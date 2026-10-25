@@ -8,6 +8,7 @@ import { asBoolean, asString, parseFrontmatterMarkdown } from "./frontmatter.js"
 import type { CatalogTeam } from "./types.js";
 
 const EXPECTED_BUNDLED_KEYS = [
+  "paperclipai/bundled/company-defaults/agentos-operators",
   "paperclipai/bundled/company-defaults/core-exec-team",
   "paperclipai/bundled/product/product-design",
   "paperclipai/bundled/software-development/product-engineering",
@@ -93,6 +94,14 @@ describe("shipped teams catalog", () => {
 
   it("preserves shipped agent roles, reporting lines, and skill assignments", () => {
     const expected = {
+      "agentos-operators/coordinator": { role: "general", reportsTo: null, skills: ["task-planning", "issue-triage"] },
+      "agentos-operators/product": { role: "pm", reportsTo: "coordinator", skills: ["task-planning", "doc-maintenance"] },
+      "agentos-operators/engineer": { role: "engineer", reportsTo: "coordinator", skills: ["github-pr-workflow", "task-planning", "doc-maintenance"] },
+      "agentos-operators/qa": { role: "qa", reportsTo: "coordinator", skills: ["qa-acceptance", "issue-triage"] },
+      "agentos-operators/operations": { role: "devops", reportsTo: "coordinator", skills: ["issue-triage", "task-planning", "doc-maintenance"] },
+      "agentos-operators/marketing": { role: "cmo", reportsTo: "coordinator", skills: ["task-planning", "doc-maintenance"] },
+      "agentos-operators/sales": { role: "general", reportsTo: "coordinator", skills: ["task-planning", "issue-triage"] },
+      "agentos-operators/support": { role: "general", reportsTo: "coordinator", skills: ["issue-triage", "doc-maintenance"] },
       "core-exec-team/ceo": { role: "ceo", reportsTo: null, skills: ["task-planning", "issue-triage"] },
       "core-exec-team/cto": { role: "engineering-manager", reportsTo: "ceo", skills: ["github-pr-workflow", "task-planning"] },
       "core-exec-team/qa": { role: "qa", reportsTo: "cto", skills: ["qa-acceptance"] },

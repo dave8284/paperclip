@@ -264,3 +264,4 @@ export { companyObservability } from "./company_observability.js";
 
 export * from "./prompt_injection_prevention.js";
 export { workflows } from "./workflows.js";
+export { managedApplications, managedApplicationProjects } from "./managed_applications.js";

@@ -4,7 +4,7 @@ navigation: {"section":"Agents and reusable capabilities","sectionOrder":30,"ord
 
 # Team packages and installation
 
-Operators can preview and install a team package with its agents and related resources. Catalog/package installation is available through the CLI/API; the repository also contains catalog UI components that are not a current top-level route.
+Operators can preview and install a team package with its agents and related resources through the CLI/API or the AgentOS `/teams-catalog` page. Applications links directly to the AgentOS operating team.
 
 Feature ID: `teams`.
 
@@ -27,7 +27,7 @@ Use the CLI teams catalog/preview/install operations in the selected context.
 
 ### `catalog-components`
 
-The catalog components and install wizard are available in developer tests/design surfaces. No top-level `/teams` route is registered; use the CLI/API for the current installation workflow.
+Open `/teams-catalog`, select a package, and preview/install it through the native wizard. The company-prefixed route and unprefixed redirect are registered in the application shell.
 
 ## Driving it with the Paperclip CLI
 
@@ -49,7 +49,7 @@ Manual: When changing or mounting these components, exercise preview, manager/so
 
 - Catalog preview records an audit event but installs no agents/projects. Use
   `teams browse/inspect/preview` with explicit company and origin API context;
-  the current product has no `/teams` route.
+  the product catalog route is `/teams-catalog`.
 
 - Source files do not prove that a screen is reachable in the current app.
 - Installed team configuration may still need credentials or environment setup.

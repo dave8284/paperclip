@@ -73,6 +73,10 @@ const Timeline = lazy(() => import("./pages/Timeline").then((module) => ({ defau
 const Companies = lazy(() => import("./pages/Companies").then((module) => ({ default: module.Companies })));
 const AgentDetail = lazy(() => import("./pages/AgentDetailPage").then((module) => ({ default: module.AgentDetailPage })));
 const Projects = lazy(() => import("./pages/Projects").then((module) => ({ default: module.Projects })));
+const Applications = lazy(() => import("./pages/Applications").then((module) => ({ default: module.Applications })));
+const TeamCatalog = lazy(() => import("./pages/TeamCatalog").then((module) => ({ default: module.TeamCatalog })));
+const OperatingConnections = lazy(() => import("./pages/OperatingConnections").then((module) => ({ default: module.OperatingConnections })));
+const ApplicationDetail = lazy(() => import("./pages/ApplicationDetail").then((module) => ({ default: module.ApplicationDetail })));
 const ProjectDetail = lazy(() => import("./pages/ProjectDetail").then((module) => ({ default: module.ProjectDetail })));
 const ProjectWorkspaceDetail = lazy(() => import("./pages/ProjectWorkspaceDetail").then((module) => ({ default: module.ProjectWorkspaceDetail })));
 const Workspaces = lazy(() => import("./pages/Workspaces").then((module) => ({ default: module.Workspaces })));
@@ -146,9 +150,13 @@ function boardRoutes(streamlinedUiEnabled: boolean, combinedInboxTasksEnabled: b
   const mergedTasks = streamlinedUiEnabled && combinedInboxTasksEnabled;
   return (
     <>
-      <Route index element={<Navigate to="dashboard" replace />} />
+      <Route index element={<Navigate to="applications" replace />} />
       <Route path="dashboard" element={<Dashboard />} />
       <Route path="dashboard/live" element={<DashboardLive />} />
+      <Route path="applications" element={<Applications />} />
+      <Route path="teams-catalog/*" element={<TeamCatalog />} />
+      <Route path="operating-connections" element={<OperatingConnections />} />
+      <Route path="applications/:applicationId" element={<ApplicationDetail />} />
       <Route
         path="timeline"
         element={streamlinedUiEnabled ? <AuditCompatibilityRedirect to="/activity/timeline" /> : <Timeline />}
@@ -661,7 +669,7 @@ function CompanyRootRedirect() {
     return <NoCompaniesStartPage />;
   }
 
-  return <Navigate to={`/${targetCompany.issuePrefix}/dashboard`} replace />;
+  return <Navigate to={`/${targetCompany.issuePrefix}/applications`} replace />;
 }
 
 function StatusCardsLegacyRedirect() {
@@ -800,6 +808,10 @@ export function App() {
           <Route path="instance/settings" element={<LegacySettingsRedirect />} />
           <Route path="instance/settings/*" element={<LegacySettingsRedirect />} />
           <Route path="companies" element={<UnprefixedBoardRedirect />} />
+          <Route path="applications" element={<UnprefixedBoardRedirect />} />
+          <Route path="applications/:applicationId" element={<UnprefixedBoardRedirect />} />
+          <Route path="teams-catalog/*" element={<UnprefixedBoardRedirect />} />
+          <Route path="operating-connections" element={<UnprefixedBoardRedirect />} />
           <Route path="issues" element={<UnprefixedBoardRedirect />} />
           <Route path="tasks" element={<UnprefixedBoardRedirect />} />
           <Route path="issues/:issueId" element={<UnprefixedBoardRedirect />} />

@@ -152,6 +152,7 @@ export function Sidebar() {
               Cmd/Ctrl+K remains the keyboard path (command palette). */}
           <SidebarNavItem to="/search" label="Search" icon={Search} />
           <SidebarNavItem to="/dashboard" label="Dashboard" icon={LayoutDashboard} liveCount={liveRunCount} />
+          <SidebarNavItem to="/applications" label="Applications" icon={Layers} />
           <SidebarNavItem
             to="/inbox"
             label="Inbox"

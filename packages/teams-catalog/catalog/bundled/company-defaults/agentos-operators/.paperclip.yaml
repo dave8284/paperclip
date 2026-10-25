@@ -1,0 +1,18 @@
+schema: paperclip/v1
+routines:
+  daily-portfolio-review:
+    status: paused
+    concurrencyPolicy: coalesce_if_active
+    catchUpPolicy: skip_missed
+    triggers:
+      - kind: schedule
+        cronExpression: "0 9 * * *"
+        timezone: Pacific/Auckland
+  weekly-role-review:
+    status: paused
+    concurrencyPolicy: coalesce_if_active
+    catchUpPolicy: skip_missed
+    triggers:
+      - kind: schedule
+        cronExpression: "0 10 * * 1"
+        timezone: Pacific/Auckland

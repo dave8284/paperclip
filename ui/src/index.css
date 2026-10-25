@@ -1,5 +1,26 @@
 @import "./motion-tokens.css";
 @import "tailwindcss";
+
+:root {
+  --agentos-map-height: 28rem;
+  --agentos-map-task-radius: 5px;
+  --agentos-map-selected-radius: 8px;
+  --agentos-map-project-radius: 11px;
+  --agentos-map-label-size: 12px;
+  --agentos-map-pulse-duration: 1.8s;
+}
+.agentos-work-map { width: 100%; height: var(--agentos-map-height); touch-action: none; }
+.agentos-map-edge { stroke: var(--border); stroke-width: 1; }
+.agentos-map-task { r: var(--agentos-map-task-radius); fill: var(--background); stroke: var(--muted-foreground); stroke-width: 1.5; }
+.agentos-map-task[data-status="in_progress"] { fill: var(--primary); stroke: var(--primary); }
+.agentos-map-task[data-status="done"] { fill: var(--status-task-done); stroke: var(--status-task-done); }
+.agentos-map-task[data-status="blocked"] { fill: var(--destructive); stroke: var(--destructive); }
+.agentos-map-task[data-selected="true"], a:focus-visible > .agentos-map-task { r: var(--agentos-map-selected-radius); stroke: var(--ring); stroke-width: 3; }
+.agentos-map-project { r: var(--agentos-map-project-radius); fill: var(--foreground); }
+.agentos-map-label { font-size: var(--agentos-map-label-size); fill: var(--foreground); }
+@keyframes agentos-running { 50% { opacity: 0.45; } }
+.agentos-map-task[data-running="true"] { animation: agentos-running var(--agentos-map-pulse-duration) ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .agentos-map-task[data-running="true"] { animation: none; stroke-width: 3; } }
 @plugin "@tailwindcss/typography";
 
 /* offline-recovery:start */

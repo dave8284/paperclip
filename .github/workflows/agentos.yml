@@ -1,0 +1,37 @@
+name: AgentOS fork checks
+on:
+  push:
+    branches: ["agentos/**"]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: agentos-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7, pinned with upstream
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: "24"
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+        with:
+          version: "9.15.4"
+      - run: pnpm install --frozen-lockfile
+      - name: Prepare the package-owned Rust toolchain
+        working-directory: packages/paperclip-runner
+        run: rustup show
+      - name: Build generated SDK inputs
+        run: pnpm --filter @paperclipai/plugin-sdk build
+      - run: pnpm -r typecheck
+      - run: pnpm --filter @paperclipai/db check:migrations
+      - run: pnpm --filter @paperclipai/teams-catalog validate
+      - run: pnpm --filter @paperclipai/teams-catalog test
+      - run: node scripts/check-maps.mjs
+      - run: pnpm check:token-gates
+      - name: Verify application persistence, authorization, API discovery, and installation
+        run: pnpm exec vitest run server/src/__tests__/managed-applications.test.ts server/src/__tests__/openapi-routes.test.ts ui/src/pages/Applications.test.tsx ui/src/pages/TeamCatalog.test.tsx ui/src/pages/useInstallTeamCatalogEntry.test.tsx ui/src/App.test.tsx
+      - run: pnpm build

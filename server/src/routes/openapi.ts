@@ -7,6 +7,7 @@ import {
   experimentalApiQueries,
 } from "./experimental-api-paths.js";
 import { Router } from "express";
+import { createManagedApplicationSchema, updateManagedApplicationSchema, managedApplicationListSchema, managedApplicationWorkQuerySchema, linkManagedApplicationProjectSchema } from "@paperclipai/shared";
 import { subscriptionPriceSchema, mergeSubscriptionsSchema } from "@paperclipai/shared";
 import { z } from "zod";
 import {
@@ -1391,6 +1392,9 @@ const browserUseOperations = [
 ] as const;
 
 const BOARD_ONLY_OPERATIONS = new Set([
+  "POST /api/companies/{companyId}/managed-applications",
+  "PATCH /api/companies/{companyId}/managed-applications/{id}",
+  "DELETE /api/companies/{companyId}/managed-applications/{id}/projects/{projectId}",
   "GET /api/agents/{id}/project-access",
   "POST /api/agents/{id}/project-access",
   "POST /api/issues/{id}/interactions/{interactionId}/dismiss",
@@ -5011,6 +5015,16 @@ registry.registerPath({
     422: r.unprocessable,
   },
 });
+
+for (const operation of [
+  { method: "get", path: "/api/companies/{companyId}/managed-applications", summary: "List accessible application portfolio with project and task counts", query: managedApplicationListSchema },
+  { method: "post", path: "/api/companies/{companyId}/managed-applications", summary: "Register an application against its home project (operator only, idempotent)", body: createManagedApplicationSchema },
+  { method: "get", path: "/api/companies/{companyId}/managed-applications/{id}", summary: "Read an application through its home-project access boundary" },
+  { method: "patch", path: "/api/companies/{companyId}/managed-applications/{id}", summary: "Update application brief or descriptive lifecycle (operator only; does not pause execution)", body: updateManagedApplicationSchema },
+  { method: "get", path: "/api/companies/{companyId}/managed-applications/{id}/work", summary: "Read authorized linked projects and paginated application tasks", query: managedApplicationWorkQuerySchema },
+  { method: "post", path: "/api/companies/{companyId}/managed-applications/{id}/projects", summary: "Link an accessible initiative project to an application (standard company access; grants no project access)", body: linkManagedApplicationProjectSchema },
+  { method: "delete", path: "/api/companies/{companyId}/managed-applications/{id}/projects/{projectId}", summary: "Unlink an initiative project (operator only; home project cannot be removed)" },
+]) registerCurrentRoute({ ...operation, tags: ["managed-applications"] });
 
 registry.registerPath({
   method: "get",

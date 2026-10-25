@@ -13,6 +13,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROUTES_DIR = path.resolve(__dirname, "../routes");
 
 const apiPrefixes: Record<string, string> = {
+  "managed-applications.ts": "/api",
   "cases.ts": "/api",
   "case-handoffs.ts": "/api",
   "workflows.ts": "/api",

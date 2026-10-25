@@ -35,7 +35,7 @@ credentials/run context; inspect its result and applicable persistence/attributi
 Assert the relevant denied actor, owner, company or mode from Policy. Review the
 remaining operations before qualifying the whole capability.
 
-Gaps: Team browsing exists even though there is no dedicated teams product screen.
+Gaps: The AgentOS fork mounts the existing catalog at `/teams-catalog`; live agent authorization still needs the separate verification described above.
 
 ## `preview`
 

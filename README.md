@@ -1,3 +1,5 @@
+> **AgentOS fork:** application portfolio, combined work views, and a reusable operating team. See [AgentOS setup](AGENTOS.md) and the [implementation plan](doc/plans/2026-10-25-agentos-platform.md). Upstream documentation follows below.
+
 <p align="center">
   <img src="doc/assets/banner.jpg" alt="Paperclip is the app people use to manage AI agents for work." width="720" />
 </p>

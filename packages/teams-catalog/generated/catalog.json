@@ -2,8 +2,208 @@
   "schemaVersion": 1,
   "packageName": "@paperclipai/teams-catalog",
   "packageVersion": "0.1.0",
-  "generatedAt": "2026-10-08T10:35:56.448Z",
+  "generatedAt": "2026-10-25T00:18:34.034Z",
   "teams": [
+    {
+      "id": "paperclipai:bundled:company-defaults:agentos-operators",
+      "key": "paperclipai/bundled/company-defaults/agentos-operators",
+      "kind": "bundled",
+      "category": "company-defaults",
+      "slug": "agentos-operators",
+      "name": "AgentOS Operators",
+      "description": "A reusable cross-functional operating team for existing applications and new products, with a coordinator and seven specialists.",
+      "path": "catalog/bundled/company-defaults/agentos-operators",
+      "entrypoint": "TEAM.md",
+      "schema": "agentcompanies/v1",
+      "defaultInstall": false,
+      "recommendedForCompanyTypes": [
+        "company-root",
+        "software",
+        "startup"
+      ],
+      "tags": [
+        "agentos",
+        "operations",
+        "product",
+        "marketing",
+        "sales"
+      ],
+      "counts": {
+        "agents": 8,
+        "projects": 1,
+        "tasks": 0,
+        "routines": 2,
+        "localSkills": 0,
+        "catalogSkills": 5,
+        "externalSkillSources": 0
+      },
+      "rootAgentSlugs": [
+        "coordinator"
+      ],
+      "agentSlugs": [
+        "coordinator",
+        "engineer",
+        "marketing",
+        "operations",
+        "product",
+        "qa",
+        "sales",
+        "support"
+      ],
+      "projectSlugs": [
+        "portfolio-operations"
+      ],
+      "requiredSkills": [
+        {
+          "type": "catalog",
+          "ref": "doc-maintenance",
+          "agentSlugs": [
+            "engineer",
+            "marketing",
+            "operations",
+            "product",
+            "support"
+          ],
+          "resolved": true,
+          "catalogSkillId": "paperclipai:bundled:docs:doc-maintenance",
+          "catalogSkillKey": "paperclipai/bundled/docs/doc-maintenance"
+        },
+        {
+          "type": "catalog",
+          "ref": "github-pr-workflow",
+          "agentSlugs": [
+            "engineer"
+          ],
+          "resolved": true,
+          "catalogSkillId": "paperclipai:bundled:software-development:github-pr-workflow",
+          "catalogSkillKey": "paperclipai/bundled/software-development/github-pr-workflow"
+        },
+        {
+          "type": "catalog",
+          "ref": "issue-triage",
+          "agentSlugs": [
+            "coordinator",
+            "operations",
+            "qa",
+            "sales",
+            "support"
+          ],
+          "resolved": true,
+          "catalogSkillId": "paperclipai:bundled:paperclip-operations:issue-triage",
+          "catalogSkillKey": "paperclipai/bundled/paperclip-operations/issue-triage"
+        },
+        {
+          "type": "catalog",
+          "ref": "qa-acceptance",
+          "agentSlugs": [
+            "qa"
+          ],
+          "resolved": true,
+          "catalogSkillId": "paperclipai:bundled:quality:qa-acceptance",
+          "catalogSkillKey": "paperclipai/bundled/quality/qa-acceptance"
+        },
+        {
+          "type": "catalog",
+          "ref": "task-planning",
+          "agentSlugs": [
+            "coordinator",
+            "engineer",
+            "marketing",
+            "operations",
+            "product",
+            "sales"
+          ],
+          "resolved": true,
+          "catalogSkillId": "paperclipai:bundled:paperclip-operations:task-planning",
+          "catalogSkillKey": "paperclipai/bundled/paperclip-operations/task-planning"
+        }
+      ],
+      "envInputs": [],
+      "sourceRefs": [],
+      "files": [
+        {
+          "path": "TEAM.md",
+          "kind": "team",
+          "sizeBytes": 2458,
+          "sha256": "ee3494882233a396ddb38de325406296e3cad78edb3187d8a5703273f352af20"
+        },
+        {
+          "path": ".paperclip.yaml",
+          "kind": "extension",
+          "sizeBytes": 480,
+          "sha256": "f30d41b1a16f3ed0186c6bb1e2234d6a1b1f179ad7bd3d9d7a7a8f151da9617e"
+        },
+        {
+          "path": "agents/coordinator/AGENTS.md",
+          "kind": "agent",
+          "sizeBytes": 2917,
+          "sha256": "e71ab63fa176e10fbd7831c47752923aa588462f2e9573a3dc6d5583c452e03c"
+        },
+        {
+          "path": "agents/engineer/AGENTS.md",
+          "kind": "agent",
+          "sizeBytes": 1335,
+          "sha256": "22e08e6075121d3b4c8874fc3cc17b9fda2e942f6cce9c584c0debbe75c62e64"
+        },
+        {
+          "path": "agents/marketing/AGENTS.md",
+          "kind": "agent",
+          "sizeBytes": 1312,
+          "sha256": "3a84dbe1d46c7340c5e1a5242bf2084400ae0747dbc6cba3579d1780dbe6d167"
+        },
+        {
+          "path": "agents/operations/AGENTS.md",
+          "kind": "agent",
+          "sizeBytes": 1565,
+          "sha256": "88aa838f773b4a4858d8353ba7a545451e787af9b1abb5eee8beee362b1d701e"
+        },
+        {
+          "path": "agents/product/AGENTS.md",
+          "kind": "agent",
+          "sizeBytes": 1343,
+          "sha256": "63ec926f0c2b8d56dbc34de5a841c4d07a659c85fa2579ed6deeee34f847c3cf"
+        },
+        {
+          "path": "agents/qa/AGENTS.md",
+          "kind": "agent",
+          "sizeBytes": 1183,
+          "sha256": "609f220ff66e783a12f3cc92ac26f33a781bf307d4d841384423c6d183972405"
+        },
+        {
+          "path": "agents/sales/AGENTS.md",
+          "kind": "agent",
+          "sizeBytes": 1228,
+          "sha256": "e3fa5371b4f596f5800a39e1f590eee3b53d13c71a9bf0d6ed7f2fff9d529b75"
+        },
+        {
+          "path": "agents/support/AGENTS.md",
+          "kind": "agent",
+          "sizeBytes": 1260,
+          "sha256": "5a2b52e63ffe8783ae62308a288246d3ff7afb12adfe928bcf9ead4158f8c618"
+        },
+        {
+          "path": "projects/portfolio-operations/PROJECT.md",
+          "kind": "project",
+          "sizeBytes": 460,
+          "sha256": "4a6dd07faed7718a3dba57b143105b4d7d0b0b451df8f46298302201eada3745"
+        },
+        {
+          "path": "projects/portfolio-operations/tasks/daily-portfolio-review/TASK.md",
+          "kind": "task",
+          "sizeBytes": 955,
+          "sha256": "f00d76258e499238c739d9acb288f9ecd69800938c16d7b84128a980e75766b5"
+        },
+        {
+          "path": "projects/portfolio-operations/tasks/weekly-role-review/TASK.md",
+          "kind": "task",
+          "sizeBytes": 808,
+          "sha256": "7e98b3ec25be1dae399554b275a7c253154d3952b95e345d0752db3496aff525"
+        }
+      ],
+      "trustLevel": "assets",
+      "compatibility": "compatible",
+      "contentHash": "sha256:683e9818a32514700c04b324df860dfceefdd9f23a1ca5b424754d6eca668678"
+    },
     {
       "id": "paperclipai:bundled:company-defaults:core-exec-team",
       "key": "paperclipai/bundled/company-defaults/core-exec-team",
