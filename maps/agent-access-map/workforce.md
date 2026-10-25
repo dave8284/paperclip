@@ -22,6 +22,11 @@ Verification: `passed` — [tests](../../server/src/__tests__/agentos-workforce.
 
 Gaps: explicit Friday portfolio delegation and CEO company staffing admission remain to implement. Agent identity is never elevated to board implicitly.
 
+Ownership transition: the existing native board-claim ceremony transfers only
+`local-board` portfolios to the authenticated claimant, with an activity record
+in the same transaction. Another user's portfolio is never transferred by that
+ceremony. See [board-claim tests](../../server/src/__tests__/board-claim.test.ts).
+
 ## `assignments`
 
 Capability ID: `workforce/assignments`.

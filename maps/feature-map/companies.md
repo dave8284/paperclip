@@ -80,6 +80,9 @@ Use an owned provider fixture for failure states; record any actual provider usa
 
 - Package presence does not prove a runnable imported company; credentials and environment bindings need separate verification.
 - Company deletion is a distinct gated operation; do not use it as the archive test.
+- A portfolio home company is retained for administration and audit; archive it
+  instead of permanently deleting it. Company package transfer does not export
+  the owner-scoped shared workforce; use a whole-instance backup for that data.
 - Settings hidden in a managed deployment should be recorded as unavailable, not bypassed.
 - Decision tests and fast responses have different request and execution contracts.
   A fast-response receipt is an acknowledgement, not completed agent work.

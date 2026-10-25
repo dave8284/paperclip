@@ -1,9 +1,11 @@
 import { randomBytes } from "node:crypto";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
-import { companies, companyMemberships, instanceUserRoles } from "@paperclipai/db";
+import { companies, companyMemberships, instanceUserRoles, agentosPortfolios } from "@paperclipai/db";
 import type { DeploymentMode } from "@paperclipai/shared";
 import { ensureHumanRoleDefaultGrants } from "./services/principal-access-compatibility.js";
+import { persistActivity, publishActivity, type ActivityPublication } from "./services/activity-log.js";
+import { logger } from "./middleware/logger.js";
 
 const LOCAL_BOARD_USER_ID = "local-board";
 const CLAIM_TTL_MS = 1000 * 60 * 60 * 24;
@@ -91,6 +93,7 @@ export async function claimBoardOwnership(
   if (status !== "available") return { status };
 
   const claimedCompanyIds: string[] = [];
+  const publications: ActivityPublication[] = [];
   await db.transaction(async (tx) => {
     const existingTargetAdmin = await tx
       .select({ id: instanceUserRoles.id })
@@ -112,7 +115,7 @@ export async function claimBoardOwnership(
     for (const company of allCompanies) {
       claimedCompanyIds.push(company.id);
       const existing = await tx
-        .select({ id: companyMemberships.id, status: companyMemberships.status })
+        .select({ id: companyMemberships.id, status: companyMemberships.status, membershipRole: companyMemberships.membershipRole })
         .from(companyMemberships)
         .where(
           and(
@@ -134,14 +137,32 @@ export async function claimBoardOwnership(
         continue;
       }
 
-      if (existing.status !== "active") {
+      if (existing.status !== "active" || existing.membershipRole !== "owner") {
         await tx
           .update(companyMemberships)
           .set({ status: "active", membershipRole: "owner", updatedAt: new Date() })
           .where(eq(companyMemberships.id, existing.id));
       }
     }
+    // The existing local-to-authenticated ownership ceremony also transfers
+    // local portfolios. Never take a portfolio owned by another real user.
+    const claimedPortfolios = await tx.update(agentosPortfolios).set({
+      ownerUserId: opts.userId, revision: sql`${agentosPortfolios.revision} + 1`,
+    }).where(eq(agentosPortfolios.ownerUserId, LOCAL_BOARD_USER_ID)).returning();
+    for (const portfolio of claimedPortfolios) {
+      const result = await persistActivity(tx as unknown as Db, {
+        companyId: portfolio.homeCompanyId, actorType: "user", actorId: opts.userId,
+        action: "agentos.portfolio_claimed", entityType: "agentos_workforce", entityId: portfolio.id,
+        details: { previousOwner: LOCAL_BOARD_USER_ID, revision: portfolio.revision },
+      });
+      publications.push(result.publication);
+    }
   });
+
+  for (const publication of publications) {
+    try { publishActivity(publication); }
+    catch (error) { logger.warn({ err: error }, "Board ownership committed; live activity publication failed"); }
+  }
 
   for (const companyId of claimedCompanyIds) {
     await ensureHumanRoleDefaultGrants(db, {

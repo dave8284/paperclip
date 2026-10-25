@@ -204,6 +204,10 @@ Sources: [Managed-agent CLI](../../cli/src/commands/managed-agent.ts), [profile 
 
 ## Gotchas
 
+- A shared workforce assignment retains its native agent record, including after
+  retirement. Permanent deletion returns a conflict; use Portfolio & workforce
+  to retire that company's assignment and inspect its history.
+
 - Managed-agent probing is read-only at the provider and does not persist a Paperclip profile. The explicit retention acknowledgement remains required even for probe.
 
 - Agent keys, human CLI tokens, and personal assistant OAuth grants are different credentials. Never include a key’s plaintext token in screenshots, logs, or verification artifacts.

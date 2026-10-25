@@ -202,6 +202,9 @@ Policy: Agent creation/configuration uses action grants, resource policies and c
 consent; some controls require a board actor.
 Permanent deletion is board-only. Retained case handoff references return
 `409 agent_case_history_retained` before dependency cleanup; keep the agent terminated.
+Shared workforce assignments similarly return `409 agent_workforce_history_retained`;
+retire the company assignment while preserving its native agent record. Replacing
+that employee in the same company waits for native runtime cleanup to finish.
 
 Evidence: `source-only` — [implementation](../../server/src/routes/agents.ts#L1395) at
 the reviewed commit above.

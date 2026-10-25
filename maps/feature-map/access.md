@@ -26,6 +26,10 @@ Agent access: [companion](../agent-access-map/access.md).
 
 Open `/auth`; first-owner bootstrap uses `/board-claim/:token` when configured.
 
+When converting a local Agent OS instance to authenticated ownership, the native
+claim ceremony also transfers local-board-owned portfolios to the claimant and
+audits that transfer. Portfolios owned by another real user are unchanged.
+
 ### `invite-members`
 
 Open `/invite/:token`; operators manage members in company settings and join requests at `/inbox/requests`.

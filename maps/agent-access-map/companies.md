@@ -31,6 +31,12 @@ lists/creates companies.
 Policy: Same-company CEO or board for identity/import operations; list/create/archive
 convenience endpoint is board-gated.
 
+An Agent OS portfolio's home company cannot be permanently deleted because it
+owns portfolio administration and audit context; the native delete service returns
+`409 portfolio_home_company_retained` before stopping agents. Archive remains
+available. Explicit deletion of another linked company removes only that
+company's assignments and portfolio link, retaining shared employees.
+
 Evidence: `source-only` — [implementation](../../server/src/routes/companies.ts#L1245)
 at the reviewed commit above.
 

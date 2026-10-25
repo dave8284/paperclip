@@ -8,6 +8,8 @@ import {
   createDb,
   instanceUserRoles,
   principalPermissionGrants,
+  agentosPortfolios,
+  activityLog,
 } from "@paperclipai/db";
 import {
   claimBoardOwnership,
@@ -36,6 +38,8 @@ describeEmbeddedPostgres("board claim", () => {
     await initializeBoardClaimChallenge(db, { deploymentMode: "local_trusted" });
     await db.delete(principalPermissionGrants);
     await db.delete(companyMemberships);
+    await db.delete(activityLog);
+    await db.delete(agentosPortfolios);
     await db.delete(companies);
     await db.delete(instanceUserRoles);
     await db.delete(authUsers);
@@ -45,7 +49,7 @@ describeEmbeddedPostgres("board claim", () => {
     await tempDb?.cleanup();
   });
 
-  it("lets a signed-in user claim a local-board-only authenticated instance", async () => {
+  it.each([false, true])("claims a local board and its portfolios, including an existing viewer (%s)", async (existingViewer) => {
     const now = new Date();
     const userId = `claim-user-${randomUUID()}`;
     const company = await db
@@ -56,6 +60,12 @@ describeEmbeddedPostgres("board claim", () => {
       })
       .returning()
       .then((rows) => rows[0]!);
+
+    const [localPortfolio, otherPortfolio] = await db.insert(agentosPortfolios).values([
+      { homeCompanyId: company.id, ownerUserId: "local-board", name: "Local portfolio" },
+      { homeCompanyId: company.id, ownerUserId: "another-owner", name: "Other owner's portfolio" },
+    ]).returning();
+    if (existingViewer) await db.insert(companyMemberships).values({ companyId: company.id, principalType: "user", principalId: userId, status: "active", membershipRole: "viewer" });
 
     await db.insert(authUsers).values({
       id: userId,
@@ -83,6 +93,9 @@ describeEmbeddedPostgres("board claim", () => {
       requiresSignIn: true,
       claimedByUserId: null,
     });
+    await expect(claimBoardOwnership(db, { token, code: "incorrect", userId })).resolves.toEqual({ status: "invalid" });
+    const [beforeClaim] = await db.select().from(agentosPortfolios).where(eq(agentosPortfolios.id, localPortfolio.id));
+    expect(beforeClaim.ownerUserId).toBe("local-board");
 
     await expect(
       claimBoardOwnership(db, { token, code, userId }),
@@ -124,5 +137,13 @@ describeEmbeddedPostgres("board claim", () => {
       status: "claimed",
       claimedByUserId: userId,
     });
+    const [claimed] = await db.select().from(agentosPortfolios).where(eq(agentosPortfolios.id, localPortfolio.id));
+    const [untouched] = await db.select().from(agentosPortfolios).where(eq(agentosPortfolios.id, otherPortfolio.id));
+    expect(claimed).toMatchObject({ ownerUserId: userId, revision: 2 });
+    expect(untouched).toMatchObject({ ownerUserId: "another-owner", revision: 1 });
+    await expect(claimBoardOwnership(db, { token, code, userId })).resolves.toEqual({ status: "claimed" });
+    const audit = await db.select().from(activityLog).where(eq(activityLog.action, "agentos.portfolio_claimed"));
+    expect(audit).toHaveLength(1);
+    expect(audit[0]).toMatchObject({ actorId: userId, companyId: company.id, entityId: localPortfolio.id });
   });
 });
