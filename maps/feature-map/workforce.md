@@ -25,6 +25,8 @@ Open Portfolio & workforce in the sidebar, or `/workforce`. Create a portfolio w
 
 Retire assignment requires a reason. Only the selected company agent enters native termination. Other assignments remain active. Runtime cleanup can remain pending; retirement is not proof that a remote process has stopped. Managers with live reports must reassign those reports first.
 
+Reassigning that employee within the same company waits for the previous native runtime's terminal cleanup state. Retired assignment history remains visible after a replacement is assigned.
+
 ## Driving it with the API and UI
 
 ### `shared-workforce`

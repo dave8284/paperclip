@@ -88,6 +88,20 @@ describe("Agent OS shared workforce", () => {
       await db.execute(sql`drop function agentos_test_audit_failure()`);
     }
   });
+  it("blocks replacement within a company while its previous runtime stop remains unresolved", async () => {
+    const f = await seed();
+    await request(f.api).post(`${f.base}/assignments/${f.assignments[0].id}/retire`).send({ expectedRevision: 1, reason: "Replace after evaluation" }).expect(200);
+    const [replacement] = await db.insert(agents).values({ companyId: f.one.id, name: "Replacement", role: "general", adapterType: "paperclip_runner" }).returning();
+    const intent = { id: randomUUID(), employeeId: f.employeeInput.id, companyId: f.one.id, agentId: replacement.id };
+    await request(f.api).post(`${f.base}/assignments`).send(intent).expect(409);
+    // Simulate the native worker's confirmed terminal state; this tests binding
+    // admission, not a real remote host's stop proof (owned by lifecycle tests).
+    await db.update(agents).set({ lifecycleState: "terminated", status: "terminated", lifecycleOperation: null }).where(eq(agents.id, f.first.id));
+    await request(f.api).post(`${f.base}/assignments`).send(intent).expect(201);
+    const view = await request(f.api).get(f.base).expect(200);
+    expect(view.body.assignments.filter((row: { companyId: string; status: string }) => row.companyId === f.one.id && row.status === "active")).toHaveLength(1);
+    expect(view.body.assignments.find((row: { id: string }) => row.id === f.assignments[1].id).status).toBe("active");
+  });
   it("uses fresh membership, hides revoked companies and denies agents and other owners", async () => {
     const f = await seed();
     await request(app({ ...f.actor, userId: randomUUID() })).get(f.base).expect(404);

@@ -1,4 +1,4 @@
-import { and, eq, inArray, ne, sql } from "drizzle-orm";
+import { and, eq, inArray, ne, or, sql } from "drizzle-orm";
 import { agents, companies, companyMemberships, agentosPortfolios, agentosPortfolioCompanies, agentosEmployees, agentosAssignments, type Db } from "@paperclipai/db";
 import type { AgentosWorkforce, CreateAgentosPortfolio, CreateAgentosEmployee, CreateAgentosAssignment, RetireAgentosAssignment } from "@paperclipai/shared";
 import { conflict, forbidden, notFound } from "../errors.js";
@@ -125,7 +125,9 @@ export function agentosWorkforceService(db: Db) {
     },
 
     async assign(actor: AuthorizationActor, who: Who, portfolioId: string, input: CreateAgentosAssignment) {
-      return mutate(async (tx, publications) => {
+      await portfolio(db, actor, portfolioId, true);
+      if (!(await companyAccess(db, actor, input.companyId, true))) throw notFound("Company not found");
+      return withAccountingTransaction(db, input.companyId, async (tx, publications) => {
         await portfolio(tx, actor, portfolioId, true);
         if (!(await companyAccess(tx, actor, input.companyId, true))) throw notFound("Company not found");
         const [company] = await tx.select().from(agentosPortfolioCompanies).where(and(eq(agentosPortfolioCompanies.portfolioId, portfolioId), eq(agentosPortfolioCompanies.companyId, input.companyId)));
@@ -141,8 +143,11 @@ export function agentosWorkforceService(db: Db) {
         const [agent] = await tx.select().from(agents).where(and(eq(agents.id, input.agentId), eq(agents.companyId, input.companyId))).for("update");
         if (!agent) throw notFound("Company agent not found");
         if (["terminated", "pending_approval"].includes(agent.status) || ["terminating", "cleaning_up", "rejected", "deleting"].includes(agent.lifecycleState)) throw conflict("Choose an approved, available company agent");
-        const duplicates = await tx.select().from(agentosAssignments).where(eq(agentosAssignments.companyId, input.companyId));
-        if (duplicates.some(row => row.agentId === input.agentId || (row.employeeId === input.employeeId && row.status === "active"))) throw conflict("This agent or employee already has a company assignment");
+        const previous = await tx.select({ assignment: agentosAssignments, lifecycleState: agents.lifecycleState }).from(agentosAssignments)
+          .innerJoin(agents, and(eq(agents.id, agentosAssignments.agentId), eq(agents.companyId, agentosAssignments.companyId)))
+          .where(and(eq(agentosAssignments.companyId, input.companyId), or(eq(agentosAssignments.agentId, input.agentId), eq(agentosAssignments.employeeId, input.employeeId))));
+        if (previous.some(({ assignment }) => assignment.agentId === input.agentId || assignment.status === "active")) throw conflict("This agent or employee already has a company assignment");
+        if (previous.some(({ lifecycleState }) => !["terminated", "rejected"].includes(lifecycleState))) throw conflict("Wait for the previous assignment's runtime cleanup to finish before reassigning this employee in the same company");
         const [created] = await tx.insert(agentosAssignments).values({ ...input, portfolioId }).returning();
         await audit(tx, publications, who, input.companyId, "agentos.assignment_created", created.id, { employeeId: input.employeeId, agentId: input.agentId, department: input.department });
         return created;
