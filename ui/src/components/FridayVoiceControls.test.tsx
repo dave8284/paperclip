@@ -18,6 +18,7 @@ describe("Friday browser voice", () => {
   const transcript = vi.fn();
   const synthesis = { getVoices: () => [], speak: vi.fn(), cancel: vi.fn(), addEventListener: vi.fn(), removeEventListener: vi.fn() };
   beforeEach(() => {
+    localStorage.clear();
     vi.clearAllMocks(); vi.stubGlobal("SpeechRecognition", Recognition); vi.stubGlobal("speechSynthesis", synthesis); vi.stubGlobal("SpeechSynthesisUtterance", Utterance);
     host = document.createElement("div"); document.body.appendChild(host); root = createRoot(host);
   });
@@ -58,5 +59,34 @@ describe("Friday browser voice", () => {
     expect(host.textContent).toContain("does not support dictation");
     expect(Array.from(host.querySelectorAll("button")).find(button => button.textContent?.includes("Talk to Friday"))?.disabled).toBe(true);
     await click("Read reply"); expect(synthesis.speak).toHaveBeenCalledOnce();
+  });
+  it("sends a completed voice turn once and preserves text when recognition fails", async () => {
+    const send = vi.fn().mockResolvedValue(undefined);
+    await act(async () => root.render(<FridayVoiceControls onTranscript={transcript} onVoiceMessage={send} />));
+    await click("Talk to Friday");
+    const result = (text: string) => Recognition.latest.onresult?.({ resultIndex: 0, results: [{ isFinal: true, 0: { transcript: text } }] });
+    await act(async () => { result("Create a project"); result("for the website"); });
+    expect(send).not.toHaveBeenCalled();
+    await click("Send voice message");
+    await act(async () => Recognition.latest.onend?.());
+    expect(send).toHaveBeenCalledExactlyOnceWith("Create a project for the website");
+    await click("Talk to Friday");
+    await act(async () => { result("Keep this draft"); Recognition.latest.onerror?.({ error: "network" }); Recognition.latest.onend?.(); });
+    expect(send).toHaveBeenCalledOnce();
+    expect(transcript).toHaveBeenCalledExactlyOnceWith("Keep this draft");
+  });
+  it("defaults Friday to spoken new replies, skips history and remembers mute", async () => {
+    const show = async (id: string, createdAt: string) => act(async () => root.render(<FridayVoiceControls compact speakReplies onTranscript={transcript} reply={{ id, body: "Your project is ready.", createdAt }} />));
+    await show("loaded", "2000-01-01");
+    await show("more-history", "2000-01-02");
+    expect(synthesis.speak).not.toHaveBeenCalled();
+    await show("new", new Date(Date.now() + 1000).toISOString());
+    expect(synthesis.speak).toHaveBeenCalledOnce();
+    await click("Mute replies");
+    expect(localStorage.getItem("paperclip.friday.speakReplies")).toBe("false");
+    await show("muted", new Date(Date.now() + 2000).toISOString());
+    expect(synthesis.speak).toHaveBeenCalledOnce();
+    await click("Read reply");
+    expect(synthesis.speak).toHaveBeenCalledTimes(2);
   });
 });

@@ -1,6 +1,9 @@
+import type { IssueChatComposerHandle } from "../IssueChatThread";
 import { AgentAvatar } from "../AgentAvatar";
 import {
   useEffect,
+  useImperativeHandle,
+  type Ref,
   useRef,
   useState,
   type ChangeEvent,
@@ -91,6 +94,7 @@ export interface TaskChatComposerTakeover {
 }
 
 interface TaskChatComposerProps {
+  composerRef?: Ref<IssueChatComposerHandle>;
   onAdd?: (
     body: string,
     reopen?: boolean,
@@ -376,6 +380,7 @@ function escapeMarkdownLabel(name: string): string {
  * states) between the editor and the comp-bar.
  */
 export function TaskChatComposer({
+  composerRef,
   onAdd,
   creation,
   confirmedSubmissionIds,
@@ -474,6 +479,7 @@ export function TaskChatComposer({
         .map(item => ({ ...item, inline: item.inline === true })), pending.attemptId);
     }
   }
+  const voiceSubmitting = useRef(false);
   const submittingRef = useRef(submitting);
   submittingRef.current = submitting;
   const pendingAssigneeRef = useRef(pendingAssignee);
@@ -884,6 +890,31 @@ export function TaskChatComposer({
   }, [queuedEdit, takeoverVisible]);
 
   const canResetPausedConversation = conversationMode && !queuedEdit && body.trim() === "/new" && attachments.length === 0;
+
+  useImperativeHandle(composerRef, () => ({
+    focus: () => editorRef.current?.focus(),
+    restoreDraft: text => {
+      const next = [bodyRef.current.trim(), text.trim()].filter(Boolean).join("\n\n");
+      changeBody(next);
+      if (draftKey) saveDraft(draftKey, next);
+      requestAnimationFrame(() => editorRef.current?.focus());
+    },
+    sendVoice: async text => {
+      if (!text.trim()) return true;
+      // Never merge a voice turn into an existing typed draft or interpret it
+      // as a native approval. Preserve both for explicit review instead.
+      const requiresReview = !!bodyRef.current.trim() || attachmentsRef.current.length > 0 || !!queuedEdit || !!takeover || !!pendingTakeover || !!uncertainSubmission || submittingRef.current || voiceSubmitting.current || disabled || !!pause;
+      const next = [bodyRef.current.trim(), text.trim()].filter(Boolean).join("\n\n");
+      changeBody(next);
+      if (draftKey) saveDraft(draftKey, next);
+      if (requiresReview) return false;
+      voiceSubmitting.current = true;
+      try {
+        await submit();
+        return !bodyRef.current.trim() && !(draftKey && loadDraftSubmission(draftKey));
+      } finally { voiceSubmitting.current = false; }
+    },
+  }));
 
   async function submit() {
     if (disabled || (pause && !canResetPausedConversation)) return;

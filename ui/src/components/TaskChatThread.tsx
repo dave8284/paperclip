@@ -3027,6 +3027,7 @@ export function TaskChatThread(props: TaskChatThreadProps) {
   // Keep native recovery notices visible. Runtime decisions remain in the
   // native composer takeover even while the transcript is folded away.
   const pendingInlineDecision = (interactions ?? []).some(interaction => interaction.status === "pending" && interaction.kind === "connection_intent" && !shouldHideInteractionCard(interaction));
+  const collapseComposer = !!focusView?.composerCollapsed && !composerTakeover && !pendingInlineDecision && !composerPause && !queuedEdit && !runtimeComposerDisabledReason;
   const showHistory = pendingInlineDecision || !focusView || focusView.showTranscript || !!props.recoveryAction || !!props.interruption || !!props.executionBlocked || tailStatus === "failed" || historyError;
 
   return (
@@ -3270,8 +3271,17 @@ export function TaskChatThread(props: TaskChatThreadProps) {
                       <TaskChatTurnStatusIsland model={tailTurnStatus} />
                     ) : null}
                     <RunnerGoalWidget control={runnerGoal} />
+                    {focusView?.composerCollapsed !== undefined && <div className="friday-type-toggle">
+                      <Button type="button" variant="ghost" size="sm" onClick={() => {
+                        if (collapseComposer) {
+                          focusView.onExpandComposer?.();
+                          requestAnimationFrame(() => { if (props.composerRef && typeof props.composerRef !== "function") props.composerRef.current?.focus(); });
+                        } else focusView.onCollapseComposer?.();
+                      }} aria-expanded={!collapseComposer}>{collapseComposer ? "Type to Friday…" : "Use voice"}</Button>
+                    </div>}
                     <div
-                      className="relative isolate flex flex-col"
+                      hidden={collapseComposer}
+                      className={collapseComposer ? "hidden" : "relative isolate flex flex-col"}
                       data-testid="task-chat-composer-stack"
                     >
                       {!composerPause ? (
@@ -3318,6 +3328,7 @@ export function TaskChatThread(props: TaskChatThreadProps) {
                       ) : null}
                       <div className="relative z-10">
                         <TaskChatComposer
+                          composerRef={props.composerRef}
                           onAdd={handleThreadAdd}
                           confirmedSubmissionIds={new Set(comments.filter((comment) =>
                             comment.authorUserId === currentUserId && comment.clientRequestId &&

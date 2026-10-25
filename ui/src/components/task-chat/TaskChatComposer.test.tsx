@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
-import { act, StrictMode, useState, type ComponentProps, type ReactElement } from "react";
+import { act, createRef, StrictMode, useState, type ComponentProps, type ReactElement } from "react";
+import type { IssueChatComposerHandle } from "../IssueChatThread";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -301,6 +302,36 @@ function renderComposer(props: ComponentProps<typeof TaskChatComposer>) {
 }
 
 describe("TaskChatComposer", () => {
+  it("submits voice through the native sender and preserves an existing draft for review", async () => {
+    const composerRef = createRef<IssueChatComposerHandle>();
+    const onAdd = vi.fn().mockResolvedValue(undefined);
+    renderComposer({ composerRef, onAdd, workMode: "standard", draftKey: "voice-native" });
+    let sent: boolean | undefined;
+    await act(async () => { sent = await composerRef.current!.sendVoice!("Show my projects"); });
+    expect(sent).toBe(true);
+    expect(onAdd).toHaveBeenCalledOnce();
+    expect(onAdd.mock.calls[0][0]).toBe("Show my projects");
+    expect(editable().textContent).toBe("");
+    typeText("Unfinished typed thought");
+    await act(async () => { sent = await composerRef.current!.sendVoice!("Additional voice thought"); });
+    expect(sent).toBe(false);
+    expect(onAdd).toHaveBeenCalledOnce();
+    expect(editable().textContent).toBe("Unfinished typed thought\n\nAdditional voice thought");
+  });
+
+  it("retains a failed voice turn and supports legacy dictation through the modern composer ref", async () => {
+    const composerRef = createRef<IssueChatComposerHandle>();
+    const onAdd = vi.fn().mockRejectedValue(new Error("Connection unavailable"));
+    renderComposer({ composerRef, onAdd, workMode: "standard", draftKey: "voice-failed" });
+    let sent: boolean | undefined;
+    await act(async () => { sent = await composerRef.current!.sendVoice!("Create a project"); });
+    expect(sent).toBe(false);
+    expect(editable().textContent).toBe("Create a project");
+    await act(async () => composerRef.current!.restoreDraft("with these details"));
+    expect(editable().textContent).toBe("Create a project\n\nwith these details");
+    expect(onAdd).toHaveBeenCalledOnce();
+  });
+
   it("keeps creation images inline and prevents submission during their upload", async () => {
     let resolveUpload!: (url: string) => void;
     const onImageUpload = vi.fn().mockReturnValue(new Promise<string>((resolve) => { resolveUpload = resolve; }));

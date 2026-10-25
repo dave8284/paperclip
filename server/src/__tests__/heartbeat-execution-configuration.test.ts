@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { eq } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import { agents, authUsers, companies, companyMemberships, companySkills, createDb, heartbeatRunEvents, heartbeatRuns, issues, projects } from "@paperclipai/db";
+import { agents, authUsers, companies, companyMemberships, companyOperatingProfiles, companySkills, createDb, heartbeatRunEvents, heartbeatRuns, issues, projects } from "@paperclipai/db";
 import { companySkillService } from "../services/company-skills.js";
 import { withSkillVersionCacheLock } from "../services/skill-version-cache.js";
 import { registerServerAdapter, unregisterServerAdapter, type AdapterExecutionContext } from "../adapters/index.js";
@@ -132,6 +132,16 @@ describePostgres("heartbeat execution configuration through adapter dispatch", (
     expect(finished).toBeDefined();
     return { finished, input: captured.get(run!.id) };
   }
+
+  it("resolves an unbound profile agent through native selection and refuses an API-billed default before dispatch", async () => {
+    const f = await seed(true);
+    await db.insert(companyOperatingProfiles).values({ companyId: f.companyId, fridayAgentId: f.agentId });
+    await db.update(agents).set({ runtimeConfig: {}, adapterConfig: { model: "fixture-model" } }).where(eq(agents.id, f.agentId));
+    const { finished, input } = await execute(f);
+    expect(finished.status).toBe("failed");
+    expect(finished.error).toContain("subscription seats only");
+    expect(input).toBeUndefined();
+  });
 
   it.each([
     { saved: "isolated", managed: true, failure: "saved managed login required" },

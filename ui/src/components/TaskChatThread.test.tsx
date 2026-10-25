@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 
 import type { ComponentProps, ReactElement } from "react";
-import { act, forwardRef, useImperativeHandle, type ForwardedRef } from "react";
+import { act, createRef, forwardRef, useImperativeHandle, type ForwardedRef } from "react";
+import type { IssueChatComposerHandle } from "./IssueChatThread";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -4938,6 +4939,20 @@ it("explains a missing provider runtime with an installation repair", () => {
 });
 
 describe("conversation focus presentation", () => {
+  it("keeps the voice sender connected while the composer is folded and expands typing on request", async () => {
+    const composerRef = createRef<IssueChatComposerHandle>();
+    const onAdd = vi.fn().mockResolvedValue(undefined);
+    const onExpandComposer = vi.fn();
+    render(<TaskChatThread comments={[]} onAdd={onAdd} conversationMode composerRef={composerRef} focusView={{ showTranscript: false, composerCollapsed: true, onExpandComposer, render: () => <div>Friday</div> }} />);
+    expect(composerRef.current?.sendVoice).toBeTypeOf("function");
+    expect(container.querySelector('[data-testid="mock-editor"]')?.closest('[hidden]')).not.toBeNull();
+    await act(async () => { await composerRef.current!.sendVoice!("What needs my attention?"); });
+    expect(onAdd).toHaveBeenCalledOnce();
+    expect(onAdd.mock.calls[0][0]).toBe("What needs my attention?");
+    await act(async () => Array.from(container.querySelectorAll("button")).find(button => button.textContent?.includes("Type to Friday"))!.click());
+    expect(onExpandComposer).toHaveBeenCalledOnce();
+  });
+
   it("folds history without replacing the native sender, then restores the same editor", async () => {
     const onAdd = vi.fn(async (_body: string) => {});
     const focus = vi.fn((_state: import("@/lib/conversation-focus").ConversationFocusState) => <div data-testid="focus-presence">Friday</div>);

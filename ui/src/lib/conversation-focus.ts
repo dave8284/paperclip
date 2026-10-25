@@ -11,6 +11,9 @@ export interface ConversationFocusState {
 }
 export interface ConversationFocusView {
   showTranscript: boolean;
+  composerCollapsed?: boolean;
+  onExpandComposer?: () => void;
+  onCollapseComposer?: () => void;
   render: (state: ConversationFocusState) => ReactNode;
 }
 export interface AgentConversationFocusData extends ConversationFocusState {
@@ -19,9 +22,13 @@ export interface AgentConversationFocusData extends ConversationFocusState {
   attachments: IssueAttachment[];
   workProducts: IssueWorkProduct[];
   onTranscript: (text: string) => void;
+  onVoiceMessage?: (text: string) => Promise<void>;
   voiceDisabled: boolean;
 }
 export interface AgentConversationFocusView {
   showTranscript: boolean;
+  composerCollapsed?: boolean;
+  onExpandComposer?: () => void;
+  onCollapseComposer?: () => void;
   render: (state: AgentConversationFocusData) => ReactNode;
 }

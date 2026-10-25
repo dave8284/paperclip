@@ -1,5 +1,5 @@
 import { agentHarnessType } from "@paperclipai/shared";
-import { assertCompanyModelPolicy } from "../company-model-policy.js";
+import { assertCompanyModelPolicy, defaultCompanyModelBinding } from "../company-model-policy.js";
 import { observabilitySecretValues } from "@paperclipai/adapter-utils/agent-observability";
 import { agentObservabilityService, unavailableAgentObservability, type ResolvedAgentObservability } from "../agent-observability.js";
 import { agentObservabilityLaunch } from "../agent-observability-launch.js";
@@ -108,8 +108,9 @@ export async function prepareHeartbeatExecutionConfiguration(db: Db, input: Hear
   // The executor keeps these values in its failure redactor before any later
   // preparation step can fail. Subsequent provider/identity values extend it.
   onFailureSecretsResolved(() => []);
-  const aiBinding = preconfiguredHome ? undefined : input.config.aiBinding;
-  if (!aiBinding) await assertCompanyModelPolicy(db, agent.companyId, null);
+  const aiBinding = preconfiguredHome ? undefined : input.config.aiBinding
+    ?? await defaultCompanyModelBinding(db, agent.companyId, agent.adapterType, sourceWorkspaceConfig);
+  if (preconfiguredHome) await assertCompanyModelPolicy(db, agent.companyId, null);
   const { trustPreset, useIsolatedTaskDirectory, explicitTaskDirectory, requestedExecutionWorkspaceMode } = input.policy;
   const { secretsSvc, companySkills, appendRunEvent, finalizeAiConnectionBusyDeferral } = input.services;
   let managedAiRuntime: ManagedAiRuntime | undefined;

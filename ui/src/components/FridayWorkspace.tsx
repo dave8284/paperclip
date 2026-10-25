@@ -47,12 +47,12 @@ export function FridayWorkspace({ companyId, data, panel, setPanel, compact, con
   const unavailable = data.unavailable || !connected;
   return <div className="friday-stage" data-panel={!!panel} data-expanded={expanded && !!panel}>
     <div className="friday-presence">
-      <FridayVoiceControls compact reply={data.reply} onTranscript={data.onTranscript} disabled={data.voiceDisabled}
+      <FridayVoiceControls compact speakReplies reply={data.reply} onTranscript={data.onTranscript} onVoiceMessage={data.onVoiceMessage} disabled={data.voiceDisabled || data.loading || data.unavailable}
         renderPresence={voice => {
           const state = voice.listening ? "listening" : voice.speaking ? "speaking" : data.awaitingInput ? "waiting" : unavailable ? "offline" : data.runStatus === "running" ? "thinking" : data.runStatus === "queued" ? "waiting" : "idle";
           const status = voice.listening ? "Listening" : voice.speaking ? "Speaking" : voice.starting ? "Opening microphone" : data.awaitingInput ? "Your decision is needed below" : data.loading ? "Loading conversation" : data.unavailable ? "Connection interrupted" : !connected ? "Connect a subscription to begin" : data.runStatus === "running" ? "Working on your request" : data.runStatus === "queued" ? "Waiting to start" : "Ready when you are";
           return <div className="friday-presence-identity">
-            <FridayOrb state={state} compact={compact || !!panel} label={voice.listening ? "Stop listening" : voice.starting ? "Cancel microphone" : "Talk to Friday"} onActivate={voice.toggleListening} disabled={!voice.canListen} />
+            <FridayOrb state={state} compact={compact || !!panel} label={voice.listening ? "Send voice message" : voice.starting ? "Cancel microphone" : "Talk to Friday"} onActivate={voice.toggleListening} disabled={!voice.canListen} />
             <div className="space-y-2 text-center"><p className="friday-wordmark">FRIDAY</p><p className="text-sm text-muted-foreground" role="status">{status}</p></div>
           </div>;
         }} />

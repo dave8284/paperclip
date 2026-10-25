@@ -510,6 +510,8 @@ export function shouldRenderComposerHandoffPreview(
 export interface IssueChatComposerHandle {
   focus: () => void;
   restoreDraft: (submittedBody: string) => void;
+  /** Uses the native sender; false means the preserved draft needs review. */
+  sendVoice?: (body: string) => Promise<boolean>;
 }
 
 interface IssueChatComposerProps {

@@ -8265,13 +8265,24 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
                   composerRef={commentComposerRef}
                   focusView={conversation?.focusView ? {
                     showTranscript: conversation.focusView.showTranscript,
+                    composerCollapsed: conversation.focusView.composerCollapsed,
+                    onExpandComposer: conversation.focusView.onExpandComposer,
+                    onCollapseComposer: conversation.focusView.onCollapseComposer,
                     render: state => conversation.focusView!.render({
                       ...state,
                       issueId: conversation.issue?.id ?? null,
                       reply: comments.filter(comment => comment.authorAgentId === conversation.agent.id && !comment.deletedAt && comment.origin !== "fast_response").at(-1),
                       attachments: attachments ?? [],
                       workProducts: workProducts ?? [],
-                      onTranscript: text => commentComposerRef.current?.restoreDraft(text),
+                      onTranscript: text => {
+                        conversation.focusView?.onExpandComposer?.();
+                        commentComposerRef.current?.restoreDraft(text);
+                      },
+                      onVoiceMessage: async text => {
+                        const composer = commentComposerRef.current;
+                        if (!composer?.sendVoice) throw new Error("Conversation is still loading. Your voice message has not been sent.");
+                        if (!await composer.sendVoice(text)) conversation.focusView?.onExpandComposer?.();
+                      },
                       voiceDisabled: !!activePauseHold || !instanceExperimentalSettings?.enableAgentChat,
                     }),
                   } : undefined}

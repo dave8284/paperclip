@@ -1,6 +1,6 @@
 import { completeSetupTokenAiConnection } from "../services/setup-token-ai-connection.js";
 import { companyOperatingProfiles } from "@paperclipai/db";
-import { assertCompanyModelPolicy } from "../services/company-model-policy.js";
+import { assertCompanyModelPolicy, defaultCompanyModelBinding } from "../services/company-model-policy.js";
 import { connectionIntentService } from "../services/connection-intents.js";
 import { connectionIntentDeliveryService } from "../services/connection-intent-delivery.js";
 import { issueRecoveryActionService } from "../services/issue-recovery-actions.js";
@@ -76,6 +76,35 @@ beforeAll(async () => {
 afterAll(async () => { await database?.cleanup(); vi.unstubAllEnvs(); if (home) await rm(home, { recursive: true, force: true }); });
 
 describe("managed AI connections", () => {
+  it("inherits Friday's shared subscription choice without bypassing native grants or sharing personal credentials", async () => {
+    const owner = "friday-default-binding";
+    await db.insert(companyMemberships).values({ companyId, principalId: owner, principalType: "user", status: "active", membershipRole: "member" });
+    const account = await service.save(companyId, owner, { provider: "openai", method: "subscription", ownership: "shared", name: owner, loginSessionId: "fixture", agentIds: [], allAgents: true }, JSON.stringify({ tokens: { account_id: owner, access_token: "fixture", refresh_token: "fixture" } }));
+    const shared = { provider: "openai", method: "subscription", mode: "shared", ...account } as const;
+    const configure = async (aiConnection: unknown) => db.update(agents).set({ runtimeConfig: { aiConnection } }).where(eq(agents.id, agentId));
+    await db.insert(companyOperatingProfiles).values({ companyId, fridayAgentId: agentId });
+    try {
+      await configure(shared);
+      const inherited = await defaultCompanyModelBinding(db, companyId, "paperclip_runner", { provider: "codex" });
+      expect(inherited).toEqual(shared);
+      const selection = { companyId, agentId, userId: owner, adapterType: "paperclip_runner", runnerProvider: "codex", binding: inherited! };
+      expect((await service.select(selection)).connection.id).toBe(account.connectionId);
+      await db.update(connectionGrants).set({ status: "revoked" }).where(eq(connectionGrants.id, account.grantId));
+      await expect(service.select(selection)).rejects.toThrow();
+      await configure({ ...shared, mode: "delegated" });
+      expect(await defaultCompanyModelBinding(db, companyId, "paperclip_runner", { provider: "codex" })).toMatchObject({ provider: "openai", mode: "responsible_user" });
+      await configure({ mode: "router", connectionId: randomUUID() });
+      await expect(defaultCompanyModelBinding(db, companyId, "paperclip_runner", { provider: "codex" })).rejects.toThrow("account pool");
+      await configure(undefined);
+      expect(await defaultCompanyModelBinding(db, companyId, "paperclip_runner", { provider: "codex" })).toEqual({ provider: "openai", method: "subscription", mode: "responsible_user" });
+      await expect(defaultCompanyModelBinding(db, companyId, "process", {})).rejects.toThrow("compatible");
+      expect(await defaultCompanyModelBinding(db, otherCompanyId, "paperclip_runner", { provider: "codex" })).toBeUndefined();
+    } finally {
+      await db.delete(companyOperatingProfiles).where(eq(companyOperatingProfiles.companyId, companyId));
+      await db.update(agents).set({ runtimeConfig: {} }).where(eq(agents.id, agentId));
+    }
+  });
+
   it("enforces subscription-only operating profiles against resolved defaults, helpers, and late credential reads", async () => {
     const userId = "subscription-policy-user";
     await db.insert(companyMemberships).values({ companyId, principalId: userId, principalType: "user", status: "active", membershipRole: "member" });

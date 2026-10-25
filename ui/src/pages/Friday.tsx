@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { MessageCircle, Settings2 } from "lucide-react";
 import { operatingProfileApi, operatingProfileKey } from "../api/operating-profile";
 import { agentsApi } from "../api/agents";
 import { aiConnectionsApi } from "../api/ai-connections";
 import { instanceSettingsApi } from "../api/instanceSettings";
+import { useTheme } from "../context/ThemeContext";
 import { useCompany } from "../context/CompanyContext";
 import { useAgentChatEnabled } from "../hooks/useAgentChatEnabled";
 import { queryKeys } from "../lib/queryKeys";
@@ -16,6 +17,8 @@ import { FridayOrb } from "../components/FridayOrb";
 
 export function Friday() {
   const { selectedCompanyId } = useCompany();
+  const { setTheme } = useTheme();
+  useEffect(() => { setTheme("light"); }, [setTheme]);
   return selectedCompanyId ? <FridayCompany key={selectedCompanyId} companyId={selectedCompanyId} />
     : <p className="text-sm text-muted-foreground">Select an organization to talk to Friday.</p>;
 }
@@ -28,6 +31,7 @@ function FridayCompany({ companyId }: { companyId: string }) {
   const [selectedAgent, setSelectedAgent] = useState("");
   const [settings, setSettings] = useState(false);
   const [transcript, setTranscript] = useState(false);
+  const [typing, setTyping] = useState(false);
   const [panel, setPanel] = useState<FridayPanel>(null);
   const chat = useAgentChatEnabled();
   const save = useMutation({
@@ -66,6 +70,9 @@ function FridayCompany({ companyId }: { companyId: string }) {
     <section className="friday-conversation" aria-label="Conversation with Friday">
       {fridayId && chat.enabled && !profile.error ? <AgentChat key={fridayId} agentRef={fridayId} focusView={{
         showTranscript: transcript,
+        composerCollapsed: !typing,
+        onExpandComposer: () => setTyping(true),
+        onCollapseComposer: () => setTyping(false),
         render: data => <FridayWorkspace key={fridayId} companyId={companyId} data={data} panel={panel} setPanel={setPanel} compact={transcript} connected={connected} />,
       }} /> : <div className="friday-unconfigured">
         <FridayOrb state="offline" label="Friday is not connected" />
