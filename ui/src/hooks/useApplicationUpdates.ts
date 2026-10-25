@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCompanyLiveEvent } from "../context/LiveUpdatesProvider";
+import { operatingProfileKey } from "../api/operating-profile";
 
 export const applicationQueryKey = (companyId: string | null) => ["managedApplications", companyId] as const;
 
@@ -13,6 +14,7 @@ export function useApplicationUpdates(companyId: string | null) {
     pending.current = setTimeout(() => {
       pending.current = null;
       void client.invalidateQueries({ queryKey: applicationQueryKey(companyId) });
+      void client.invalidateQueries({ queryKey: operatingProfileKey(companyId) });
     }, 300);
   });
   useEffect(() => () => {

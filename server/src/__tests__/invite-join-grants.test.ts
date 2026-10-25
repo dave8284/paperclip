@@ -67,6 +67,7 @@ describe("agentJoinGrantsFromDefaults", () => {
 describe("human invite roles", () => {
   it("maps owner to the full management grant set", () => {
     expect(grantsForHumanRole("owner")).toEqual([
+      { permissionKey: "applications:manage", scope: null },
       { permissionKey: "agents:create", scope: null },
       { permissionKey: "agents:configure", scope: null },
       { permissionKey: "skills:create", scope: null },
@@ -85,6 +86,7 @@ describe("human invite roles", () => {
 
   it("maps admin to management grants including environment management", () => {
     expect(grantsForHumanRole("admin")).toEqual([
+      { permissionKey: "applications:manage", scope: null },
       { permissionKey: "agents:create", scope: null },
       { permissionKey: "agents:configure", scope: null },
       { permissionKey: "skills:create", scope: null },
@@ -102,6 +104,7 @@ describe("human invite roles", () => {
 
   it("maps operator to company editing grants without join approval or member permissions", () => {
     expect(grantsForHumanRole("operator")).toEqual([
+      { permissionKey: "applications:manage", scope: null },
       { permissionKey: "agents:create", scope: null },
       { permissionKey: "agents:configure", scope: null },
       { permissionKey: "skills:create", scope: null },

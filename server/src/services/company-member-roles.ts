@@ -27,6 +27,7 @@ export function grantsForHumanRole(
   switch (role) {
     case "owner":
       return [
+        { permissionKey: "applications:manage", scope: null },
         { permissionKey: "agents:create", scope: null },
         { permissionKey: "agents:configure", scope: null },
         { permissionKey: "skills:create", scope: null },
@@ -43,6 +44,7 @@ export function grantsForHumanRole(
       ];
     case "admin":
       return [
+        { permissionKey: "applications:manage", scope: null },
         { permissionKey: "agents:create", scope: null },
         { permissionKey: "agents:configure", scope: null },
         { permissionKey: "skills:create", scope: null },
@@ -58,6 +60,7 @@ export function grantsForHumanRole(
       ];
     case "operator":
       return [
+        { permissionKey: "applications:manage", scope: null },
         { permissionKey: "agents:create", scope: null },
         { permissionKey: "agents:configure", scope: null },
         { permissionKey: "skills:create", scope: null },

@@ -44,10 +44,11 @@ export function managedApplicationService(db: Db) {
 
   return {
     read,
-    async list(companyId: string, actor: AuthorizationActor, options: { after?: string; limit: number }): Promise<ManagedApplicationPage> {
+    async list(companyId: string, actor: AuthorizationActor, options: { after?: string; limit: number; kind?: "application" | "platform" | "all" }): Promise<ManagedApplicationPage> {
       const rows = await db.select({ application: managedApplications }).from(managedApplications)
         .innerJoin(projects, and(eq(projects.id, managedApplications.homeProjectId), eq(projects.companyId, managedApplications.companyId)))
         .where(and(eq(managedApplications.companyId, companyId), await projectReadSqlCondition(db, actor),
+          options.kind === "all" ? undefined : eq(managedApplications.kind, options.kind ?? "application"),
           options.after ? gt(managedApplications.id, options.after) : undefined))
         .orderBy(asc(managedApplications.id)).limit(options.limit + 1);
       const applications = rows.slice(0, options.limit).map(row => publicApplication(row.application));
@@ -88,7 +89,10 @@ export function managedApplicationService(db: Db) {
 
     async create(companyId: string, actor: AuthorizationActor, who: MutationActor, input: CreateManagedApplication) {
       const creationKey = `${who.actorType}:${who.actorId}:${input.idempotencyKey}`;
-      const creationHash = createHash("sha256").update(JSON.stringify(input)).digest("hex");
+      const { kind, ...originalFields } = input;
+      // Preserve retries submitted before portfolio classification existed.
+      const creationHash = createHash("sha256").update(JSON.stringify(!kind || kind === "application" ? originalFields : input)).digest("hex");
+      const explicitDefaultHash = createHash("sha256").update(JSON.stringify(input)).digest("hex");
       const result = await db.transaction(async transaction => {
         const tx = transaction as unknown as Db;
         await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`application:${companyId}:${creationKey}`}, 0))`);
@@ -96,7 +100,7 @@ export function managedApplicationService(db: Db) {
         const [prior] = await tx.select().from(managedApplications)
           .where(and(eq(managedApplications.companyId, companyId), eq(managedApplications.creationKey, creationKey)));
         if (prior) {
-          if (prior.creationHash !== creationHash) throw conflict("Application creation key was used with different inputs");
+          if (prior.creationHash !== creationHash && prior.creationHash !== explicitDefaultHash) throw conflict("Application creation key was used with different inputs");
           return { application: await read(companyId, prior.id, actor, tx), publication: null, created: false };
         }
         const { idempotencyKey: _key, ...fields } = input;

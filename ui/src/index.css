@@ -6,9 +6,18 @@
   --agentos-map-task-radius: 5px;
   --agentos-map-selected-radius: 8px;
   --agentos-map-project-radius: 11px;
+  --agentos-map-agent-radius: 15px;
   --agentos-map-label-size: 12px;
   --agentos-map-pulse-duration: 1.8s;
+  --agentos-command-height: 72vh;
+  --agentos-command-min-height: 36rem;
+  --agentos-command-gap: 1rem;
+  --agentos-command-pane-min: 22rem;
 }
+.agentos-command-center { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--agentos-command-gap); }
+.agentos-friday-conversation { height: var(--agentos-command-height); min-height: var(--agentos-command-min-height); min-width: 0; overflow: auto; }
+.agentos-command-work { min-width: 0; }
+@media (min-width: 1280px) { .agentos-command-center { grid-template-columns: minmax(var(--agentos-command-pane-min), 1fr) minmax(0, 1fr); } }
 .agentos-work-map { width: 100%; height: var(--agentos-map-height); touch-action: none; }
 .agentos-map-edge { stroke: var(--border); stroke-width: 1; }
 .agentos-map-task { r: var(--agentos-map-task-radius); fill: var(--background); stroke: var(--muted-foreground); stroke-width: 1.5; }
@@ -17,6 +26,9 @@
 .agentos-map-task[data-status="blocked"] { fill: var(--destructive); stroke: var(--destructive); }
 .agentos-map-task[data-selected="true"], a:focus-visible > .agentos-map-task { r: var(--agentos-map-selected-radius); stroke: var(--ring); stroke-width: 3; }
 .agentos-map-project { r: var(--agentos-map-project-radius); fill: var(--foreground); }
+.agentos-map-agent { r: var(--agentos-map-agent-radius); fill: var(--card); stroke: var(--primary); stroke-width: 2; }
+.agentos-map-assignment { stroke: var(--primary); stroke-width: 1; opacity: 0.25; }
+.agentos-map-assignment[data-running="true"] { opacity: 0.8; }
 .agentos-map-label { font-size: var(--agentos-map-label-size); fill: var(--foreground); }
 @keyframes agentos-running { 50% { opacity: 0.45; } }
 .agentos-map-task[data-running="true"] { animation: agentos-running var(--agentos-map-pulse-duration) ease-in-out infinite; }

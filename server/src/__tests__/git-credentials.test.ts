@@ -202,6 +202,8 @@ describe("buildGitAuthInvocation", () => {
     expect(invocation.env.GH_TOKEN).toBe("super-secret-token");
     expect(invocation.env.GITHUB_TOKEN).toBe("super-secret-token");
     expect(invocation.env.GIT_TERMINAL_PROMPT).toBe("0");
+    expect(invocation.env.GIT_ASKPASS).toBe("");
+    expect(invocation.env.SSH_ASKPASS).toBe("");
     expect(invocation.env).not.toHaveProperty("HOME");
   });
 

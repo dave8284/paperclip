@@ -2846,3 +2846,4 @@ export * from "./prompt-injection-prevention.js";
 export * from "./workspace-provider.js";
 export * from "./workflows.js";
 export * from "./managed-applications.js";
+export * from "./operating-profile.js";

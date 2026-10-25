@@ -144,6 +144,11 @@ export function buildGitAuthInvocation(credential: GitCredential): GitAuthInvoca
       GH_TOKEN: credential.token,
       GITHUB_TOKEN: credential.token,
       GIT_TERMINAL_PROMPT: "0",
+      // GIT_TERMINAL_PROMPT does not disable GUI/editor askpass helpers. An
+      // inherited helper could hang or provide another credential after our
+      // host-scoped helper correctly declines a request.
+      GIT_ASKPASS: "",
+      SSH_ASKPASS: "",
       ...(identity ? {
         GIT_AUTHOR_NAME: identity.login,
         GIT_AUTHOR_EMAIL: noreplyEmail!,

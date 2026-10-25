@@ -12,7 +12,7 @@ Review: `baseline`.
 
 API: `present` — GET/POST /api/companies/{companyId}/managed-applications; GET/PATCH /api/companies/{companyId}/managed-applications/{id}; POST /api/companies/{companyId}/managed-applications/{id}/projects; DELETE /api/companies/{companyId}/managed-applications/{id}/projects/{projectId}.
 
-Agent access: `partial` — standard company agents can read and link accessible initiative projects through authenticated REST and the OpenAPI catalog used by native search_api/call_api when enabled. Registration, brief/lifecycle edits and unlinking are operator-only.
+Agent access: `partial` — standard company agents can read and link accessible initiative projects through authenticated REST and the OpenAPI catalog used by native search_api/call_api when enabled. Registration, brief/lifecycle edits and unlinking also allow the native applications:manage grant. Friday binding transfers that grant atomically and requires an operator with users:manage_permissions; restricted keys and project ACLs still apply.
 
 Policy: company admission and the home project's canonical read ACL; both project ACLs for links; restricted skill/task keys rejected. Link writes are idempotent and audited; links grant no audience access. Viewer mutations fail. Native run fallback admission still applies.
 
@@ -20,7 +20,7 @@ Evidence: `verified` — [route/service database tests](../../server/src/__tests
 
 Verification: `passed` — create once under concurrent retries, reject a changed payload under the same key, preserve later edits on replay, reject private/foreign links, check one audit on repeated linking and roll back on audit failure.
 
-Gaps: live native runner API fallback admission needs separate qualification; application-wide pause and agent registration authority are not implemented.
+Gaps: live native runner API fallback admission needs separate qualification; application-wide pause is not implemented; registry authority is now an explicit native grant.
 
 ## `work`
 
@@ -75,3 +75,11 @@ Evidence: `source-only` — [operating connections page](../../ui/src/pages/Oper
 Verification: `not-run` — inspect authorized management state; use native per-agent access testing and a real provider receipt to qualify execution.
 
 Gaps: no preconfigured Google Cloud account, no qualified Google Cloud deployment, and no application-specific provider resource mapping in this release.
+
+## Friday coordination and observation
+
+The existing registry/work/coordination capabilities now include `/friday`, GET/PUT `/api/companies/{companyId}/operating-profile`, and GET `/api/companies/{companyId}/managed-applications/galaxy`. Binding requires a board permission administrator and expectedRevision. Native grants are transferred in the same transaction as the binding and audit. Companies with an operating profile enforce subscription-only model admission and resolved credential selection; companies without one retain their existing behavior.
+
+The galaxy projects native records through the same project/task ACLs before counting or pagination. `kind=application` is the default; `kind=platform` separates internal development and `kind=all` supports cross-portfolio awareness. Dots are bounded and truncation is explicit. Select application/project/task to drill down while Friday stays alongside it. Native conversations own persistence, handoffs and revision-bound approvals.
+
+Voice is a browser capability: explicit microphone activation writes final transcripts to the existing draft, playback is stoppable, and automatic new-reply speech is opt-in. There is no paid speech API fallback. Component tests cover transcript/permission/cleanup behavior; a real microphone and audible playback are not yet qualified. Live model coordination, account-wide quota queuing and self-deployment remain separate qualification gates.

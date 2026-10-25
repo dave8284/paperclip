@@ -13,6 +13,7 @@ export const managedApplications = pgTable("managed_applications", {
   brief: text("brief").notNull(),
   source: text("source").notNull(),
   stage: text("stage").notNull().default("discovery"),
+  kind: text("kind").notNull().default("application"),
   creationKey: text("creation_key").notNull(),
   creationHash: text("creation_hash").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -25,6 +26,7 @@ export const managedApplications = pgTable("managed_applications", {
   homeProjectFk: foreignKey({ columns: [table.companyId, table.homeProjectId], foreignColumns: [projects.companyId, projects.id] }).onDelete("cascade"),
   stageCheck: check("managed_applications_stage_check", sql`${table.stage} in ('discovery', 'building', 'operating', 'archived')`),
   sourceCheck: check("managed_applications_source_check", sql`${table.source} in ('existing', 'new')`),
+  kindCheck: check("managed_applications_kind_check", sql`${table.kind} in ('application', 'platform')`),
 }));
 
 export const managedApplicationProjects = pgTable("managed_application_projects", {

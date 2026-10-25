@@ -1,20 +1,23 @@
 import { z } from "zod";
 
 export const MANAGED_APPLICATION_STAGES = ["discovery", "building", "operating", "archived"] as const;
+export const MANAGED_APPLICATION_KINDS = ["application", "platform"] as const;
 export const createManagedApplicationSchema = z.object({
   idempotencyKey: z.string().uuid(),
   name: z.string().trim().min(1).max(160),
   brief: z.string().trim().min(1).max(20000),
   source: z.enum(["existing", "new"]),
   homeProjectId: z.string().uuid(),
+  kind: z.enum(MANAGED_APPLICATION_KINDS).default("application"),
 }).strict();
 export const updateManagedApplicationSchema = createManagedApplicationSchema
   .pick({ name: true, brief: true }).partial()
-  .extend({ stage: z.enum(MANAGED_APPLICATION_STAGES).optional() }).strict();
+  .extend({ stage: z.enum(MANAGED_APPLICATION_STAGES).optional(), kind: z.enum(MANAGED_APPLICATION_KINDS).optional() }).strict();
 export const linkManagedApplicationProjectSchema = z.object({ projectId: z.string().uuid() }).strict();
 export const managedApplicationListSchema = z.object({
   after: z.string().uuid().optional(),
   limit: z.coerce.number().int().min(1).max(100).default(50),
+  kind: z.enum([...MANAGED_APPLICATION_KINDS, "all"]).default("application"),
 }).strict();
 export const managedApplicationWorkQuerySchema = z.object({
   offset: z.coerce.number().int().min(0).max(100000).default(0),
@@ -23,7 +26,7 @@ export const managedApplicationWorkQuerySchema = z.object({
   assigneeAgentId: z.string().uuid().optional(),
 }).strict();
 
-export type CreateManagedApplication = z.infer<typeof createManagedApplicationSchema>;
+export type CreateManagedApplication = z.input<typeof createManagedApplicationSchema>;
 export type UpdateManagedApplication = z.infer<typeof updateManagedApplicationSchema>;
 export interface ManagedApplication {
   id: string;
@@ -32,6 +35,7 @@ export interface ManagedApplication {
   name: string;
   brief: string;
   source: "existing" | "new";
+  kind: typeof MANAGED_APPLICATION_KINDS[number];
   stage: typeof MANAGED_APPLICATION_STAGES[number];
   createdAt: Date;
   updatedAt: Date;
@@ -59,6 +63,14 @@ export interface ApplicationWork {
     updatedAt: Date;
   }>;
   nextOffset: number | null;
+}
+
+export interface PortfolioGalaxyData extends ManagedApplicationPage {
+  projects: Array<ApplicationWork["projects"][number] & { applicationId: string }>;
+  tasks: Array<ApplicationWork["tasks"][number] & { applicationId: string }>;
+  /** Counts stay complete for the visible application page; dots may be capped. */
+  tasksTruncated: boolean;
+  observedAt: string;
 }
 
 /** A task brief for native Paperclip execution; creating this text does not run an agent. */

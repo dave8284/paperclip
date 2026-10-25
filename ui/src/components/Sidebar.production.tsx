@@ -18,6 +18,7 @@ import {
   FolderOpen,
   Unplug,
   MessagesSquare,
+  MessageCircle,
   GanttChartSquare,
   LayoutGrid,
 } from "lucide-react";
@@ -153,6 +154,7 @@ export function Sidebar() {
           <SidebarNavItem to="/search" label="Search" icon={Search} />
           <SidebarNavItem to="/dashboard" label="Dashboard" icon={LayoutDashboard} liveCount={liveRunCount} />
           <SidebarNavItem to="/applications" label="Applications" icon={Layers} />
+          <SidebarNavItem to="/friday" label="Friday" icon={MessageCircle} />
           <SidebarNavItem
             to="/inbox"
             label="Inbox"

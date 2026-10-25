@@ -1,4 +1,5 @@
 import { useTaskRetry } from "../hooks/useTaskRetry";
+import { FridayVoiceControls } from "../components/FridayVoiceControls";
 import { grokBotApi } from "@/api/grokBot";
 import { WorkspaceBaseRefRecoveryProvider } from "../components/WorkspaceBaseRefRecovery";
 import { WorkspaceRetryControl } from "../components/WorkspaceRetryButton";
@@ -3093,7 +3094,7 @@ export function IssueDetail({ tasksTab }: { tasksTab?: TaskSidePanelProps["tasks
 
 /** One controller and surface for both task URLs and agent conversations. */
 export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskSidePanelProps["tasksTab"]; conversation?: {
-  agent: Agent; issue: Issue | null; ensureIssue: () => Promise<Issue>;
+  agent: Agent; issue: Issue | null; ensureIssue: () => Promise<Issue>; voice?: boolean;
 } }) {
   const { issueId: routeIssueId, companyPrefix } = useParams<{ issueId: string; companyPrefix: string }>();
   const issueId = conversation ? conversation.issue?.id : routeIssueId;
@@ -8259,7 +8260,11 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
                   onRefreshLatestComments={refetchLatestComments}
                   composerRef={commentComposerRef}
                   composerAccessory={
-                    hasVisibleMonitorSurface(issue) ? (
+                    conversation?.voice ? <FridayVoiceControls
+                      onTranscript={text => commentComposerRef.current?.restoreDraft(text)}
+                      reply={comments.filter(comment => comment.authorAgentId === conversation.agent.id && !comment.deletedAt && comment.origin !== "fast_response").at(-1)}
+                      disabled={!!activePauseHold || !instanceExperimentalSettings?.enableAgentChat}
+                    /> : hasVisibleMonitorSurface(issue) ? (
                       <IssueMonitorComposerStrip
                         issue={issue}
                         workProducts={workProducts}

@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "packageName": "@paperclipai/teams-catalog",
   "packageVersion": "0.1.0",
-  "generatedAt": "2026-10-25T00:18:34.034Z",
+  "generatedAt": "2026-10-25T03:28:43.865Z",
   "teams": [
     {
       "id": "paperclipai:bundled:company-defaults:agentos-operators",
@@ -11,7 +11,7 @@
       "category": "company-defaults",
       "slug": "agentos-operators",
       "name": "AgentOS Operators",
-      "description": "A reusable cross-functional operating team for existing applications and new products, with a coordinator and seven specialists.",
+      "description": "Friday and a reusable cross-functional operating pool for existing applications and new products, with delegated project and pipeline ownership.",
       "path": "catalog/bundled/company-defaults/agentos-operators",
       "entrypoint": "TEAM.md",
       "schema": "agentcompanies/v1",
@@ -124,8 +124,8 @@
         {
           "path": "TEAM.md",
           "kind": "team",
-          "sizeBytes": 2458,
-          "sha256": "ee3494882233a396ddb38de325406296e3cad78edb3187d8a5703273f352af20"
+          "sizeBytes": 2474,
+          "sha256": "59c50ef170b3592245ed90467e673bbde879b4e03d1ffb5bc145cafd0a1212e4"
         },
         {
           "path": ".paperclip.yaml",
@@ -136,8 +136,8 @@
         {
           "path": "agents/coordinator/AGENTS.md",
           "kind": "agent",
-          "sizeBytes": 2917,
-          "sha256": "e71ab63fa176e10fbd7831c47752923aa588462f2e9573a3dc6d5583c452e03c"
+          "sizeBytes": 6110,
+          "sha256": "01cae81ed2220bfdf5ce90efa11cf524aa3b207da703707927392a836e10e9c0"
         },
         {
           "path": "agents/engineer/AGENTS.md",
@@ -202,7 +202,7 @@
       ],
       "trustLevel": "assets",
       "compatibility": "compatible",
-      "contentHash": "sha256:683e9818a32514700c04b324df860dfceefdd9f23a1ca5b424754d6eca668678"
+      "contentHash": "sha256:e7e72690821f59aaa3efada13ae1690e533b0d9adad4ab16dc65e4b9f13115c3"
     },
     {
       "id": "paperclipai:bundled:company-defaults:core-exec-team",

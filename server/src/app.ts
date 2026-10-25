@@ -105,6 +105,7 @@ import { environmentService } from "./services/environments.js";
 import { environmentRuntimeService } from "./services/environment-runtime.js";
 import { projectRoutes } from "./routes/projects.js";
 import { managedApplicationRoutes } from "./routes/managed-applications.js";
+import { operatingProfileRoutes } from "./routes/operating-profile.js";
 import { issueRoutes } from "./routes/issues.js";
 import { issueTreeControlRoutes } from "./routes/issue-tree-control.js";
 import { caseRoutes } from "./routes/cases.js";
@@ -855,6 +856,7 @@ export async function createApp(
   api.use(taskWorkspaceRoutes(db));
   api.use(projectRoutes(db));
   api.use(managedApplicationRoutes(db));
+  api.use(operatingProfileRoutes(db));
   api.use(caseRoutes(db, opts.storageService));
   api.use(caseHandoffRoutes(db));
   api.use(workflowRoutes(db));

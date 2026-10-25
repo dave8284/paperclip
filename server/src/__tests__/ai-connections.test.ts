@@ -1,4 +1,6 @@
 import { completeSetupTokenAiConnection } from "../services/setup-token-ai-connection.js";
+import { companyOperatingProfiles } from "@paperclipai/db";
+import { assertCompanyModelPolicy } from "../services/company-model-policy.js";
 import { connectionIntentService } from "../services/connection-intents.js";
 import { connectionIntentDeliveryService } from "../services/connection-intent-delivery.js";
 import { issueRecoveryActionService } from "../services/issue-recovery-actions.js";
@@ -74,6 +76,26 @@ beforeAll(async () => {
 afterAll(async () => { await database?.cleanup(); vi.unstubAllEnvs(); if (home) await rm(home, { recursive: true, force: true }); });
 
 describe("managed AI connections", () => {
+  it("enforces subscription-only operating profiles against resolved defaults, helpers, and late credential reads", async () => {
+    const userId = "subscription-policy-user";
+    await db.insert(companyMemberships).values({ companyId, principalId: userId, principalType: "user", status: "active", membershipRole: "member" });
+    const personal = await create(userId, "policy-personal");
+    const shared = await create(userId, "policy-shared", "shared");
+    await service.setDefault(companyId, userId, personal.grantId);
+    const selected = await service.select({ ...input, userId });
+    await db.insert(companyOperatingProfiles).values({ companyId, fridayAgentId: agentId });
+    try {
+      // responsible_user deliberately ignores the legacy method hint. The actual
+      // selected API credential must still be refused before any provider call.
+      await expect(service.select({ ...input, userId, binding: { ...binding, method: "subscription" } })).rejects.toThrow("subscription seats only");
+      await expect(service.credential(selected)).rejects.toThrow("subscription seats only");
+      await expect(service.selectDecision({ companyId, userId, ...shared })).rejects.toThrow("subscription seats only");
+      await expect(service.selectFastResponse({ companyId, userId, ...shared })).rejects.toThrow("subscription seats only");
+      await expect(assertCompanyModelPolicy(db, companyId, null)).rejects.toThrow("managed subscription connection");
+      await expect(assertCompanyModelPolicy(db, companyId, "subscription")).resolves.toBeUndefined();
+      await expect(assertCompanyModelPolicy(db, otherCompanyId, "api_key")).resolves.toBeUndefined();
+    } finally { await db.delete(companyOperatingProfiles).where(eq(companyOperatingProfiles.companyId, companyId)); }
+  });
   it.each([
     { provider: "openrouter", envKey: "OPENROUTER_API_KEY", routed: false },
     { provider: "openrouter", envKey: "OPENROUTER_API_KEY", routed: true },

@@ -1,6 +1,6 @@
 # AgentOS on Paperclip
 
-This fork adds an application portfolio and reusable operating team to Paperclip. Start at **Applications**, add an existing repository or a new idea, install **AgentOS Operators**, configure an execution connection, and assign the planning task to its coordinator.
+This fork adds Friday, an application portfolio and a reusable operating team to Paperclip. Open **Friday** for a durable conversation alongside the portfolio galaxy. Install **AgentOS Operators**, bind its Friday agent under Configure Friday, and connect a model subscription through the native account setup. You can also register an existing repository or a new idea from **Applications**.
 
 The map, Kanban and task list use saved native tasks. Selecting a dot exposes reported execution and work products; native task and agent pages provide the complete history. A pulsing dot means a recorded running execution. Empty or idle work is not animated.
 
@@ -17,7 +17,7 @@ node cli/node_modules/tsx/dist/cli.mjs cli/src/index.ts onboard --data-dir ../.r
 pnpm dev:once --data-dir ../.runtime
 ```
 
-Open http://localhost:3100/applications. The data directory contains the local database, workspaces, configuration and artifacts; keep it outside Git. Use the normal Paperclip onboarding/configuration flow for model credentials and agent authentication.
+Open http://localhost:3100/friday. The data directory contains the local database, workspaces, configuration and artifacts; keep it outside Git. Use the normal Paperclip onboarding/configuration flow for model credentials and agent authentication.
 
 ## Operating the team
 
@@ -31,8 +31,14 @@ GitHub CLI access used to maintain the fork does not automatically connect runti
 
 The [implementation and qualification plan](doc/plans/2026-10-25-agentos-platform.md) tracks what is implemented and what remains. [Feature/access recipes](maps/feature-map/managed-applications.md) describe the testable behavior. [Docker](doc/DOCKER.md) and [deployment modes](doc/DEPLOYMENT-MODES.md) cover the existing persistent hosting path.
 
-The [Friday operating model](doc/plans/2026-10-25-agentos-platform.md#friday-and-delegated-operating-loops) defines the next build: conversation as the primary control surface, dedicated leads owning recurring pipelines, yes/no agenda decisions, a platform-wide galaxy, and delegated platform engineering through verified deployment. These capabilities are planned; installing the initial role package does not implement them.
+The [Friday operating model](doc/plans/2026-10-25-agentos-platform.md#friday-and-delegated-operating-loops) defines the operating architecture: conversation as the primary control surface, dedicated leads owning recurring pipelines, yes/no agenda decisions, a platform-wide galaxy, and delegated platform engineering through verified deployment. The combined conversation/galaxy, explicit coordinator binding, internal platform classification, native registry delegation and subscription-only admission are implemented. Live lead creation, recurring business loops, quota queuing and verified self-deployment still require the remaining integration and qualification work; a role instruction is not proof of an executed workflow.
 
-For an opt-in check against an owned local instance, run `node scripts/agentos-smoke.mjs`. It exercises both onboarding paths and native task aggregation, then removes its disposable company. It invokes no model or external provider and does not certify a browser journey.
+Friday supports typing, browser dictation into an editable draft, reply playback, voice selection and opt-in spoken new replies. Browser dictation may process audio through the browser provider; availability varies. No separately billed speech API is used. Microphone and audible playback must be qualified in a supported browser. See [Web Speech behavior](https://developer.mozilla.org/en-US/docs/Web/API/Web_Speech_API/Using_the_Web_Speech_API).
+
+Binding Friday creates a subscription-only operating profile. Runtime admission refuses unmanaged credentials; actual resolved API-key connections are rejected for native agents, decision helpers, fast responses and credential reads. Changing a personal default cannot evade this policy. This does not enforce account-wide concurrency or prevent arbitrary code from contacting external services; those require the planned runtime capability and capacity controls.
+
+Internal platform work uses `kind=platform`. The normal portfolio defaults to `kind=application`; Friday can read both with `kind=all`. Moving an entry between kinds retains its project links, tasks and history. The galaxy caps overview dots at 500 task associations per application page and identifies truncation; application drill-down provides task pagination.
+
+For an opt-in check against an owned local instance, run `node scripts/agentos-smoke.mjs`. It exercises both onboarding paths, native task aggregation, coordinator binding, authenticated subordinate hiring/project leadership and graph classification, then removes its disposable company. It invokes no model or external provider and does not certify a browser journey.
 
 Upstream: [paperclipai/paperclip](https://github.com/paperclipai/paperclip). Original MIT license and history are preserved. No upstream release publishing or cloud credentials are required by the AgentOS fork checks.

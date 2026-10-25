@@ -61,3 +61,11 @@ Manual: inspect an unconfigured company, a healthy connection and a failed one. 
 - A repository URL does not create a repository or connect an account. GitHub CLI login used to maintain this fork is distinct from a runtime agent's connection.
 - Native live updates reconcile active queries on socket connection/reconnection. Animation uses observed running records; idle tasks do not animate. Reduced motion removes pulsing.
 - Exact provider stages and outputs exist only when reported. No chain-of-thought view is provided.
+
+## Friday coordination and observation
+
+The existing registry/work/coordination capabilities now include `/friday`, GET/PUT `/api/companies/{companyId}/operating-profile`, and GET `/api/companies/{companyId}/managed-applications/galaxy`. Binding requires a board permission administrator and expectedRevision. Native grants are transferred in the same transaction as the binding and audit. Companies with an operating profile enforce subscription-only model admission and resolved credential selection; companies without one retain their existing behavior.
+
+The galaxy projects native records through the same project/task ACLs before counting or pagination. `kind=application` is the default; `kind=platform` separates internal development and `kind=all` supports cross-portfolio awareness. Dots are bounded and truncation is explicit. Select application/project/task to drill down while Friday stays alongside it. Native conversations own persistence, handoffs and revision-bound approvals.
+
+Voice is a browser capability: explicit microphone activation writes final transcripts to the existing draft, playback is stoppable, and automatic new-reply speech is opt-in. There is no paid speech API fallback. Component tests cover transcript/permission/cleanup behavior; a real microphone and audible playback are not yet qualified. Live model coordination, account-wide quota queuing and self-deployment remain separate qualification gates.

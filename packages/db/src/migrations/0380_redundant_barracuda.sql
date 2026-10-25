@@ -1,0 +1,1 @@
+ALTER TABLE "company_operating_profiles" ADD CONSTRAINT "company_operating_profiles_friday_agent_id_agents_id_fk" FOREIGN KEY ("friday_agent_id") REFERENCES "public"."agents"("id") ON DELETE set null ON UPDATE no action;

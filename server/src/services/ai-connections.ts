@@ -46,6 +46,7 @@ import { logger } from "../middleware/logger.js";
 import { logActivity } from "./activity-log.js";
 import { secretService } from "./secrets.js";
 import { probeAiConnectionUsage } from "./ai-connection-usage.js";
+import { assertCompanyModelPolicy } from "./company-model-policy.js";
 
 /** Same human audience displayed by the existing Connections identity controls. */
 function canUseCredential(
@@ -305,6 +306,7 @@ export function aiConnectionService(db: Db) {
       throw aiConnectionConfigurationFailure("ai_connection_missing", "The selected AI connection is unavailable");
     const { connection, grant } = row;
     const metadata = aiConnectionMetadataSchema.safeParse(connection.config.ai);
+    await assertCompanyModelPolicy(db, companyId, metadata.success ? metadata.data.method : null);
     if (
       !metadata.success ||
       metadata.data.provider !== binding.provider ||
@@ -409,6 +411,7 @@ export function aiConnectionService(db: Db) {
     if (!row || row.grant.kind !== "organization") throw unprocessable("Shared AI connection unavailable", { code: "connection_unavailable" });
     const metadata = aiConnectionMetadataSchema.safeParse(row.connection.config.ai);
     const provider = metadata.success ? decisionProviderForConnection(metadata.data) : null;
+    await assertCompanyModelPolicy(db, input.companyId, metadata.success ? metadata.data.method : null);
     if (!provider) throw unprocessable("Connection does not support decisions", { code: "incompatible_connection" });
     if (row.grant.status !== "active" || !row.connection.enabled || row.connection.status !== "active" || row.connection.healthStatus !== "ok")
       throw unprocessable("Reconnect or enable this connection", { code: "connection_unavailable" });
@@ -443,6 +446,7 @@ export function aiConnectionService(db: Db) {
     if (!row || row.grant.kind !== "organization") throw unprocessable("Shared AI connection unavailable", { code: "connection_unavailable" });
     const metadata = aiConnectionMetadataSchema.safeParse(row.connection.config.ai);
     const provider = metadata.success && metadata.data.method === "api_key" ? metadata.data.provider : null;
+    await assertCompanyModelPolicy(db, input.companyId, metadata.success ? metadata.data.method : null);
     if (!provider) throw unprocessable("Connection does not support fast responses", { code: "incompatible_connection" });
     if (row.grant.status !== "active" || !row.connection.enabled || row.connection.status !== "active" || row.connection.healthStatus !== "ok")
       throw unprocessable("Reconnect or enable this connection", { code: "connection_unavailable" });
@@ -499,6 +503,7 @@ export function aiConnectionService(db: Db) {
   }
   async function credential(row: Pick<Awaited<ReturnType<typeof select>>, "connection" | "grant">, retry = 0, audit?: { responsibleUserId: string | null; actorType: "user" | "agent" | "system"; actorId: string; issueId?: string | null; heartbeatRunId?: string | null }): Promise<string> {
     const metadata = aiConnectionMetadataSchema.parse(row.connection.config.ai);
+    await assertCompanyModelPolicy(db, row.connection.companyId, metadata.method);
     if (metadata.routing?.auth === "none") return "";
     const ref = row.grant.credentialSecretRefs.find(
       (r) => r.configPath === "ai.credential",

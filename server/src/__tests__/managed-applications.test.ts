@@ -3,10 +3,12 @@ import express from "express";
 import request from "supertest";
 import { and, eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { activityLog, agents, companies, createDb, issues, managedApplications, managedApplicationProjects, projects, projectAccessMembers } from "@paperclipai/db";
+import { activityLog, agents, companies, companyMemberships, companyOperatingProfiles, createDb, issues, managedApplications, managedApplicationProjects, projects, projectAccessMembers } from "@paperclipai/db";
 import { startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
 import { errorHandler } from "../middleware/index.js";
 import { managedApplicationRoutes } from "../routes/managed-applications.js";
+import { operatingProfileRoutes } from "../routes/operating-profile.js";
+import { ensureHumanRoleDefaultGrants } from "../services/principal-access-compatibility.js";
 
 describe("managed application persistence and access", () => {
   let tempDb: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>;
@@ -22,6 +24,7 @@ describe("managed application persistence and access", () => {
     result.use(express.json());
     result.use((req, _res, next) => { req.actor = actor; next(); });
     result.use("/api", managedApplicationRoutes(db));
+    result.use("/api", operatingProfileRoutes(db));
     result.use(errorHandler);
     return result;
   }
@@ -32,6 +35,8 @@ describe("managed application persistence and access", () => {
     const companyId = randomUUID();
     const homeProjectId = randomUUID();
     await db.insert(companies).values({ id: companyId, name: "AgentOS test", issuePrefix: `A${companyId.slice(0, 5).toUpperCase()}` });
+    await db.insert(companyMemberships).values(["owner", "other", "viewer"].map(principalId => ({ companyId, principalId, principalType: "user", status: "active", membershipRole: principalId === "viewer" ? "viewer" : "operator" })));
+    for (const principalId of ["owner", "other"]) await ensureHumanRoleDefaultGrants(db, { companyId, principalId, membershipRole: "operator", grantedByUserId: "owner" });
     await db.insert(projects).values({ id: homeProjectId, companyId, name: "Home", visibility });
     if (visibility === "private") await db.insert(projectAccessMembers).values({ companyId, projectId: homeProjectId, subjectType: "user", subjectId: "owner" });
     const base = `/api/companies/${companyId}/managed-applications`;
@@ -56,6 +61,56 @@ describe("managed application persistence and access", () => {
     expect(audit).toHaveLength(1);
     expect(audit[0].entityType).toBe("project");
     expect(audit[0].entityId).toBe(fixture.homeProjectId);
+  });
+
+  it("binds Friday with a revocable native grant and protects the binding from agents and stale writes", async () => {
+    const fixture = await seed();
+    const [friday, replacement] = await db.insert(agents).values([
+      { companyId: fixture.companyId, name: "Friday", role: "general", adapterType: "paperclip_runner" },
+      { companyId: fixture.companyId, name: "Replacement", role: "general", adapterType: "paperclip_runner" },
+    ]).returning();
+    const owner = app({ ...actor(fixture.companyId), source: "local_implicit" });
+    const endpoint = `/api/companies/${fixture.companyId}/operating-profile`;
+    const fridayActor: Express.Request["actor"] = { type: "agent", source: "agent_key", companyId: fixture.companyId, agentId: friday.id, keyScope: { kind: "standard" } };
+    expect((await request(app(fridayActor)).post(fixture.base).send(fixture.input)).status).toBe(403);
+    const bound = await request(owner).put(endpoint).send({ fridayAgentId: friday.id, expectedRevision: 0 });
+    expect(bound.status).toBe(200);
+    expect(bound.body.revision).toBe(1);
+    expect((await request(app(fridayActor)).put(endpoint).send({ fridayAgentId: replacement.id, expectedRevision: 1 })).status).toBe(403);
+    const created = await request(app(fridayActor)).post(fixture.base).send(fixture.input);
+    expect(created.status).toBe(201);
+    expect((await request(app({ ...fridayActor, keyScope: { kind: "skill_test" } as never })).patch(`${fixture.base}/${created.body.id}`).send({ name: "No" })).status).toBe(403);
+    expect((await request(owner).put(endpoint).send({ fridayAgentId: replacement.id, expectedRevision: 0 })).status).toBe(409);
+    expect((await request(owner).put(endpoint).send({ fridayAgentId: replacement.id, expectedRevision: 1 })).status).toBe(200);
+    expect((await request(app(fridayActor)).patch(`${fixture.base}/${created.body.id}`).send({ name: "Old Friday" })).status).toBe(403);
+    expect((await request(app({ ...fridayActor, agentId: replacement.id })).patch(`${fixture.base}/${created.body.id}`).send({ name: "New Friday" })).status).toBe(200);
+    const foreign = await seed();
+    const [foreignAgent] = await db.insert(agents).values({ companyId: foreign.companyId, name: "Other company's agent", role: "general", adapterType: "paperclip_runner" }).returning();
+    expect((await request(owner).put(endpoint).send({ fridayAgentId: foreignAgent.id, expectedRevision: 2 })).status).toBe(404);
+    expect((await request(app(actor(fixture.companyId, "viewer", "viewer"))).put(endpoint).send({ fridayAgentId: null, expectedRevision: 2 })).status).toBe(403);
+    // Native deletion clears nullable audit references before deleting an agent.
+    await db.update(activityLog).set({ agentId: null }).where(eq(activityLog.agentId, replacement.id));
+    await db.delete(agents).where(eq(agents.id, replacement.id));
+    const retained = (await db.select().from(companyOperatingProfiles).where(eq(companyOperatingProfiles.companyId, fixture.companyId)))[0];
+    expect(retained.fridayAgentId).toBeNull();
+    expect(retained.revision).toBe(2);
+  });
+
+  it("separates internal platform work without losing projects, tasks or direct links", async () => {
+    const fixture = await seed();
+    const api = app(actor(fixture.companyId));
+    const created = await request(api).post(fixture.base).send(fixture.input);
+    await db.insert(issues).values({ companyId: fixture.companyId, projectId: fixture.homeProjectId, title: "Existing platform work", status: "todo" });
+    expect((await request(api).patch(`${fixture.base}/${created.body.id}`).send({ kind: "platform" })).status).toBe(200);
+    expect((await request(api).get(fixture.base)).body.applications).toHaveLength(0);
+    expect((await request(api).get(`${fixture.base}?kind=platform`)).body.applications).toHaveLength(1);
+    const graph = await request(api).get(`${fixture.base}/galaxy?kind=all`);
+    expect(graph.status).toBe(200);
+    expect(graph.body.tasks[0].title).toBe("Existing platform work");
+    expect(graph.body.projects[0].id).toBe(fixture.homeProjectId);
+    expect(graph.body.tasksTruncated).toBe(false);
+    expect(Number.isNaN(Date.parse(graph.body.observedAt))).toBe(false);
+    expect((await request(api).get(`${fixture.base}/${created.body.id}/work`)).body.tasks).toHaveLength(1);
   });
 
   it("inherits private home-project access for list, detail, work, and mutation", async () => {
@@ -132,6 +187,10 @@ describe("managed application persistence and access", () => {
     expect((await request(viewer).get(`${fixture.base}/${created.body.id}/work?projectId=${secondProject}`)).status).toBe(404);
     const portfolio = await request(viewer).get(fixture.base);
     expect(portfolio.body.summaries[created.body.id]).toEqual({ projectCount: 1, agentCount: 0, taskCounts: { todo: 1, done: 1 } });
+    const galaxy = await request(viewer).get(`${fixture.base}/galaxy`);
+    expect(galaxy.status).toBe(200);
+    expect(galaxy.body.projects.map((project: { id: string }) => project.id)).toEqual([fixture.homeProjectId]);
+    expect(galaxy.body.tasks.map((task: { title: string }) => task.title).sort()).toEqual(["Visible one", "Visible two"]);
     const next = await request(viewer).get(`${fixture.base}/${created.body.id}/work?limit=1&offset=1`);
     expect(next.body.nextOffset).toBeNull();
     expect(next.body.tasks[0].id).not.toBe(page.body.tasks[0].id);

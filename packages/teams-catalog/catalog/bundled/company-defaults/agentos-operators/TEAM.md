@@ -1,6 +1,6 @@
 ---
 name: AgentOS Operators
-description: A reusable cross-functional operating team for existing applications and new products, with a coordinator and seven specialists.
+description: Friday and a reusable cross-functional operating pool for existing applications and new products, with delegated project and pipeline ownership.
 schema: agentcompanies/v1
 slug: agentos-operators
 category: company-defaults
@@ -38,7 +38,7 @@ requiredSkills:
 
 Install once as an organization pool, or under an existing manager. Configure the execution adapter in the native installer. Application planning selects specialists from this pool, so projects can share role definitions without copying their private context.
 
-Version: 1.0.0. Paperclip records this package's content hash and installed resources. Keep prior hashes with evaluation evidence when promoting a revision. This package defines working behavior; it does not claim that the agents are trained, evaluated, or connected to external accounts.
+Version: 1.1.0. Paperclip records this package's content hash and installed resources. Keep prior hashes with evaluation evidence when promoting a revision. This package defines working behavior; it does not claim that the agents are trained, evaluated, or connected to external accounts.
 
 The daily portfolio review and weekly role review are real native routines, installed paused. Enable them after the adapters and required connections are ready. Their default timezone is Pacific/Auckland; schedules are editable in Routines. No agent timer is needed.
 

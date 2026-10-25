@@ -1,0 +1,1 @@
+ALTER TABLE "company_operating_profiles" DROP CONSTRAINT "company_operating_profiles_company_id_friday_agent_id_agents_company_id_id_fk";

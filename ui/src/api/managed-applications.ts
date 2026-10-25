@@ -1,9 +1,18 @@
-import type { ApplicationWork, CreateManagedApplication, ManagedApplication, ManagedApplicationPage, UpdateManagedApplication } from "@paperclipai/shared";
+import type { ApplicationWork, CreateManagedApplication, ManagedApplication, ManagedApplicationPage, PortfolioGalaxyData, UpdateManagedApplication } from "@paperclipai/shared";
 import { api } from "./client";
 
 const base = (companyId: string) => `/companies/${encodeURIComponent(companyId)}/managed-applications`;
 export const managedApplicationsApi = {
-  list: (companyId: string, after?: string) => api.get<ManagedApplicationPage>(`${base(companyId)}${after ? `?after=${encodeURIComponent(after)}` : ""}`),
+  galaxy: (companyId: string, kind: "application" | "platform" | "all" = "application", after?: string) => {
+    const query = new URLSearchParams({ kind });
+    if (after) query.set("after", after);
+    return api.get<PortfolioGalaxyData>(`${base(companyId)}/galaxy?${query}`);
+  },
+  list: (companyId: string, after?: string, kind: "application" | "platform" | "all" = "application") => {
+    const query = new URLSearchParams({ kind });
+    if (after) query.set("after", after);
+    return api.get<ManagedApplicationPage>(`${base(companyId)}?${query}`);
+  },
   create: (companyId: string, body: CreateManagedApplication) => api.post<ManagedApplication>(base(companyId), body),
   update: (companyId: string, id: string, body: UpdateManagedApplication) => api.patch<ManagedApplication>(`${base(companyId)}/${id}`, body),
   work: (companyId: string, id: string, offset = 0, projectId?: string, assigneeAgentId?: string) => {

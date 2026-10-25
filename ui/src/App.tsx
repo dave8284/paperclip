@@ -74,6 +74,7 @@ const Companies = lazy(() => import("./pages/Companies").then((module) => ({ def
 const AgentDetail = lazy(() => import("./pages/AgentDetailPage").then((module) => ({ default: module.AgentDetailPage })));
 const Projects = lazy(() => import("./pages/Projects").then((module) => ({ default: module.Projects })));
 const Applications = lazy(() => import("./pages/Applications").then((module) => ({ default: module.Applications })));
+const Friday = lazy(() => import("./pages/Friday").then((module) => ({ default: module.Friday })));
 const TeamCatalog = lazy(() => import("./pages/TeamCatalog").then((module) => ({ default: module.TeamCatalog })));
 const OperatingConnections = lazy(() => import("./pages/OperatingConnections").then((module) => ({ default: module.OperatingConnections })));
 const ApplicationDetail = lazy(() => import("./pages/ApplicationDetail").then((module) => ({ default: module.ApplicationDetail })));
@@ -154,6 +155,7 @@ function boardRoutes(streamlinedUiEnabled: boolean, combinedInboxTasksEnabled: b
       <Route path="dashboard" element={<Dashboard />} />
       <Route path="dashboard/live" element={<DashboardLive />} />
       <Route path="applications" element={<Applications />} />
+      <Route path="friday" element={<Friday />} />
       <Route path="teams-catalog/*" element={<TeamCatalog />} />
       <Route path="operating-connections" element={<OperatingConnections />} />
       <Route path="applications/:applicationId" element={<ApplicationDetail />} />
@@ -809,6 +811,7 @@ export function App() {
           <Route path="instance/settings/*" element={<LegacySettingsRedirect />} />
           <Route path="companies" element={<UnprefixedBoardRedirect />} />
           <Route path="applications" element={<UnprefixedBoardRedirect />} />
+          <Route path="friday" element={<UnprefixedBoardRedirect />} />
           <Route path="applications/:applicationId" element={<UnprefixedBoardRedirect />} />
           <Route path="teams-catalog/*" element={<UnprefixedBoardRedirect />} />
           <Route path="operating-connections" element={<UnprefixedBoardRedirect />} />
