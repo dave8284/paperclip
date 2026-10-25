@@ -5024,7 +5024,19 @@ for (const operation of [
   { method: "get", path: "/api/companies/{companyId}/managed-applications/{id}/work", summary: "Read authorized linked projects and paginated application tasks", query: managedApplicationWorkQuerySchema },
   { method: "post", path: "/api/companies/{companyId}/managed-applications/{id}/projects", summary: "Link an accessible initiative project to an application (standard company access; grants no project access)", body: linkManagedApplicationProjectSchema },
   { method: "delete", path: "/api/companies/{companyId}/managed-applications/{id}/projects/{projectId}", summary: "Unlink an initiative project (operator only; home project cannot be removed)" },
-]) registerCurrentRoute({ ...operation, tags: ["managed-applications"] });
+]) {
+  const noContent = operation.method === "delete" || (operation.method === "post" && operation.path.endsWith("/projects"));
+  registerCurrentRoute({
+    ...operation,
+    tags: ["managed-applications"],
+    responses: {
+      ...(noContent ? { 204: r.noContent } : { 200: r.ok() }),
+      ...(operation.method === "post" && !noContent ? { 201: r.ok() } : {}),
+      400: r.badRequest, 401: r.unauthorized, 403: r.forbidden, 404: r.notFound,
+      409: { description: "Conflicting creation intent or protected home-project association" },
+    },
+  });
+}
 
 registry.registerPath({
   method: "get",

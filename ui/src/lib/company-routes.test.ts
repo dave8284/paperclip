@@ -7,6 +7,13 @@ import {
 } from "./company-routes";
 
 describe("company routes", () => {
+  it.each(["/applications", "/applications/app-123", "/applications/app-123?view=board#work", "/operating-connections"])("keeps AgentOS navigation in the active company: %s", path => {
+    expect(isBoardPathWithoutPrefix(path)).toBe(true);
+    expect(extractCompanyPrefixFromPath(path)).toBeNull();
+    expect(applyCompanyPrefix(path, "AGE")).toBe(`/AGE${path}`);
+    expect(applyCompanyPrefix(`/AGE${path}`, "AGE")).toBe(`/AGE${path}`);
+    expect(toCompanyRelativePath(`/AGE${path}`)).toBe(path);
+  });
   it("keeps public Dot consent outside company-prefixed routes", () => {
     const path = `/dot-connect/pcmcp_request_${"a".repeat(43)}`;
     expect(extractCompanyPrefixFromPath(path)).toBeNull();

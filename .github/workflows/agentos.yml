@@ -33,5 +33,5 @@ jobs:
       - run: node scripts/check-maps.mjs
       - run: pnpm check:token-gates
       - name: Verify application persistence, authorization, API discovery, and installation
-        run: pnpm exec vitest run server/src/__tests__/managed-applications.test.ts server/src/__tests__/openapi-routes.test.ts ui/src/pages/Applications.test.tsx ui/src/pages/TeamCatalog.test.tsx ui/src/pages/useInstallTeamCatalogEntry.test.tsx ui/src/App.test.tsx
+        run: pnpm exec vitest run server/src/__tests__/managed-applications.test.ts server/src/__tests__/openapi-routes.test.ts ui/src/pages/Applications.test.tsx ui/src/pages/TeamCatalog.test.tsx ui/src/pages/useInstallTeamCatalogEntry.test.tsx ui/src/lib/company-routes.test.ts ui/src/App.test.tsx
       - run: pnpm build

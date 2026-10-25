@@ -11,6 +11,7 @@ Use Node >=24.11, pnpm 9.15.4 and rustup. The runner pins its Rust version in `p
 ```sh
 pnpm install --frozen-lockfile
 pnpm --filter @paperclipai/plugin-sdk build
+pnpm paperclipai onboard --data-dir ../.runtime --no-install-service
 pnpm dev:once --data-dir ../.runtime
 ```
 
