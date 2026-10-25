@@ -1,3 +1,4 @@
+import type { AgentConversationFocusView } from "@/lib/conversation-focus";
 import { useCallback, useEffect, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { agentChatsApi } from "@/api/agentChats";
@@ -12,7 +13,7 @@ import { agentRouteRef } from "@/lib/utils";
 import { TaskDetailSurface } from "./IssueDetail";
 import { isUuidLike, type Issue } from "@paperclipai/shared";
 
-export function AgentChat({ agentRef: selectedAgentRef, voice = false }: { agentRef?: string; voice?: boolean } = {}) {
+export function AgentChat({ agentRef: selectedAgentRef, voice = false, focusView }: { agentRef?: string; voice?: boolean; focusView?: AgentConversationFocusView } = {}) {
   const { agentRef: routeAgentRef = "" } = useParams<{ agentRef: string }>();
   const agentRef = selectedAgentRef ?? routeAgentRef;
   const { selectedCompanyId } = useCompany();
@@ -96,7 +97,7 @@ export function AgentChat({ agentRef: selectedAgentRef, voice = false }: { agent
   return (
     <TaskDetailSurface
       key={`${agent.id}:${userId}`}
-      conversation={{ agent, issue: chat.data ?? null, ensureIssue, voice }}
+      conversation={{ agent, issue: chat.data ?? null, ensureIssue, voice, focusView }}
     />
   );
 }

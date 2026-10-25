@@ -1,3 +1,4 @@
+import type { AgentConversationFocusView, ConversationFocusView } from "@/lib/conversation-focus";
 import { useTaskRetry } from "../hooks/useTaskRetry";
 import { FridayVoiceControls } from "../components/FridayVoiceControls";
 import { grokBotApi } from "@/api/grokBot";
@@ -1201,6 +1202,7 @@ function InboxMobileToolbar({
 }
 
 type IssueDetailChatTabProps = {
+  focusView?: ConversationFocusView;
   executionBlocked?: boolean;
   interruption?: Issue["interruption"];
   retryPreparing?: boolean;
@@ -1411,6 +1413,7 @@ const IssueDetailChatTab = memo(function IssueDetailChatTab({
   onWorkModeChange,
   composerRef,
   composerAccessory,
+  focusView,
   threadHeader,
   issueBrief,
   footer,
@@ -2552,6 +2555,7 @@ const IssueDetailChatTab = memo(function IssueDetailChatTab({
               void refetchLiveRuns();
               if (activeRunQueryEnabled) void refetchActiveRun();
             }}
+            focusView={focusView}
             composerRef={composerRef}
             composerAccessory={<><WorkspaceRetryControl />{composerAccessory}</>}
             threadHeader={
@@ -3094,7 +3098,7 @@ export function IssueDetail({ tasksTab }: { tasksTab?: TaskSidePanelProps["tasks
 
 /** One controller and surface for both task URLs and agent conversations. */
 export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskSidePanelProps["tasksTab"]; conversation?: {
-  agent: Agent; issue: Issue | null; ensureIssue: () => Promise<Issue>; voice?: boolean;
+  agent: Agent; issue: Issue | null; ensureIssue: () => Promise<Issue>; voice?: boolean; focusView?: AgentConversationFocusView;
 } }) {
   const { issueId: routeIssueId, companyPrefix } = useParams<{ issueId: string; companyPrefix: string }>();
   const issueId = conversation ? conversation.issue?.id : routeIssueId;
@@ -8259,8 +8263,20 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
                   onLoadOlderComments={loadOlderComments}
                   onRefreshLatestComments={refetchLatestComments}
                   composerRef={commentComposerRef}
+                  focusView={conversation?.focusView ? {
+                    showTranscript: conversation.focusView.showTranscript,
+                    render: state => conversation.focusView!.render({
+                      ...state,
+                      issueId: conversation.issue?.id ?? null,
+                      reply: comments.filter(comment => comment.authorAgentId === conversation.agent.id && !comment.deletedAt && comment.origin !== "fast_response").at(-1),
+                      attachments: attachments ?? [],
+                      workProducts: workProducts ?? [],
+                      onTranscript: text => commentComposerRef.current?.restoreDraft(text),
+                      voiceDisabled: !!activePauseHold || !instanceExperimentalSettings?.enableAgentChat,
+                    }),
+                  } : undefined}
                   composerAccessory={
-                    conversation?.voice ? <FridayVoiceControls
+                    conversation?.voice && !conversation.focusView ? <FridayVoiceControls
                       onTranscript={text => commentComposerRef.current?.restoreDraft(text)}
                       reply={comments.filter(comment => comment.authorAgentId === conversation.agent.id && !comment.deletedAt && comment.origin !== "fast_response").at(-1)}
                       disabled={!!activePauseHold || !instanceExperimentalSettings?.enableAgentChat}

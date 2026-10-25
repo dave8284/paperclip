@@ -1,0 +1,27 @@
+import type { ReactNode } from "react";
+import type { IssueAttachment, IssueComment, IssueWorkProduct } from "@paperclipai/shared";
+
+/** Optional presentation slot; the native thread still owns sending, queues,
+ * runtime requests, approvals, recovery and the durable conversation. */
+export interface ConversationFocusState {
+  runStatus: "idle" | "queued" | "running";
+  awaitingInput: boolean;
+  unavailable: boolean;
+  loading: boolean;
+}
+export interface ConversationFocusView {
+  showTranscript: boolean;
+  render: (state: ConversationFocusState) => ReactNode;
+}
+export interface AgentConversationFocusData extends ConversationFocusState {
+  issueId: string | null;
+  reply: IssueComment | undefined;
+  attachments: IssueAttachment[];
+  workProducts: IssueWorkProduct[];
+  onTranscript: (text: string) => void;
+  voiceDisabled: boolean;
+}
+export interface AgentConversationFocusView {
+  showTranscript: boolean;
+  render: (state: AgentConversationFocusData) => ReactNode;
+}

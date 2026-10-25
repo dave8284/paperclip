@@ -1,6 +1,6 @@
 # AgentOS on Paperclip
 
-This fork adds Friday, an application portfolio and a reusable operating team to Paperclip. Open **Friday** for a durable conversation alongside the portfolio galaxy. Install **AgentOS Operators**, bind its Friday agent under Configure Friday, and connect a model subscription through the native account setup. You can also register an existing repository or a new idea from **Applications**.
+This fork adds Friday, an application portfolio and a reusable operating team to Paperclip. Friday is the home screen: an original pulsing point-cloud orb, native typed/voice conversation, and an on-demand workspace. Open **Portfolio** for the galaxy, **Conversation** for the full thread, **Displays** for generated HTML and saved reusable displays, and **Explore** for native dashboards/projects/agents/connections. Install **AgentOS Operators**, bind its Friday agent under Configure Friday, and connect a model subscription through the native account setup. You can also register an existing repository or a new idea from **Applications**.
 
 The map, Kanban and task list use saved native tasks. Selecting a dot exposes reported execution and work products; native task and agent pages provide the complete history. A pulsing dot means a recorded running execution. Empty or idle work is not animated.
 
@@ -42,3 +42,8 @@ Internal platform work uses `kind=platform`. The normal portfolio defaults to `k
 For an opt-in check against an owned local instance, run `node scripts/agentos-smoke.mjs`. It exercises both onboarding paths, native task aggregation, coordinator binding, authenticated subordinate hiring/project leadership and graph classification, then removes its disposable company. It invokes no model or external provider and does not certify a browser journey.
 
 Upstream: [paperclipai/paperclip](https://github.com/paperclipai/paperclip). Original MIT license and history are preserved. No upstream release publishing or cloud credentials are required by the AgentOS fork checks.
+
+
+Friday can publish small, self-contained HTML displays through native attachment and artifact work-product APIs. Newly published displays open beside the orb; existing history does not open itself on arrival during initial loading. The native HTML preview isolates inline code from the parent application. Stop preview removes the frame, and Raw/Download retain access to the source. Displays are immutable snapshots, not autonomous deployments or privileged platform extensions.
+
+Save for reuse writes a revision-controlled `friday-canvas-{attachmentId}` document in the current conversation. Friday's instructions explain how to resolve those references, refresh data and publish a new version. Turning a useful display into a permanent component remains a delegated engineering/release task. No separate scheduler, credential store, canvas database or paid voice API was introduced. The renderer is original Canvas code, visually inspired by [HorizonX's Solving Orb](https://horizonx.so/tools/orb-solving); its points indicate presence and are distinct from the portfolio's record-backed task dots.

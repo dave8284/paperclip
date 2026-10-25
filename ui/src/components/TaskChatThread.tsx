@@ -3023,13 +3023,19 @@ export function TaskChatThread(props: TaskChatThreadProps) {
     void retryPlan();
   };
 
+  const focusView = props.focusView;
+  // Keep native recovery notices visible. Runtime decisions remain in the
+  // native composer takeover even while the transcript is folded away.
+  const pendingInlineDecision = (interactions ?? []).some(interaction => interaction.status === "pending" && interaction.kind === "connection_intent" && !shouldHideInteractionCard(interaction));
+  const showHistory = pendingInlineDecision || !focusView || focusView.showTranscript || !!props.recoveryAction || !!props.interruption || !!props.executionBlocked || tailStatus === "failed" || historyError;
+
   return (
     <TaskChatRequestHistoryContext.Provider value={issueId ?? "unknown"}>
     <TaskChatExpansionState.Provider value={expansionState.current}>
       <TaskChatScrollReady.Provider value={!historyPending || historyWaitExpired}>
         <TaskChatWindowScroll
           contentKey={isMobile ? autoFollowContentKey : 0}
-          enabled={isMobile && historyRevealed}
+          enabled={isMobile && historyRevealed && showHistory}
         />
         <TaskChatPresentationProvider
           mode={streamlinedUiEnabled ? "streamlined" : "production"}
@@ -3042,9 +3048,18 @@ export function TaskChatThread(props: TaskChatThreadProps) {
             )}
             data-testid="task-chat-thread"
           >
+            {focusView && <div className={showHistory ? "shrink-0" : "flex min-h-0 flex-1 flex-col"}>
+              {focusView.render({
+                runStatus: liveRun?.status === "running" ? "running" : liveRun || optimisticRunnerStartup ? "queued" : "idle",
+                awaitingInput: !!selectedPendingInput || pendingInlineDecision,
+                unavailable: historyError || initialHistoryError,
+                loading: historyPending,
+              })}
+            </div>}
             <div
+              hidden={!showHistory}
               className={cn(
-                "relative flex flex-col",
+                showHistory ? "relative flex flex-col" : "hidden",
                 (!isMobile || !historyRevealed) && "min-h-0 flex-1",
               )}
               aria-busy={!historyRevealed}

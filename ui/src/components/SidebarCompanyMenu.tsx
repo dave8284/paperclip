@@ -227,7 +227,7 @@ function BuiltinCompanyMenu({ open: controlledOpen, onOpenChange, showChevron = 
     setOpen(false);
     if (isMobile) setSidebarOpen(false);
     if (shouldLeaveCurrentRoute) {
-      navigate(`/${company.issuePrefix}/dashboard`);
+      navigate(`/${company.issuePrefix}/friday`);
     }
   }
 

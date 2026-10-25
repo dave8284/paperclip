@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Mic, MicOff, Volume2, Square } from "lucide-react";
 import { Button } from "./ui/button";
 
@@ -19,10 +19,12 @@ export function spokenReply(text: string) {
 
 /** Audio is opt-in. Dictation uses the browser's speech service, never a hidden
  * model API fallback. Final transcripts enter the existing recoverable draft. */
-export function FridayVoiceControls({ onTranscript, reply, disabled = false }: {
+export function FridayVoiceControls({ onTranscript, reply, disabled = false, renderPresence, compact = false }: {
   onTranscript: (text: string) => void;
   reply?: { id: string; body: string; createdAt?: Date | string };
   disabled?: boolean;
+  compact?: boolean;
+  renderPresence?: (voice: { listening: boolean; speaking: boolean; starting: boolean; canListen: boolean; toggleListening: () => void }) => ReactNode;
 }) {
   const host = window as unknown as VoiceWindow;
   const RecognitionClass = host.SpeechRecognition ?? host.webkitSpeechRecognition;
@@ -110,15 +112,20 @@ export function FridayVoiceControls({ onTranscript, reply, disabled = false }: {
     recognition.current = active; setStarting(true);
     try { active.start(); } catch { recognition.current = null; setStarting(false); setError("The browser could not start dictation. Try again or type."); }
   }
-  return <div className="space-y-2" aria-label="Friday voice controls">
-    <div className="flex flex-wrap items-center gap-2">
-      <Button type="button" size="sm" variant={listening ? "default" : "outline"} disabled={!RecognitionClass || disabled} onClick={() => starting ? stopListening() : listening ? recognition.current?.stop() : listen()}>{listening || starting ? <MicOff /> : <Mic />}{listening ? "Stop listening" : starting ? "Cancel microphone" : "Talk to Friday"}</Button>
-      <Button type="button" variant="outline" size="sm" disabled={!synthesis || !reply} onClick={() => reply && speak(reply.body)}><Volume2 />Read reply</Button>
-      {speaking && <Button type="button" variant="outline" size="sm" onClick={stopSpeaking}><Square />Stop speaking</Button>}
+  const toggleListening = () => starting ? stopListening() : listening ? recognition.current?.stop() : listen();
+  const preferences = <>
       <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={autoSpeak} disabled={!synthesis} onChange={event => { setAutoSpeak(event.target.checked); speakSince.current = Date.now(); seenReply.current = reply?.id ?? ""; if (!event.target.checked) stopSpeaking(); }} />Speak new replies</label>
       {!!voices.length && <select aria-label="Friday voice" className="rounded-md border bg-background px-2 py-1 text-xs" value={voiceURI} onChange={event => setVoiceURI(event.target.value)}><option value="">System voice</option>{voices.map(voice => <option key={voice.voiceURI} value={voice.voiceURI}>{voice.name} · {voice.lang}</option>)}</select>}
+      <p className="text-xs text-muted-foreground">{RecognitionClass ? "Browser dictation may send audio to your browser’s speech provider. Review the transcript in your draft, then send. Listening stops when you leave this page." : "This browser does not support dictation. Use browser/OS dictation or type; speech playback is available where supported."}</p>
+  </>;
+  return <div className={compact ? "friday-voice" : "space-y-2"} aria-label="Friday voice controls">
+    {renderPresence?.({ listening, speaking, starting, canListen: !!RecognitionClass && !disabled, toggleListening })}
+    <div className="flex flex-wrap items-center gap-2">
+      <Button type="button" size="sm" variant={listening ? "default" : "outline"} disabled={!RecognitionClass || disabled} onClick={toggleListening}>{listening || starting ? <MicOff /> : <Mic />}{listening ? "Stop listening" : starting ? "Cancel microphone" : "Talk to Friday"}</Button>
+      <Button type="button" variant="outline" size="sm" disabled={!synthesis || !reply} onClick={() => reply && speak(reply.body)}><Volume2 />Read reply</Button>
+      {speaking && <Button type="button" variant="outline" size="sm" onClick={stopSpeaking}><Square />Stop speaking</Button>}
     </div>
-    <p className="text-xs text-muted-foreground">{RecognitionClass ? "Browser dictation may send audio to your browser’s speech provider. Review the transcript in your draft, then send. Listening stops when you leave this page." : "This browser does not support dictation. Use browser/OS dictation or type; speech playback is available where supported."}</p>
+    {compact ? <details className="friday-voice-settings"><summary className="cursor-pointer text-xs text-muted-foreground">Voice settings</summary><div className="space-y-2 pt-2">{preferences}</div></details> : preferences}
     {interim && <p role="status" className="text-sm text-muted-foreground">{interim}</p>}
     {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
   </div>;

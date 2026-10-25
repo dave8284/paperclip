@@ -151,7 +151,7 @@ function boardRoutes(streamlinedUiEnabled: boolean, combinedInboxTasksEnabled: b
   const mergedTasks = streamlinedUiEnabled && combinedInboxTasksEnabled;
   return (
     <>
-      <Route index element={<Navigate to="applications" replace />} />
+      <Route index element={<Navigate to="friday" replace />} />
       <Route path="dashboard" element={<Dashboard />} />
       <Route path="dashboard/live" element={<DashboardLive />} />
       <Route path="applications" element={<Applications />} />
@@ -671,7 +671,7 @@ function CompanyRootRedirect() {
     return <NoCompaniesStartPage />;
   }
 
-  return <Navigate to={`/${targetCompany.issuePrefix}/applications`} replace />;
+  return <Navigate to={`/${targetCompany.issuePrefix}/friday`} replace />;
 }
 
 function StatusCardsLegacyRedirect() {

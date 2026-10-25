@@ -4936,3 +4936,43 @@ it("explains a missing provider runtime with an installation repair", () => {
   expect(container.textContent).toContain("Reinstall or rebuild Paperclip");
   expect(container.textContent).toContain("test the agent's runtime");
 });
+
+describe("conversation focus presentation", () => {
+  it("folds history without replacing the native sender, then restores the same editor", async () => {
+    const onAdd = vi.fn(async (_body: string) => {});
+    const focus = vi.fn((_state: import("@/lib/conversation-focus").ConversationFocusState) => <div data-testid="focus-presence">Friday</div>);
+    const props = { comments: [], onAdd, conversationMode: true, issueId: "friday-chat", issueAssigneeAgentId: "agent", issueStatus: "todo" };
+    render(<TaskChatThread {...props} focusView={{ showTranscript: false, render: focus }} />);
+    const editor = container.querySelector('[data-testid="mock-editor"]');
+    expect(editor).not.toBeNull();
+    expect(container.querySelector('[data-testid="task-chat-history-content"]')?.parentElement?.hidden).toBe(true);
+    expect(focus.mock.lastCall?.[0]).toMatchObject({ runStatus: "idle", awaitingInput: false });
+    await act(async () => editorCallbacks.change("Show my projects"));
+    await act(async () => container.querySelector<HTMLButtonElement>('[data-testid="task-chat-composer-send"]')!.click());
+    expect(onAdd).toHaveBeenCalledOnce();
+    expect(onAdd.mock.calls[0][0]).toBe("Show my projects");
+    render(<TaskChatThread {...props} focusView={{ showTranscript: true, render: focus }} />);
+    expect(container.querySelector('[data-testid="task-chat-history-content"]')?.parentElement?.hidden).toBe(false);
+    expect(container.querySelector('[data-testid="mock-editor"]')).toBe(editor);
+  });
+  it("reports an observed run and opens history when observations fail", () => {
+    const focus = vi.fn((_state: import("@/lib/conversation-focus").ConversationFocusState) => <div>Friday</div>);
+    const active = { id: "friday-run", status: "running", invocationSource: "issue", triggerDetail: null,
+      startedAt: "2026-10-25T00:00:00Z", finishedAt: null, createdAt: "2026-10-25T00:00:00Z",
+      agentId: "agent", agentName: "Friday", adapterType: "process" };
+    render(<TaskChatThread comments={[]} onAdd={async () => {}} issueStatus="in_progress" activeRun={active} focusView={{ showTranscript: false, render: focus }} />);
+    expect(focus.mock.lastCall?.[0]).toMatchObject({ runStatus: "running" });
+    render(<TaskChatThread comments={[]} onAdd={async () => {}} initialHistoryError focusView={{ showTranscript: false, render: focus }} />);
+    expect(focus.mock.lastCall?.[0]).toMatchObject({ unavailable: true });
+    expect(container.querySelector('[data-testid="task-chat-history-content"]')?.parentElement?.hidden).toBe(false);
+  });
+  it("keeps native pending connection decisions reachable with history folded", async () => {
+    const focus = vi.fn((_state: import("@/lib/conversation-focus").ConversationFocusState) => <div>Friday</div>);
+    render(<TaskChatThread comments={[]} onAdd={async () => {}} currentUserId="user-board" interactions={[pendingConnectionIntentInteraction]} focusView={{ showTranscript: false, render: focus }} />);
+    expect(focus.mock.lastCall?.[0]).toMatchObject({ awaitingInput: true });
+    expect(container.querySelector('[data-testid="task-chat-composer-dock"]')?.closest('[hidden]')).toBeNull();
+    expect(container.querySelector('[data-testid="task-chat-history-content"]')?.parentElement?.hidden).toBe(false);
+    await act(async () => { await new Promise(resolve => requestAnimationFrame(resolve)); });
+    expect(container.textContent).toContain("Notion");
+  });
+});

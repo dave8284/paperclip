@@ -1,3 +1,4 @@
+import type { ConversationFocusView } from "@/lib/conversation-focus";
 import { resolveIssueChatHumanAuthor } from "@/lib/issue-chat-human-author";
 import { useCurrentWorkspaceRetry, useWorkspaceBaseRefRecovery, useWorkspaceRetry } from "./WorkspaceBaseRefRecovery";
 import { WorkspaceBaseRefRecoveryNotice } from "./WorkspaceBaseRefRecoveryNotice";
@@ -542,6 +543,7 @@ interface IssueChatComposerProps {
 }
 
 interface IssueChatThreadProps {
+  focusView?: ConversationFocusView;
   executionBlocked?: boolean;
   interruption?: import("@paperclipai/shared").TaskInterruptionPresentation | null;
   retryPreparing?: boolean;

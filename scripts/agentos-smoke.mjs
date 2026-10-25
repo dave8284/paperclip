@@ -75,7 +75,31 @@ try {
   assert.equal(galaxy.tasks.length, 2);
   assert.equal(galaxy.tasksTruncated, false);
   assert.equal((await api(`${base}/managed-applications/${first.application.id}/work`)).tasks[0].id, first.task.id);
-  console.log("PASS: registration/replay, native task aggregation, Friday binding/stale-write denial, authenticated delegation/hiring/project leadership, platform separation and galaxy records.");
+  // Generated displays use native attachments/work products and revisioned
+  // documents. Exercise the real publication path without invoking a model.
+  const html = '<!doctype html><title>Verification display</title><button onclick="this.textContent=\'Ready\'">Inspect</button>';
+  const form = new FormData();
+  form.set("file", new Blob([html], { type: "text/html" }), "verification.html");
+  const upload = await fetch(new URL(`/api${base}/issues/${first.task.id}/attachments`, origin), {
+    method: "POST", headers: { Origin: origin.origin, Authorization: `Bearer ${key.token}` }, body: form,
+  });
+  assert(upload.ok, `Artifact upload failed: ${upload.status}`);
+  const attachment = await upload.json();
+  const canvas = await api(`/issues/${first.task.id}/work-products`, "POST", {
+    type: "artifact", provider: "paperclip", title: "Verification display", status: "ready_for_review",
+    externalId: "friday-display-verification", metadata: { attachmentId: attachment.id },
+  }, undefined, key.token);
+  assert.equal(canvas.metadata.attachmentId, attachment.id);
+  assert.equal(canvas.metadata.contentType, "text/html");
+  const content = await fetch(new URL(`/api/attachments/${attachment.id}/content`, origin));
+  assert(content.ok); assert.equal(await content.text(), html);
+  const documentPath = `/issues/${first.task.id}/documents/friday-canvas-${attachment.id}`;
+  const saved = await api(documentPath, "PUT", { format: "markdown", title: "Saved verification display", baseRevisionId: null,
+    body: JSON.stringify({ version: 1, attachmentId: attachment.id, workProductId: canvas.id }) });
+  assert(saved.latestRevisionId);
+  assert.equal(JSON.parse((await api(documentPath, "GET", undefined, undefined, key.token)).body).attachmentId, attachment.id);
+  await api(documentPath, "PUT", { format: "markdown", title: "Stale overwrite", baseRevisionId: null, body: "stale" }, 409);
+  console.log("PASS: registration/replay, native aggregation, Friday binding, authenticated delegation/hiring, platform separation, galaxy, agent HTML publication and revision-controlled reusable displays.");
 } finally {
   if (company) {
     await api(`/companies/${company.id}`, "DELETE");

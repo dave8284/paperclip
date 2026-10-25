@@ -516,7 +516,7 @@ describe("SidebarCompanyMenu", () => {
     await flushReact();
 
     expect(mockSetSelectedCompanyId).toHaveBeenCalledWith("company-2");
-    expect(mockNavigate).toHaveBeenCalledWith("/STR/dashboard");
+    expect(mockNavigate).toHaveBeenCalledWith("/STR/friday");
 
     act(() => {
       root.unmount();
@@ -615,7 +615,7 @@ describe("SidebarCompanyMenu", () => {
         .find(element => element.textContent?.includes("Anachronist Wiki"));
       act(() => row?.dispatchEvent(new MouseEvent("click", { bubbles: true })));
       expect(mockSetSelectedCompanyId).toHaveBeenCalledWith("company-3");
-      expect(mockNavigate).toHaveBeenCalledWith("/ANA/dashboard");
+      expect(mockNavigate).toHaveBeenCalledWith("/ANA/friday");
       expect(mockNavigateTopLevel).not.toHaveBeenCalled();
       act(() => root.unmount());
     });

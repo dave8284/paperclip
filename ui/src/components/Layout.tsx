@@ -124,6 +124,7 @@ export function Layout({ sidebarSections }: { sidebarSections?: ReactNode }) {
   const companyPathSegments = shellRoute.companySegments;
   const isTaskDetailRoute = shellRoute.isTaskDetail;
   const { enabled: agentChatEnabled } = useAgentChatEnabled();
+  const isFridayRoute = companyPathSegments[0]?.toLowerCase() === "friday";
   const isAgentChatRoute = agentChatEnabled && companyPathSegments[0]?.toLowerCase() === "chats";
   // Chat keeps its header beside the agent sidebar, including before an agent is selected.
   const useStreamlinedTaskDetailShell = streamlinedUiEnabled && (isTaskDetailRoute || isAgentChatRoute);
@@ -245,9 +246,9 @@ export function Layout({ sidebarSections }: { sidebarSections?: ReactNode }) {
   });
 
   useLayoutEffect(() => {
-    setForceCollapsed(!streamlinedUiEnabled && hasSecondarySidebar);
+    setForceCollapsed(isFridayRoute || (!streamlinedUiEnabled && hasSecondarySidebar));
     return () => setForceCollapsed(false);
-  }, [hasSecondarySidebar, setForceCollapsed, streamlinedUiEnabled]);
+  }, [hasSecondarySidebar, setForceCollapsed, streamlinedUiEnabled, isFridayRoute]);
 
   useEffect(() => {
     const previous = previousShellRoute.current;
@@ -315,7 +316,7 @@ export function Layout({ sidebarSections }: { sidebarSections?: ReactNode }) {
         dedupeKey: `archived-company-bounce:${matchedCompany.id}`,
       });
       setSelectedCompanyId(bounce.id, { source: "route_sync" });
-      navigate(`/${bounce.issuePrefix}/dashboard`, { replace: true });
+      navigate(`/${bounce.issuePrefix}/friday`, { replace: true });
       return;
     }
 
