@@ -91,6 +91,12 @@ pnpm dev
 1. Keep changes company-scoped.
 Every domain entity should be scoped to a company and company boundaries must be enforced in routes/services.
 
+Agent OS fork exception: owner-scoped portfolios and shared employee identities
+link company-specific agent assignments, as approved in
+`doc/plans/2026-10-25-agentos-operating-model.md`. They contain shared identity
+metadata, not company credentials or private transcripts. Company links never
+grant access; each target company retains native authorization and execution.
+
 Explicit exception: announcement dismissals are instance-wide user preferences,
 keyed by user and announcement so they persist across companies. Their audit
 context must still validate company membership. The announcement publication-ID

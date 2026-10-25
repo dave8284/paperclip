@@ -2,6 +2,7 @@ const BOARD_ROUTE_ROOTS = new Set([
   "dashboard",
   "applications",
   "friday",
+  "workforce",
   "operating-connections",
   "companies",
   "company",

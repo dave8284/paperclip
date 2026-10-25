@@ -1,5 +1,7 @@
 # AgentOS: application operating platform
 
+The current target architecture and delivery sequence are in the [Agent OS operating model and delivery plan](2026-10-25-agentos-operating-model.md). Its portfolio above companies, shared workforce, mandatory execution visibility and evaluated learning replace the earlier design assumptions below. This document preserves the initial implementation scope and historical qualification evidence; its checkpoints are not certification of the expanded design.
+
 ## Objective
 
 Maintain a real Paperclip fork that coordinates a portfolio of existing, in-flight and new applications. Friday is the operator's conversational entry point and platform coordinator. The operator provides a repository, an idea or an outcome through Friday. Friday creates projects, appoints accountable leads and coordinates decisions. Project and pipeline leads discover current state, plan outcomes, select specialists from a reusable role pool and own delivery and recurring operation across product, development, QA, operations, marketing, sales and support.

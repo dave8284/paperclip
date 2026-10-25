@@ -266,3 +266,4 @@ export * from "./prompt_injection_prevention.js";
 export { workflows } from "./workflows.js";
 export { managedApplications, managedApplicationProjects } from "./managed_applications.js";
 export { companyOperatingProfiles } from "./company_operating_profiles.js";
+export { agentosPortfolios, agentosPortfolioCompanies, agentosEmployees, agentosAssignments } from "./agentos_workforce.js";

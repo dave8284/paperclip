@@ -7,6 +7,7 @@ import {
   experimentalApiQueries,
 } from "./experimental-api-paths.js";
 import { Router } from "express";
+import { createAgentosPortfolioSchema, createAgentosEmployeeSchema, createAgentosAssignmentSchema, retireAgentosAssignmentSchema } from "@paperclipai/shared";
 import { createManagedApplicationSchema, updateManagedApplicationSchema, managedApplicationListSchema, managedApplicationWorkQuerySchema, linkManagedApplicationProjectSchema, updateOperatingProfileSchema, fridayWorkQuerySchema } from "@paperclipai/shared";
 import { subscriptionPriceSchema, mergeSubscriptionsSchema } from "@paperclipai/shared";
 import { z } from "zod";
@@ -1757,6 +1758,7 @@ function operationKey(method: string, path: string) {
 function isVoiceSessionOperation(path: string) { return /^\/api\/companies\/\{companyId\}\/voice-(sessions|callbacks|phone|history)(?:\/|$)/.test(path); }
 
 function isBoardOnlyOperation(method: string, path: string) {
+  if (path.startsWith("/api/agentos/portfolios")) return true;
   if (isVoiceSessionOperation(path)) return true;
   const key = operationKey(method, path);
   if (BOARD_ONLY_OPERATIONS.has(key)) return true;
@@ -5014,6 +5016,22 @@ registry.registerPath({
     422: r.unprocessable,
   },
 });
+
+for (const operation of [
+  { method: "get", path: "/api/agentos/portfolios", summary: "List the operator's accessible Agent OS portfolios (board only)" },
+  { method: "post", path: "/api/agentos/portfolios", summary: "Create an owner-scoped portfolio and link its home company (permission administrator, idempotent)", body: createAgentosPortfolioSchema },
+  { method: "get", path: "/api/agentos/portfolios/{portfolioId}", summary: "Read shared employees and company assignments, filtering revoked company access (portfolio owner only)" },
+  { method: "post", path: "/api/agentos/portfolios/{portfolioId}/companies", summary: "Link an authorized company to a portfolio (permission administrator in both companies)", body: z.object({ companyId: z.uuid() }).strict() },
+  { method: "post", path: "/api/agentos/portfolios/{portfolioId}/employees", summary: "Create a reusable specialist identity (portfolio owner, idempotent)", body: createAgentosEmployeeSchema },
+  { method: "post", path: "/api/agentos/portfolios/{portfolioId}/assignments", summary: "Bind a shared employee to an existing approved company agent (permission administrator, idempotent)", body: createAgentosAssignmentSchema },
+  { method: "post", path: "/api/agentos/portfolios/{portfolioId}/assignments/{assignmentId}/retire", summary: "Retire only this company assignment and request native agent termination with durable audit (revision checked)", body: retireAgentosAssignmentSchema },
+]) {
+  registerCurrentRoute({ ...operation, tags: ["agentos-workforce"], responses: {
+    ...(operation.method === "post" && !operation.path.endsWith("/retire") ? { 201: r.ok() } : { 200: r.ok() }),
+    400: r.badRequest, 401: r.unauthorized, 403: r.forbidden, 404: r.notFound,
+    409: { description: "Conflicting creation intent, binding or assignment revision" },
+  } });
+}
 
 for (const operation of [
   { method: "get", path: "/api/companies/{companyId}/friday/work", summary: "Read current work across projects for Friday or an individual agent: complete authorized counts, project assignments, paginated tasks, messages, artifacts and recorded case handoffs", query: fridayWorkQuerySchema },

@@ -6,6 +6,11 @@ import { fridayConversationView, fridayNavigationSearch, parseFridayView, readFr
 const projectId = "00000000-0000-4000-8000-000000000001";
 const agentId = "00000000-0000-4000-8000-000000000002";
 describe("Friday contextual views", () => {
+  it("opens the portfolio workforce alongside the current conversation", () => {
+    const view = fridayConversationView({ panel: "workforce" }, agentId);
+    expect(readFridayNavigation(fridayNavigationSearch(view))).toEqual({ panel: "workforce", speakerId: agentId });
+    expect(parseFridayView('{"version":1,"panel":"workforce"}')).toEqual({ version: 1, panel: "workforce" });
+  });
   it("round trips scoped links and preserves a specialist conversation when opening its output", () => {
     const view = fridayConversationView({ panel: "work", projectId, mode: "combined" }, agentId);
     expect(readFridayNavigation(fridayNavigationSearch(view))).toEqual({ ...view, speakerId: agentId });

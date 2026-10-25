@@ -113,6 +113,16 @@ export async function applyAgentPolicyHoldsInTransaction(tx: Db, effects: Lifecy
   return changeLockedAgent(tx, effects, agent, "reconcile", {}, holds, patch.restartPause);
 }
 
+/** The workforce owner commits assignment retirement with native termination.
+ * The caller holds the company accounting lock; cleanup uses the native worker. */
+export async function terminateAgentInTransaction(tx: Db, effects: LifecycleEffects, companyId: string, agentId: string) {
+  if (!("nestedIndex" in tx)) throw new AgentLifecycleConflict("Retirement requires an accounting transaction");
+  const [agent] = await tx.select().from(agents).where(and(eq(agents.companyId, companyId), eq(agents.id, agentId))).for("update");
+  if (!agent) return null;
+  if (["terminated", "terminating", "cleaning_up", "rejected"].includes(agent.lifecycleState)) return agent;
+  return changeLockedAgent(tx, effects, agent, "terminate");
+}
+
 export function createLifecycleStore(db: Db, effects: LifecycleEffects): LifecycleStore {
   const get = (id: string) => db.select().from(agents).where(eq(agents.id, id)).then(rows => rows[0] ?? null);
   return {

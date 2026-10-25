@@ -2661,6 +2661,20 @@
       "when": 1792899513248,
       "tag": "0381_daily_william_stryker",
       "breakpoints": true
+    },
+    {
+      "idx": 382,
+      "version": "7",
+      "when": 1792925303285,
+      "tag": "0382_chunky_triathlon",
+      "breakpoints": true
+    },
+    {
+      "idx": 383,
+      "version": "7",
+      "when": 1792925480234,
+      "tag": "0383_sour_hellfire_club",
+      "breakpoints": true
     }
   ]
 }

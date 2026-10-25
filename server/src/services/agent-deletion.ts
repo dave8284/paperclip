@@ -1,11 +1,17 @@
 import { and, eq, or, sql } from "drizzle-orm";
 import { agents, agentApiKeys, agentRuntimeState, agentTaskSessions, agentWakeupRequests, activityLog,
   budgetReservations, heartbeatRunEvents, heartbeatRuns, issueExecutionDecisions, issues, issueComments,
-  caseHandoffs, principalPermissionGrants, type Db } from "@paperclipai/db";
+  caseHandoffs, agentosAssignments, principalPermissionGrants, type Db } from "@paperclipai/db";
 import { conflict } from "../errors.js";
 import { issueThreadInteractionService } from "./issue-thread-interactions.js";
 
 export async function deleteAgentDependencies(tx: Db, companyId: string, id: string) {
+  const [assignment] = await tx.select({ id: agentosAssignments.id }).from(agentosAssignments).where(and(
+    eq(agentosAssignments.companyId, companyId), eq(agentosAssignments.agentId, id),
+  )).limit(1);
+  if (assignment) throw conflict("Shared employee assignment history requires this agent record. Retire the assignment instead of permanently deleting the agent", {
+    code: "agent_workforce_history_retained",
+  });
   const [retainedHandoff] = await tx.select({ id: caseHandoffs.id }).from(caseHandoffs).where(and(
     eq(caseHandoffs.companyId, companyId), or(eq(caseHandoffs.fromAgentId, id), eq(caseHandoffs.toAgentId, id)),
   )).limit(1);

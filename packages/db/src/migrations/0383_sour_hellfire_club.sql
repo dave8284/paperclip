@@ -1,0 +1,2 @@
+ALTER TABLE "agentos_assignments" DROP CONSTRAINT "agentos_assignments_retirement_check";--> statement-breakpoint
+ALTER TABLE "agentos_assignments" ADD CONSTRAINT "agentos_assignments_retirement_check" CHECK (("agentos_assignments"."status" = 'active' and "agentos_assignments"."retired_at" is null and "agentos_assignments"."retirement_reason" is null) or ("agentos_assignments"."status" = 'retired' and "agentos_assignments"."retired_at" is not null and "agentos_assignments"."retirement_reason" is not null and length("agentos_assignments"."retirement_reason") > 0));

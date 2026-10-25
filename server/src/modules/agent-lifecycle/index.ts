@@ -14,6 +14,7 @@ import { createLifecycleWorker } from "./application/worker.js";
 import type { LifecycleDriver } from "./application/ports.js";
 
 export { applyAgentPolicyHoldsInTransaction } from "./adapters/postgres.js";
+export { terminateAgentInTransaction } from "./adapters/postgres.js";
 export { companyHoldMismatch, fenceActiveCompanyAgentStopsInTransaction } from "./adapters/company-policy.js";
 
 export { AgentLifecycleConflict, canConfigureAgentConnection, isAgentAwaitingSetup } from "./domain/policy.js";

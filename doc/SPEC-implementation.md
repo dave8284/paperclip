@@ -2599,3 +2599,12 @@ Company-managed [Prompt Injection Prevention](prompt-injection-prevention.md)
 optionally classifies existing tool-result boundaries through a shared OpenRouter
 connection. Settings → Connections is permanent; valid model verdicts take
 precedence and dependency failures use the original built-in detector.
+# Agent OS fork extension
+
+The approved [Agent OS operating model](plans/2026-10-25-agentos-operating-model.md)
+adds owner-scoped portfolios and reusable employee identities above native
+company agents. Company assignments retain execution, access, skills and history
+in their own company. Retirement affects one assignment and uses native lifecycle
+controls. Portfolio links never grant access. See the [workforce access contract](../maps/agent-access-map/workforce.md)
+for the implemented operator surface and outstanding agent delegation work.
+The upstream implementation contract otherwise remains in force.

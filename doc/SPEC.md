@@ -864,3 +864,12 @@ Company-managed [Prompt Injection Prevention](prompt-injection-prevention.md)
 optionally classifies existing tool-result boundaries through a shared OpenRouter
 connection. Settings → Connections is permanent; valid model verdicts take
 precedence and dependency failures use the original built-in detector.
+# Agent OS fork direction
+
+This fork follows the approved [Agent OS operating model](plans/2026-10-25-agentos-operating-model.md):
+Friday coordinates an authorized portfolio, reusable employees have isolated
+company assignments, and company CEOs retain company-scoped authority. Existing
+routines, artefacts, company profiles, instructions, skills, harnesses, account
+connections and spend controls remain foundational capabilities. Central learning
+publication and company opt-in adoption are explicit planned extensions; shared
+identity alone does not implement them. The upstream long-horizon context is retained.

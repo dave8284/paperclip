@@ -64,6 +64,10 @@ export function applyAgentBudgetHoldInTransaction(tx: Db, companyId: string, age
   return applyAgentPolicyHoldsInTransaction(tx, createAgentLifecycleEffects(), companyId, agentId, { budget: blocked });
 }
 
+export function terminateAgentInTransaction(tx: Db, companyId: string, agentId: string) {
+  return lifecycle.terminateAgentInTransaction(tx, createAgentLifecycleEffects(), companyId, agentId);
+}
+
 export function fenceActiveCompanyAgentStopsInTransaction(tx: Db, companyId: string, status: "paused" | "archived") {
   return fenceActiveCompanyStops(tx, createAgentLifecycleEffects(), companyId, status);
 }

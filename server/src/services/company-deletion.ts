@@ -6,8 +6,12 @@ import { eq, inArray } from "drizzle-orm";
 import { createAgentLifecycle, processAgentLifecycle } from "./agent-lifecycle.js";
 import { requestRestorePointDeletion } from "./git-restore-point-ledger.js";
 import { agentLifecycleCompanyDeletion } from "../modules/agent-lifecycle/company-deletion.js";
+import { conflict } from "../errors.js";
 import {
   companies,
+  agentosPortfolios,
+  agentosAssignments,
+  agentosPortfolioCompanies,
   agents,
   companyLogos,
   assets,
@@ -47,6 +51,8 @@ import {
 } from "@paperclipai/db";
 
 export async function deleteCompany(db: Db, id: string) {
+  const [portfolio] = await db.select({ id: agentosPortfolios.id }).from(agentosPortfolios).where(eq(agentosPortfolios.homeCompanyId, id)).limit(1);
+  if (portfolio) throw conflict("This company holds a portfolio's administration and audit history. Archive it instead of permanently deleting it", { code: "portfolio_home_company_retained" });
   const lifecycle = createAgentLifecycle(db);
   const companyAgents = await db.select({ id: agents.id }).from(agents).where(eq(agents.companyId, id));
   for (const agent of companyAgents) {
@@ -60,6 +66,12 @@ export async function deleteCompany(db: Db, id: string) {
         const [existing] = await tx.select({ id: companies.id }).from(companies)
           .where(eq(companies.id, id)).for("no key update");
         if (!existing) return null;
+        const [portfolio] = await tx.select({ id: agentosPortfolios.id }).from(agentosPortfolios).where(eq(agentosPortfolios.homeCompanyId, id)).limit(1);
+        if (portfolio) throw conflict("This company holds a portfolio's administration and audit history. Archive it instead of permanently deleting it", { code: "portfolio_home_company_retained" });
+        // Explicit company deletion removes only that company's engagements.
+        // Shared identities and every other company's agents remain intact.
+        await tx.delete(agentosAssignments).where(eq(agentosAssignments.companyId, id));
+        await tx.delete(agentosPortfolioCompanies).where(eq(agentosPortfolioCompanies.companyId, id));
         await notifyDeliveryWork(tx, DELIVERY_QUEUES.skillSourceSync);
         await agentObservabilityService(tx as unknown as Db).removeForCompanyDeletion(id);
         // Finance can reference costs and both can reference runs. Incidents

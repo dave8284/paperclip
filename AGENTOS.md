@@ -1,5 +1,18 @@
 # AgentOS on Paperclip
 
+The [Agent OS operating model and delivery plan](doc/plans/2026-10-25-agentos-operating-model.md) is the current target: Friday coordinates a portfolio of companies, employees are reusable across company assignments, and execution, delegation and evaluated learning remain inspectable through Agent OS. It includes the phased build and Paperclip keep/hide/archive strategy. The capabilities described below are the existing implementation baseline; they do not imply that the expanded operating model is complete.
+
+The shared-workforce foundation is now implemented at `/workforce` and inside
+Friday's **Portfolio & workforce** canvas. An owner can group existing companies,
+create a specialist identity, bind it to company agents and retire only one
+assignment. Company skills, instructions, account seats, routines, artefacts and
+chat remain on their native records. Retirement and its audit commit with native
+termination and key revocation; remote cleanup remains separately observable.
+The new portfolio APIs are currently operator-only. Friday/CEO delegated staffing,
+central evaluated capability versions and opt-in adoption are still upcoming
+operating-model phases. See the [capability inventory](doc/plans/2026-10-25-agentos-capability-inventory.md)
+and [workforce access contract](maps/agent-access-map/workforce.md).
+
 This fork adds Friday, an application portfolio and a reusable operating team to Paperclip. Friday is the home screen: an original pulsing point-cloud orb, native typed/voice conversation, and an on-demand workspace. Open **Portfolio** for the galaxy, **Conversation** for the full thread, **Displays** for generated HTML and saved reusable displays, and **Explore** for native dashboards/projects/agents/connections. Install **AgentOS Operators**, bind its Friday agent under Configure Friday, and connect a model subscription through the native account setup. You can also register an existing repository or a new idea from **Applications**.
 
 The map, Kanban and task list use saved native tasks. Selecting a dot exposes reported execution and work products; native task and agent pages provide the complete history. A pulsing dot means a recorded running execution. Empty or idle work is not animated.

@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "packageName": "@paperclipai/teams-catalog",
   "packageVersion": "0.1.0",
-  "generatedAt": "2026-10-25T06:22:46.931Z",
+  "generatedAt": "2026-10-25T11:02:13.029Z",
   "teams": [
     {
       "id": "paperclipai:bundled:company-defaults:agentos-operators",
@@ -125,7 +125,7 @@
           "path": "TEAM.md",
           "kind": "team",
           "sizeBytes": 2474,
-          "sha256": "a1629a371f2ff3ded62efb31795dc1f7ca08721f97d761a98f1c80aa10bc61c0"
+          "sha256": "d1af15c4a045ad30c43e9e1006a24150401b66674bf6cd12912399b1ebc538fe"
         },
         {
           "path": ".paperclip.yaml",
@@ -136,8 +136,8 @@
         {
           "path": "agents/coordinator/AGENTS.md",
           "kind": "agent",
-          "sizeBytes": 12143,
-          "sha256": "492f13bdfd0afb220123a210a72ca5ad5c332471fa05a24fc4a5514e7691c4fe"
+          "sizeBytes": 12427,
+          "sha256": "7a89721e061d9136cdd5f5e535b7f6202123bc68f22a0f93c6bec7eca839266f"
         },
         {
           "path": "agents/engineer/AGENTS.md",
@@ -202,7 +202,7 @@
       ],
       "trustLevel": "assets",
       "compatibility": "compatible",
-      "contentHash": "sha256:f9099b9788b4a75cee79b75552c9596cbea6a81bac05247373bd6954d8249cde"
+      "contentHash": "sha256:7d4fda41cb9909d5ad6a46f1ec5a8b794cb1f3e4a430e10a1152d14fbafc60b7"
     },
     {
       "id": "paperclipai:bundled:company-defaults:core-exec-team",

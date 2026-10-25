@@ -18,6 +18,7 @@ import { FridayWork } from "./FridayWork";
 import { FridayTeam } from "./FridayTeam";
 import { FridayOperations } from "./FridayOperations";
 import { TaskAttachmentPanel } from "./task-side-panel/TaskAttachmentPanel";
+import { Workforce } from "../pages/Workforce";
 
 export type FridayPanel = FridayNavigation["panel"] | "portfolio";
 export function FridayWorkspace({ companyId, data, panel, setPanel, compact, connected, view, navigate, agents = [], assistantName = "Friday" }: {
@@ -97,11 +98,12 @@ export function FridayWorkspace({ companyId, data, panel, setPanel, compact, con
     </div>
     {panel && <section className="friday-workspace" aria-label="Friday workspace">
       <header className="flex flex-wrap items-center gap-2 border-b px-4 py-3">
-        <h2 className="min-w-0 flex-1 truncate text-sm font-medium">{panel === "portfolio" ? "Your applications and agents" : panel === "library" ? "Reusable displays" : panel === "work" ? "Work in motion" : panel === "attention" ? "Your attention dashboard" : panel === "team" || panel === "chat" ? "Your team" : panel === "activity" ? "Audit trail" : panel === "routines" ? "Operating loops" : panel === "artifacts" ? "Recorded outputs" : chosen?.product.title ?? "Canvas"}</h2>
+        <h2 className="min-w-0 flex-1 truncate text-sm font-medium">{panel === "workforce" ? "Portfolio & workforce" : panel === "portfolio" ? "Your applications and agents" : panel === "library" ? "Reusable displays" : panel === "work" ? "Work in motion" : panel === "attention" ? "Your attention dashboard" : panel === "team" || panel === "chat" ? "Your team" : panel === "activity" ? "Audit trail" : panel === "routines" ? "Operating loops" : panel === "artifacts" ? "Recorded outputs" : chosen?.product.title ?? "Canvas"}</h2>
         <Button size="icon-sm" variant="ghost" aria-label={expanded ? "Reduce workspace" : "Expand workspace"} onClick={() => setExpanded(value => !value)}>{expanded ? <Minimize2 /> : <Expand />}</Button>
         <Button size="icon-sm" variant="ghost" aria-label="Close workspace" onClick={() => { setPanel(null); setExpanded(false); }}><X /></Button>
       </header>
       {data.unavailable ? <p role="alert" className="p-4 text-sm">Refresh the conversation before displaying its content.</p> : panel === "portfolio" ? <div className="min-h-0 flex-1 overflow-auto p-4"><PortfolioGalaxy companyId={companyId} /></div>
+        : panel === "workforce" ? <div className="min-h-0 flex-1 overflow-auto p-4"><Workforce embedded /></div>
         : panel && ["attention", "work", "team", "chat", "activity", "routines", "artifacts"].includes(panel) ? <div className="min-h-0 flex-1 overflow-auto p-4">
           {panel === "attention" ? <FridayAttention key={nav.projectId ?? "all"} companyId={companyId} projectId={nav.projectId} agents={agents} onProject={projectId => go({ panel: "work", projectId, mode: "combined" })} assistantName={assistantName} onAsk={text => void ask(text)} />
             : panel === "work" ? <FridayWork key={`${nav.projectId ?? ""}:${nav.agentId ?? ""}:${nav.applicationId ?? ""}`} companyId={companyId} agents={agents} view={nav} navigate={go} assistantName={assistantName} onAsk={text => void ask(text)} />
