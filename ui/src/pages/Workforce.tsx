@@ -14,7 +14,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { NativeSelect } from "@/components/ui/select";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { relativeTime } from "@/lib/utils";
+import { formatDateTime } from "@/lib/utils";
 
 // Reuse a request ID after uncertain delivery. Changing the submitted payload
 // is a new intent; a retry of the same payload remains idempotent.
@@ -101,7 +101,7 @@ function PortfolioWorkforce({ userId, data }: { userId: string | null; data: Age
   });
   const unlinked = companies.filter(company => !data.companies.some(row => row.id === company.id));
   return <>
-    <div className="flex flex-wrap items-center justify-between gap-3"><h2 className="text-lg font-medium">{data.portfolio.name}</h2><div className="flex items-center gap-3"><Link to="/companies" className="text-sm underline">Manage companies</Link><p className="text-xs text-muted-foreground">Updated {relativeTime(data.observedAt)}</p></div></div>
+    <div className="flex flex-wrap items-center justify-between gap-3"><h2 className="text-lg font-medium">{data.portfolio.name}</h2><div className="flex items-center gap-3"><Link to="/companies" className="text-sm underline">Manage companies</Link><p className="text-xs text-muted-foreground">As of <time dateTime={data.observedAt}>{formatDateTime(data.observedAt, { includeSeconds: true })}</time></p></div></div>
     <section aria-label="Companies" className="flex flex-col gap-4">
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{data.companies.map(company => <Card key={company.id} className="flex flex-col gap-3 p-4">
         <div className="flex items-center justify-between gap-3"><Link className="font-medium underline" to={`/${company.issuePrefix}/friday`}>{company.name}</Link><Badge variant="secondary">{company.status}</Badge></div>

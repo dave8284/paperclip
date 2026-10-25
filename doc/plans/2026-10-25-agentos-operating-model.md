@@ -256,6 +256,10 @@ and company assignments. Native authorization, lifecycle, audit and subscription
 retain their existing owners. `/workforce` and Friday's `panel=workforce` canvas
 provide creation, linking, assignment and company-scoped retirement.
 
+This checkpoint covers baseline preservation and the shared identity/assignment
+slice of Phase 1. Phase 1 remains open for delegated Friday/CEO authority and
+capability references; the complete operating model is not yet implemented.
+
 The local instance now has an Agent OS portfolio and six shared specialists bound
 to their existing agents. The existing company was renamed Platform Operations;
 its ID and project/agent records are unchanged. Friday remains the existing
@@ -264,8 +268,11 @@ preserved. No provider workflow or hiring/training quality is inferred from
 registering an identity.
 
 Repository-wide typecheck and production build passed. Focused workforce,
-OpenAPI, Friday navigation, UI and activity-format checks passed. The broad test
-suite is being run separately; the final result belongs in the delivery record.
+OpenAPI, Friday navigation, UI and activity-format checks passed. A restoration
+of the baseline database into a separate cluster preserved the existing record
+IDs through the new migrations. The broad test run has required targeted
+recovery and environment fixes; its original failures and subsequent results
+are retained in the capability inventory, not presented as a single clean run.
 The local server restarted with both migrations applied, no pending migration
 and no interrupted active run. Real browser/audio acceptance remains blocked by
 the host browser tool connection, not certified by HTTP or component tests.
