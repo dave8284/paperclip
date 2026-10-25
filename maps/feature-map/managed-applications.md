@@ -31,7 +31,7 @@ Choose Install operating team, or open `/teams-catalog?search=AgentOS`. Preview 
 
 ### `operating-connections`
 
-Open `/operating-connections`. Inspect a connection's reported health and active tool catalog; use Configure access to enter its native permissions page. These are organization resources, not inferred application deployment health.
+Open `/operating-connections`. Inspect model account status, use a native provider setup link, and configure agent bindings. Inspect a tool connection's reported health and active tool catalog; use Configure access to enter its native permissions page. These are organization resources, not inferred application deployment health.
 
 ## Driving it with the API and UI
 
@@ -57,7 +57,7 @@ Manual: inspect an unconfigured company, a healthy connection and a failed one. 
 
 - Application access inherits the home project's audience. Linking another project never grants access; unauthorized work is filtered before counts and rows.
 - Lifecycle is descriptive. It does not implement an application-wide pause. Use native task/project/agent/routine controls.
-- Work pages are bounded to 100 tasks by default; counts cover all accessible matching tasks. The displayed team is derived from that page and project leads.
+- Work pages are bounded to 100 tasks by default; counts cover all accessible matching tasks. The team covers all accessible assignments and project leads in the selected projects, independent of task pagination. Filter by an agent to inspect its workload across map, Kanban and list; this does not hide the rest of the team.
 - A repository URL does not create a repository or connect an account. GitHub CLI login used to maintain this fork is distinct from a runtime agent's connection.
 - Native live updates reconcile active queries on socket connection/reconnection. Animation uses observed running records; idle tasks do not animate. Reduced motion removes pulsing.
 - Exact provider stages and outputs exist only when reported. No chain-of-thought view is provided.

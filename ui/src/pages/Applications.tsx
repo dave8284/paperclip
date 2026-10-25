@@ -129,6 +129,7 @@ export function Applications() {
           <CardHeader><div className="flex items-center justify-between gap-3"><CardTitle><Link to={`/applications/${application.id}`}>{application.name}</Link></CardTitle><ArrowUpRight className="size-4 text-muted-foreground" /></div><p className="text-xs uppercase tracking-wide text-muted-foreground">{application.stage} · {application.source === "existing" ? "Existing application" : "New application"}</p></CardHeader>
           <CardContent className="space-y-4"><p className="line-clamp-3 text-sm text-muted-foreground">{application.brief}</p>
             <div className="grid grid-cols-4 gap-2 text-sm"><div><strong>{summary?.projectCount ?? 0}</strong><p className="text-xs text-muted-foreground">Projects</p></div><div><strong>{counts.in_progress ?? 0}</strong><p className="text-xs text-muted-foreground">In progress</p></div><div><strong>{counts.blocked ?? 0}</strong><p className="text-xs text-muted-foreground">Blocked</p></div><div><strong>{counts.done ?? 0}</strong><p className="text-xs text-muted-foreground">Done</p></div></div>
+            <p className="text-xs text-muted-foreground">{summary?.agentCount ?? 0} assigned agents and project leads across accessible work</p>
             <Link to={`/applications/${application.id}`} className="text-sm font-medium text-primary">Open application →</Link>
           </CardContent>
         </Card>;

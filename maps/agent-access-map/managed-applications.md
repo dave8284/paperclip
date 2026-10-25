@@ -28,7 +28,7 @@ Capability ID: `managed-applications/work`.
 
 Review: `baseline`.
 
-API: `present` — GET /api/companies/{companyId}/managed-applications/{id}/work with bounded offset/limit and optional projectId. Native issue execution and work-product endpoints supply selected-task detail.
+API: `present` — GET /api/companies/{companyId}/managed-applications/{id}/work with bounded offset/limit and optional projectId/assigneeAgentId. Agent assignment aggregates cover all accessible work in the selected projects before task pagination and agent filtering. The portfolio includes distinct assigned-agent/project-lead counts. Native issue execution and work-product endpoints supply selected-task detail.
 
 Agent access: `available` — authenticated standard-agent REST; native API catalog discovery when generic tools are enabled.
 
@@ -64,7 +64,7 @@ Capability ID: `managed-applications/connections`.
 
 Review: `baseline`.
 
-API: `present` — native GET /api/companies/{companyId}/tools/connections and GET /api/tool-connections/{connectionId}/catalog.
+API: `present` — native GET /api/companies/{companyId}/ai-connections, GET /api/companies/{companyId}/tools/connections and GET /api/tool-connections/{connectionId}/catalog. Model setup links use the existing Apps connection flow.
 
 Agent access: `operator-only` — this management view uses board APIs; agents use the native installed tool and connection-request surfaces.
 

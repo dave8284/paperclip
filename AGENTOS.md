@@ -4,6 +4,8 @@ This fork adds an application portfolio and reusable operating team to Paperclip
 
 The map, Kanban and task list use saved native tasks. Selecting a dot exposes reported execution and work products; native task and agent pages provide the complete history. A pulsing dot means a recorded running execution. Empty or idle work is not animated.
 
+Application team summaries cover all accessible task assignments and project leads, including those beyond the current task page. Filter by a project or agent to inspect its work across the same views. Operator-owned work is labelled separately from unassigned tasks.
+
 ## Run from source
 
 Use Node >=24.11, pnpm 9.15.4 and rustup. The runner pins its Rust version in `packages/paperclip-runner/rust-toolchain.toml`.
@@ -21,7 +23,7 @@ Open http://localhost:3100/applications. The data directory contains the local d
 
 - **Install operating team** opens the native catalog preview/installer. The package contains eight roles with versioned content and two initially paused routines.
 - **Start planning** creates a native task with a stable operation key. Existing applications receive an adoption brief; new ideas receive a first-release brief. The coordinator selects the specialists it needs.
-- **Operating connections** shows organization connection health and discovered read/write tools. Configure per-agent installations, permissions and approvals through the native connection page.
+- **Operating connections** shows model account status, organization connection health and discovered read/write tools. Connect a model account there, then configure per-agent bindings, installations, permissions and approvals through native settings.
 - Enable recurring reviews after runtime setup. Native routines run independently of the browser while the server and workers are running.
 - Use native project, task, agent and routine controls for pauses and budgets. Application lifecycle is descriptive and is not a global stop switch.
 

@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { and, asc, desc, eq, gt, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, isNotNull, sql } from "drizzle-orm";
 import { issues, managedApplications, managedApplicationProjects, projects, type Db } from "@paperclipai/db";
 import type { ApplicationWork, CreateManagedApplication, ManagedApplication, ManagedApplicationPage, UpdateManagedApplication } from "@paperclipai/shared";
 import { conflict, notFound } from "../errors.js";
@@ -51,23 +51,37 @@ export function managedApplicationService(db: Db) {
           options.after ? gt(managedApplications.id, options.after) : undefined))
         .orderBy(asc(managedApplications.id)).limit(options.limit + 1);
       const applications = rows.slice(0, options.limit).map(row => publicApplication(row.application));
-      const summaries: ManagedApplicationPage["summaries"] = Object.fromEntries(applications.map(app => [app.id, { projectCount: 0, taskCounts: {} }]));
+      const summaries: ManagedApplicationPage["summaries"] = Object.fromEntries(applications.map(app => [app.id, { projectCount: 0, agentCount: 0, taskCounts: {} }]));
       if (applications.length) {
         const visibleProjects = db.select({ id: projects.id }).from(projects)
           .where(and(eq(projects.companyId, companyId), await projectReadSqlCondition(db, actor)));
         const membership = and(eq(managedApplicationProjects.companyId, companyId),
           inArray(managedApplicationProjects.applicationId, applications.map(app => app.id)),
           inArray(managedApplicationProjects.projectId, visibleProjects));
-        const [projectCounts, taskCounts] = await Promise.all([
+        const [projectCounts, taskCounts, taskAgents, projectLeads] = await Promise.all([
           db.select({ id: managedApplicationProjects.applicationId, count: sql<number>`count(*)::int` })
             .from(managedApplicationProjects).where(membership).groupBy(managedApplicationProjects.applicationId),
           db.select({ id: managedApplicationProjects.applicationId, status: issues.status, count: sql<number>`count(*)::int` })
             .from(managedApplicationProjects).innerJoin(issues, and(eq(issues.projectId, managedApplicationProjects.projectId), eq(issues.companyId, companyId)))
             .where(and(membership, executionIssueCondition(), await issueReadSqlCondition(db, actor)))
             .groupBy(managedApplicationProjects.applicationId, issues.status),
+          db.selectDistinct({ id: managedApplicationProjects.applicationId, agentId: issues.assigneeAgentId })
+            .from(managedApplicationProjects).innerJoin(issues, and(eq(issues.projectId, managedApplicationProjects.projectId), eq(issues.companyId, companyId)))
+            .where(and(membership, executionIssueCondition(), await issueReadSqlCondition(db, actor), isNotNull(issues.assigneeAgentId))),
+          db.selectDistinct({ id: managedApplicationProjects.applicationId, agentId: projects.leadAgentId })
+            .from(managedApplicationProjects).innerJoin(projects, and(eq(projects.id, managedApplicationProjects.projectId), eq(projects.companyId, companyId)))
+            .where(and(membership, isNotNull(projects.leadAgentId))),
         ]);
         for (const row of projectCounts) summaries[row.id].projectCount = Number(row.count);
         for (const row of taskCounts) summaries[row.id].taskCounts[row.status] = Number(row.count);
+        const agentsByApplication = new Map<string, Set<string>>();
+        for (const row of [...taskAgents, ...projectLeads]) {
+          if (!row.agentId) continue;
+          const agents = agentsByApplication.get(row.id) ?? new Set<string>();
+          agents.add(row.agentId);
+          agentsByApplication.set(row.id, agents);
+        }
+        for (const [id, agents] of agentsByApplication) summaries[id].agentCount = agents.size;
       }
       return { applications, summaries, nextCursor: rows.length > options.limit ? applications.at(-1)!.id : null };
     },
@@ -132,7 +146,7 @@ export function managedApplicationService(db: Db) {
       if (result) publishActivity(result);
     },
 
-    async work(companyId: string, id: string, actor: AuthorizationActor, options: { offset: number; limit: number; projectId?: string }): Promise<ApplicationWork> {
+    async work(companyId: string, id: string, actor: AuthorizationActor, options: { offset: number; limit: number; projectId?: string; assigneeAgentId?: string }): Promise<ApplicationWork> {
       const application = await read(companyId, id, actor);
       const linkedProjects = await db.select({ id: projects.id, name: projects.name, status: projects.status, leadAgentId: projects.leadAgentId })
         .from(managedApplicationProjects).innerJoin(projects, and(
@@ -141,16 +155,30 @@ export function managedApplicationService(db: Db) {
           await projectReadSqlCondition(db, actor))).orderBy(asc(projects.name), asc(projects.id));
       if (options.projectId && !linkedProjects.some(project => project.id === options.projectId)) throw notFound("Project not found");
       const ids = options.projectId ? [options.projectId] : linkedProjects.map(project => project.id);
-      if (!ids.length) return { application, projects: [], counts: {}, tasks: [], nextOffset: null };
-      const predicate = and(eq(issues.companyId, companyId), inArray(issues.projectId, ids),
+      if (!ids.length) return { application, projects: [], counts: {}, agentWork: [], tasks: [], nextOffset: null };
+      const accessibleWork = and(eq(issues.companyId, companyId), inArray(issues.projectId, ids),
         executionIssueCondition(), await issueReadSqlCondition(db, actor));
-      const [counts, tasks] = await Promise.all([
+      const predicate = and(accessibleWork, options.assigneeAgentId ? eq(issues.assigneeAgentId, options.assigneeAgentId) : undefined);
+      const [counts, tasks, assignments] = await Promise.all([
         db.select({ status: issues.status, count: sql<number>`count(*)::int` }).from(issues).where(predicate).groupBy(issues.status),
         db.select({ id: issues.id, identifier: issues.identifier, title: issues.title, status: issues.status, priority: issues.priority,
-          projectId: issues.projectId, assigneeAgentId: issues.assigneeAgentId, updatedAt: issues.updatedAt })
+          projectId: issues.projectId, assigneeAgentId: issues.assigneeAgentId, assigneeUserId: issues.assigneeUserId, updatedAt: issues.updatedAt })
           .from(issues).where(predicate).orderBy(desc(issues.updatedAt), desc(issues.id)).offset(options.offset).limit(options.limit + 1),
+        db.select({ agentId: issues.assigneeAgentId, status: issues.status, count: sql<number>`count(*)::int` })
+          .from(issues).where(and(accessibleWork, isNotNull(issues.assigneeAgentId))).groupBy(issues.assigneeAgentId, issues.status),
       ]);
+      const agentWork = new Map<string, Record<string, number>>();
+      for (const project of linkedProjects) {
+        if (ids.includes(project.id) && project.leadAgentId) agentWork.set(project.leadAgentId, {});
+      }
+      for (const row of assignments) {
+        if (!row.agentId) continue;
+        const taskCounts = agentWork.get(row.agentId) ?? {};
+        taskCounts[row.status] = Number(row.count);
+        agentWork.set(row.agentId, taskCounts);
+      }
       return { application, projects: linkedProjects, counts: Object.fromEntries(counts.map(row => [row.status, Number(row.count)])),
+        agentWork: [...agentWork].sort(([a], [b]) => a.localeCompare(b)).map(([agentId, taskCounts]) => ({ agentId, taskCounts })),
         tasks: tasks.slice(0, options.limit), nextOffset: tasks.length > options.limit ? options.offset + options.limit : null };
     },
   };

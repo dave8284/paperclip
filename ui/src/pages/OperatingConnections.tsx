@@ -4,6 +4,7 @@ import { Plug } from "lucide-react";
 import { useCompany } from "../context/CompanyContext";
 import { useBreadcrumbs } from "../context/BreadcrumbContext";
 import { toolsApi } from "../api/tools";
+import { aiConnectionsApi } from "../api/ai-connections";
 import { queryKeys } from "../lib/queryKeys";
 import { Link } from "../lib/router";
 import { Button } from "../components/ui/button";
@@ -15,6 +16,7 @@ export function OperatingConnections() {
   const { setBreadcrumbs } = useBreadcrumbs();
   const [connectionId, setConnectionId] = useState("");
   const connections = useQuery({ queryKey: queryKeys.tools.connections(selectedCompanyId!), queryFn: () => toolsApi.listConnections(selectedCompanyId!), enabled: !!selectedCompanyId });
+  const models = useQuery({ queryKey: ["ai-connections", selectedCompanyId], queryFn: () => aiConnectionsApi.list(selectedCompanyId!), enabled: !!selectedCompanyId });
   const selected = connections.data?.connections.find(connection => connection.id === connectionId);
   const catalog = useQuery({ queryKey: queryKeys.tools.catalog(connectionId), queryFn: () => toolsApi.listCatalog(connectionId), enabled: !!selected });
   useEffect(() => { setConnectionId(""); }, [selectedCompanyId]);
@@ -24,7 +26,14 @@ export function OperatingConnections() {
   return <div className="space-y-6">
     <div><h1 className="text-2xl font-semibold">Operating connections</h1><p className="text-sm text-muted-foreground">Organization connections, reported health, and discovered capabilities.</p></div>
     <div className="flex flex-wrap gap-4 text-sm"><Link to="/apps" className="text-primary">Connect an account</Link><Link to="/agents" className="text-primary">Agent access</Link><Link to="/routines" className="text-primary">Recurring work</Link><Link to="/applications" className="text-primary">Application portfolio</Link></div>
-    {[connections.error, catalog.error].filter(Boolean).map((error, index) => <p role="alert" key={index} className="text-sm text-destructive">{error!.message}</p>)}
+    {[connections.error, catalog.error, models.error].filter(Boolean).map((error, index) => <p role="alert" key={index} className="text-sm text-destructive">{error!.message}</p>)}
+    <Card><CardHeader><CardTitle>Model accounts</CardTitle></CardHeader><CardContent className="space-y-3">
+      {models.isLoading && <p className="text-sm text-muted-foreground">Loading model accounts…</p>}
+      {models.data?.connections.length === 0 && <p className="text-sm text-muted-foreground">No model account is connected. Connect an account and assign it through the agent settings before starting work.</p>}
+      {models.data?.connections.map(connection => <div key={connection.grantId} className="flex flex-wrap justify-between gap-3 text-sm"><Link className="text-primary" to={`/apps/${connection.id}/permissions`}>{connection.name}</Link><span className="text-muted-foreground">{connection.provider} · {connection.status.replaceAll("_", " ")}{connection.isDefault ? " · Your default" : ""}</span></div>)}
+      <div className="flex flex-wrap gap-4 text-sm"><Link className="text-primary" to="/apps/connect?source=openai">Connect OpenAI / Codex</Link><Link className="text-primary" to="/apps/connect?source=anthropic">Connect Anthropic / Claude</Link><Link className="text-primary" to="/agents">Configure agent accounts</Link></div>
+      <p className="text-xs text-muted-foreground">Account status is reported by Paperclip. Agent grants, runtime compatibility, and budget limits still determine whether a run can start.</p>
+    </CardContent></Card>
     {connections.isLoading && <p className="text-sm text-muted-foreground">Loading connections…</p>}
     {connections.data?.connections.length === 0 && <EmptyState icon={Plug} message="No connections configured yet. Connect accounts to make their capabilities available to your agents." />}
     <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{connections.data?.connections.map(connection => <Card key={connection.id}>

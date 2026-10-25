@@ -131,11 +131,58 @@ describe("managed application persistence and access", () => {
     expect(page.body.projects.map((project: { id: string }) => project.id)).toEqual([fixture.homeProjectId]);
     expect((await request(viewer).get(`${fixture.base}/${created.body.id}/work?projectId=${secondProject}`)).status).toBe(404);
     const portfolio = await request(viewer).get(fixture.base);
-    expect(portfolio.body.summaries[created.body.id]).toEqual({ projectCount: 1, taskCounts: { todo: 1, done: 1 } });
+    expect(portfolio.body.summaries[created.body.id]).toEqual({ projectCount: 1, agentCount: 0, taskCounts: { todo: 1, done: 1 } });
     const next = await request(viewer).get(`${fixture.base}/${created.body.id}/work?limit=1&offset=1`);
     expect(next.body.nextOffset).toBeNull();
     expect(next.body.tasks[0].id).not.toBe(page.body.tasks[0].id);
     expect((await request(owner).delete(`${fixture.base}/${created.body.id}/projects/${fixture.homeProjectId}`)).status).toBe(409);
+  });
+
+  it("aggregates all visible agent assignments before pagination and supports an agent drill-down", async () => {
+    const fixture = await seed();
+    const owner = app(actor(fixture.companyId));
+    const created = await request(owner).post(fixture.base).send(fixture.input);
+    const [engineer, marketer, hiddenAgent, lead] = [randomUUID(), randomUUID(), randomUUID(), randomUUID()];
+    await db.insert(agents).values([engineer, marketer, hiddenAgent, lead].map((id, index) => ({
+      id, companyId: fixture.companyId, name: `Specialist ${index}`, role: "general", adapterType: "process",
+    })));
+    await db.update(projects).set({ leadAgentId: lead }).where(eq(projects.id, fixture.homeProjectId));
+    const privateProjectId = randomUUID();
+    await db.insert(projects).values({ id: privateProjectId, companyId: fixture.companyId, name: "Private", visibility: "private", leadAgentId: hiddenAgent });
+    await db.insert(projectAccessMembers).values({ companyId: fixture.companyId, projectId: privateProjectId, subjectType: "user", subjectId: "owner" });
+    await request(owner).post(`${fixture.base}/${created.body.id}/projects`).send({ projectId: privateProjectId }).expect(204);
+    await db.insert(issues).values([
+      { companyId: fixture.companyId, projectId: fixture.homeProjectId, title: "Build", status: "in_progress", assigneeAgentId: engineer },
+      { companyId: fixture.companyId, projectId: fixture.homeProjectId, title: "Completed build", status: "done", assigneeAgentId: engineer },
+      { companyId: fixture.companyId, projectId: fixture.homeProjectId, title: "Campaign", status: "todo", assigneeAgentId: marketer },
+      { companyId: fixture.companyId, projectId: fixture.homeProjectId, title: "Operator task", status: "todo", assigneeUserId: "owner" },
+      { companyId: fixture.companyId, projectId: fixture.homeProjectId, title: "Private", status: "blocked", assigneeAgentId: hiddenAgent, visibility: "private", createdByUserId: "owner" },
+      { companyId: fixture.companyId, projectId: fixture.homeProjectId, title: "Hidden", status: "blocked", assigneeAgentId: hiddenAgent, hiddenAt: new Date() },
+      { companyId: fixture.companyId, projectId: privateProjectId, title: "Private project", status: "blocked", assigneeAgentId: hiddenAgent },
+    ]);
+    const viewer = app(actor(fixture.companyId, "other"));
+    const endpoint = `${fixture.base}/${created.body.id}/work`;
+    const page = await request(viewer).get(`${endpoint}?limit=1`).expect(200);
+    expect(page.body.tasks).toHaveLength(1);
+    expect(page.body.agentWork).toHaveLength(3);
+    expect(page.body.agentWork).toEqual(expect.arrayContaining([
+      { agentId: engineer, taskCounts: { in_progress: 1, done: 1 } },
+      { agentId: marketer, taskCounts: { todo: 1 } }, { agentId: lead, taskCounts: {} },
+    ]));
+    const filtered = await request(viewer).get(`${endpoint}?assigneeAgentId=${engineer}&limit=1`).expect(200);
+    expect(filtered.body.tasks[0].assigneeAgentId).toBe(engineer);
+    expect(filtered.body.counts).toEqual({ in_progress: 1, done: 1 });
+    expect(filtered.body.nextOffset).toBe(1);
+    expect(filtered.body.agentWork).toEqual(page.body.agentWork);
+    const hidden = await request(viewer).get(`${endpoint}?assigneeAgentId=${hiddenAgent}`).expect(200);
+    expect(hidden.body.tasks).toEqual([]);
+    expect(hidden.body.counts).toEqual({});
+    expect(hidden.body.agentWork).toEqual(page.body.agentWork);
+    const portfolio = await request(viewer).get(fixture.base).expect(200);
+    expect(portfolio.body.summaries[created.body.id].agentCount).toBe(3);
+    const all = await request(viewer).get(endpoint).expect(200);
+    expect(all.body.tasks.find((task: { title: string }) => task.title === "Operator task").assigneeUserId).toBe("owner");
+    await request(viewer).get(`${endpoint}?assigneeAgentId=invalid`).expect(400);
   });
 
   it("rolls back application and project links when the audit cannot persist", async () => {

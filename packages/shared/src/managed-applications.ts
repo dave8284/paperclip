@@ -20,6 +20,7 @@ export const managedApplicationWorkQuerySchema = z.object({
   offset: z.coerce.number().int().min(0).max(100000).default(0),
   limit: z.coerce.number().int().min(1).max(200).default(100),
   projectId: z.string().uuid().optional(),
+  assigneeAgentId: z.string().uuid().optional(),
 }).strict();
 
 export type CreateManagedApplication = z.infer<typeof createManagedApplicationSchema>;
@@ -37,13 +38,15 @@ export interface ManagedApplication {
 }
 export interface ManagedApplicationPage {
   applications: ManagedApplication[];
-  summaries: Record<string, { projectCount: number; taskCounts: Record<string, number> }>;
+  summaries: Record<string, { projectCount: number; agentCount: number; taskCounts: Record<string, number> }>;
   nextCursor: string | null;
 }
 export interface ApplicationWork {
   application: ManagedApplication;
   projects: Array<{ id: string; name: string; status: string; leadAgentId: string | null }>;
   counts: Record<string, number>;
+  /** All accessible assignments in the selected projects, independent of task pagination and agent filtering. */
+  agentWork: Array<{ agentId: string; taskCounts: Record<string, number> }>;
   tasks: Array<{
     id: string;
     identifier: string | null;
@@ -52,6 +55,7 @@ export interface ApplicationWork {
     priority: string;
     projectId: string | null;
     assigneeAgentId: string | null;
+    assigneeUserId: string | null;
     updatedAt: Date;
   }>;
   nextOffset: number | null;
