@@ -22,7 +22,19 @@
   --friday-copy-width: 34rem;
   --friday-menu-width: 13rem;
   --friday-stage-min: 26rem;
-  --friday-workspace-height: 31rem;
+  --friday-workspace-height: max(32rem, calc(100dvh - 14rem));
+  --friday-graph-height: 32rem;
+  --friday-graph-handoff: #8666ba;
+  --friday-graph-output: #bf8738;
+  --friday-graph-message: #83a7b8;
+  --friday-graph-evidence-radius: 2.5px;
+  --friday-graph-task-radius: 5px;
+  --friday-graph-project-radius: 11px;
+  --friday-graph-agent-radius: 15px;
+  --friday-graph-application-radius: 19px;
+  --friday-card-radius: 0.75rem;
+  --friday-card-gap: 0.75rem;
+  --friday-graph-motion: 2.4s;
   --friday-focus-ring: 2px;
   --friday-focus-offset: 4px;
   --friday-shadow: 0 24px 80px #00000033;
@@ -50,7 +62,7 @@
 .friday-navigation-menu { position: absolute; right: 0; top: 100%; z-index: 40; display: flex; flex-direction: column; width: var(--friday-menu-width); padding: var(--friday-padding); gap: var(--friday-gap); border: 1px solid var(--border); border-radius: var(--friday-radius); background: var(--popover); box-shadow: var(--friday-shadow); font-size: var(--text-sm); }
 .friday-conversation { display: flex; flex: 1; flex-direction: column; min-height: 0; min-width: 0; overflow: auto; }
 .friday-stage { display: grid; grid-template-columns: minmax(0, 1fr); min-height: 0; flex: 1; gap: var(--friday-gap); }
-.friday-presence { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 0; overflow: auto; padding-bottom: var(--friday-padding); }
+.friday-presence { display: flex; flex-direction: column; align-items: center; justify-content: safe center; min-height: 0; overflow: auto; padding-bottom: var(--friday-padding); }
 .friday-voice { display: flex; flex-direction: column; align-items: center; gap: var(--friday-gap); }
 .friday-presence-identity { display: flex; flex-direction: column; align-items: center; }
 .friday-orb { display: block; position: relative; width: var(--friday-orb-size); max-width: 100%; aspect-ratio: 1; flex-shrink: 0; padding: 0; border: 0; border-radius: 50%; background: transparent; cursor: pointer; }
@@ -67,9 +79,42 @@
 .friday-stage[data-expanded="true"] .friday-presence-identity, .friday-stage[data-expanded="true"] .friday-latest-reply, .friday-stage[data-expanded="true"] .friday-prompt { display: none; }
 .friday-stage[data-expanded="true"] { grid-template-columns: minmax(0, 1fr); }
 .friday-unconfigured { display: flex; flex: 1; flex-direction: column; justify-content: center; align-items: center; gap: var(--friday-gap); }
-@media (min-width: 1100px) { .friday-stage[data-panel="true"]:not([data-expanded="true"]) { grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr); } }
+@media (min-width: 1100px) { .friday-stage[data-panel="true"]:not([data-expanded="true"]) { grid-template-columns: minmax(16rem, 0.55fr) minmax(0, 1.8fr); } }
 @media (max-width: 1099px) { .friday-stage[data-panel="true"] .friday-presence-identity { flex-direction: row; } .friday-stage[data-panel="true"] .friday-orb { width: var(--friday-orb-small); } }
 @media (max-width: 767px) { .friday-home { height: auto; } .friday-stage { flex: none; } .friday-workspace { height: var(--friday-workspace-height); } }
+.friday-home-attention { width: 100%; max-width: var(--friday-copy-width); padding: var(--friday-padding); }
+.friday-work-task { display: block; width: 100%; padding: var(--friday-card-gap); border: 1px solid var(--border); border-radius: var(--friday-card-radius); background: var(--background); text-align: left; }
+button.friday-work-task:hover, a.friday-work-task:hover { background: var(--card); }
+.friday-work-task[aria-pressed="true"] { border-color: var(--primary); }
+.friday-work-counts { display: flex; flex-wrap: wrap; gap: var(--friday-card-gap); font-size: var(--text-xs); color: var(--muted-foreground); }
+.friday-work-counts span { padding: var(--spacing) calc(var(--spacing) * 2); border: 1px solid var(--border); border-radius: var(--friday-card-radius); }
+.friday-combined-work { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--friday-gap); }
+.friday-work-activity { max-height: var(--friday-workspace-height); overflow: auto; }
+.friday-kanban { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(13rem, 1fr); gap: var(--friday-card-gap); overflow: auto; padding-bottom: var(--friday-card-gap); }
+.friday-team-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); gap: var(--friday-card-gap); }
+.friday-work-graph { display: block; width: 100%; height: var(--friday-graph-height); touch-action: none; background: radial-gradient(ellipse at center, var(--card), var(--background)); border: 1px solid var(--border); border-radius: var(--friday-radius); }
+.friday-graph-edge { stroke: var(--border); stroke-width: 1; }
+.friday-graph-edge[data-kind="assignment"] { stroke: var(--primary); stroke-dasharray: 3 5; opacity: 0.35; }
+.friday-graph-edge[data-kind="creation"], .friday-graph-edge[data-kind="message"] { stroke: var(--friday-graph-message); opacity: 0.35; }
+.friday-graph-edge[data-kind="output"] { stroke: var(--friday-graph-output); }
+.friday-graph-edge[data-kind="handoff"] { stroke: var(--friday-graph-handoff); stroke-width: 3; stroke-dasharray: 6 4; cursor: pointer; }
+.friday-graph-edge[data-active="true"] { opacity: 0.8; animation: friday-work-flow var(--friday-graph-motion) linear infinite; }
+.friday-graph-node { cursor: pointer; outline: none; }
+.friday-graph-node circle { r: var(--friday-graph-task-radius); fill: var(--background); stroke: var(--muted-foreground); stroke-width: 1.5; }
+.friday-graph-node[data-kind="application"] circle { r: var(--friday-graph-application-radius); fill: var(--card); stroke: var(--primary); }
+.friday-graph-node[data-kind="project"] circle { r: var(--friday-graph-project-radius); fill: var(--foreground); stroke: var(--foreground); }
+.friday-graph-node[data-kind="agent"] circle { r: var(--friday-graph-agent-radius); fill: var(--background); stroke: var(--primary); stroke-width: 2.5; }
+.friday-graph-node[data-kind="comment"] circle { r: var(--friday-graph-evidence-radius); fill: var(--friday-graph-message); stroke: none; }
+.friday-graph-node[data-kind="artifact"] circle { r: var(--friday-graph-evidence-radius); fill: var(--friday-graph-output); stroke: none; }
+.friday-graph-node[data-status="done"] circle { fill: var(--status-task-done); }
+.friday-graph-node[data-status="blocked"] circle { fill: var(--destructive); }
+.friday-graph-node[data-running="true"] circle { fill: var(--primary); animation: agentos-running var(--agentos-map-pulse-duration) ease-in-out infinite; }
+.friday-graph-node:focus-visible circle, .friday-graph-node:hover circle { stroke: var(--ring); stroke-width: 3; }
+.friday-graph-node text { fill: var(--foreground); font-size: var(--agentos-map-label-size); }
+.friday-work-graph[data-quiet="true"] * { animation: none; }
+@keyframes friday-work-flow { to { stroke-dashoffset: -20; } }
+@media (min-width: 1500px) { .friday-combined-work { grid-template-columns: minmax(0, 1.6fr) minmax(15rem, 1fr); } }
+@media (prefers-reduced-motion: reduce) { .friday-work-graph * { animation: none !important; } }
 
 :root {
   --agentos-map-height: 28rem;

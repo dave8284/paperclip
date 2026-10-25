@@ -3277,7 +3277,7 @@ export function TaskChatThread(props: TaskChatThreadProps) {
                           focusView.onExpandComposer?.();
                           requestAnimationFrame(() => { if (props.composerRef && typeof props.composerRef !== "function") props.composerRef.current?.focus(); });
                         } else focusView.onCollapseComposer?.();
-                      }} aria-expanded={!collapseComposer}>{collapseComposer ? "Type to Friday…" : "Use voice"}</Button>
+                      }} aria-expanded={!collapseComposer}>{collapseComposer ? `Type to ${focusView.assistantName ?? "Friday"}…` : "Use voice"}</Button>
                     </div>}
                     <div
                       hidden={collapseComposer}

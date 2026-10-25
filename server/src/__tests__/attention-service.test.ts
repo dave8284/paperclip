@@ -2003,6 +2003,21 @@ describeEmbeddedPostgres("attention service", () => {
     });
   });
 
+  it("scopes Friday project decisions before counting and pagination without exposing private reviews", async () => {
+    const { companyId } = await seedCompany("FRI");
+    const [first, second] = await db.insert(projects).values([{ companyId, name: "First" }, { companyId, name: "Second" }]).returning();
+    const firstId = await insertIssue({ companyId, projectId: first.id, identifier: "FRI-1", title: "First review", status: "in_review" });
+    await insertIssue({ companyId, projectId: second.id, identifier: "FRI-2", title: "Other review", status: "in_review" });
+    await insertIssue({ companyId, projectId: first.id, identifier: "FRI-3", title: "Hidden review", status: "in_review", visibility: "private", responsibleUserId: "private-owner" });
+    const actor = { type: "board" as const, source: "session" as const, userId: "reader", companyIds: [companyId] };
+    const feed = await attentionService(db).list(companyId, { projectId: first.id, userId: actor.userId, actor, limit: 1 });
+    expect(feed.totalCount).toBe(1); expect(feed.nextCursor).toBeNull();
+    expect(feed.items.map(item => item.subject.id)).toEqual([firstId]);
+    expect(JSON.stringify(feed)).not.toContain("Hidden review");
+    const empty = await attentionService(db).list(companyId, { projectId: randomUUID(), userId: actor.userId, actor });
+    expect(empty.totalCount).toBe(0); expect(empty.items).toEqual([]);
+  });
+
   it("serves the route for board users and rejects agent callers", async () => {
     const { companyId } = await seedCompany("ATR");
 
@@ -2034,6 +2049,7 @@ describeEmbeddedPostgres("attention service", () => {
     };
 
     await request(app(board)).get(`/api/companies/${companyId}/attention`).expect(200);
+    await request(app(board)).get(`/api/companies/${companyId}/attention?projectId=invalid`).expect(400);
     const completeFeed = await request(app(board))
       .get(`/api/companies/${companyId}/attention?includeDismissed=true&all=true`)
       .expect(200);

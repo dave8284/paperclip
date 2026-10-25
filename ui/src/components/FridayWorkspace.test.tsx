@@ -7,8 +7,9 @@ import type { IssueAttachment, IssueWorkProduct } from "@paperclipai/shared";
 import type { AgentConversationFocusData } from "@/lib/conversation-focus";
 import { FridayWorkspace, type FridayPanel } from "./FridayWorkspace";
 import { fridayCanvases, savedFridayCanvases } from "@/lib/friday-canvas";
+import { queryKeys } from "@/lib/queryKeys";
 
-const api = vi.hoisted(() => ({ listDocuments: vi.fn(async () => []), upsertDocument: vi.fn(async () => ({})) }));
+const api = vi.hoisted(() => ({ listDocuments: vi.fn(async (): Promise<any[]> => []), getDocument: vi.fn(), upsertDocument: vi.fn(async () => ({})) }));
 vi.mock("@/api/issues", () => ({ issuesApi: api }));
 vi.mock("./FridayOrb", () => ({ FridayOrb: ({ state }: { state: string }) => <div data-state={state} /> }));
 vi.mock("./PortfolioGalaxy", () => ({ PortfolioGalaxy: () => <div>Real portfolio</div> }));
@@ -23,7 +24,7 @@ describe("Friday published displays", () => {
     provider: "paperclip", externalId: null, url: null, reviewState: "none", isPrimary: false, healthStatus: "unknown",
     summary: null, createdByRunId: null, createdAt: new Date(), updatedAt: new Date() } satisfies IssueWorkProduct;
   const data: AgentConversationFocusData = { issueId: "chat", attachments: [], workProducts: [], reply: undefined, onTranscript: vi.fn(), voiceDisabled: false, runStatus: "idle", awaitingInput: false, unavailable: false, loading: false };
-  beforeEach(() => { vi.clearAllMocks(); host = document.createElement("div"); document.body.append(host); root = createRoot(host); client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } }); });
+  beforeEach(() => { vi.clearAllMocks(); api.listDocuments.mockResolvedValue([]); host = document.createElement("div"); document.body.append(host); root = createRoot(host); client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } }); });
   afterEach(async () => { await act(async () => root.unmount()); host.remove(); client.clear(); });
   async function render(next: AgentConversationFocusData, panel: FridayPanel = null) {
     await act(async () => root.render(<QueryClientProvider client={client}><FridayWorkspace companyId="company" data={next} panel={panel} setPanel={setPanel} compact={false} connected /></QueryClientProvider>));
@@ -59,5 +60,18 @@ describe("Friday published displays", () => {
     expect(fridayCanvases("chat", [], [product])).toHaveLength(0);
     expect(fridayCanvases("chat", [file], [{ ...product, metadata: { url: "https://untrusted.invalid" } }])).toHaveLength(0);
     expect(savedFridayCanvases([{ key: "friday-canvas-file", body: "invalid" } as never], fridayCanvases("chat", [file], [product])).size).toBe(0);
+  });
+  it("opens newly saved typed view requests without replaying history or executing invalid requests", async () => {
+    api.listDocuments.mockResolvedValue([{ key: "friday-view", latestRevisionId: "old" }]);
+    api.getDocument.mockResolvedValue({ latestRevisionId: "old", body: '{"version":1,"panel":"work"}' });
+    await render(data); await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
+    expect(setPanel).not.toHaveBeenCalled();
+    api.getDocument.mockResolvedValue({ latestRevisionId: "new", body: '{"version":1,"panel":"work","mode":"combined"}' });
+    await act(async () => { client.setQueryData(queryKeys.issues.documents("chat"), [{ key: "friday-view", latestRevisionId: "new" }]); await new Promise(resolve => setTimeout(resolve, 0)); });
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
+    expect(setPanel).toHaveBeenCalledWith("work"); setPanel.mockClear();
+    api.getDocument.mockResolvedValue({ latestRevisionId: "invalid", body: '{"version":1,"panel":"deploy","url":"https://untrusted.invalid"}' });
+    await act(async () => { client.setQueryData(queryKeys.issues.documents("chat"), [{ key: "friday-view", latestRevisionId: "invalid" }]); await new Promise(resolve => setTimeout(resolve, 0)); });
+    expect(setPanel).not.toHaveBeenCalled();
   });
 });

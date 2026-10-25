@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { z } from "zod";
 import type { Db } from "@paperclipai/db";
 import type { AttentionSortMode } from "@paperclipai/shared";
 import { attentionService } from "../services/attention.js";
@@ -25,6 +26,7 @@ export function attentionRoutes(db: Db) {
     }
 
     const includeDismissed = req.query.includeDismissed === "true";
+    const projectId = req.query.projectId === undefined ? undefined : z.string().uuid().parse(req.query.projectId);
     const archived = req.query.archived === "true";
     const all = req.query.all === "true";
     const activitySince = optionalQueryString(req.query.activitySince, "activitySince");
@@ -39,6 +41,7 @@ export function attentionRoutes(db: Db) {
     const limit = limitValue === undefined ? undefined : Number(limitValue);
     if (limit !== undefined && !Number.isInteger(limit)) throw badRequest("limit must be an integer");
     const feed = await svc.list(companyId, {
+      projectId,
       userId: req.actor.userId,
       includeDismissed,
       actor: req.actor,

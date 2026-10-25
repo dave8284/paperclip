@@ -8264,6 +8264,7 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
                   onRefreshLatestComments={refetchLatestComments}
                   composerRef={commentComposerRef}
                   focusView={conversation?.focusView ? {
+                    assistantName: conversation.focusView.assistantName,
                     showTranscript: conversation.focusView.showTranscript,
                     composerCollapsed: conversation.focusView.composerCollapsed,
                     onExpandComposer: conversation.focusView.onExpandComposer,

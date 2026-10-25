@@ -83,6 +83,8 @@ export interface AttentionTriageAttribution {
 export type AttentionSortMode = "activity" | "decide";
 
 export interface AttentionFeedQuery {
+  /** Filter the authorized feed before ranking, counts and pagination. */
+  projectId?: string;
   includeDismissed?: boolean;
   archived?: boolean;
   /** Return the complete filtered snapshot in one response. */

@@ -19,7 +19,8 @@ export function spokenReply(text: string) {
 
 /** Microphone activation is explicit. Voice turns use the native sender, with
  * recoverable draft fallback; legacy dictation can remain draft-only. */
-export function FridayVoiceControls({ onTranscript, reply, disabled = false, renderPresence, compact = false, speakReplies = false, onVoiceMessage }: {
+export function FridayVoiceControls({ onTranscript, reply, disabled = false, renderPresence, compact = false, speakReplies = false, onVoiceMessage, assistantName = "Friday" }: {
+  assistantName?: string;
   onTranscript: (text: string) => void;
   reply?: { id: string; body: string; createdAt?: Date | string };
   disabled?: boolean;
@@ -142,13 +143,13 @@ export function FridayVoiceControls({ onTranscript, reply, disabled = false, ren
   const toggleListening = () => starting ? stopListening() : listening ? recognition.current?.stop() : listen();
   const preferences = <>
       <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={autoSpeak} disabled={!synthesis} onChange={event => { setAutoSpeak(event.target.checked); speakSince.current = Date.now(); seenReply.current = reply?.id ?? ""; if (!event.target.checked) stopSpeaking(); }} />Speak new replies</label>
-      {!!voices.length && <select aria-label="Friday voice" className="rounded-md border bg-background px-2 py-1 text-xs" value={voiceURI} onChange={event => setVoiceURI(event.target.value)}><option value="">System voice</option>{voices.map(voice => <option key={voice.voiceURI} value={voice.voiceURI}>{voice.name} · {voice.lang}</option>)}</select>}
+      {!!voices.length && <select aria-label={`${assistantName} voice`} className="rounded-md border bg-background px-2 py-1 text-xs" value={voiceURI} onChange={event => setVoiceURI(event.target.value)}><option value="">System voice</option>{voices.map(voice => <option key={voice.voiceURI} value={voice.voiceURI}>{voice.name} · {voice.lang}</option>)}</select>}
       <p className="text-xs text-muted-foreground">{RecognitionClass ? "Browser dictation may send audio to your browser’s speech provider. Listening stops when you leave this page." : "This browser does not support dictation. Use browser/OS dictation or type; speech playback is available where supported."}</p>
   </>;
-  return <div className={compact ? "friday-voice" : "space-y-2"} aria-label="Friday voice controls">
+  return <div className={compact ? "friday-voice" : "space-y-2"} aria-label={`${assistantName} voice controls`}>
     {renderPresence?.({ listening, speaking, starting, canListen: !!RecognitionClass && !disabled && !sending, toggleListening })}
     <div className="flex flex-wrap items-center gap-2">
-      <Button type="button" size="sm" variant={listening ? "default" : "outline"} disabled={!RecognitionClass || disabled || sending} onClick={toggleListening}>{listening || starting ? <MicOff /> : <Mic />}{sending ? "Sending…" : listening ? onVoiceMessage ? "Send voice message" : "Stop listening" : starting ? "Cancel microphone" : "Talk to Friday"}</Button>
+      <Button type="button" size="sm" variant={listening ? "default" : "outline"} disabled={!RecognitionClass || disabled || sending} onClick={toggleListening}>{listening || starting ? <MicOff /> : <Mic />}{sending ? "Sending…" : listening ? onVoiceMessage ? "Send voice message" : "Stop listening" : starting ? "Cancel microphone" : `Talk to ${assistantName}`}</Button>
       <Button type="button" variant="outline" size="sm" disabled={!synthesis || !reply} onClick={() => reply && speak(reply.body)}><Volume2 />Read reply</Button>
       {compact && <Button type="button" variant="ghost" size="sm" disabled={!synthesis} aria-pressed={autoSpeak} onClick={() => { setAutoSpeak(value => !value); speakSince.current = Date.now(); if (autoSpeak) stopSpeaking(); }}>{autoSpeak ? "Mute replies" : "Unmute replies"}</Button>}
       {speaking && <Button type="button" variant="outline" size="sm" onClick={stopSpeaking}><Square />Stop speaking</Button>}

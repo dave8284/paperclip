@@ -170,3 +170,6 @@ losing authorized cache updates. Deny revoked membership and private task access
 Confirm relevance lookup failure yields a quiet authorized event.
 
 Gaps: Browser recipes and regression sources are not deployment acceptance proof.
+
+
+Friday consumes the existing attention feed and native decision controls. `GET /api/companies/{companyId}/attention` accepts optional UUID `projectId`; the filter runs after authorization/enrichment and before counts, ordering and pagination. Global items without that project are omitted from a project-specific feed. Board-only authorization is unchanged. The project-scope/privacy regression is in `server/src/__tests__/attention-service.test.ts`; Friday grouping/native action wiring is in `ui/src/components/FridayAttention.test.tsx`.

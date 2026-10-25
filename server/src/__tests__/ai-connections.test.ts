@@ -77,6 +77,12 @@ afterAll(async () => { await database?.cleanup(); vi.unstubAllEnvs(); if (home) 
 
 describe("managed AI connections", () => {
   it("inherits Friday's shared subscription choice without bypassing native grants or sharing personal credentials", async () => {
+    // A shared grant remains visible to other company members even when revoked.
+    // Isolate this scenario from quota tests which select their own fixture row.
+    const companyId = randomUUID();
+    const agentId = randomUUID();
+    await db.insert(companies).values({ id: companyId, name: "Friday binding fixture", issuePrefix: "FRB" });
+    await db.insert(agents).values({ id: agentId, companyId, name: "Friday fixture", adapterType: "paperclip_runner" });
     const owner = "friday-default-binding";
     await db.insert(companyMemberships).values({ companyId, principalId: owner, principalType: "user", status: "active", membershipRole: "member" });
     const account = await service.save(companyId, owner, { provider: "openai", method: "subscription", ownership: "shared", name: owner, loginSessionId: "fixture", agentIds: [], allAgents: true }, JSON.stringify({ tokens: { account_id: owner, access_token: "fixture", refresh_token: "fixture" } }));

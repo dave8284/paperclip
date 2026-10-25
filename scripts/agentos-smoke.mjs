@@ -99,7 +99,28 @@ try {
   assert(saved.latestRevisionId);
   assert.equal(JSON.parse((await api(documentPath, "GET", undefined, undefined, key.token)).body).attachmentId, attachment.id);
   await api(documentPath, "PUT", { format: "markdown", title: "Stale overwrite", baseRevisionId: null, body: "stale" }, 409);
-  console.log("PASS: registration/replay, native aggregation, Friday binding, authenticated delegation/hiring, platform separation, galaxy, agent HTML publication and revision-controlled reusable displays.");
+  // Friday's read model includes projects outside the application registry.
+  const initiative = await api(`${base}/projects`, "POST", { name: "Unregistered initiative", leadAgentId: coordinator.id, idempotencyKey: randomUUID() }, undefined, key.token);
+  const awareness = await api(`${base}/friday/work?limit=1`, "GET", undefined, undefined, key.token);
+  assert.equal(awareness.projectCount, 3);
+  assert.equal(awareness.counts.done, 2);
+  assert.equal(awareness.tasks.length, 1);
+  assert.equal(awareness.nextOffset, 1);
+  const ownWork = await api(`${base}/friday/work?agentId=${coordinator.id}`, "GET", undefined, undefined, key.token);
+  assert(ownWork.projects.some(item => item.id === initiative.id));
+  const scoped = await api(`${base}/friday/work?projectId=${first.project.id}`, "GET", undefined, undefined, key.token);
+  assert(scoped.evidence.some(item => item.id === canvas.id && item.kind === "artifact"));
+  const viewPath = `/issues/${first.task.id}/documents/friday-view`;
+  const view = { version: 1, panel: "work", projectId: first.project.id, mode: "combined" };
+  const shown = await api(viewPath, "PUT", { format: "markdown", title: "Current work view", body: JSON.stringify(view), baseRevisionId: null }, undefined, key.token);
+  assert.deepEqual(JSON.parse(shown.body), view);
+  await api(viewPath, "PUT", { format: "markdown", title: "Stale view", body: "{}", baseRevisionId: null }, 409, key.token);
+  const routine = await api(`${base}/routines`, "POST", { title: "Verification feedback loop", projectId: initiative.id, assigneeAgentId: coordinator.id, status: "paused", description: "Disposable paused routine; no external operations." }, undefined, key.token);
+  assert.equal(routine.status, "paused");
+  assert((await api(`${base}/routines?projectId=${initiative.id}`)).some(item => item.id === routine.id));
+  await api(`${base}/attention?projectId=${first.project.id}`, "GET", undefined, 200);
+  await api(`${base}/attention`, "GET", undefined, 403, key.token);
+  console.log("PASS: registration/replay, native aggregation, Friday binding, authenticated delegation/hiring, platform separation, galaxy, publication, shared awareness, revision-controlled displays/views, and agent-created paused routines.");
 } finally {
   if (company) {
     await api(`/companies/${company.id}`, "DELETE");

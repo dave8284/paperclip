@@ -1935,6 +1935,7 @@ export function attentionService(db: Db, serviceOptions: AttentionServiceOptions
       }
       const queueKey = options.queue?.trim() || null;
       const visibleItems = enrichedItems.filter((item) => {
+        if (options.projectId && item.project?.id !== options.projectId) return false;
         if (options.archived === true ? !item.archivedAt : Boolean(item.archivedAt)) return false;
         if (!includeDismissed && item.snoozedUntil && timestamp(item.snoozedUntil) > now) return false;
         const activity = timestamp(item.activityAt);

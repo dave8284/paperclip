@@ -7,7 +7,7 @@ import {
   experimentalApiQueries,
 } from "./experimental-api-paths.js";
 import { Router } from "express";
-import { createManagedApplicationSchema, updateManagedApplicationSchema, managedApplicationListSchema, managedApplicationWorkQuerySchema, linkManagedApplicationProjectSchema, updateOperatingProfileSchema } from "@paperclipai/shared";
+import { createManagedApplicationSchema, updateManagedApplicationSchema, managedApplicationListSchema, managedApplicationWorkQuerySchema, linkManagedApplicationProjectSchema, updateOperatingProfileSchema, fridayWorkQuerySchema } from "@paperclipai/shared";
 import { subscriptionPriceSchema, mergeSubscriptionsSchema } from "@paperclipai/shared";
 import { z } from "zod";
 import {
@@ -5016,6 +5016,7 @@ registry.registerPath({
 });
 
 for (const operation of [
+  { method: "get", path: "/api/companies/{companyId}/friday/work", summary: "Read current work across projects for Friday or an individual agent: complete authorized counts, project assignments, paginated tasks, messages, artifacts and recorded case handoffs", query: fridayWorkQuerySchema },
   { method: "get", path: "/api/companies/{companyId}/managed-applications", summary: "List accessible application portfolio with project and task counts", query: managedApplicationListSchema },
   { method: "post", path: "/api/companies/{companyId}/managed-applications", summary: "Register an application against its home project (operator or applications:manage grant, idempotent)", body: createManagedApplicationSchema },
   { method: "get", path: "/api/companies/{companyId}/managed-applications/galaxy", summary: "Read a bounded portfolio graph with authorized native projects, task dots, complete counts and observation time", query: managedApplicationListSchema },
@@ -6175,6 +6176,7 @@ registry.registerPath({
   request: {
     params: z.object({ companyId: z.string() }),
     query: z.object({
+      projectId: z.string().uuid().optional(),
       includeDismissed: z.enum(["true", "false"]).optional(),
       archived: z.enum(["true", "false"]).optional(),
       all: z.enum(["true", "false"]).optional(),

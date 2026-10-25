@@ -10,6 +10,7 @@ export interface ConversationFocusState {
   loading: boolean;
 }
 export interface ConversationFocusView {
+  assistantName?: string;
   showTranscript: boolean;
   composerCollapsed?: boolean;
   onExpandComposer?: () => void;
@@ -26,6 +27,7 @@ export interface AgentConversationFocusData extends ConversationFocusState {
   voiceDisabled: boolean;
 }
 export interface AgentConversationFocusView {
+  assistantName?: string;
   showTranscript: boolean;
   composerCollapsed?: boolean;
   onExpandComposer?: () => void;
