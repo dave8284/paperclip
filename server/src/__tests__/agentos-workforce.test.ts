@@ -102,6 +102,16 @@ describe("Agent OS shared workforce", () => {
     expect(readonly.body.canManage).toBe(false);
     await request(f.api).post(`${f.base}/employees`).send({ id: randomUUID(), name: "Forbidden" }).expect(404);
   });
+  it("intersects portfolio visibility with a token's admitted companies even when its user owns both", async () => {
+    const f = await seed();
+    const scoped = app({ ...f.actor, source: "mcp_oauth", companyIds: [f.one.id], isInstanceAdmin: true });
+    const view = await request(scoped).get(f.base).expect(200);
+    expect(view.body.companies.map((row: { id: string }) => row.id)).toEqual([f.one.id]);
+    expect(JSON.stringify(view.body)).not.toContain(f.second.id);
+    await request(scoped).post(`${f.base}/companies`).send({ companyId: f.two.id }).expect(404);
+    await request(scoped).post(`${f.base}/assignments/${f.assignments[1].id}/retire`).send({ expectedRevision: 1, reason: "Outside token scope" }).expect(404);
+    await request(app({ ...f.actor, companyIds: [] })).get(f.base).expect(404);
+  });
   it("rejects cross-company runtime binding, malformed requests, competing assignments and managers with reports", async () => {
     const f = await seed();
     const employee = { id: randomUUID(), name: "Second employee" };

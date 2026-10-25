@@ -25,6 +25,9 @@ export function agentosWorkforceService(db: Db) {
     if (actor.type === "none" || (actor.type === "agent" && (actor.companyId !== companyId || (actor.keyScope && actor.keyScope.kind !== "standard")))) return false;
     // Recheck membership from durable state. Portfolio links are not grants.
     if (actor.type === "board" && actor.source !== "local_implicit") {
+      // A session/token may be narrower than the user's memberships (e.g. a
+      // company-consented MCP connection). Retain native route admission too.
+      if (!actor.companyIds?.includes(companyId)) return false;
       const [member] = await connection.select().from(companyMemberships).where(and(
         eq(companyMemberships.companyId, companyId), eq(companyMemberships.principalType, "user"),
         eq(companyMemberships.principalId, actor.userId ?? ""), eq(companyMemberships.status, "active"),

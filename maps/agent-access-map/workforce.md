@@ -14,7 +14,7 @@ API: `present` — GET/POST /api/agentos/portfolios; GET /api/agentos/portfolios
 
 Agent access: `operator-only` — board REST and UI. Native discovery labels these routes board-only. Ordinary company agent keys cannot operate or read portfolios.
 
-Policy: owner user identity, fresh active membership and native company ACLs. Writes require users:manage_permissions in the home and target company. Linking never grants company access. Local implicit board retains existing local authority. Home company permanent deletion is blocked before stopping agents; archive remains available.
+Policy: owner user identity, session/token company admission, fresh active membership and native company ACLs. A company-consented token cannot use broader user memberships to expand its scope. Writes require users:manage_permissions in the home and target company. Linking never grants company access. Local implicit board retains existing local authority. Home company permanent deletion is blocked before stopping agents; archive remains available.
 
 Evidence: `verified` — isolated PostgreSQL HTTP tests at the current source checkout exercise owner, foreign-owner, revoked-company and agent-denial paths. Live provider/Friday transport is not certified.
 
