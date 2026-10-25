@@ -5,16 +5,16 @@ import { describe, expect, it } from "vitest";
 const stylesheet = readFileSync(fileURLToPath(new URL("../index.css", import.meta.url)), "utf8");
 
 function cssBlock(selector: string): string {
-  const start = stylesheet.indexOf(`\n${selector} {`);
-  expect(start, `Missing CSS selector: ${selector}`).toBeGreaterThanOrEqual(0);
-  const bodyStart = stylesheet.indexOf("{", start);
-  const bodyEnd = stylesheet.indexOf("\n}", bodyStart);
-  return stylesheet.slice(bodyStart + 1, bodyEnd);
+  // The token layer is split across several :root/.dark rules (including
+  // Friday's tokens). Read all of them in source order, as the cascade does.
+  const blocks = stylesheet.split(`\n${selector} {`).slice(1);
+  expect(blocks.length, `Missing CSS selector: ${selector}`).toBeGreaterThan(0);
+  return blocks.map((block) => block.slice(0, block.indexOf("\n}"))).join("\n");
 }
 
 function token(block: string, name: string): string {
-  const match = block.match(new RegExp(`^\\s*--${name}:\\s*([^;]+);`, "m"));
-  expect(match, `Missing token --${name}`).not.toBeNull();
+  const match = [...block.matchAll(new RegExp(`^\\s*--${name}:\\s*([^;]+);`, "gm"))].at(-1);
+  expect(match, `Missing token --${name}`).toBeDefined();
   return match![1].trim();
 }
 
