@@ -34,4 +34,14 @@ jobs:
       - run: pnpm check:token-gates
       - name: Verify application persistence, authorization, API discovery, and installation
         run: pnpm exec vitest run server/src/__tests__/friday-awareness.test.ts server/src/__tests__/attention-service.test.ts ui/src/lib/friday-workspace.test.ts ui/src/components/FridayAttention.test.tsx ui/src/hooks/useFridayUpdates.test.tsx server/src/__tests__/managed-applications.test.ts server/src/__tests__/openapi-routes.test.ts server/src/__tests__/ai-connections.test.ts server/src/__tests__/git-credentials.test.ts server/src/__tests__/muse-client-contract.test.ts server/src/__tests__/invite-join-grants.test.ts ui/src/components/FridayWorkspace.test.tsx ui/src/components/TaskChatThread.test.tsx ui/src/components/task-side-panel/TaskAttachmentPanel.test.tsx ui/src/lib/html-preview.test.ts ui/src/components/FridayVoiceControls.test.tsx ui/src/components/PortfolioGalaxy.test.tsx ui/src/pages/Applications.test.tsx ui/src/pages/ApplicationDetail.test.tsx ui/src/pages/TeamCatalog.test.tsx ui/src/pages/useInstallTeamCatalogEntry.test.tsx ui/src/lib/company-routes.test.ts ui/src/App.test.tsx
+      - name: Verify shared workforce isolation, retirement, ownership and UI
+        run: >-
+          pnpm exec vitest run --maxWorkers=1
+          server/src/__tests__/agentos-workforce.test.ts
+          server/src/__tests__/board-claim.test.ts
+          server/src/modules/agent-lifecycle/__tests__/lifecycle.test.ts
+          server/src/services/case-deletion.test.ts
+          ui/src/pages/Workforce.test.tsx
+          ui/src/lib/activity-format.test.ts
+          ui/src/components/DestructiveThemeTokens.test.ts
       - run: pnpm build
