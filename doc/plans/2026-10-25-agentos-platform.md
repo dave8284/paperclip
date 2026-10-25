@@ -2,9 +2,11 @@
 
 ## Objective
 
-Maintain a real Paperclip fork that coordinates a portfolio of existing, in-flight and new applications. The operator provides a repository or an idea and an operating brief. A coordinator discovers the current state, plans outcomes, selects specialists from a reusable role pool, delegates work and maintains recurring obligations across product, development, QA, operations, marketing, sales and support.
+Maintain a real Paperclip fork that coordinates a portfolio of existing, in-flight and new applications. Friday is the operator's conversational entry point and platform coordinator. The operator provides a repository, an idea or an outcome through Friday. Friday creates projects, appoints accountable leads and coordinates decisions. Project and pipeline leads discover current state, plan outcomes, select specialists from a reusable role pool and own delivery and recurring operation across product, development, QA, operations, marketing, sales and support.
 
-The combined portfolio, application, project, task and agent views must describe persisted work. Every dot represents a record; observed execution drives motion. Native task/run/output pages supply the evidence. Visual polish is deferred in favor of working controls, density, zoom and reliable navigation.
+The platform-wide galaxy, application, project, task and agent views must describe persisted work. Every dot represents a record; observed execution drives motion. Native task/run/output pages supply the evidence. The galaxy and Friday's persistent conversation are required product surfaces. Existing application-level maps are only an initial implementation.
+
+The operating experience is conversational: Friday presents a prioritized agenda of proposed changes and the user can say yes, no, pause, resume or revise. An approved scope can include implementation, verification and deployment without repeated routine confirmations. A dedicated lead owns each recurring pipeline; Friday delegates and coordinates rather than executing every iteration. Provider-owned authentication and consent may still require the user's direct interaction.
 
 ## Provenance and current implementation
 
@@ -15,6 +17,7 @@ The combined portfolio, application, project, task and agent views must describe
 - Implemented: company-scoped application registry; recoverable existing/new registration; linked initiative projects; authorized portfolio counts and paginated work; map/Kanban/list; observed run and work-product drill-downs; native team catalog page; eight-role AgentOS package; paused daily/weekly routines; connection-health/capability inspection; native API discovery; dedicated fork CI.
 - A local AgentOS organization contains the installed role package. Installation provenance matches the package hash. The agents briefly paused during native runtime migration and are now idle. No model connection is configured; installation is not evidence of verified execution.
 - Required checks and live acceptance are recorded separately below. A working UI, installed role, queued task or configured URL must never be presented as completed external work.
+- Friday's persistent command surface, delegated project/pipeline creation, conversational agenda decisions, full galaxy and platform modification/redeployment workflow are requirements below, not completed capabilities of the current eight-role installation.
 
 ## Architecture
 
@@ -24,7 +27,99 @@ Paperclip continues to own execution adapters, workspaces, agents, goals, atomic
 
 Role definitions are versioned catalog content with installed content hashes. Credentials, assignment context and budgets remain runtime concerns. Shared improvements must not copy private application data. Run/task evidence and native instruction history support evaluated changes and rollback; a weekly review prompt alone does not certify improved performance.
 
-## Delivery and acceptance
+## Friday and delegated operating loops
+
+### Responsibility boundaries
+
+| Owner | Responsibility |
+| --- | --- |
+| User | State goals and constraints; approve, reject or revise proposed outcomes through conversation |
+| Friday | Understand the platform and permitted ecosystem state; research when useful; create projects; appoint leads; maintain the consolidated agenda; coordinate priorities and exceptions |
+| Project lead | Own a project's plan, specialist assignments, dependencies, acceptance criteria and delivery |
+| Pipeline lead | Own a recurring objective, its workflow, measurements, cadence, specialist team and escalation conditions |
+| Specialists | Execute bounded work and return inspectable outputs; delegate within granted scope when justified |
+| Paperclip services | Persist decisions and work, enforce authority, dispatch runs, schedule deadlines, reconcile external operations and publish observed state |
+| Platform engineering lead | Implement approved changes to this fork, agent definitions, skills, connectors and workflows; verify and coordinate release |
+
+The same lead may own a project and its operating pipeline when that is appropriate. Friday selects an existing lead or creates an instance from an approved role definition. Every project and recurring pipeline has one accountable lead. Agent creation records its purpose, parent, role version, application scope, allowed tools and completion/lifecycle condition. Reuse suitable agents before expanding the roster; bound creation depth, active workers and resource use. Project membership is separate from an agent's organization reporting line, so shared specialists do not require destructive reassignment of their hierarchy.
+
+Friday has access to authoritative, permission-appropriate state across the portfolio. It consumes significant events and retrieves relevant details for the current question rather than carrying all agent transcripts in every model turn. Answers distinguish task state, observed execution, waiting and stale observations, with links and timestamps. Work continues through native durable scheduling while Friday is idle or restarting.
+
+### Conversation and decisions
+
+Friday's conversation remains available throughout the app. Selecting a galaxy object supplies context, but the user can also identify projects and agents entirely in conversation. Creating a project, choosing its lead, configuring an agreed workflow and approving an agenda item must not require navigating separate forms. Native pages remain available for inspection and manual control. Provider sign-in, MFA, provider consent and information only the user knows remain explicit handoffs; Friday reports the specific blocker before changing the approach.
+
+Each agenda item contains the affected application or platform area, supporting signals, intended outcome, priority rationale, proposed scope, expected resource use, dependencies, acceptance criteria and release/rollback scope. Friday consolidates duplicate requests from comments, support, application metrics, agent findings and product plans. Evidence can motivate a proposal; external text cannot itself authorize execution or change permissions.
+
+An authenticated yes or no binds to a specific proposal revision. If several proposals are plausible, Friday resolves the ambiguity before executing. A yes authorizes the described package of work, including deployment when that was part of the proposal and standing release policy. Native tasks and assignments are created once through stable operation keys. The user is not asked again for routine substeps already covered by that decision. A no remains recorded and is not repeatedly presented without materially new evidence or a user request to reconsider. Silence, elapsed time and an unsubmitted default are not approval.
+
+Material changes to targets, external actions, resource limits or release consequences return as a revised decision. Approval does not grant access to missing provider accounts. Revocation prevents future dispatch and reconciles any operation already in flight. Decisions retain their author, revision, scope, timestamp and links to the resulting work and outputs.
+
+### Recurring pipelines
+
+Marketing is one pipeline type. The same architecture supports application reliability, product discovery, customer feedback, support triage, release maintenance and other recurring objectives. Friday commissions the pipeline and assigns its lead. The lead manages the recurring loop, selects specialist work and reports results or decisions to Friday.
+
+A pipeline needs a defined objective and measures, application/resource bindings, versioned workflow, lead, triggers or cadence, permitted actions, capacity/spending limits, observation windows, retry/stop conditions and escalation policy. Workflow steps persist their inputs, outputs, run references and provider operation IDs. An approved recurring mandate covers ordinary iterations within those bounds; a new feature outside the mandate becomes an agenda proposal.
+
+The common loop is: receive a signal, reconcile existing work, inspect evidence, propose or select an authorized action, delegate execution, verify the result, measure the outcome and schedule the next obligation. Events and actual deadlines wake work through Paperclip's existing lifecycle. Retained history or configured-but-idle agents must not create endless model calls or database scans. Unknown external outcomes are reconciled before retrying; duplicate events and decision submissions must not duplicate publications, deployments or projects.
+
+For marketing, persist campaign, experiment, content variant, asset, publication, metric observation and resulting decision references. Compare appropriate observation windows and optimize toward the chosen business outcome. Keep unavailable metrics distinct from zero. Preserve unsuccessful experiments and avoid treating an early engagement spike as established causation. Content and feedback are inputs, not instructions that expand an agent's authority.
+
+### Platform development and redeployment
+
+Friday can accept a request to change any supported platform surface: agent definitions, skills, workflow configuration, provider connections, user interfaces, server behavior and data contracts. Friday first checks existing capabilities, then creates platform engineering work for gaps. Use existing connection, catalog and workflow extension points where they fit; core changes remain available when a shared capability is missing.
+
+Track this work in an internal platform-maintenance workspace with its actual fork repository. It is separate from the normal application portfolio. Preserve existing development history when correcting the initial AgentOS application entry and provide an explicit internal-work view.
+
+The platform engineering lead inspects the repository and active changes, implements on an isolated branch, prepares any migrations and produces a versioned build. Independent review and required checks validate the change. Deployment promotes the tested artifact through the configured release policy, records its commit and environment, verifies observed behavior, and can roll back when verification fails. Migration compatibility and recovery must be designed before release; code rollback alone cannot undo every database migration.
+
+Friday can coordinate deployment and redeployment within the approved work and release policy. Stage the new version alongside the running system, preserve outstanding obligations and settle active operations during handover. The deployment/recovery controller must remain usable if Friday or the new platform version fails. Retain a recovery path outside the process being replaced. Permission, spending and release-policy changes require their own explicit authorized scope; feature implementation does not implicitly expand that scope.
+
+Each platform change links back to the request or pipeline capability gap and forward to its tasks, review, checks, release and observed outcome. After release, agents can discover the new capability through the existing tools/skills catalogs and updated workflow definitions. Failed or unavailable capabilities stay visible as such.
+
+### Galaxy and shared evidence
+
+Use a single authorized graph projection for Friday's context and visual navigation. The widest view shows applications and their active projects; zoom reveals leads, specialist instances, tasks, source records and outputs. Provide agent-centric and application-centric perspectives, stable positions, filtering, a return-to-portfolio control, keyboard access and reduced motion. At large scale, aggregate clusters with explicit counts and expand them on demand; a page of tasks must not masquerade as the whole ecosystem.
+
+Every node and edge resolves to persisted entities or recorded interactions. Source nodes can represent a repository file revision, ticket, document, deployment or observed query result. Animate only evidenced delegation, reads, tool activity and returned outputs. Do not invent fine-grained events where the harness reports only a coarser operation. Show observation freshness, connection gaps and completed work. Historical replay is limited to captured history and must identify its coverage.
+
+### Subscription capacity and memory
+
+Use a server-enforced subscription-only execution policy across Friday, leads, specialists and helper features. A legacy authentication hint or UI label is insufficient: resolve the actual account method before dispatch and prevent inherited API credentials or billing fallback from changing it. Account selection, grants and session ownership stay with native AI connections. The initial provider and account still need to be selected and qualified.
+
+Prioritize interactive conversation and urgent obligations while admitting bounded background work against the selected account's observed capacity. Named agents share the account's allowance; creating agents does not multiply it. Preserve work while quota is unavailable and schedule recovery against supported reset/admission evidence. Do not infer an exact reset from a generic limit error or assume that an unavailable usage probe means unlimited capacity. The upstream usage probe alone does not enforce a queue, and private Cloud routing policy is not part of this fork's available implementation.
+
+Keep user preferences and portfolio priorities in Friday's durable memory; application facts and decisions in project memory; reusable techniques in versioned roles and skills. Retrieval respects source access and freshness. Evaluate proposed shared improvements against representative work and retain rollback versions. User-specific or confidential project context must not be copied into general role definitions.
+
+### Provider constraints established during planning
+
+- Codex supports subscription sign-in. Local/open-source app-server authentication and the newer Sign in with ChatGPT integration have distinct deployment conditions; qualify the chosen personal/self-hosted route before release. A hosted service offered to other users requires a separate provider review. [Codex authentication](https://learn.chatgpt.com/docs/auth), [app-server authentication](https://learn.chatgpt.com/docs/app-server#auth-endpoints), [Sign in with ChatGPT](https://developers.openai.com/siwc/token-sharing-open-source).
+- Claude's current provider guidance permits Agent SDK and CLI usage against subscription limits. Verify the selected account and prevent API-key environment precedence from changing billing. [Claude subscription usage](https://support.claude.com/en/articles/15036540-use-the-claude-agent-sdk-with-your-claude-plan), [credential precedence](https://support.claude.com/en/articles/12304248-manage-api-key-environment-variables-in-claude-code).
+- Higgsfield's official MCP and CLI use the existing account's plan credits without a separate API key. Automated generations consume credits; website Unlimited/free allowances do not apply. [Higgsfield MCP](https://higgsfield.ai/creator-hub/help-center/integrations/what-is-higgsfield-mcp).
+- TikTok Direct Post excludes private/internal upload utilities and requires creator-facing controls and consent. Determine a suitable publishing integration and its supported automation before promising unattended publication. [TikTok guidelines](https://developers.tiktok.com/docs/en/content-sharing-guidelines).
+- LinkedIn publishing and feedback require the relevant approved product, account type and permissions. Qualify publication and each required analytics capability separately. [LinkedIn Community Management](https://learn.microsoft.com/en-us/linkedin/marketing/community-management/community-management-overview?view=li-lms-2026-06).
+
+## Revised implementation sequence
+
+| Increment | Deliverable | Acceptance |
+| --- | --- | --- |
+| Foundation repair | Fixed-revision qualification and accurate internal platform workspace | Account for all broad-suite failures; preserve history; distinguish shipped behavior from planned features |
+| Friday and one subscription | Persistent conversation, actual account binding and subscription-only admission | Complete an attributed model turn; reject unintended API billing; recover an interrupted conversation |
+| Conversational delegation | Authorized application/project creation, lead selection and bounded specialist creation | A conversational request creates one project, its lead and useful assigned work; repeated submission creates no duplicates |
+| Full galaxy | Portfolio, team, agent, task and evidence views sharing authorized state | Inspect two applications, off-page agents, actual activity and completed outputs; private resources remain excluded |
+| Agenda and one operating loop | Signal intake, versioned proposals, yes/no decisions and a dedicated pipeline lead | User approves in chat; lead executes and verifies a complete iteration; no decision requires dashboard navigation |
+| Platform improvement and release | Friday delegates a missing feature to platform engineering and coordinates redeployment | Approved feature becomes a verified running capability; release failure exercises a recoverable rollback |
+| Additional pipelines and production | Marketing, feedback, reliability and other workflows; persistent hosting and role evaluation | Qualified provider receipts; capacity/restart/duplicate-event recovery; backup restore; application-scoped stop/resume |
+
+First complete demonstration: the user asks Friday to establish an application improvement loop. Friday creates or identifies the application, appoints its lead and records the mandate. The lead collects authorized feedback and proposes an evidence-backed feature. Friday presents it in the agenda; the user says yes. The lead delegates implementation and review, deploys within the agreed scope and verifies the result. Friday reports the outcome with evidence, and the galaxy exposes the same chain. A second scenario exercises a capability gap that requires changing and redeploying Paperclip itself.
+
+## Implementation ownership
+
+Extend native agent conversations for Friday's durable dialogue; the experimental local board-chat relay does not establish the required portfolio coordinator. Add narrowly scoped, delegated coordination tools around the existing application/project/agent services. The current registry creation route is operator-only, so Friday needs a reviewed permission contract rather than a board-token bypass.
+
+Use existing project lead, task parent/owner, approval, routine, work-product, connection and run records wherever possible. Add only the missing signal/proposal metadata, revision-bound decision linkage, pipeline ownership/configuration and resource bindings. Projection caches are rebuildable views, not competing sources of work state. State-changing commands recheck source permissions and approval scope, record durable receipts and publish native events after commit. Keep credential resolution, scheduling, deployment and provider protocols with their owning modules.
+
+## Existing foundation delivery and acceptance
 
 | Stage | Implementation and acceptance | Current state |
 | --- | --- | --- |
@@ -74,7 +169,9 @@ Required repository checks: `pnpm -r typecheck`, `pnpm test:run`, `pnpm build`, 
 
 Meaningful targeted coverage includes real PostgreSQL transactions, actor/company/private-resource boundaries, concurrent replay, audit rollback, hidden task filtering, coordinator link rights, API discovery and interrupted UI registration. The dedicated fork CI runs these without depending on the upstream organization's private runner infrastructure.
 
-Local evidence so far: 100 distinct targeted tests have passed across application persistence/access, API discovery, registration recovery, agent drill-down, native installer/app shell, company navigation and the team catalog. Assignment coverage verifies that private/hidden work cannot affect agent counts and that pagination does not truncate the team. `node scripts/agentos-smoke.mjs` passes against the running server for existing/new registration, replay, native tasks, counts, pagination and initiative links, and removes its disposable company. A restart preserved the real application, six tracked delivery tasks, eight agents and two paused routines. Typecheck, build, migration, map and token checks have passed. The [first fork CI run](https://github.com/dave8284/paperclip/actions/runs/40146947400) passed at `3b60c92e4`; the [navigation/API revision](https://github.com/dave8284/paperclip/actions/runs/40147696104) passed at `976504e36`. Later revisions have their own checks. The repository-wide suite is still being qualified; browser automation fails before connection and no provider execution has been certified.
+Local evidence so far: 100 distinct targeted tests have passed across application persistence/access, API discovery, registration recovery, agent drill-down, native installer/app shell, company navigation and the team catalog. Assignment coverage verifies that private/hidden work cannot affect agent counts and that pagination does not truncate the team. `node scripts/agentos-smoke.mjs` passes against the running server for existing/new registration, replay, native tasks, counts, pagination and initiative links, and removes its disposable company. A restart preserved the real application, six tracked delivery tasks, eight agents and two paused routines. Typecheck, build, migration, map and token checks have passed. Fork CI passed at [3b60c92e4](https://github.com/dave8284/paperclip/actions/runs/40146947400), [976504e36](https://github.com/dave8284/paperclip/actions/runs/40147696104) and [19d0c556d](https://github.com/dave8284/paperclip/actions/runs/40148369367). Later revisions have their own checks. Browser automation fails before connection and no provider execution has been certified.
+
+The broad local test run finished its general-server group with 24,472 passed, 8 failed and 130 skipped tests, then exited before later groups. Failures include the setup guide's CLI command, two application response-contract assertions, two Git credential-helper timeouts, one Muse client contract and two workspace-runtime assertions. The run overlapped edits and is not a fixed-revision acceptance result; missing new response fields are consistent with a mixed revision but require a clean check rather than dismissal. The setup guide now uses direct source execution and its 40 CLI-invocation safety tests pass. Reproduce and resolve or classify the remaining failures against a fixed revision before claiming repository-wide qualification. Passing targeted tests and fork CI do not supersede this failed run.
 
 Failures retained in the local qualification record: the first new drill-down UI test queried the next page before React finished rendering; an explicit wait corrected the test, and the two UI cases plus 27 API-discovery tests passed on rerun. One smoke invocation during server startup received connection refused before the listener was ready; after startup recovery completed, the complete smoke passed. Neither retry is evidence of browser or external-provider acceptance.
 

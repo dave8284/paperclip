@@ -13,7 +13,7 @@ Use Node >=24.11, pnpm 9.15.4 and rustup. The runner pins its Rust version in `p
 ```sh
 pnpm install --frozen-lockfile
 pnpm --filter @paperclipai/plugin-sdk build
-pnpm paperclipai onboard --data-dir ../.runtime --no-install-service
+node cli/node_modules/tsx/dist/cli.mjs cli/src/index.ts onboard --data-dir ../.runtime --no-install-service
 pnpm dev:once --data-dir ../.runtime
 ```
 
@@ -30,6 +30,8 @@ Open http://localhost:3100/applications. The data directory contains the local d
 GitHub CLI access used to maintain the fork does not automatically connect runtime agents to GitHub, Vercel, Google Cloud or a business account. A stored repository URL is not a provider permission grant. Google Cloud deployment and external business workflows remain unqualified until the corresponding accounts and environments are configured.
 
 The [implementation and qualification plan](doc/plans/2026-10-25-agentos-platform.md) tracks what is implemented and what remains. [Feature/access recipes](maps/feature-map/managed-applications.md) describe the testable behavior. [Docker](doc/DOCKER.md) and [deployment modes](doc/DEPLOYMENT-MODES.md) cover the existing persistent hosting path.
+
+The [Friday operating model](doc/plans/2026-10-25-agentos-platform.md#friday-and-delegated-operating-loops) defines the next build: conversation as the primary control surface, dedicated leads owning recurring pipelines, yes/no agenda decisions, a platform-wide galaxy, and delegated platform engineering through verified deployment. These capabilities are planned; installing the initial role package does not implement them.
 
 For an opt-in check against an owned local instance, run `node scripts/agentos-smoke.mjs`. It exercises both onboarding paths and native task aggregation, then removes its disposable company. It invokes no model or external provider and does not certify a browser journey.
 
