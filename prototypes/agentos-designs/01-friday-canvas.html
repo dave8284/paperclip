@@ -11,9 +11,9 @@
 <body>
   <div class="preview-banner"><a href="index.html">← Design explorations</a><span>REFINED DESIGN · SAMPLE COMPANIES & RESPONSES</span><a href="friday/design.html">Design blueprint ↗</a></div>
   <header class="app-header">
-    <a class="brand" href="#/" aria-label="Agent OS home"><span class="brand-mark" aria-hidden="true">⠿</span>Agent OS</a>
-    <nav aria-label="Main navigation"><a href="#/companies" data-nav="companies">Companies</a><a href="#/decisions" data-nav="decisions">Decisions <span id="decision-count">3</span></a><a href="#/workforce" data-nav="workforce">Workforce</a></nav>
-    <div class="header-tools"><button data-action="search" aria-label="Search portfolio" title="Search portfolio"><span data-icon="search"></span></button><a href="#/audit" aria-label="Audit trail" title="Audit trail"><span data-icon="clock"></span></a><span class="user-avatar" aria-label="Dave">D</span></div>
+    <a class="brand" href="#/" aria-label="Agent OS home"><canvas id="brand-orb" class="brand-orb" aria-hidden="true"></canvas>Agent OS</a>
+    <nav aria-label="Main navigation"><a href="#/companies" data-nav="companies">Companies</a><a href="#/decisions" data-nav="decisions">Decisions <span id="decision-count">4</span></a><a href="#/workforce" data-nav="workforce">Workforce</a></nav>
+    <div class="header-tools"><button data-action="search" aria-label="Search portfolio" title="Search portfolio"><span data-icon="search"></span></button><a id="header-audit" href="#/audit" aria-label="Audit trail" title="Audit trail"><span data-icon="clock"></span></a><span class="user-avatar" aria-label="Dave">D</span></div>
   </header>
   <div class="workspace-shell"><aside id="company-nav" aria-label="Company navigation" hidden></aside><main id="canvas" tabindex="-1"></main></div>
   <div id="friday-presence" class="friday-presence is-home">
@@ -22,8 +22,10 @@
     <button id="talk-button" class="talk-button" data-action="talk"><span data-icon="mic"></span><span id="talk-label">Talk to Friday</span></button>
     <button class="type-button" data-action="type"><span data-icon="keyboard"></span><span>Prefer to type?</span></button>
   </div>
-  <section id="transcript" class="transcript" aria-label="Recent conversation" hidden>
-    <div class="row between"><span class="eyebrow">In conversation</span><button data-action="hide-transcript" class="icon-button" aria-label="Minimise transcript"><span data-icon="minus"></span></button></div><div id="transcript-content" aria-live="polite"></div><button class="text-button" data-action="history">Full conversation <span data-icon="arrow"></span></button>
+  <section id="home-conversation" class="home-conversation" aria-label="Conversation with Friday" hidden>
+    <div class="row between"><span class="eyebrow">You & Friday</span><button data-action="hide-conversation" class="icon-button" aria-label="Minimise conversation"><span data-icon="minus"></span></button></div>
+    <div id="home-conversation-log" class="home-conversation-log" role="log" aria-live="polite"></div>
+    <form id="home-message-form" class="message-form"><input name="message" aria-label="Type to Friday on the home screen" placeholder="What’s on your mind?" autocomplete="off"><button type="submit" class="icon-button" aria-label="Send message to Friday"><span data-icon="arrow"></span></button></form>
   </section>
   <dialog id="history-dialog" class="history-dialog" aria-labelledby="history-title">
     <div class="dialog-header"><div><span class="eyebrow">Your continuous conversation</span><h2 id="history-title">You & Friday</h2></div><button class="icon-button" data-action="close-history" aria-label="Close conversation"><span data-icon="close"></span></button></div>
@@ -31,11 +33,6 @@
     <div id="conversation-log" class="conversation-log"></div>
     <form id="history-form" class="message-form"><input name="message" aria-label="Message Friday" placeholder="Ask Friday anything about this preview…" autocomplete="off"><button type="submit" class="icon-button" aria-label="Send message"><span data-icon="arrow"></span></button></form>
     <div class="row between dialog-footer"><button class="text-button" data-action="talk"><span data-icon="mic"></span>Talk to Friday</button><label><input id="speak-replies" type="checkbox" checked> Speak replies</label></div>
-  </dialog>
-  <dialog id="composer-dialog" class="composer-dialog" aria-label="Type to Friday">
-    <div class="row between"><span class="eyebrow">Friday is here</span><button class="icon-button" data-action="close-type" aria-label="Close typing input"><span data-icon="close"></span></button></div>
-    <form id="composer-form" class="message-form"><input name="message" aria-label="Type a request" placeholder="Show me what needs my attention…" autocomplete="off"><button type="submit" class="icon-button" aria-label="Send request"><span data-icon="arrow"></span></button></form>
-    <small>Try “show my decisions”, “open Forma”, or “show the launch campaign”.</small>
   </dialog>
   <div id="toast" class="toast" role="status" hidden></div>
 </body>

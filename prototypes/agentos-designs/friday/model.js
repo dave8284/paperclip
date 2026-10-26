@@ -64,7 +64,8 @@ export const tasks = projects.flatMap(p=>p.tasks);
 export const decisions = [
   {id:'launch',company:'northstar',project:'customer-portal',agent:'maya',title:'Launch to 10% of customers?',type:'Release approval',summary:'The customer portal is ready for a staged release. The team has prepared the checks and rollback steps.',recommendation:'Start with 10% of customers. Monitor reliability before expanding the rollout.',evidence:['Release report reviewed by Imani','Rollback procedure prepared by Leo','Customer announcement drafted by Rae'],metrics:[['98.7%','Checks passed'],['0','Critical issues'],['10%','Initial rollout']],action:'Approve staged launch'},
   {id:'budget',company:'forma',project:'creative-pipeline',agent:'rae',title:'Increase the test budget by $120?',type:'Budget decision',summary:'One creative direction is producing more qualified enquiries. The team proposes a small follow-up experiment.',recommendation:'Run a three-day test with a hard $120 cap and compare qualified enquiries against the current control.',evidence:['Creative performance comparison attached','Daily spend limit included','Review scheduled after three days'],metrics:[['$120','Maximum spend'],['3 days','Test duration'],['2','Creative variants']],action:'Approve $120 test'},
-  {id:'invites',company:'northstar',project:'customer-portal',agent:'maya',title:'Prioritise team invitations?',type:'Product direction',summary:'Twelve customers requested team invitations. The first version is scoped and ready to prioritise.',recommendation:'Start with email invitations into a shared workspace. Keep role customisation for a later cycle.',evidence:['Twelve customer requests linked','Engineering scope reviewed','Interaction draft ready'],metrics:[['12','Requests'],['4 days','Estimate'],['3','Tasks scoped']],action:'Approve next-cycle priority'}
+  {id:'invites',company:'northstar',project:'customer-portal',agent:'maya',title:'Prioritise team invitations?',type:'Product direction',summary:'Twelve customers requested team invitations. The first version is scoped and ready to prioritise.',recommendation:'Start with email invitations into a shared workspace. Keep role customisation for a later cycle.',evidence:['Twelve customer requests linked','Engineering scope reviewed','Interaction draft ready'],metrics:[['12','Requests'],['4 days','Estimate'],['3','Tasks scoped']],action:'Approve next-cycle priority'},
+  {id:'creative',company:'northstar',project:'launch-campaign',agent:'rae',title:'Approve the launch creative?',type:'Creative review',summary:'The first campaign creative is ready for review before the launch announcement is scheduled.',recommendation:'Use the customer-story opening and keep the product walkthrough as the follow-up. Publication still waits for the release approval.',evidence:['Customer-story storyboard attached','Channel-specific copy reviewed','Publication depends on the release decision'],metrics:[['3','Channel drafts'],['1','Opening story'],['0','Posts published']],action:'Approve creative direction'}
 ];
 export const findCompany = id => companies.find(c=>c.id===id);
 export const findProject = id => projects.find(p=>p.id===id);
@@ -75,25 +76,52 @@ export function counts(items) {return {todo:items.filter(t=>t.status==='todo').l
 export function parseRoute(hash) {
   const [path,query='']=hash.replace(/^#\/?/,'').split('?');
   const parts=path.split('/').filter(Boolean).map(p=>{try{return decodeURIComponent(p);}catch{return '';}});
-  return {page:parts[0]||'home',id:parts[1]||'',tab:parts[2]||'home',company:new URLSearchParams(query).get('company')||''};
+  const params=new URLSearchParams(query);
+  return {page:parts[0]||'home',id:parts[1]||'',tab:parts[2]||'home',company:params.get('company')||'',project:params.get('project')||'',decision:params.get('decision')||''};
+}
+export function navigationRequested(text){
+  if(/\b(don['’]?t|do not|no need to)\s+(show|open|navigate|take|switch|go|display)/i.test(text))return false;
+  return /\b(show|open|navigate|take me|bring up|switch|go to|go back|display|let me see)\b/i.test(text)||/^(companies|projects|decisions|workforce|routines|artefacts|artifacts|audit trail|agent map|home)$/i.test(text.trim());
+}
+export function routeScope(route){
+  const project=route.page==='project'?findProject(route.id):route.project?findProject(route.project):null;
+  const company=route.page==='company'?findCompany(route.id):project?findCompany(project.company):findCompany(route.company);
+  if(route.company&&project&&route.company!==project.company)return {};
+  return {company:company?.id||'',project:project?.id||''};
+}
+export function scopeQuery(company='',project=''){
+  const params=new URLSearchParams();if(company)params.set('company',company);if(project)params.set('project',project);
+  return params.size?'?'+params.toString():'';
 }
 export function interpret(text,route) {
   const q=text.toLowerCase().replace(/[?!.,]/g,'').trim();
   const directCompany=companies.find(c=>q.includes(c.name.toLowerCase()));
   const directProject=projects.find(p=>q.includes(p.name.toLowerCase()));
-  const currentCompany=route.page==='company'?route.id:route.page==='project'?findProject(route.id)?.company:undefined;
+  const current=routeScope(route),companyId=directCompany?.id||directProject?.company||current.company;
+  const projectId=directProject?.id||(!directCompany?current.project:'');
+  const base=projectId?'#/project/'+projectId:companyId?'#/company/'+companyId:'';
+  if(!navigationRequested(text)){
+    if(/^(hi|hello|hey|good morning|good evening)\b/.test(q))return {reply:'Hi. I’m here. We can talk through your companies, your team, or what needs your attention.'};
+    if(/\b(thank|thanks)\b/.test(q))return {reply:'You’re welcome. I’m here when you need me.'};
+    if(/routine/.test(q))return {reply:'Routines belong to a project. A company view brings its project routines together. I can open the current scope when you ask.'};
+    if(/decision|attention|needs? me/.test(q))return {reply:'Your team has recommendations ready for review, each linked to its company, project, owner, and evidence. Ask me to show the decisions when you’re ready.'};
+    if(directCompany){const work=counts(scopeTasks(directCompany.id));return {reply:directCompany.name+' has '+scopeProjects(directCompany.id).length+' projects, '+work.doing+' tasks in motion, and '+work.done+' completed tasks in this sample portfolio.'};}
+    if(/compan|portfolio/.test(q))return {reply:'You have '+companies.length+' companies in this sample portfolio: '+companies.map(c=>c.name).join(', ')+'. We can talk about any of them here.'};
+    return {reply:'That isn’t covered by the sample replies yet. We can keep the conversation here, or you can ask me to show a company, project, or decision.'};
+  }
   if(/\b(home|go back|agent os)\b/.test(q)) return {route:'#/',reply:'Back to your Friday home. I’m here when you need me.'};
   if(/\b(approve|reject|yes|no)\b/.test(q)) return {reply:'Please open the decision and use its labelled action in this preview, so your choice is attached to the right proposal.'};
-  if(/decision|attention|blocker|needs? me/.test(q)) return {route:'#/decisions'+(directCompany?'?company='+directCompany.id:''),reply:'Here are the decisions that need you, with the recommendation and evidence for each.'};
-  if(directProject) return {route:'#/project/'+directProject.id+(/combined|everything/.test(q)?'/combined':/map|graph/.test(q)?'/map':''),reply:'Here is '+directProject.name+' at '+findCompany(directProject.company).name+'. You can see the work, the team, and what happens next.'};
-  if(/combined|kanban/.test(q)&&route.page==='project') return {route:'#/project/'+route.id+'/combined',reply:'Here is the full workspace: to do, in motion, and done, with the activity alongside it.'};
-  if(/agent map|graph|galaxy|work in motion/.test(q)) return {route:route.page==='project'?'#/project/'+route.id+'/map':directCompany?'#/company/'+directCompany.id+'/map':'#/map',reply:'Here is the work map. Every point represents a record you can inspect.'};
+  const portfolioWide=/all compan|across (the |my )?portfolio|portfolio-wide/.test(q);
+  if(/decision|attention|blocker|needs? me/.test(q)) return {route:base&&!portfolioWide?base+'/decisions':'#/decisions',reply:'Here are the decisions for '+(portfolioWide||!base?'your portfolio':projectId?findProject(projectId).name:findCompany(companyId).name)+', with each recommendation and its evidence.'};
+  if(/routine/.test(q)) return {route:base&&!portfolioWide?base+'/routines':'#/routines',reply:'Here are the routines for '+(portfolioWide||!base?'your portfolio':projectId?findProject(projectId).name:findCompany(companyId).name)+'.'};
+  if(/artefact|artifact|result/.test(q)) return {route:base&&!portfolioWide?base+'/artefacts':'#/artefacts',reply:'Here are the work products for the selected scope.'};
+  if(/audit|history|trail/.test(q)) return {route:'#/audit'+(portfolioWide?'':scopeQuery(companyId,projectId)),reply:'Here is the audit trail. Your company and project context stays in the navigation.'};
+  if(/combined|kanban/.test(q)&&base) return {route:base+'/combined',reply:'Here is the combined view: all work to do, in motion, and done, with the activity alongside it.'};
+  if(/agent map|graph|galaxy|work in motion/.test(q)) return {route:base?base+'/map':'#/map',reply:'Here is the work map. Every point represents a record you can inspect.'};
+  if(directProject) return {route:'#/project/'+directProject.id,reply:'Here is '+directProject.name+' at '+findCompany(directProject.company).name+'.'};
   if(directCompany) return {route:'#/company/'+directCompany.id,reply:'Here is '+directCompany.name+', including its projects, team, and decisions.'};
-  if(/project/.test(q)) return {route:currentCompany?'#/company/'+currentCompany:'#/projects',reply:'Here are the projects. Open any card to see its workspace.'};
-  if(/compan|portfolio/.test(q)) return {route:'#/companies',reply:'Here are your three companies. Choose one to explore its projects.'};
+  if(/project/.test(q)) return {route:companyId?'#/company/'+companyId:'#/projects',reply:'Here are the projects. Open any card to see its workspace.'};
+  if(/compan|portfolio/.test(q)) return {route:'#/companies',reply:'Here are your companies. Choose one to explore its projects.'};
   if(/team|agent|workforce|who/.test(q)) return {route:'#/workforce',reply:'Here is your shared workforce, with each person’s skills and company assignments.'};
-  if(/routine/.test(q)) return {route:currentCompany?'#/company/'+currentCompany+'/routines':'#/routines',reply:'Here are the recurring routines, with their owners and schedules.'};
-  if(/artefact|artifact|result/.test(q)) return {route:currentCompany?'#/company/'+currentCompany+'/artefacts':'#/artefacts',reply:'Here are the work products and the projects they belong to.'};
-  if(/audit|history|trail/.test(q)) return {route:'#/audit',reply:'Here is the audit trail for the sample work and your decisions.'};
-  return {reply:'This design preview understands navigation requests. Try “show my decisions”, “open Northstar”, or “show the launch campaign”.'};
+  return {reply:'I haven’t changed the view. Tell me which company, project, or decision you’d like to open.'};
 }

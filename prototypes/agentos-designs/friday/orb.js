@@ -1,10 +1,10 @@
 /** A presence indicator made only of dots. This is not the work-data graph. */
-export function createOrb(canvas) {
+export function createOrb(canvas,{pointCount=460}={}) {
   const context=canvas.getContext('2d');
   const reduced=matchMedia('(prefers-reduced-motion: reduce)');
   const thumbnail=new URLSearchParams(location.search).has('thumbnail');
-  const points=Array.from({length:460},(_,i)=>{
-    const y=1-2*(i+.5)/460, radius=Math.sqrt(1-y*y), angle=i*Math.PI*(3-Math.sqrt(5));
+  const points=Array.from({length:pointCount},(_,i)=>{
+    const y=1-2*(i+.5)/pointCount, radius=Math.sqrt(1-y*y), angle=i*Math.PI*(3-Math.sqrt(5));
     return {x:Math.cos(angle)*radius,y,z:Math.sin(angle)*radius,phase:i*.37};
   });
   let state='ready',frame=0,time=0,last=0,size=215;
