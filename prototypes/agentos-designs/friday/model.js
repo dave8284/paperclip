@@ -77,11 +77,12 @@ export function parseRoute(hash) {
   const [path,query='']=hash.replace(/^#\/?/,'').split('?');
   const parts=path.split('/').filter(Boolean).map(p=>{try{return decodeURIComponent(p);}catch{return '';}});
   const params=new URLSearchParams(query);
-  return {page:parts[0]||'home',id:parts[1]||'',tab:parts[2]||'home',company:params.get('company')||'',project:params.get('project')||'',decision:params.get('decision')||''};
+  const tab=parts[2]==='combined'?'kanban':parts[2]||'home';
+  return {page:parts[0]||'home',id:parts[1]||'',tab,company:params.get('company')||'',project:params.get('project')||'',decision:params.get('decision')||''};
 }
 export function navigationRequested(text){
   if(/\b(don['’]?t|do not|no need to)\s+(show|open|navigate|take|switch|go|display)/i.test(text))return false;
-  return /\b(show|open|navigate|take me|bring up|switch|go to|go back|display|let me see)\b/i.test(text)||/^(companies|projects|decisions|workforce|routines|artefacts|artifacts|audit trail|agent map|home)$/i.test(text.trim());
+  return /\b(show|open|navigate|take me|bring up|switch|go to|go back|display|let me see)\b/i.test(text)||/^(companies|projects|decisions|workforce|kanban|routines|artefacts|artifacts|audit trail|agent map|home)$/i.test(text.trim());
 }
 export function routeScope(route){
   const project=route.page==='project'?findProject(route.id):route.project?findProject(route.project):null;
@@ -116,7 +117,7 @@ export function interpret(text,route) {
   if(/routine/.test(q)) return {route:base&&!portfolioWide?base+'/routines':'#/routines',reply:'Here are the routines for '+(portfolioWide||!base?'your portfolio':projectId?findProject(projectId).name:findCompany(companyId).name)+'.'};
   if(/artefact|artifact|result/.test(q)) return {route:base&&!portfolioWide?base+'/artefacts':'#/artefacts',reply:'Here are the work products for the selected scope.'};
   if(/audit|history|trail/.test(q)) return {route:'#/audit'+(portfolioWide?'':scopeQuery(companyId,projectId)),reply:'Here is the audit trail. Your company and project context stays in the navigation.'};
-  if(/combined|kanban/.test(q)&&base) return {route:base+'/combined',reply:'Here is the combined view: all work to do, in motion, and done, with the activity alongside it.'};
+  if(/combine|kanban/.test(q)&&base) return {route:base+'/kanban',reply:'Here is the Kanban board: to do, in motion, and done.'};
   if(/agent map|graph|galaxy|work in motion/.test(q)) return {route:base?base+'/map':'#/map',reply:'Here is the work map. Every point represents a record you can inspect.'};
   if(directProject) return {route:'#/project/'+directProject.id,reply:'Here is '+directProject.name+' at '+findCompany(directProject.company).name+'.'};
   if(directCompany) return {route:'#/company/'+directCompany.id,reply:'Here is '+directCompany.name+', including its projects, team, and decisions.'};

@@ -18,9 +18,13 @@ function toast(message){const target=$('#toast');target.textContent=message;targ
 function voiceState(value,message){
   presence.dataset.state=value;orb.setState(value);brandOrb.setState(value);$('#voice-status').textContent=message;
   const active=['requesting','listening','thinking','speaking'].includes(value);
+  const listening=value==='listening';
+  $('#talk-icon').innerHTML=icon(listening?'mic':'mic-off');
+  $('#talk-button').dataset.listening=String(listening);
+  $('#talk-button').title=listening?'Microphone listening — click to pause':active?'Microphone not listening — click to pause voice':'Microphone paused — click to start listening';
   $('#talk-button').setAttribute('aria-pressed',String(active));
   $('#talk-label').textContent=active?'Pause voice':'Talk to Friday';
-  $('#talk-button').setAttribute('aria-label',active?'Pause Friday voice':'Talk to Friday');
+  $('#talk-button').setAttribute('aria-label',listening?'Pause listening':active?'Pause Friday voice':'Start listening to Friday');
 }
 const voice=createVoice({
   onState:voiceState,

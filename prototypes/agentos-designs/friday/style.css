@@ -70,3 +70,10 @@ dialog{color:var(--ink);background:white;border:1px solid #e8e8e8;box-shadow:0 3
 @media(max-width:850px){.home-stage{grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:24px}.home-stage:not(:has(.home-conversation:not([hidden]))){grid-template-columns:1fr}.home-stage:not(:has(.home-conversation:not([hidden]))) #home-presence-slot{grid-column:1}.home-stage:not(:has(.home-conversation:not([hidden]))) #home-conversation-slot{display:none}.home-conversation-log{max-height:210px}}
 @media(max-width:760px){.decision-list>.decision-group{flex:0 0 215px;margin-bottom:0}.scope-caption{font-size:9px}.brand-orb{width:30px;height:30px}.brand{gap:3px}.view-tabs{gap:18px}}
 @media(max-width:580px){.home-stage{display:flex;flex-direction:column-reverse;gap:8px}.home-stage:not(:has(.home-conversation:not([hidden]))){display:block}.home-stage>div{width:100%}.home-conversation{max-width:380px;margin:0 auto 20px}.home-conversation-log{max-height:200px}.home-conversation .message-form input{font-size:13px}}
+@media(max-width:600px){
+  .app-header{height:auto;min-height:102px;display:grid;grid-template-columns:1fr auto;gap:0 12px;padding:8px 18px 0}
+  .app-header .brand{grid-column:1;grid-row:1}
+  .app-header .header-tools{grid-column:2;grid-row:1}
+  .app-header nav{grid-column:1/-1;grid-row:2;width:100%;justify-content:space-between;gap:12px}
+  .app-header nav a{padding:12px 0;font-size:11px}
+}
