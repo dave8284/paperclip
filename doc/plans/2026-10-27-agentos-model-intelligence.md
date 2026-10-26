@@ -1,8 +1,12 @@
 # Agent OS model intelligence and learning execution plan
 
-Date: 2026-10-27  
-Status: Proposed architecture and delivery plan; routing backend not implemented by this change.  
+Date: 2026-10-27
+
+Status: Agreed product direction and delivery plan; routing backend not implemented by this change.
+
 Related: [Agent OS operating model](2026-10-25-agentos-operating-model.md), [capability inventory](2026-10-25-agentos-capability-inventory.md), [Friday design blueprint](../../prototypes/agentos-designs/friday/design.html).
+
+The [master execution plan](2026-10-27-agentos-end-to-end-execution.md) consolidates the full Agent OS UI, work structure and implementation sequence. This document specifies the independent model product.
 
 ## Product decision
 
@@ -65,7 +69,11 @@ Proposed independently buildable units in the fork:
 | Agent OS integration in the existing connection-router/plugin boundary | Authorised profile discovery, translating work into requests, native execution linkage, outbox delivery, company-scoped UI projections |
 | Optional reusable management UI | Policy/evaluation views backed only by the product API, embeddable in Agent OS and later runnable as its own console |
 
+The service API is the integration boundary. Initially deploy it alongside Agent OS, with the selection/learning core packaged as an independent library inside the service. Route once at meaningful work-stage boundaries; ordinary tokens and tool calls use the native executor directly. Cache qualified profile metadata and use fast policy lookup; an additional model classification call requires a justified ambiguity. Outcome ingestion and heavier learning jobs run asynchronously. Measure overhead rather than promising a fixed latency.
+
 Ship a container/CLI distribution with health/readiness checks, configuration reference, migrations and upgrade instructions. Local development may run alongside Agent OS on the same machine, with its own process and storage credentials. It must start and pass contract tests without Paperclip. Include a tiny reference host that submits fixture work and outcomes; it does not need an Agent OS company database.
+
+Cloud-native deployment, responsive management views and cost/latency limits follow the master plan. Production must not depend on a developer laptop. Use external durable storage, explicit cloud-worker ownership and reconnectable evidence delivery. Keep the service independently packaged while colocating it with its host where useful; scale background evaluations within the agreed learning budget.
 
 The product authenticates host installations and tenants. A company maps to an opaque scope; portfolio policies require explicit owner grants. The service trusts authenticated, validated host receipts, not caller-supplied company IDs. Isolation, rate limits, export/delete/retention, API versioning, backups, and migrations are product responsibilities from the first release.
 
@@ -131,8 +139,10 @@ Start with transparent rules and a conservative baseline, then learn in this seq
 3. Run offline candidate evaluations in sandboxes. Replays may read recorded evidence; they must not repeat real publishing, customer messaging or deployment. Count experiment usage in the same account budget.
 4. Run routing in shadow mode. It records what it would select while the existing approved route executes. Shadow choices alone do not establish alternative-model quality; that needs controlled runs.
 5. Promote to a small low-risk canary only after the agreed quality floor, non-regression checks and resource targets pass. Require enough independent cases and uncertainty reporting, not a single successful example.
-6. Adopt a versioned policy within an approved mandate, monitor drift, and roll back if quality, resource use or coverage regresses. Companies can pin a policy or opt into an approved release channel. Global publication never silently updates every company.
+6. Automatically adopt proven low-risk policy improvements for companies enrolled in the owner-approved operating policy. Monitor drift and roll back if quality, resource use or coverage regresses. Keep a versioned adoption receipt and concise outcome summary. Companies can pin a policy or opt out; global publication never silently updates companies outside the mandate.
 7. After sufficient data, optionally introduce a constrained contextual bandit: choose among already qualified profiles, explore only within low-risk limits, record selection probabilities, and evaluate against a stable holdout. No uncontrolled online experiments on live high-impact actions.
+
+Automatic adoption is the agreed default within the approved limits, not a request for approval on every update. Before enabling it, define task-family quality floors, non-regression criteria, experiment limits, canary scope and rollback triggers. A new provider/funding class, broader data access, larger budget/risk or platform code change falls outside this automatic policy and becomes a Decision or requires the explicit platform instruction. In-flight work retains its recorded version until a safe handoff.
 
 Cold-start task families use the baseline until there is enough evidence. Treat pending, cancelled and unknown outcomes separately from success or failure; account for delayed outcomes and selection bias. Calibrate model judges against deterministic results and human assessments. Restrict policy promotion to trusted evaluators; task content and a model's self-rating cannot rewrite routing rules.
 

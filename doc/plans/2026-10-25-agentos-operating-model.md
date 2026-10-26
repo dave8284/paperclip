@@ -4,7 +4,7 @@ Status: Consolidated target design for implementation. This plan does not certif
 
 Agent OS operates a portfolio of companies through Friday, a shared workforce and a complete record of operational work. Provider harnesses supply execution capabilities. Agent OS retains company authority, work ownership, execution evidence, analysis, decisions and evaluated learning throughout each workflow.
 
-This is the current Agent OS product and delivery plan. It supersedes the single-company portfolio and provider-selection assumptions in the [earlier implementation plan](2026-10-25-agentos-platform.md). That document remains the historical implementation and qualification record. Existing Paperclip execution, authorization and persistence contracts remain in force until an explicitly scoped implementation extends them.
+The [master execution plan](2026-10-27-agentos-end-to-end-execution.md) now consolidates the current UI, task structure, delivery sequence and automatic low-risk model-policy adoption. This document retains the foundation operating contract and its historical implementation checkpoints. It supersedes the single-company portfolio and provider-selection assumptions in the [earlier implementation plan](2026-10-25-agentos-platform.md). That document remains the historical implementation and qualification record. Existing Paperclip execution, authorization and persistence contracts remain in force until an explicitly scoped implementation extends them.
 
 ## Product decisions
 
@@ -64,7 +64,7 @@ Cross-company employee chat aggregates only what the current speaker may access.
 
 ## Friday and the workspace
 
-The primary navigation is Friday, Companies, Decisions and Workforce. Search, audit and settings remain available as utilities. Company detail contains its overview, projects, applications, workforce, routines, artifacts and knowledge; these do not all need permanent global sidebar entries.
+The current layout is specified in the master plan: Friday home, Work, Companies, Decisions and Agent Map, with Workforce/employee selection and search, audit and settings readily available. Company detail contains its overview, projects, applications, workforce, routines, artifacts and knowledge; these do not all need permanent global sidebar entries.
 
 Friday has three coordinated states:
 
@@ -134,7 +134,7 @@ Production assignments pin adopted capability versions. Ordinary permitted skill
 
 Central learning updates must be inspectable and rollbackable. If a provider has opaque autonomous memory that cannot support the required separation or versioning, it cannot serve as the sole authoritative learning store for those assignments.
 
-## Galaxy and combined views
+## Agent Map and work views
 
 Use one authorized work graph for visual navigation and Friday's retrieval. Zoom from portfolio to company, project, employee, task, run and source evidence. Allow immediate return to wider scope, breadcrumbs, browser history, search, filters, keyboard access and reduced motion.
 
@@ -142,7 +142,7 @@ Provide Structure and Activity modes. Structure shows assignments and permitted 
 
 Every work node represents a real record. Spirals and clusters organize those nodes; motion represents committed observed events. The Friday presence orb remains a conversation-state indicator and is visually distinct from work evidence. Large graphs aggregate clusters with accurate authorized totals and explicit expansion, not fabricated filler points.
 
-Company and project workspaces offer galaxy, Kanban, activity and combined layouts. Combined mode keeps the selected graph object, task status, published analysis and execution timeline synchronized. Historical inspection reconstructs captured state; it does not rerun external actions.
+Company and project workspaces offer Home, board-only Kanban and Agent Map. Home brings work and activity together; there is no separate Combine or Combined tab. Graph selection, task status, published analysis and execution detail remain linked. Historical inspection reconstructs captured state; it does not rerun external actions.
 
 Paperclip currently hides some agent-created tasks in ordinary lists by default. Agent OS operational views must include relevant automated work and counts by default, with explicit filtering/grouping for noise. Preserve private-resource ACLs and distinguish conversations, routine instances, recovery work and deliverable tasks.
 
