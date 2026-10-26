@@ -26,6 +26,7 @@ function database(onPredicate: (kind: "where" | "join", condition: SQL) => void 
       innerJoin: (_table: unknown, condition: SQL) => { onPredicate("join", condition); return query; },
       where: (condition: SQL) => { onPredicate("where", condition); return query; },
       limit: async () => {
+        if (table === "user") return [{ status: "approved" }];
         if (table === "issues") return [{ id: "task" }];
         if (table === "company_memberships") return fields.name ? [{ name: "Alex Example", image: "/alex.png" }] : [{ id: "membership" }];
         if (table === "agents") return [{ name: "Coder", appearance: { schemaVersion: 1, characterVersion: "cap-v1", paletteId: "bubblegum-sky" } }];

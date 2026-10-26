@@ -16,6 +16,8 @@ const signInEmailMock = vi.hoisted(() => vi.fn());
 const signUpEmailMock = vi.hoisted(() => vi.fn());
 const healthMock = vi.hoisted(() => vi.fn());
 const beginCloudSignInMock = vi.hoisted(() => vi.fn());
+vi.mock("@/api/administration", () => ({ administrationApi: { authOptions: async () => ({ googleEnabled: false, passwordSignUpEnabled: true, approvalRequired: true }) } }));
+vi.mock("@/components/FridayOrb", () => ({ FridayOrb: () => <div>Friday</div> }));
 
 vi.mock("../api/health", () => ({ healthApi: { get: () => healthMock() } }));
 vi.mock("@/lib/cloud-sign-in", () => ({
@@ -276,6 +278,8 @@ describe("AuthPage", () => {
 
   it("invalidates anonymous health metadata after sign-in", async () => {
     const { root, queryClient } = await mount();
+    queryClient.setQueryData(["registration", "previous-user"], { status: "approved" });
+    queryClient.setQueryData(["administration", "previous-user", "overview"], { private: "previous account" });
     queryClient.setQueryData(queryKeys.health, {
       status: "ok",
       deploymentMode: "authenticated",
@@ -307,6 +311,8 @@ describe("AuthPage", () => {
       password: "supersecret",
     });
     expect(healthMock).toHaveBeenCalledTimes(2);
+    expect(queryClient.getQueryData(["registration", "previous-user"])).toBeUndefined();
+    expect(queryClient.getQueryData(["administration", "previous-user", "overview"])).toBeUndefined();
 
     await act(async () => {
       root.unmount();

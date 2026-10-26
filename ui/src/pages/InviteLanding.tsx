@@ -352,6 +352,7 @@ export function InviteLandingPage() {
       clearPendingInviteToken(token);
       const asBootstrap = isBootstrapAcceptancePayload(payload);
       setResult({ kind: asBootstrap ? "bootstrap" : "join", payload });
+      await queryClient.invalidateQueries({ queryKey: ["registration"] });
       await queryClient.invalidateQueries({ queryKey: queryKeys.auth.session });
       await queryClient.invalidateQueries({ queryKey: queryKeys.access.currentBoardAccess });
       await queryClient.invalidateQueries({ queryKey: queryKeys.companies.all });

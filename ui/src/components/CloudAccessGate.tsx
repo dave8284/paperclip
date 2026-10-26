@@ -14,6 +14,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { CloudSignIn } from "@/components/CloudSignIn";
 import { clearCloudSignInAttempt } from "@/lib/cloud-sign-in";
+import { administrationApi, registrationKey } from "@/api/administration";
 
 const RECONNECT_INTERVAL_MS = 5_000;
 
@@ -99,10 +100,20 @@ export function CloudAccessGate({ allowMembershipRequest = false }: { allowMembe
     if (sessionQuery.data) clearCloudSignInAttempt();
   }, [sessionQuery.data]);
 
+  const registration = useQuery({
+    queryKey: registrationKey(sessionQuery.data?.user.id ?? null),
+    queryFn: administrationApi.registration,
+    enabled: isAuthenticatedMode && !!sessionQuery.data,
+    retry: false,
+    refetchInterval: (query) => isTemporaryApiError(query.state.error) ? RECONNECT_INTERVAL_MS : false,
+    refetchIntervalInBackground: true,
+  });
+  const approved = registration.data?.status === "approved";
+
   const boardAccessQuery = useQuery({
     queryKey: queryKeys.access.currentBoardAccess,
     queryFn: () => accessApi.getCurrentBoardAccess(),
-    enabled: isAuthenticatedMode && !isBootstrapPending && !!sessionQuery.data,
+    enabled: isAuthenticatedMode && !isBootstrapPending && !!sessionQuery.data && approved,
     retry: false,
     refetchInterval: (query) => isTemporaryApiError(query.state.error) ? RECONNECT_INTERVAL_MS : false,
     refetchIntervalInBackground: true,
@@ -111,6 +122,7 @@ export function CloudAccessGate({ allowMembershipRequest = false }: { allowMembe
     mutationFn: () => accessApi.claimBootstrapAdmin(),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: queryKeys.auth.session });
+      await queryClient.invalidateQueries({ queryKey: ["registration"] });
       await queryClient.invalidateQueries({ queryKey: queryKeys.health });
       await queryClient.invalidateQueries({ queryKey: queryKeys.companies.all });
       await queryClient.invalidateQueries({ queryKey: queryKeys.companies.stats });
@@ -121,7 +133,8 @@ export function CloudAccessGate({ allowMembershipRequest = false }: { allowMembe
   const activeQueries = [
     healthQuery,
     ...(isAuthenticatedMode ? [sessionQuery] : []),
-    ...(isAuthenticatedMode && !isBootstrapPending && sessionQuery.data ? [boardAccessQuery] : []),
+    ...(isAuthenticatedMode && sessionQuery.data ? [registration] : []),
+    ...(isAuthenticatedMode && !isBootstrapPending && sessionQuery.data && approved ? [boardAccessQuery] : []),
   ];
   const isServerStarting = healthQuery.data?.status === "starting";
   const isReconnecting = isServerStarting || activeQueries.some((query) => isTemporaryApiError(query.error));
@@ -132,7 +145,8 @@ export function CloudAccessGate({ allowMembershipRequest = false }: { allowMembe
   const isLoading =
     healthQuery.isLoading ||
     (isAuthenticatedMode && sessionQuery.isLoading) ||
-    (isAuthenticatedMode && !isBootstrapPending && !!sessionQuery.data && boardAccessQuery.isLoading);
+    (isAuthenticatedMode && !!sessionQuery.data && registration.isLoading) ||
+    (isAuthenticatedMode && !isBootstrapPending && !!sessionQuery.data && approved && boardAccessQuery.isLoading);
   const hasBoardAccess = allowMembershipRequest || !isAuthenticatedMode
     || !!boardAccessQuery.data?.isInstanceAdmin || (boardAccessQuery.data?.companyIds.length ?? 0) > 0;
   const canAccessBoard = !isLoading && !blockingError && !isBootstrapPending
@@ -202,6 +216,10 @@ export function CloudAccessGate({ allowMembershipRequest = false }: { allowMembe
   if (isAuthenticatedMode && !sessionQuery.data) {
     const next = encodeURIComponent(`${location.pathname}${location.search}`);
     return <Navigate to={`/auth?next=${next}`} replace />;
+  }
+
+  if (isAuthenticatedMode && sessionQuery.data && !approved) {
+    return <Navigate to="/pending-approval" replace />;
   }
 
   // Private invitation pages may let signed-in nonmembers request access.

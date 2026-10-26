@@ -1,6 +1,6 @@
 import { eq, sql } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
-import { instanceUserRoles } from "@paperclipai/db";
+import { agentosAdminEvents, authUsers, instanceUserRoles } from "@paperclipai/db";
 
 type FirstAdminTransaction = Pick<Db, "execute" | "select" | "insert" | "update">;
 
@@ -44,6 +44,9 @@ export async function claimFirstInstanceAdmin<T = unknown>(
       userId: input.userId,
       role: "instance_admin",
     });
+    // The existing explicit bootstrap challenge is the initial owner's approval.
+    await tx.update(authUsers).set({ approvalStatus: "approved", approvalRevision: sql`${authUsers.approvalRevision} + 1`, updatedAt: new Date() }).where(eq(authUsers.id, input.userId));
+    await tx.insert(agentosAdminEvents).values({ actorUserId: input.userId, targetUserId: input.userId, action: "user.first_admin_claimed" });
 
     const value = input.onClaim ? await input.onClaim(tx) : null;
     return {

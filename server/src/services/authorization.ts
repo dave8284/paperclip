@@ -866,7 +866,7 @@ function createAuthorizationService(db: Db | DbTransaction, readSnapshot?: ReadA
       db
         .select({ id: authUsers.id })
         .from(authUsers)
-        .where(eq(authUsers.id, userId))
+        .where(and(eq(authUsers.id, userId), eq(authUsers.approvalStatus, "approved")))
         .then((rows) => rows[0] ?? null),
       db
         .select({

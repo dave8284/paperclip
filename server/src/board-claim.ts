@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { and, eq, sql } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
-import { companies, companyMemberships, instanceUserRoles, agentosPortfolios } from "@paperclipai/db";
+import { companies, companyMemberships, instanceUserRoles, agentosPortfolios, authUsers, agentosAdminEvents } from "@paperclipai/db";
 import type { DeploymentMode } from "@paperclipai/shared";
 import { ensureHumanRoleDefaultGrants } from "./services/principal-access-compatibility.js";
 import { persistActivity, publishActivity, type ActivityPublication } from "./services/activity-log.js";
@@ -94,7 +94,10 @@ export async function claimBoardOwnership(
 
   const claimedCompanyIds: string[] = [];
   const publications: ActivityPublication[] = [];
-  await db.transaction(async (tx) => {
+  const didClaim = await db.transaction(async (tx) => {
+    await tx.execute(sql`lock table ${instanceUserRoles} in share row exclusive mode`);
+    const admins = await tx.select({ userId: instanceUserRoles.userId }).from(instanceUserRoles).where(eq(instanceUserRoles.role, "instance_admin"));
+    if (admins.length !== 1 || admins[0]?.userId !== LOCAL_BOARD_USER_ID) return false;
     const existingTargetAdmin = await tx
       .select({ id: instanceUserRoles.id })
       .from(instanceUserRoles)
@@ -110,6 +113,8 @@ export async function claimBoardOwnership(
     await tx
       .delete(instanceUserRoles)
       .where(and(eq(instanceUserRoles.userId, LOCAL_BOARD_USER_ID), eq(instanceUserRoles.role, "instance_admin")));
+    await tx.update(authUsers).set({ approvalStatus: "approved", approvalRevision: sql`${authUsers.approvalRevision} + 1`, updatedAt: new Date() }).where(eq(authUsers.id, opts.userId));
+    await tx.insert(agentosAdminEvents).values({ actorUserId: opts.userId, targetUserId: opts.userId, action: "user.local_board_claimed" });
 
     const allCompanies = await tx.select({ id: companies.id }).from(companies);
     for (const company of allCompanies) {
@@ -157,7 +162,9 @@ export async function claimBoardOwnership(
       });
       publications.push(result.publication);
     }
+    return true;
   });
+  if (!didClaim) return { status: "invalid" };
 
   for (const publication of publications) {
     try { publishActivity(publication); }

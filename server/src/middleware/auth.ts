@@ -119,7 +119,7 @@ async function loadResponsibleUserMemberships(
     db
       .select({ id: authUsers.id })
       .from(authUsers)
-      .where(eq(authUsers.id, input.userId))
+      .where(and(eq(authUsers.id, input.userId), eq(authUsers.approvalStatus, "approved")))
       .then((rows) => rows[0] ?? null),
     db
       .select({

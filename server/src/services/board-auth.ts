@@ -76,6 +76,7 @@ export function boardAuthService(db: Db) {
           id: authUsers.id,
           name: authUsers.name,
           email: authUsers.email,
+          approvalStatus: authUsers.approvalStatus,
         })
         .from(authUsers)
         .where(eq(authUsers.id, userId))
@@ -102,11 +103,12 @@ export function boardAuthService(db: Db) {
         .then((rows) => rows[0] ?? null),
     ]);
 
+    const approved = user?.approvalStatus === "approved";
     return {
-      user,
-      companyIds: memberships.map((row) => row.companyId),
-      memberships,
-      isInstanceAdmin: Boolean(adminRole),
+      user: approved ? user : null,
+      companyIds: approved ? memberships.map((row) => row.companyId) : [],
+      memberships: approved ? memberships : [],
+      isInstanceAdmin: approved && Boolean(adminRole),
     };
   }
 

@@ -2675,6 +2675,13 @@
       "when": 1792925480234,
       "tag": "0383_sour_hellfire_club",
       "breakpoints": true
+    },
+    {
+      "idx": 384,
+      "version": "7",
+      "when": 1793049690224,
+      "tag": "0384_nosy_chronomancer",
+      "breakpoints": true
     }
   ]
 }

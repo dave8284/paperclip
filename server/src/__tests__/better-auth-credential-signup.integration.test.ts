@@ -16,7 +16,7 @@
 import express from "express";
 import request from "supertest";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { authAccounts, createDb } from "@paperclipai/db";
+import { authAccounts, authUsers, createDb } from "@paperclipai/db";
 import {
   getEmbeddedPostgresTestSupport,
   startEmbeddedPostgresTestDatabase,
@@ -94,11 +94,14 @@ describeEmbeddedPostgres("Better Auth credential sign-up against the real schema
     const signUp = await request(app)
       .post("/api/auth/sign-up/email")
       .set("origin", ORIGIN)
-      .send({ email: EMAIL, password: PASSWORD, name: "Founder" });
+      .send({ email: EMAIL, password: PASSWORD, name: "Founder", approvalStatus: "approved", emailVerified: true });
 
     // A missing `account` column fails here with a 500 and an empty body.
     expect(signUp.status).toBe(200);
     expect(signUp.body?.user?.email).toBe(EMAIL);
+    const [registeredUser] = await db.select().from(authUsers);
+    expect(registeredUser.approvalStatus).toBe("pending");
+    expect(registeredUser.emailVerified).toBe(false);
 
     // Sign-up has to leave a usable account row behind. A half-created user —
     // a `user` row with no `account` — cannot sign in, cannot sign up again,

@@ -14,6 +14,7 @@ import { isIP } from "node:net";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Router } from "express";
+import { administrationService } from "../services/agentos-administration.js";
 import type { NextFunction, Request, Response } from "express";
 import { and, desc, eq, gt, inArray, isNotNull, isNull, lte, ne } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
@@ -4632,8 +4633,11 @@ export function accessRoutes(
       await assertInstanceAdmin(req);
       assertAccessAdminVisible();
       const userId = req.params.userId as string;
-      const result = await access.promoteInstanceAdmin(userId);
-      res.status(201).json(result);
+      const [user] = await db.select({ revision: authUsers.approvalRevision }).from(authUsers).where(eq(authUsers.id, userId)).limit(1);
+      if (!user) throw notFound("User not found");
+      const result = await administrationService(db).updatePerson({ userId: req.actor.userId ?? "", local: req.actor.source === "local_implicit" }, userId,
+        { expectedRevision: user.revision, action: "promote", reason: "Legacy access settings" });
+      res.status(201).json(result.roleGrant);
     }
   );
 
@@ -4704,9 +4708,11 @@ export function accessRoutes(
       await assertInstanceAdmin(req);
       assertAccessAdminVisible();
       const userId = req.params.userId as string;
-      const removed = await access.demoteInstanceAdmin(userId);
-      if (!removed) throw notFound("Instance admin role not found");
-      res.json(removed);
+      const [user] = await db.select({ revision: authUsers.approvalRevision }).from(authUsers).where(eq(authUsers.id, userId)).limit(1);
+      if (!user) throw notFound("User not found");
+      const removed = await administrationService(db).updatePerson({ userId: req.actor.userId ?? "", local: req.actor.source === "local_implicit" }, userId,
+        { expectedRevision: user.revision, action: "demote", reason: "Legacy access settings" });
+      res.json(removed.roleGrant);
     }
   );
 
@@ -4724,10 +4730,9 @@ export function accessRoutes(
       await assertInstanceAdmin(req);
       assertAccessAdminVisible();
       const userId = req.params.userId as string;
-      await access.setUserCompanyAccess(
-        userId,
-        req.body.companyIds ?? [],
-        { actorUserId: req.actor.userId ?? null },
+      await administrationService(db).setCompanyAccess(
+        { userId: req.actor.userId ?? "", local: req.actor.source === "local_implicit" },
+        userId, req.body.companyIds ?? [],
       );
       res.json(await loadUserCompanyAccessResponse(db, access, userId));
     }

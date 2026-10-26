@@ -14,6 +14,7 @@ const ROUTES_DIR = path.resolve(__dirname, "../routes");
 
 const apiPrefixes: Record<string, string> = {
   "agentos-workforce.ts": "/api",
+  "agentos-administration.ts": "/api",
   "friday.ts": "/api",
   "managed-applications.ts": "/api",
   "operating-profile.ts": "/api",

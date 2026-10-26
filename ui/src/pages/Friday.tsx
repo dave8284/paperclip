@@ -17,6 +17,8 @@ import { AgentChat } from "./AgentChat";
 import { FridayWorkspace, type FridayPanel } from "../components/FridayWorkspace";
 import { FridayOrb } from "../components/FridayOrb";
 import { useFridayAttention } from "../components/FridayAttention";
+import { administrationApi, registrationKey } from "../api/administration";
+import { useAccountIdentity } from "../api/companies-query";
 
 export function Friday() {
   const { selectedCompanyId } = useCompany();
@@ -27,6 +29,8 @@ export function Friday() {
 }
 
 function FridayCompany({ companyId }: { companyId: string }) {
+  const { userId } = useAccountIdentity();
+  const registration = useQuery({ queryKey: registrationKey(userId), queryFn: administrationApi.registration, retry: false });
   const client = useQueryClient();
   const profile = useQuery({ queryKey: operatingProfileKey(companyId), queryFn: () => operatingProfileApi.get(companyId) });
   const agents = useQuery({ queryKey: queryKeys.agents.list(companyId), queryFn: () => agentsApi.list(companyId) });
@@ -64,6 +68,7 @@ function FridayCompany({ companyId }: { companyId: string }) {
     <header className="friday-toolbar">
       <div><h1 className="text-sm font-medium">Friday</h1><p className="text-xs text-muted-foreground">Your command centre</p></div>
       <nav className="flex flex-wrap items-center gap-1" aria-label="Friday navigation">
+        {registration.data?.isInstanceAdmin && <Button asChild size="sm" variant="ghost"><Link to="/admin">Admin</Link></Button>}
         <Button size="sm" variant={!panel ? "secondary" : "ghost"} onClick={() => go({ panel: null })}>Friday</Button>
         <Button size="sm" variant={panel === "attention" ? "secondary" : "ghost"} aria-pressed={panel === "attention"} onClick={() => go({ panel: panel === "attention" ? null : "attention" })}>Attention{!attention.error && attention.data?.totalCount ? <span role="status" className="rounded-full bg-primary/10 px-2 text-xs">{attention.data.totalCount}</span> : null}</Button>
         <Button size="sm" variant={panel === "work" ? "secondary" : "ghost"} aria-pressed={panel === "work"} onClick={() => go({ panel: panel === "work" ? null : "work", mode: "combined" })}>Work</Button>

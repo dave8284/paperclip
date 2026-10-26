@@ -42,6 +42,9 @@ import { cloudStackCreateUrl } from "./lib/cloudLinks";
 import { navigateTopLevel } from "@/lib/browserNavigation";
 
 const AuthPage = lazy(() => import("./pages/Auth").then((module) => ({ default: module.AuthPage })));
+const AgentOSLanding = lazy(() => import("./pages/AgentOSLanding").then((module) => ({ default: module.AgentOSLanding })));
+const PendingApproval = lazy(() => import("./pages/PendingApproval").then((module) => ({ default: module.PendingApproval })));
+const Administration = lazy(() => import("./pages/Administration").then((module) => ({ default: module.Administration })));
 const BoardClaimPage = lazy(() => import("./pages/BoardClaim").then((module) => ({ default: module.BoardClaimPage })));
 const CliAuthPage = lazy(() => import("./pages/CliAuth").then((module) => ({ default: module.CliAuthPage })));
 const InviteLandingPage = lazy(() => import("./pages/InviteLanding").then((module) => ({ default: module.InviteLandingPage })));
@@ -783,6 +786,9 @@ export function App() {
   return (
     <>
       <Suspense fallback={<PaperclipLoading />}><Routes>
+        <Route index element={<AgentOSLanding />} />
+        <Route path="welcome" element={<AgentOSLanding preview />} />
+        <Route path="pending-approval" element={<PendingApproval />} />
         <Route path="oauth-handoff" element={<PaperclipCloudOAuthHandoffPage />} />
         <Route path="auth" element={<AuthPage />} />
         <Route path="board-claim/:token" element={<BoardClaimPage />} />
@@ -805,8 +811,9 @@ export function App() {
         <Route path="ux-lab/cross-issue-collaboration" element={<CrossIssueCollaborationUxLab />} />
 
         <Route element={<CloudAccessGate />}>
+          <Route path="admin/*" element={<Administration />} />
           <Route element={<ShellConfigurationGate loaded={streamlinedUiLoaded} />}>
-          <Route index element={<CompanyRootRedirect />} />
+          <Route path="workspace" element={<CompanyRootRedirect />} />
           <Route path="onboarding" element={<OnboardingRoutePage />} />
           <Route path="instance" element={<LegacySettingsRedirect />} />
           <Route path="instance/settings" element={<LegacySettingsRedirect />} />

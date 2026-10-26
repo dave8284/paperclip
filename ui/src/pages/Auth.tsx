@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useNavigate, useSearchParams } from "@/lib/router";
+import { Link, useNavigate, useSearchParams } from "@/lib/router";
 import { authApi } from "../api/auth";
 import { healthApi } from "../api/health";
 import { CloudSignIn } from "@/components/CloudSignIn";
@@ -9,23 +9,29 @@ import { tenantSignInReturnPath } from "@/lib/cloudLinks";
 import { queryKeys } from "../lib/queryKeys";
 import { getRememberedInvitePath } from "../lib/invite-memory";
 import { Button } from "@/components/ui/button";
-import { AsciiArtAnimation } from "@/components/AsciiArtAnimation";
+import { FridayOrb } from "@/components/FridayOrb";
 import { PaperclipLoading } from "@/components/AnimatedPaperclipIcon";
-import { ThemeToggle } from "@/components/ThemeToggle";
-import { PaperclipLockup } from "../components/PaperclipLockup";
+import { useTheme } from "@/context/ThemeContext";
+import { administrationApi } from "@/api/administration";
+import { navigateTopLevel } from "@/lib/browserNavigation";
 
 type AuthMode = "sign_in" | "sign_up";
 
 export function AuthPage() {
+  const { setTheme } = useTheme();
+  useEffect(() => setTheme("light"), [setTheme]);
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const [mode, setMode] = useState<AuthMode>("sign_in");
+  const [mode, setMode] = useState<AuthMode>(() => searchParams.get("mode") === "sign_up" ? "sign_up" : "sign_in");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const errorId = "auth-error";
+  const options = useQuery({ queryKey: ["public-auth-options"], queryFn: administrationApi.authOptions });
+  const google = useMutation({ mutationFn: () => authApi.signInGoogle(nextPath), onSuccess: navigateTopLevel,
+    onError: (failure: Error) => setError(failure.message) });
 
   const nextPath = useMemo(
     () => tenantSignInReturnPath(searchParams.get("next") || getRememberedInvitePath() || "/"),
@@ -63,6 +69,9 @@ export function AuthPage() {
     },
     onSuccess: async () => {
       setError(null);
+      queryClient.removeQueries({ queryKey: ["registration"] });
+      queryClient.removeQueries({ queryKey: ["administration"] });
+      await queryClient.resetQueries({ queryKey: queryKeys.access.currentBoardAccess });
       await queryClient.invalidateQueries({ queryKey: queryKeys.auth.session });
       await queryClient.invalidateQueries({ queryKey: queryKeys.health });
       // Reset rather than invalidate: the `["companies"]` entry is shared app-wide and
@@ -99,26 +108,37 @@ export function AuthPage() {
     return <CloudSignIn cloud={healthQuery.data.cloud} returnTo={nextPath} />;
   }
 
+  if (healthQuery.data?.deploymentMode === "local_trusted") {
+    return <main className="mx-auto flex min-h-dvh max-w-lg flex-col justify-center gap-5 px-6">
+      <Link to="/welcome" className="text-lg font-semibold">Agent OS</Link>
+      <h1 className="text-2xl font-medium">Your local workspace is ready.</h1>
+      <p className="text-sm leading-relaxed text-muted-foreground">This development instance trusts your device. Registration and Google sign-in become available when authenticated mode is configured.</p>
+      <div><Button asChild><Link to="/workspace">Open workspace</Link></Button></div>
+    </main>;
+  }
+
+  if (mode === "sign_up" && options.data?.passwordSignUpEnabled === false) {
+    return <main className="mx-auto flex min-h-dvh max-w-lg flex-col justify-center gap-4 px-6"><h1 className="text-2xl font-medium">Registration is closed.</h1><p className="text-sm text-muted-foreground">This instance is accepting existing accounts only.</p><Button variant="outline" onClick={() => setMode("sign_in")}>Sign in</Button></main>;
+  }
+
   return (
     <div className="fixed inset-0 flex bg-background">
-      <div className="absolute top-4 right-4 z-10">
-        <ThemeToggle />
-      </div>
       {/* Left half — form */}
       <div className="w-full md:w-1/2 flex flex-col overflow-y-auto">
         <div className="w-full max-w-md mx-auto my-auto px-8 py-12">
           <div className="mb-8">
-            <PaperclipLockup className="h-5 w-auto" />
+            <Link to="/welcome" className="text-lg font-semibold tracking-tight">Agent OS</Link>
           </div>
 
           <h1 className="text-xl font-semibold">
-            {mode === "sign_in" ? "Sign in to Paperclip" : "Create your Paperclip account"}
+            {mode === "sign_in" ? "Sign in to Agent OS" : "Create your Agent OS account"}
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
             {mode === "sign_in"
-              ? "Use your email and password to access this instance."
-              : "Create an account for this instance. Email confirmation is not required in v1."}
+              ? "Welcome back. Sign in to your workspace."
+              : "Register now. An administrator will review your account before granting workspace access."}
           </p>
+          {options.data?.googleEnabled && <Button className="mt-6 w-full" variant="outline" disabled={google.isPending} onClick={() => google.mutate()}>{google.isPending ? "Connecting…" : "Continue with Google"}</Button>}
 
           <form
             className="mt-6 space-y-4"
@@ -220,9 +240,9 @@ export function AuthPage() {
         </div>
       </div>
 
-      {/* Right half — ASCII art animation (hidden on mobile) */}
-      <div className="hidden md:block w-1/2 overflow-hidden">
-        <AsciiArtAnimation />
+      <div className="hidden w-1/2 flex-col items-center justify-center gap-6 overflow-hidden border-l border-border md:flex">
+        <FridayOrb state="idle" label="Friday" />
+        <p className="text-lg text-muted-foreground">A little clarity, a lot in motion.</p>
       </div>
     </div>
   );

@@ -179,6 +179,14 @@ export const authApi = {
     await authPost("/sign-up/email", input);
   },
 
+  signInGoogle: async (returnPath = "/workspace") => {
+    const destination = new URL(returnPath, window.location.origin);
+    const callbackURL = destination.origin === window.location.origin ? destination.href : `${window.location.origin}/workspace`;
+    const payload = await authPost("/sign-in/social", { provider: "google", callbackURL }) as { url?: string };
+    if (!payload?.url) throw new Error("Google sign-in did not return a redirect URL.");
+    return payload.url;
+  },
+
   getProfile: async (): Promise<CurrentUserProfile> => {
     const res = await fetch("/api/auth/profile", {
       credentials: "include",

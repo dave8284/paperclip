@@ -33,6 +33,7 @@ export function BoardClaimPage() {
   const claimMutation = useMutation({
     mutationFn: () => accessApi.claimBoard(token, code),
     onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["registration"] });
       await queryClient.invalidateQueries({ queryKey: queryKeys.auth.session });
       await queryClient.invalidateQueries({ queryKey: queryKeys.health });
       await queryClient.invalidateQueries({ queryKey: queryKeys.companies.all });

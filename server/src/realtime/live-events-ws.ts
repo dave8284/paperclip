@@ -1,11 +1,12 @@
 import { skillAccessService } from "../services/skill-access.js";
+import { readUserApproval } from "../auth/agentos-registration.js";
 import { createHash } from "node:crypto";
 import type { IncomingMessage, Server as HttpServer } from "node:http";
 import { createRequire } from "node:module";
 import type { Duplex } from "node:stream";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, gt, isNull } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
-import { agentApiKeys, companyMemberships, instanceUserRoles, heartbeatRuns, issues, projects } from "@paperclipai/db";
+import { agentApiKeys, authSessions, companyMemberships, instanceUserRoles, heartbeatRuns, issues, projects } from "@paperclipai/db";
 import type { DeploymentMode, LiveEvent } from "@paperclipai/shared";
 import type { BetterAuthSessionResult } from "../auth/better-auth.js";
 import { logger } from "../middleware/logger.js";
@@ -51,6 +52,7 @@ import { canActorReadCase } from "../services/case-access.js";
 interface UpgradeContext {
   actor: AuthorizationActor;
   apiKeyId?: string;
+  sessionId?: string;
   companyId: string;
   actorType: "board" | "agent";
   actorId: string;
@@ -168,6 +170,7 @@ async function authorizeUpgrade(
       const cloudActor = await opts.resolveCloudActor(req);
       if (cloudActor) {
         if (!cloudActor.companyIds.includes(companyId)) return null;
+        if (await readUserApproval(db, cloudActor.userId) !== "approved") return null;
         return {
           companyId,
           actorType: "board",
@@ -183,7 +186,7 @@ async function authorizeUpgrade(
 
     const session = await opts.resolveSessionFromHeaders(headersFromIncomingMessage(req));
     const userId = session?.user?.id;
-    if (!userId) return null;
+    if (!userId || await readUserApproval(db, userId) !== "approved") return null;
 
     const [roleRow, memberships] = await Promise.all([
       db
@@ -210,6 +213,7 @@ async function authorizeUpgrade(
       companyId,
       actorType: "board",
       actorId: userId,
+      sessionId: session.session?.id,
       actor: { type: "board", userId, source: "session", companyIds: memberships.map(m => m.companyId) },
     };
   }
@@ -291,6 +295,15 @@ export function setupLiveEventsWebSocketServer(
           .where(and(eq(agentApiKeys.id, context!.apiKeyId), isNull(agentApiKeys.revokedAt))).limit(1);
         if (!active.length) return null;
       } else {
+        if (await readUserApproval(db, context!.actorId) !== "approved") {
+          socket.close(1008, "account access revoked");
+          return null;
+        }
+        if (context!.sessionId) {
+          const [session] = await db.select({ id: authSessions.id }).from(authSessions)
+            .where(and(eq(authSessions.id, context!.sessionId), eq(authSessions.userId, context!.actorId), gt(authSessions.expiresAt, new Date()))).limit(1);
+          if (!session) { socket.close(1008, "session revoked"); return null; }
+        }
         const membership = await db.select({ id: companyMemberships.id }).from(companyMemberships)
           .where(and(eq(companyMemberships.companyId, context!.companyId), eq(companyMemberships.principalType, "user"),
             eq(companyMemberships.principalId, context!.actorId), eq(companyMemberships.status, "active"))).limit(1);

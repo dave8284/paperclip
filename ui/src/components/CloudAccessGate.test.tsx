@@ -25,10 +25,12 @@ const responses: Record<string, unknown> = {
     sentryDsn: null,
   },
   "/api/cli-auth/me": { isInstanceAdmin: false, companyIds: ["company"] },
+  "/api/registration": { status: "approved", userId: "user", isInstanceAdmin: false },
 };
 const checks = [
   ["/api/health", queryKeys.health],
   ["/api/auth/get-session", queryKeys.auth.session],
+  ["/api/registration", ["registration", "user"]],
   ["/api/cli-auth/me", queryKeys.access.currentBoardAccess],
 ] as const;
 
@@ -43,6 +45,7 @@ describe("CloudAccessGate restart recovery", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     failingPath = null;
+    responses["/api/registration"] = { status: "approved", userId: "user", isInstanceAdmin: false };
     failure = () => new Response("<!doctype html><h1>Restarting</h1>", { status: 200 });
     fetchMock.mockImplementation(async (path: string) => {
       if (path === failingPath) return failure();
@@ -75,6 +78,14 @@ describe("CloudAccessGate restart recovery", () => {
     flushSync(() => root.render(<QueryClientProvider client={client}><CloudAccessGate /></QueryClientProvider>));
     await flushReact();
   }
+
+  it("redirects pending users before fetching private board access", async () => {
+    responses["/api/registration"] = { status: "pending", userId: "user", isInstanceAdmin: false };
+    await render();
+    expect(container.querySelector("[data-redirect]")?.getAttribute("data-redirect")).toBe("/pending-approval");
+    expect(fetchMock.mock.calls.some(([path]) => path === "/api/cli-auth/me")).toBe(false);
+    expect(container.querySelector("textarea")).toBeNull();
+  });
 
   it.each(checks)("recovers from an HTML response on %s without navigating", async (path) => {
     failingPath = path;

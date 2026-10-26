@@ -72,6 +72,7 @@ describeEmbeddedPostgres("board claim", () => {
       name: "Board Claim User",
       email: "board-claim@example.test",
       emailVerified: true,
+      approvalStatus: "pending",
       createdAt: now,
       updatedAt: now,
     });
@@ -103,6 +104,8 @@ describeEmbeddedPostgres("board claim", () => {
       status: "claimed",
       claimedByUserId: userId,
     });
+    const [approvedOwner] = await db.select().from(authUsers).where(eq(authUsers.id, userId));
+    expect(approvedOwner.approvalStatus).toBe("approved");
 
     await expect(
       db

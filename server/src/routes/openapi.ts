@@ -12,6 +12,11 @@ import { createManagedApplicationSchema, updateManagedApplicationSchema, managed
 import { subscriptionPriceSchema, mergeSubscriptionsSchema } from "@paperclipai/shared";
 import { z } from "zod";
 import {
+  adminEventSchema, adminInvitationCreateSchema, adminInvitationSchema, adminModelIntelligenceSchema,
+  adminOverviewSchema, adminPeopleQuerySchema, adminPeopleResponseSchema, adminUserDeleteSchema,
+  adminUserUpdateSchema, publicAuthOptionsSchema, registrationStateSchema,
+} from "@paperclipai/shared";
+import {
   gitHubRepositoryPageQuerySchema,
   toggleAllGitHubRepositoriesSchema,
   createAiConnectionSchema,
@@ -7361,6 +7366,33 @@ registry.registerPath({
 });
 
 // ─── Auth / profile ──────────────────────────────────────────────────────────
+
+for (const [path, summary, responseSchema] of [
+  ["/api/admin/overview", "Read Agent OS administration overview", adminOverviewSchema],
+  ["/api/admin/preapprovals", "List administrator preapprovals", adminInvitationSchema.array()],
+  ["/api/admin/events", "Read the latest instance administration audit events", adminEventSchema.array()],
+  ["/api/admin/model-intelligence", "Read recorded model activity and learning-service readiness", adminModelIntelligenceSchema],
+] as const) {
+  registry.registerPath({ method: "get", path, summary, tags: ["admin"], responses: { 200: r.ok(responseSchema), 403: r.forbidden } });
+}
+for (const [path, summary, responseSchema] of [
+  ["/api/registration", "Read current registration approval state", registrationStateSchema],
+  ["/api/registration/options", "Read available sign-in methods", publicAuthOptionsSchema],
+] as const) {
+  registry.registerPath({ method: "get", path, summary, tags: ["auth"], security: [], responses: { 200: r.ok(responseSchema) } });
+}
+registry.registerPath({ method: "get", path: "/api/admin/people", summary: "Search and paginate user accounts", tags: ["admin"],
+  request: { query: adminPeopleQuerySchema }, responses: { 200: r.ok(adminPeopleResponseSchema), 400: r.badRequest, 403: r.forbidden } });
+registry.registerPath({ method: "patch", path: "/api/admin/people/{userId}", summary: "Review or manage an account with optimistic concurrency", tags: ["admin"],
+  request: { params: z.object({ userId: z.string() }), body: jsonBody(adminUserUpdateSchema) },
+  responses: { 200: r.ok(), 400: r.badRequest, 403: r.forbidden, 404: r.notFound, 409: r.conflict } });
+registry.registerPath({ method: "delete", path: "/api/admin/people/{userId}", summary: "Delete an account while preserving business and audit history", tags: ["admin"],
+  request: { params: z.object({ userId: z.string() }), body: jsonBody(adminUserDeleteSchema) },
+  responses: { 200: r.ok(), 400: r.badRequest, 403: r.forbidden, 404: r.notFound, 409: r.conflict } });
+registry.registerPath({ method: "post", path: "/api/admin/preapprovals", summary: "Preapprove a verified identity for seven days", tags: ["admin"],
+  request: { body: jsonBody(adminInvitationCreateSchema) }, responses: { 201: r.ok(adminInvitationSchema), 400: r.badRequest, 403: r.forbidden, 409: r.conflict } });
+registry.registerPath({ method: "delete", path: "/api/admin/preapprovals/{id}", summary: "Revoke a preapproval", tags: ["admin"],
+  request: { params: z.object({ id: z.uuid() }) }, responses: { 200: r.ok(adminInvitationSchema), 403: r.forbidden, 404: r.notFound } });
 
 registry.registerPath({
   method: "get",

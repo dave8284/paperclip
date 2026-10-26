@@ -1,4 +1,6 @@
 import { promptInjectionPreventionRoutes } from "./routes/prompt-injection-prevention.js";
+import { agentosAdministrationRoutes } from "./routes/agentos-administration.js";
+import { userApprovalGuard } from "./auth/agentos-registration.js";
 import { voiceSessionRoutes, voiceWebhookRoutes } from "./routes/voice-sessions.js";
 import { eq } from "drizzle-orm";
 import { chatEndpoints } from "@paperclipai/db";
@@ -532,6 +534,7 @@ export async function createApp(
     authPublicBaseUrl?: string;
     chatWebhookPublicBaseUrl?: string;
     authReady: boolean;
+    authDisableSignUp?: boolean;
     companyDeletionEnabled: boolean;
     announcements?: { enabled: boolean; feedUrl: string };
     instanceId?: string;
@@ -752,9 +755,11 @@ export async function createApp(
 
   // Mount API routes
   const api = Router();
+  api.use(userApprovalGuard(db));
   const agentAvatars = agentAvatarRoutes();
   api.use(agentAvatars.router);
   api.use(boardMutationGuard());
+  api.use(agentosAdministrationRoutes(db, opts));
   api.use("/health", health);
   api.use(openApiRoutes());
   api.use("/cloud", cloudRoutes());

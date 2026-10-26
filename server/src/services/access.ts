@@ -2,6 +2,7 @@ import { and, eq, inArray, ne, notInArray, sql } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import {
   agents,
+  authUsers,
   companyMemberships,
   companySecretBindings,
   companySecrets,
@@ -771,28 +772,41 @@ export function accessService(db: Db) {
   }
 
   async function promoteInstanceAdmin(userId: string) {
-    const existing = await db
-      .select()
-      .from(instanceUserRoles)
-      .where(and(eq(instanceUserRoles.userId, userId), eq(instanceUserRoles.role, "instance_admin")))
-      .then((rows) => rows[0] ?? null);
-    if (existing) return existing;
-    return db
-      .insert(instanceUserRoles)
-      .values({
-        userId,
-        role: "instance_admin",
-      })
-      .returning()
-      .then((rows) => rows[0]);
+    return db.transaction(async tx => {
+      await tx.execute(sql`lock table ${instanceUserRoles} in share row exclusive mode`);
+      const [user] = await tx.select({ id: authUsers.id }).from(authUsers)
+        .where(and(eq(authUsers.id, userId), eq(authUsers.approvalStatus, "approved"))).limit(1);
+      if (!user) throw conflict("Approve this user before granting administrator access.");
+      const existing = await tx
+        .select()
+        .from(instanceUserRoles)
+        .where(and(eq(instanceUserRoles.userId, userId), eq(instanceUserRoles.role, "instance_admin")))
+        .then((rows) => rows[0] ?? null);
+      if (existing) return existing;
+      return tx
+        .insert(instanceUserRoles)
+        .values({
+          userId,
+          role: "instance_admin",
+        })
+        .returning()
+        .then((rows) => rows[0]);
+    });
   }
 
   async function demoteInstanceAdmin(userId: string) {
-    return db
-      .delete(instanceUserRoles)
-      .where(and(eq(instanceUserRoles.userId, userId), eq(instanceUserRoles.role, "instance_admin")))
-      .returning()
-      .then((rows) => rows[0] ?? null);
+    return db.transaction(async tx => {
+      await tx.execute(sql`lock table ${instanceUserRoles} in share row exclusive mode`);
+      const admins = await tx.select({ userId: instanceUserRoles.userId }).from(instanceUserRoles)
+        .innerJoin(authUsers, eq(instanceUserRoles.userId, authUsers.id))
+        .where(and(eq(instanceUserRoles.role, "instance_admin"), eq(authUsers.approvalStatus, "approved")));
+      if (admins.some(row => row.userId === userId) && admins.length <= 1) throw conflict("Keep at least one approved administrator.");
+      return tx
+        .delete(instanceUserRoles)
+        .where(and(eq(instanceUserRoles.userId, userId), eq(instanceUserRoles.role, "instance_admin")))
+        .returning()
+        .then((rows) => rows[0] ?? null);
+    });
   }
 
   async function listUserCompanyAccess(userId: string) {

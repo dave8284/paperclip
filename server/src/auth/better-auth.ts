@@ -11,6 +11,7 @@ import {
   authVerifications,
 } from "@paperclipai/db";
 import type { Config } from "../config.js";
+import { googleSignInConfiguration, initialRegistrationStatus } from "./agentos-registration.js";
 import { resolvePaperclipInstanceId } from "../home-paths.js";
 import {
   workspaceLoginHandoffPlugin,
@@ -261,6 +262,19 @@ export function createBetterAuthInstance(db: Db, config: Config, trustedOrigins:
     baseURL: baseUrl,
     secret,
     trustedOrigins,
+    socialProviders: googleSignInConfiguration() ? { google: {
+      ...googleSignInConfiguration()!, disableSignUp: config.authDisableSignUp,
+    } } : {},
+    user: {
+      additionalFields: {
+        approvalStatus: { type: "string" as const, defaultValue: "pending", input: false },
+      },
+    },
+    databaseHooks: {
+      user: { create: { before: async (user: { email: string; emailVerified: boolean }) => ({
+        data: { ...user, approvalStatus: await initialRegistrationStatus(db, user.email, user.emailVerified) },
+      }) } },
+    },
     database: drizzleAdapter(db, {
       provider: "pg",
       schema: {
