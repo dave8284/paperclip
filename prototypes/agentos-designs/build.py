@@ -51,6 +51,9 @@ def shared():
 <div class="toast" role="status" hidden></div>'''
 def page(index, body, css_class):
     slug,title,_ = DESIGNS[index]
+    if index == 0:
+        (ROOT/(slug+".html")).write_text((ROOT/"friday"/"shell.html").read_text())
+        return
     (ROOT/(slug+".html")).write_text(f'<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><title>{title} · Agent OS design preview</title><link rel="stylesheet" href="styles.css"><script src="data.js" defer></script><script src="app.js" defer></script></head><body data-design="{index+1}">{preview(index)}<div class="{css_class}">{body}{dock()}</div>{shared()}</body></html>')
 
 companies = [
