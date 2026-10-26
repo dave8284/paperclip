@@ -1,5 +1,10 @@
 import {companies,findCompany,findProject,findAgent,scopeProjects,scopeTasks} from './model.js';
 import {icon,esc} from './icons.js';
+const taskState={todo:'To do',doing:'In motion',done:'Done'};
+export function graphLegend(){
+  const entries=[['portfolio','','Friday'],['company','','Company / project'],['agent','','Agent assignment'],['task','todo','Task · to do'],['task','doing','Task · in motion'],['task','done','Task · done'],['evidence','','Evidence']];
+  return '<div class="legend" aria-label="Map colour key">'+entries.map(([kind,status,label])=>'<span><i data-kind="'+kind+'" data-status="'+status+'" aria-hidden="true"></i>'+label+'</span>').join('')+'</div>';
+}
 export function graphRecords(companyId='',projectId=''){
   const nodes=[],edges=[],project=projectId?findProject(projectId):null;
   const cs=companies.filter(c=>(!companyId||c.id===companyId)&&(!project||c.id===project.company));
@@ -41,8 +46,9 @@ export function mountGraph(companyId='',projectId=''){
     const a=byId.get(e.from),b=byId.get(e.to);if(!a||!b)return '';
     return '<path class="map-edge'+(e.active?' active':'')+'" d="M'+a.x+' '+a.y+' Q'+((a.x+b.x)/2-(b.y-a.y)*.14)+' '+((a.y+b.y)/2+(b.x-a.x)*.14)+' '+b.x+' '+b.y+'"/>';
   }).join('')+nodes.map(n=>{
-    const r=n.kind==='company'?22:n.kind==='portfolio'?20:n.kind==='project'?13:n.kind==='agent'?5:n.kind==='task'?3.5:2;
-    return '<g class="map-node" data-node="'+esc(n.id)+'" data-kind="'+n.kind+'" transform="translate('+n.x+','+n.y+')" role="button" tabindex="0" aria-label="'+esc(n.kind+': '+n.label)+'"><title>'+esc(n.kind+' · '+n.label)+'</title><circle r="'+Math.max(11,r)+'" fill="transparent"/><circle class="point" r="'+r+'"/>'+(['company','portfolio','project','agent'].includes(n.kind)?'<text text-anchor="'+(['company','portfolio'].includes(n.kind)?'middle':'start')+'" x="'+(['company','portfolio'].includes(n.kind)?0:r+7)+'" y="3">'+esc(n.label)+'</text>':'')+'</g>';
+    const r=n.kind==='company'?22:n.kind==='portfolio'?20:n.kind==='project'?13:n.kind==='agent'?5:n.kind==='task'?4.2:2.6;
+    const label=n.kind+' · '+n.label+(n.status?' · '+taskState[n.status]:'');
+    return '<g class="map-node" data-node="'+esc(n.id)+'" data-kind="'+n.kind+'" data-status="'+(n.status||'')+'" transform="translate('+n.x+','+n.y+')" role="button" tabindex="0" aria-label="'+esc(label)+'"><title>'+esc(label)+'</title><circle r="'+Math.max(11,r)+'" fill="transparent"/><circle class="point" r="'+r+'"/>'+(['company','portfolio','project','agent'].includes(n.kind)?'<text text-anchor="'+(['company','portfolio'].includes(n.kind)?'middle':'start')+'" x="'+(['company','portfolio'].includes(n.kind)?0:r+7)+'" y="3">'+esc(n.label)+'</text>':'')+'</g>';
   }).join('');
   document.querySelector('#map-count').textContent=nodes.length+' records · '+edges.length+' meaningful connections';
   let zoom=1,offset={x:0,y:0},drag=null;
@@ -59,7 +65,7 @@ export function mountGraph(companyId='',projectId=''){
       task:'A task owned by '+(n.agent?findAgent(n.agent).name:'the team')+'. State: '+({todo:'to do',doing:'in motion',done:'done'}[n.status]||'')+'.',
       evidence:'A supporting record for “'+(n.task||'the task')+'”. Pending work results are not represented as completed evidence.'
     };
-    document.querySelector('#map-inspector').innerHTML='<span class="eyebrow">'+(n.company?esc(findCompany(n.company).name)+' / ':'')+n.kind+'</span><h3>'+esc(n.label)+'</h3><p>'+esc(descriptions[n.kind])+'</p><a class="btn" href="'+n.href+'">Open '+(n.kind==='agent'?'employee':n.kind)+' '+icon('arrow')+'</a><div class="line"></div><p>Dots represent records. Lines show ownership, assignment, or attached evidence.</p>';
+    document.querySelector('#map-inspector').innerHTML='<span class="eyebrow">'+(n.company?esc(findCompany(n.company).name)+' / ':'')+n.kind+'</span><h3>'+esc(n.label)+'</h3><p>'+esc(descriptions[n.kind])+'</p><a class="btn" href="'+n.href+'">Open '+(n.kind==='agent'?'employee':n.kind)+' '+icon('arrow')+'</a><div class="line"></div><p>Dots represent records. Lines show ownership, assignment, or attached evidence.</p>'+graphLegend();
   }
   svg.addEventListener('click',event=>{const n=event.target.closest('[data-node]');if(n)select(n.dataset.node);},options);
   svg.addEventListener('keydown',event=>{if((event.key==='Enter'||event.key===' ')&&event.target.closest('[data-node]')){event.preventDefault();select(event.target.closest('[data-node]').dataset.node);}},options);
