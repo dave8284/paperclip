@@ -4,13 +4,13 @@ import type { Agent, FridayWork } from "@paperclipai/shared";
 import { fridayGraph, type FridayGraphNode } from "../lib/friday-graph";
 import { Button } from "./ui/button";
 
-export function FridayWorkGraph({ data, agents, running, onSelect }: { data: FridayWork; agents: Agent[]; running: ReadonlySet<string>; onSelect: (node: FridayGraphNode) => void }) {
+export function FridayWorkGraph({ data, agents, running, onSelect, companies }: { data: FridayWork; agents: Agent[]; running: ReadonlySet<string>; onSelect: (node: FridayGraphNode) => void; companies?: Array<{ id: string; name: string; projectIds: string[] }> }) {
   const [view, setView] = useState({ x: 0, y: 0, zoom: 1 });
   const [evidence, setEvidence] = useState(true);
   const [quiet, setQuiet] = useState(document.hidden);
   const drag = useRef<{ x: number; y: number } | null>(null);
   useEffect(() => { const update = () => setQuiet(document.hidden); document.addEventListener("visibilitychange", update); return () => document.removeEventListener("visibilitychange", update); }, []);
-  const graph = fridayGraph(evidence ? data : { ...data, evidence: [] }, agents, running);
+  const graph = fridayGraph(evidence ? data : { ...data, evidence: [] }, agents, running, companies);
   const positions = new Map(graph.nodes.map(node => [node.id, node]));
   const width = 1100 / view.zoom, height = 700 / view.zoom;
   return <div className="space-y-2">
@@ -29,9 +29,9 @@ export function FridayWorkGraph({ data, agents, running, onSelect }: { data: Fri
       {graph.nodes.map(node => <g key={node.id} role="button" tabIndex={0} aria-label={`${node.kind}: ${node.title}${node.status ? ` · ${node.status}` : ""}`} className="friday-graph-node" data-kind={node.kind} data-status={node.status} data-running={node.running}
         onClick={() => onSelect(node)} onKeyDown={event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onSelect(node); } }}>
         <circle cx={node.x} cy={node.y} /><title>{node.title}{node.status ? ` · ${node.status}` : ""}</title>
-        {["application", "project", "agent"].includes(node.kind) && <text x={node.x} y={node.y + 23} textAnchor="middle">{node.title}</text>}
+        {["company", "application", "project", "agent"].includes(node.kind) && <text x={node.x} y={node.y + 23} textAnchor="middle">{node.title}</text>}
       </g>)}
     </svg>
-    <p className="text-xs text-muted-foreground">{graph.nodes.length} real records · circles: applications, projects, agents and work · small dots: messages and outputs. Solid links show membership and project leads; dashed links show assignments; purple links are recorded handoffs. Motion requires observed running work or a pending handoff.</p>
+    <p className="text-xs text-muted-foreground">{graph.nodes.length} real records · circles: companies, applications, projects, agents and work · small dots: messages and outputs. Solid links show membership and project leads; dashed links show assignments; purple links are recorded handoffs. Motion requires observed running work or a pending handoff.</p>
   </div>;
 }

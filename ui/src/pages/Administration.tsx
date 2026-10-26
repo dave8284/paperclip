@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, ShieldCheck } from "lucide-react";
+import { ShieldCheck } from "lucide-react";
 import { Link, useSearchParams } from "@/lib/router";
 import { administrationApi, adminKey } from "@/api/administration";
 import { useAccountIdentity } from "@/api/companies-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { AgentOSBrand } from "@/components/AgentOSBrand";
 import { AdminPeople } from "@/components/AdminPeople";
 import { AdminModelIntelligence } from "@/components/AdminModelIntelligence";
 
@@ -19,8 +20,8 @@ export function Administration() {
   const [params, setParams] = useSearchParams();
   const tab = params.get("tab") ?? "overview";
   const overview = useQuery({ queryKey: [...adminKey(userId), "overview"], queryFn: administrationApi.overview, retry: false });
-  return <div className="min-h-dvh bg-background text-foreground">
-    <header className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-6 py-5"><Link to="/workspace" className="flex items-center gap-2 font-medium"><ArrowLeft className="size-4" />Agent OS</Link><div className="flex items-center gap-2 text-sm text-muted-foreground"><ShieldCheck className="size-4" />Administration</div></header>
+  return <div className="agentos-public min-h-dvh bg-background text-foreground">
+    <header className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-6 py-5"><AgentOSBrand /><div className="flex items-center gap-2 text-sm text-muted-foreground"><ShieldCheck className="size-4" />Administration</div></header>
     {overview.error ? <main className="mx-auto max-w-xl space-y-3 px-6 py-16"><h1 className="text-xl font-medium">Administrator access required</h1><p role="alert" className="text-sm text-destructive">{overview.error.message}</p><Button variant="outline" onClick={() => void overview.refetch()}>Try again</Button></main> : overview.isPending ? <p role="status" className="p-8">Loading administration…</p> : <div className="mx-auto grid max-w-7xl md:grid-cols-4">
       <aside className="border-b border-border p-4 md:min-h-dvh md:border-r md:border-b-0"><nav className="flex flex-wrap gap-1 md:flex-col" aria-label="Administration">{tabs.map(([value, label]) => <button key={value} aria-current={tab === value ? "page" : undefined} onClick={() => setParams({ tab: value })} className={`flex items-center justify-between gap-2 rounded-lg px-3 py-3 text-left text-sm ${tab === value ? "bg-muted font-medium" : "text-muted-foreground hover:bg-muted/50"}`}>{label}{value === "pending" && overview.data.counts.pending > 0 && <span className="rounded-full bg-foreground px-2 py-0.5 text-xs text-background">{overview.data.counts.pending}</span>}</button>)}</nav></aside>
       <main className="min-w-0 space-y-6 p-6 md:col-span-3 md:p-8">

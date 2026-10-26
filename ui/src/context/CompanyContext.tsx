@@ -296,6 +296,15 @@ export function useCompany() {
   return ctx;
 }
 
+/** A read scope for an embedded company conversation. It does not change the
+ * portfolio's selected company or grant access to another company. */
+export function CompanyViewProvider({ companyId, children }: { companyId: string; children: ReactNode }) {
+  const parent = useCompany();
+  const company = parent.companies.find(item => item.id === companyId) ?? null;
+  const value = useMemo(() => ({ ...parent, selectedCompanyId: company?.id ?? null, selectedCompany: company }), [parent, company]);
+  return <CompanyContext.Provider value={value}>{children}</CompanyContext.Provider>;
+}
+
 /**
  * Non-throwing variant of {@link useCompany}. Returns null when called outside a
  * CompanyProvider instead of throwing, so components that may render in

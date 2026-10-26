@@ -1,6 +1,6 @@
 # Agent OS registration and administration delivery
 
-This implements the human account and admin foundation of the [end-to-end plan](2026-10-27-agentos-end-to-end-execution.md). It does not mark the independent learning service, full Friday redesign or production autonomous workflows complete.
+This records the human account and admin foundation of the [end-to-end plan](2026-10-27-agentos-end-to-end-execution.md). The subsequent production UI correction is recorded in that plan's baseline checkpoint. Neither delivery marks the independent learning service, browser/audio acceptance or production autonomous workflows complete.
 
 ## User journey
 

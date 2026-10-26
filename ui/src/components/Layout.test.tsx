@@ -6,6 +6,10 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Layout } from "./Layout";
 
+vi.mock("../context/ThemeContext", () => ({ useTheme: () => ({ setTheme: () => {} }) }));
+vi.mock("./FridayOrb", () => ({ FridayOrb: () => <span data-orb="true" /> }));
+vi.mock("./FridayDock", () => ({ FridayDock: () => <div>Friday dock</div> }));
+
 const mockDesignSandbox = vi.hoisted(() => ({ enabled: false }));
 vi.mock("@/context/DesignSandboxContext", () => ({ useDesignSandbox: () => mockDesignSandbox.enabled }));
 vi.mock("./DesignSandboxSidebar", () => ({ DesignSandboxSidebar: () => <div>Proposed sidebar</div> }));
@@ -43,12 +47,14 @@ const mockSidebarState = vi.hoisted(() => ({
   peeking: false,
 }));
 let currentPathname = "/PAP/dashboard";
+let currentSearch = "?shell=classic";
 
 vi.mock("@/lib/router", () => ({
   Outlet: () => <div>Outlet content</div>,
+  Link: ({ to, children, ...props }: any) => <a href={to} {...props}>{children}</a>,
   useLocation: () => ({
     pathname: currentPathname,
-    search: "",
+    search: currentSearch,
     hash: "",
     state: null,
   }),
@@ -312,6 +318,7 @@ describe("Layout", () => {
   let container: HTMLDivElement;
 
   beforeEach(() => {
+    currentSearch = "?shell=classic";
     mockDesignSandbox.enabled = false;
     container = document.createElement("div");
     document.body.appendChild(container);
@@ -378,6 +385,36 @@ describe("Layout", () => {
     await act(async () => {
       root.unmount();
     });
+  });
+
+  it("uses Agent OS navigation by default and keeps record settings in the canvas", async () => {
+    currentSearch = "";
+    currentPathname = "/PAP/company/settings/access";
+    const root = createRoot(container);
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    await act(async () => renderLayoutView(root, queryClient));
+    await flushReact();
+    expect(container.querySelector('[aria-label="Main navigation"]')?.textContent).toContain("Agent Map");
+    expect(container.querySelector('[aria-label="Portfolio navigation"]')).not.toBeNull();
+    expect(container.textContent).toContain("Company settings sidebar");
+    expect(container.textContent).toContain("Outlet content");
+    expect(container.textContent).not.toContain("Main company nav");
+    expect(container.querySelector(".agentos-root-scroll")).not.toBeNull();
+    await act(async () => root.unmount());
+  });
+
+  it("lets Friday own the whole canvas without legacy navigation or breadcrumbs", async () => {
+    currentSearch = "";
+    currentPathname = "/PAP/friday";
+    const root = createRoot(container);
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    await act(async () => renderLayoutView(root, queryClient));
+    await flushReact();
+    expect(container.textContent).toContain("Outlet content");
+    expect(container.textContent).not.toContain("Main company nav");
+    expect(container.querySelector(".agentos-native-frame")).toBeNull();
+    expect(container.querySelector(".agentos-root-scroll")).not.toBeNull();
+    await act(async () => root.unmount());
   });
 
   it("scopes the Streamlined task-detail surface while preserving balanced horizontal gutters", async () => {

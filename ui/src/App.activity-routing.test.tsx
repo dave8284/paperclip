@@ -50,7 +50,7 @@ vi.hoisted(() => {
 // resolve the :companyPrefix segment and render its nested routes.
 vi.mock("./components/Layout", async () => {
   const { Outlet } = await import("react-router-dom");
-  return { Layout: () => <Outlet /> };
+  return { Layout: () => <div data-testid="agentos-shell"><Outlet /></div> };
 });
 
 vi.mock("./components/Layout.production", async () => {
@@ -285,6 +285,7 @@ describe("App Activity routing (PAP-16302)", () => {
       const root = renderAppAt(container, path);
       await waitForRoute(container, `AUDIT_${section.toUpperCase()}@${path}`);
       expect(container.textContent).not.toContain("NOT_FOUND");
+      expect(container.querySelector('[data-testid="agentos-shell"]')).not.toBeNull();
       flushSync(() => root.unmount());
     }
   });

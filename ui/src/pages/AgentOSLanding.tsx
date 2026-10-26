@@ -5,6 +5,7 @@ import { Link, Navigate } from "@/lib/router";
 import { administrationApi, registrationKey } from "@/api/administration";
 import { useAccountIdentity } from "@/api/companies-query";
 import { useTheme } from "@/context/ThemeContext";
+import { AgentOSBrand } from "@/components/AgentOSBrand";
 import { FridayOrb } from "@/components/FridayOrb";
 import { Button } from "@/components/ui/button";
 
@@ -15,9 +16,9 @@ export function AgentOSLanding({ preview = false }: { preview?: boolean }) {
   const state = useQuery({ queryKey: registrationKey(userId), queryFn: administrationApi.registration, retry: false });
   if (!preview && state.data?.status === "approved") return <Navigate to="/workspace" replace />;
   if (!preview && state.data && !["anonymous", "approved"].includes(state.data.status)) return <Navigate to="/pending-approval" replace />;
-  return <div className="min-h-dvh bg-background text-foreground">
+  return <div className="agentos-public min-h-dvh bg-background text-foreground">
     <header className="mx-auto flex max-w-6xl items-center justify-between px-6 py-6">
-      <Link to="/" className="text-lg font-semibold tracking-tight">Agent OS</Link>
+      <AgentOSBrand to="/" />
       <div className="flex items-center gap-4"><Link to="/auth" className="text-sm">Sign in</Link><Button asChild size="sm"><Link to="/auth?mode=sign_up">Get started <ArrowRight className="size-4" /></Link></Button></div>
     </header>
     <main className="mx-auto max-w-6xl px-6">
@@ -38,6 +39,6 @@ export function AgentOSLanding({ preview = false }: { preview?: boolean }) {
         ].map(({ Icon, title, text }) => <article key={title} className="space-y-3 rounded-2xl border border-border p-6"><Icon className="size-5 text-muted-foreground" /><h2 className="font-medium">{title}</h2><p className="text-sm leading-relaxed text-muted-foreground">{text}</p></article>)}
       </section>
     </main>
-    <footer className="mx-auto flex max-w-6xl flex-wrap justify-between gap-3 border-t border-border px-6 py-6 text-sm text-muted-foreground"><span>Agent OS · Built on Paperclip</span><Link to="/auth">Enter your workspace</Link></footer>
+    <footer className="mx-auto flex max-w-6xl flex-wrap justify-between gap-3 border-t border-border px-6 py-6 text-sm text-muted-foreground"><span>Agent OS · Your portfolio, in motion</span><Link to="/auth">Enter your workspace</Link></footer>
   </div>;
 }

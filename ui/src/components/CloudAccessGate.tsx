@@ -9,7 +9,7 @@ import { healthApi } from "@/api/health";
 import { isTemporaryApiError } from "@/api/response";
 import { queryKeys } from "@/lib/queryKeys";
 import { BootstrapPendingPage } from "@/components/BootstrapPendingPage";
-import { PaperclipLoading } from "@/components/AnimatedPaperclipIcon";
+import { AgentOSLoading } from "@/components/AgentOSLoading";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { CloudSignIn } from "@/components/CloudSignIn";
@@ -32,7 +32,7 @@ export function CloudAccessError({
       <RefreshCw className="size-6 text-muted-foreground" aria-hidden="true" />
       <div className="flex flex-col gap-2" role="status">
         <h1 className="text-xl font-semibold">
-          {temporary ? "Reconnecting to Paperclip" : "Unable to load Paperclip"}
+          {temporary ? "Reconnecting to Agent OS" : "Unable to load Agent OS"}
         </h1>
         <p className="text-sm text-muted-foreground">
           {temporary
@@ -56,7 +56,7 @@ function NoBoardAccessPage() {
         <h1 className="text-xl font-semibold">No organization access</h1>
         <p className="mt-2 text-sm text-muted-foreground">
           This account is signed in, but it does not have an active organization membership or instance-admin access on
-          this Paperclip instance.
+          this Agent OS instance.
         </p>
         <p className="mt-2 text-sm text-muted-foreground">
           Use an organization invite or sign in with an account that already belongs to this org.
@@ -184,7 +184,7 @@ export function CloudAccessGate({ allowMembershipRequest = false }: { allowMembe
   }
 
   if (isLoading) {
-    return <PaperclipLoading />;
+    return <AgentOSLoading />;
   }
 
   if (isAuthenticatedMode && healthQuery.data?.cloud && !sessionQuery.data) {
@@ -194,7 +194,7 @@ export function CloudAccessGate({ allowMembershipRequest = false }: { allowMembe
   if (isBootstrapPending) {
     const health = healthQuery.data;
     if (!health) {
-      return <PaperclipLoading />;
+      return <AgentOSLoading />;
     }
     const claimError = claimMutation.error instanceof ApiError
       ? { status: claimMutation.error.status, message: claimMutation.error.message }

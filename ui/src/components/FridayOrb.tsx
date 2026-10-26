@@ -1,8 +1,8 @@
 import { useEffect, useRef } from "react";
 import { drawFridayOrb, orbPoints, type FridayOrbState } from "@/lib/friday-orb";
 
-export function FridayOrb({ state, label, onActivate, disabled = false, compact = false }: {
-  state: FridayOrbState; label: string; onActivate?: () => void; disabled?: boolean; compact?: boolean;
+export function FridayOrb({ state, label, onActivate, disabled = false, compact = false, decorative = false }: {
+  state: FridayOrbState; label: string; onActivate?: () => void; disabled?: boolean; compact?: boolean; decorative?: boolean;
 }) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const redraw = useRef<(() => void) | null>(null);
@@ -48,6 +48,7 @@ export function FridayOrb({ state, label, onActivate, disabled = false, compact 
     };
   }, []);
   useEffect(() => { redraw.current?.(); }, [state]);
+  if (decorative) return <span className="friday-orb" data-state={state} data-compact={compact} aria-hidden="true"><canvas ref={canvas} /><span className="friday-orb-fallback" /></span>;
   return <button type="button" className="friday-orb" data-state={state} data-compact={compact} onClick={onActivate} disabled={disabled || !onActivate} aria-label={label} title={label}>
     <canvas ref={canvas} aria-hidden="true" />
     <span className="friday-orb-fallback" aria-hidden="true" />

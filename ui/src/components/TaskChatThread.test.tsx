@@ -4990,4 +4990,33 @@ describe("conversation focus presentation", () => {
     await act(async () => { await new Promise(resolve => requestAnimationFrame(resolve)); });
     expect(container.textContent).toContain("Notion");
   });
+
+  it("keeps the native composer and history mounted when Friday docks and closes its panel", async () => {
+    const onAdd = vi.fn(async (_body: string) => {});
+    const onClose = vi.fn();
+    const focus = { canvas: true, docked: false, showTranscript: true, composerCollapsed: false, onClose, render: () => <div>Friday canvas</div> };
+    render(<TaskChatThread comments={[]} onAdd={onAdd} conversationMode focusView={focus} />);
+    const editor = container.querySelector('[data-testid="mock-editor"]');
+    expect(editor).not.toBeNull();
+    const panel = container.querySelector<HTMLElement>(".agentos-conversation-panel")!;
+    expect(panel.hidden).toBe(false);
+    expect(panel.dataset.docked).toBe("false");
+    await act(async () => editorCallbacks.change("Show my companies"));
+    render(<TaskChatThread comments={[]} onAdd={onAdd} conversationMode focusView={{ ...focus, docked: true }} />);
+    expect(container.querySelector('[data-testid="mock-editor"]')).toBe(editor);
+    expect(panel.dataset.docked).toBe("true");
+    await act(async () => container.querySelector<HTMLButtonElement>('[data-testid="task-chat-composer-send"]')!.click());
+    expect(onAdd.mock.calls[0][0]).toBe("Show my companies");
+    render(<TaskChatThread comments={[]} onAdd={onAdd} conversationMode focusView={{ ...focus, showTranscript: false, composerCollapsed: true }} />);
+    expect(panel.hidden).toBe(true);
+    expect(container.querySelector('[data-testid="mock-editor"]')).toBe(editor);
+  });
+
+  it("surfaces a required native decision even when the Friday panel is closed", async () => {
+    render(<TaskChatThread comments={[]} onAdd={async () => {}} currentUserId="user-board" interactions={[pendingConnectionIntentInteraction]} focusView={{ canvas: true, showTranscript: false, composerCollapsed: true, render: () => <div>Friday canvas</div> }} />);
+    expect(container.querySelector<HTMLElement>(".agentos-conversation-panel")?.hidden).toBe(false);
+    expect(container.querySelector('[data-testid="task-chat-composer-dock"]')?.closest('[hidden]')).toBeNull();
+    await act(async () => { await new Promise(resolve => requestAnimationFrame(resolve)); });
+    expect(container.textContent).toContain("Notion");
+  });
 });

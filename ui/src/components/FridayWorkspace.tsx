@@ -1,35 +1,33 @@
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bookmark, Expand, Minimize2, X } from "lucide-react";
+import { ArrowRight, Bookmark } from "lucide-react";
 import type { AgentConversationFocusData } from "@/lib/conversation-focus";
 import { fridayCanvases, fridayCanvasKey, savedFridayCanvases, type FridayCanvas } from "@/lib/friday-canvas";
 import { issuesApi } from "@/api/issues";
 import { queryKeys } from "@/lib/queryKeys";
-import { Link } from "@/lib/router";
 import { Button } from "./ui/button";
-import { FridayOrb } from "./FridayOrb";
-import { FridayVoiceControls, spokenReply } from "./FridayVoiceControls";
-import { PortfolioGalaxy } from "./PortfolioGalaxy";
-import type { Agent } from "@paperclipai/shared";
+import { FridayPresence } from "./FridayPresence";
+import { AgentOSCompanies, AgentOSDecisionPeek, AgentOSPortfolioMap, AgentOSScopedRecords, AgentOSWorkforceTable } from "./AgentOSPortfolio";
+import { AgentOSCompanyScope } from "./AgentOSCompanyScope";
+import { projectsApi } from "@/api/projects";
+import { agentsApi } from "@/api/agents";
+import type { Agent, Company } from "@paperclipai/shared";
 import type { FridayNavigation } from "../lib/friday-navigation";
 import { parseFridayView } from "../lib/friday-navigation";
-import { FridayAttention } from "./FridayAttention";
 import { FridayWork } from "./FridayWork";
 import { FridayTeam } from "./FridayTeam";
-import { FridayOperations } from "./FridayOperations";
 import { TaskAttachmentPanel } from "./task-side-panel/TaskAttachmentPanel";
 import { Workforce } from "../pages/Workforce";
 
 export type FridayPanel = FridayNavigation["panel"] | "portfolio";
-export function FridayWorkspace({ companyId, data, panel, setPanel, compact, connected, view, navigate, agents = [], assistantName = "Friday" }: {
+export function FridayWorkspace({ companyId, data, panel, setPanel, compact, connected, view, navigate, agents = [], companies = [], onConversation, onType, assistantName = "Friday" }: {
   companyId: string; data: AgentConversationFocusData; panel: FridayPanel;
   setPanel: (panel: FridayPanel) => void; compact: boolean; connected: boolean;
-  view?: FridayNavigation; navigate?: (view: FridayNavigation) => void; agents?: Agent[]; assistantName?: string;
+  view?: FridayNavigation; navigate?: (view: FridayNavigation) => void; agents?: Agent[]; companies?: Company[]; onConversation?: () => void; onType?: () => void; assistantName?: string;
 }) {
   const client = useQueryClient();
   const canvases = fridayCanvases(data.issueId, data.attachments, data.workProducts);
   const [selected, setSelected] = useState<string | null>(null);
-  const [expanded, setExpanded] = useState(false);
   const [previewStopped, setPreviewStopped] = useState(false);
   const [askError, setAskError] = useState("");
   const [viewError, setViewError] = useState("");
@@ -77,54 +75,44 @@ export function FridayWorkspace({ companyId, data, panel, setPanel, compact, con
   });
   const chosen = canvases.find(canvas => canvas.attachment.id === selected);
   const selectCanvas = (canvas: FridayCanvas) => { setSelected(canvas.attachment.id); setPreviewStopped(false); setPanel("canvas"); };
-  const unavailable = data.unavailable || !connected;
-  return <div className="friday-stage" data-panel={!!panel} data-expanded={expanded && !!panel}>
-    <div className="friday-presence">
-      <FridayVoiceControls compact speakReplies assistantName={assistantName} reply={data.reply} onTranscript={data.onTranscript} onVoiceMessage={data.onVoiceMessage} disabled={data.voiceDisabled || data.loading || data.unavailable}
-        renderPresence={voice => {
-          const state = voice.listening ? "listening" : voice.speaking ? "speaking" : data.awaitingInput ? "waiting" : unavailable ? "offline" : data.runStatus === "running" ? "thinking" : data.runStatus === "queued" ? "waiting" : "idle";
-          const status = voice.listening ? "Listening" : voice.speaking ? "Speaking" : voice.starting ? "Opening microphone" : data.awaitingInput ? "Your decision is needed below" : data.loading ? "Loading conversation" : data.unavailable ? "Connection interrupted" : !connected ? "Connect a subscription to begin" : data.runStatus === "running" ? "Working on your request" : data.runStatus === "queued" ? "Waiting to start" : "Ready when you are";
-          return <div className="friday-presence-identity">
-            <FridayOrb state={state} compact={compact || !!panel} label={voice.listening ? "Send voice message" : voice.starting ? "Cancel microphone" : `Talk to ${assistantName}`} onActivate={voice.toggleListening} disabled={!voice.canListen} />
-            <div className="space-y-2 text-center"><p className="friday-wordmark">{assistantName.toUpperCase()}</p><p className="text-sm text-muted-foreground" role="status">{status}</p></div>
-          </div>;
-        }} />
-      {!compact && !data.unavailable && data.reply && <div className="friday-latest-reply"><p className="text-sm">{spokenReply(data.reply.body).slice(0, 440)}{spokenReply(data.reply.body).length > 440 ? "…" : ""}</p><p className="mt-2 text-xs text-muted-foreground">Latest reply · open Conversation for the full response and links</p></div>}
-      {!compact && !data.reply && <p className="friday-prompt text-sm text-muted-foreground">Bring me a repository, an idea, or something that needs attention.</p>}
-      {!panel && <div className="flex flex-wrap justify-center gap-2"><Button variant="ghost" size="sm" onClick={() => data.onTranscript("I want to create a new task: ")}>New task</Button><Button variant="ghost" size="sm" onClick={() => data.onTranscript("I want to create a new project: ")}>New project</Button></div>}
-      {askError && <p role="alert" className="text-sm text-destructive">{askError}</p>}
-      {(viewError || requestedView.error) && <p role="alert" className="text-sm text-destructive">{viewError || requestedView.error?.message}</p>}
-      {!panel && navigate && <div className="friday-home-attention"><FridayAttention companyId={companyId} agents={agents} compact onProject={projectId => go({ panel: "work", projectId, mode: "combined" })} assistantName={assistantName} onAsk={text => void ask(text)} /><Button variant="ghost" size="sm" onClick={() => go({ panel: "attention" })}>Open attention dashboard</Button></div>}
-    </div>
-    {panel && <section className="friday-workspace" aria-label="Friday workspace">
-      <header className="flex flex-wrap items-center gap-2 border-b px-4 py-3">
-        <h2 className="min-w-0 flex-1 truncate text-sm font-medium">{panel === "workforce" ? "Portfolio & workforce" : panel === "portfolio" ? "Your applications and agents" : panel === "library" ? "Reusable displays" : panel === "work" ? "Work in motion" : panel === "attention" ? "Your attention dashboard" : panel === "team" || panel === "chat" ? "Your team" : panel === "activity" ? "Audit trail" : panel === "routines" ? "Operating loops" : panel === "artifacts" ? "Recorded outputs" : chosen?.product.title ?? "Canvas"}</h2>
-        <Button size="icon-sm" variant="ghost" aria-label={expanded ? "Reduce workspace" : "Expand workspace"} onClick={() => setExpanded(value => !value)}>{expanded ? <Minimize2 /> : <Expand />}</Button>
-        <Button size="icon-sm" variant="ghost" aria-label="Close workspace" onClick={() => { setPanel(null); setExpanded(false); }}><X /></Button>
-      </header>
-      {data.unavailable ? <p role="alert" className="p-4 text-sm">Refresh the conversation before displaying its content.</p> : panel === "portfolio" ? <div className="min-h-0 flex-1 overflow-auto p-4"><PortfolioGalaxy companyId={companyId} /></div>
-        : panel === "workforce" ? <div className="min-h-0 flex-1 overflow-auto p-4"><Workforce embedded /></div>
-        : panel && ["attention", "work", "team", "chat", "activity", "routines", "artifacts"].includes(panel) ? <div className="min-h-0 flex-1 overflow-auto p-4">
-          {panel === "attention" ? <FridayAttention key={nav.projectId ?? "all"} companyId={companyId} projectId={nav.projectId} agents={agents} onProject={projectId => go({ panel: "work", projectId, mode: "combined" })} assistantName={assistantName} onAsk={text => void ask(text)} />
-            : panel === "work" ? <FridayWork key={`${nav.projectId ?? ""}:${nav.agentId ?? ""}:${nav.applicationId ?? ""}`} companyId={companyId} agents={agents} view={nav} navigate={go} assistantName={assistantName} onAsk={text => void ask(text)} />
-              : panel === "team" || panel === "chat" ? <FridayTeam companyId={companyId} agents={agents} agentId={nav.agentId} navigate={go} />
-                : <FridayOperations key={`${panel}:${nav.projectId ?? ""}:${nav.agentId ?? ""}`} companyId={companyId} agents={agents} view={nav} assistantName={assistantName} onAsk={text => void ask(text)} />}
+  const scopeCompany = companies.find(company => company.id === nav.companyId);
+  const scopeId = scopeCompany?.id ?? companyId;
+  const scopeAgents = useQuery({ queryKey: queryKeys.agents.list(scopeId), queryFn: () => agentsApi.list(scopeId), enabled: scopeId !== companyId });
+  const roster = scopeId === companyId ? agents : scopeAgents.isSuccess ? scopeAgents.data : [];
+  const project = useQuery({ queryKey: queryKeys.projects.detail(nav.projectId ?? ""), queryFn: () => projectsApi.get(nav.projectId!), enabled: !!nav.projectId });
+  const visibleCompanies = scopeCompany ? [scopeCompany] : companies;
+  const scopedGo = (next: FridayNavigation) => go({ ...next, companyId: nav.companyId });
+  const title = panel === "work" ? nav.mode === "graph" ? "Agent Map" : nav.mode === "kanban" ? "Kanban" : project.data?.name ?? scopeCompany?.name ?? "Work in motion"
+    : panel === "attention" ? "Decisions" : panel === "team" || panel === "chat" ? "Workforce" : panel === "activity" ? "Audit trail" : panel === "routines" ? "Routines" : panel === "artifacts" ? "Artefacts" : panel === "workforce" ? "Workforce management" : panel === "library" ? "Saved displays" : chosen?.product.title ?? "Canvas";
+  const scopeTabs = [
+    ["Home", { panel: "work", mode: "combined" }], ["Kanban", { panel: "work", mode: "kanban" }], ["Agent Map", { panel: "work", mode: "graph" }],
+    ["Decisions", { panel: "attention" }], ["Routines", { panel: "routines" }], ["Artefacts", { panel: "artifacts" }],
+  ] as const;
+  return <div className="agentos-canvas-stage" data-panel={!!panel}>
+    {!panel && <div className="agentos-company-strip"><span className="agentos-eyebrow">Your portfolio</span>{companies.map(company => <button type="button" key={company.id} onClick={() => go({ panel: "work", companyId: company.id, mode: "combined" })}><span />{company.name}</button>)}</div>}
+    <FridayPresence data={data} connected={connected} docked={!!panel} assistantName={assistantName} onConversation={onConversation} onType={onType} />
+    {askError && <p role="alert" className="text-sm text-destructive">{askError}</p>}
+    {(viewError || requestedView.error || scopeAgents.error || project.error) && <p role="alert" className="text-sm text-destructive">{viewError || requestedView.error?.message || scopeAgents.error?.message || project.error?.message}</p>}
+    {!panel && <div className="agentos-home-content"><section className="agentos-home-intro"><h1>A little clarity. A lot in motion.</h1><p>Your companies, projects and people.<br />One conversation to move things forward.</p></section>
+      <div className="agentos-prompt-chips"><button type="button" onClick={() => go({ panel: "attention" })}>What needs me?</button><button type="button" onClick={() => go({ panel: "companies" })}>Show my companies</button><button type="button" onClick={() => go({ panel: "work", mode: "combined" })}>See work in motion</button></div>
+      <AgentOSDecisionPeek companies={companies} navigate={go} /><footer className="agentos-home-footer"><span>{companies.length} {companies.length === 1 ? "company" : "companies"} in your portfolio</span><button type="button" onClick={() => { data.onTranscript("I want to create a new project: "); onType?.(); }}>Start something new <ArrowRight /></button></footer>
+    </div>}
+    {panel && <section className="agentos-page" aria-label="Friday workspace">
+      {panel !== "companies" && <><div className="agentos-breadcrumbs"><button type="button" onClick={() => go({ panel: "companies" })}>Portfolio</button>{scopeCompany && <><span>/</span><button type="button" onClick={() => go({ panel: "work", companyId: scopeCompany.id, mode: "combined" })}>{scopeCompany.name}</button></>}{nav.projectId && <><span>/</span><button type="button" onClick={() => scopedGo({ panel: "work", projectId: nav.projectId, mode: "combined" })}>{project.data?.name ?? "Project"}</button></>}</div>
+        <div className="agentos-page-heading"><div><p className="agentos-eyebrow">{nav.projectId ? "Project workspace" : scopeCompany ? "Company workspace" : "Across your portfolio"}</p><h1>{title}</h1><p>{panel === "work" && nav.mode === "graph" ? "Every point is a record. Follow the people, handoffs and work behind it." : panel === "team" ? "Your digital employees. Skills, assignments and execution profiles, together." : panel === "attention" ? "The decisions and blockers that need you, with their context intact." : scopeCompany?.description ?? "A clear view of the work and the people moving it forward."}</p></div>
+          {panel === "team" && <Button variant="outline" onClick={() => go({ panel: "workforce" })}>Manage shared workforce</Button>}
         </div>
-        : panel === "canvas" && chosen && data.issueId ? <>
-          <div className="flex flex-wrap items-center gap-2 border-b px-4 py-2">
-            <Button size="sm" variant="ghost" disabled={saved.has(chosen.attachment.id) || save.isPending || documents.isPending || documents.isError} onClick={() => save.mutate(chosen)}><Bookmark />{saved.has(chosen.attachment.id) ? "Saved for reuse" : "Save for reuse"}</Button>
-            <Button size="sm" variant="ghost" onClick={() => setPreviewStopped(value => !value)}>{previewStopped ? "Resume preview" : "Stop preview"}</Button>
-            <Button size="sm" variant="ghost" onClick={() => setPanel("library")}>All displays</Button>
-            <span className="text-xs text-muted-foreground">Isolated preview · {new Date(chosen.attachment.createdAt).toLocaleString()}</span>
-          </div>
-          {previewStopped ? <p className="p-4 text-sm">Preview stopped.</p> : <TaskAttachmentPanel key={chosen.attachment.id} issueId={data.issueId} attachmentId={chosen.attachment.id} />}
-        </> : <div className="min-h-0 flex-1 space-y-4 overflow-auto p-4">
-          <p className="text-sm text-muted-foreground">Ask Friday for a chart, report, calculator, or interactive view. It appears here when she publishes it. Saved displays stay available in this conversation.</p>
-          {canvases.length === 0 && <p className="text-sm">No displays published yet.</p>}
-          {canvases.map(canvas => <button type="button" key={canvas.product.id} onClick={() => selectCanvas(canvas)} className="flex w-full items-center justify-between gap-3 rounded-lg border p-3 text-left hover:bg-accent"><span className="text-sm">{canvas.product.title}</span><span className="text-xs text-muted-foreground">{saved.has(canvas.attachment.id) ? "Saved" : "Open"}</span></button>)}
-          <Link to="/projects" className="block text-sm text-primary">Open all projects →</Link>
-        </div>}
-      {(save.error || documents.error) && <p role="alert" className="p-3 text-sm text-destructive">{save.error?.message ?? documents.error?.message}</p>}
+        {scopeCompany && !["team", "chat", "workforce", "activity"].includes(panel) && <nav className="agentos-workspace-tabs" aria-label="Workspace views">{scopeTabs.map(([label, next]) => <button key={label} type="button" aria-current={panel === next.panel && (next.panel !== "work" || (nav.mode ?? "combined") === next.mode) ? "page" : undefined} onClick={() => go({ ...next, companyId: nav.companyId, projectId: nav.projectId })}>{label}</button>)}</nav>}
+      </>}
+      {panel === "companies" ? <AgentOSCompanies companies={companies} navigate={go} onCreate={() => { data.onTranscript("I want to create a new company: "); onType?.(); }} />
+        : panel === "workforce" ? <Workforce embedded />
+        : panel === "work" ? !scopeCompany && nav.mode === "graph" ? <AgentOSPortfolioMap companies={companies} navigate={go} />
+          : visibleCompanies.map(company => <AgentOSCompanyScope key={company.id} company={company}><div className="agentos-company-work">{!scopeCompany && <div className="agentos-section-heading"><h2>{company.name}</h2><button type="button" onClick={() => go({ panel: "work", companyId: company.id, mode: "combined" })}>Open company <ArrowRight /></button></div>}<FridayWork key={[company.id, nav.projectId, nav.applicationId, nav.agentId].join(":")} companyId={company.id} agents={roster} view={{ ...nav, companyId: company.id }} navigate={next => go({ ...next, companyId: company.id })} onAsk={text => void ask(text)} assistantName={assistantName} /></div></AgentOSCompanyScope>)
+        : panel === "team" || panel === "chat" ? nav.agentId ? scopeCompany ? <AgentOSCompanyScope company={scopeCompany}><FridayTeam companyId={scopeId} agents={roster} agentId={nav.agentId} navigate={scopedGo} /></AgentOSCompanyScope> : <FridayTeam companyId={scopeId} agents={roster} agentId={nav.agentId} navigate={scopedGo} /> : <AgentOSWorkforceTable companies={visibleCompanies} navigate={go} />
+        : ["attention", "activity", "routines", "artifacts"].includes(panel) ? visibleCompanies.map(company => <AgentOSScopedRecords key={`${company.id}:${panel}:${nav.projectId ?? ""}`} company={company} view={nav} navigate={go} onAsk={text => void ask(text)} />)
+        : panel === "canvas" && chosen && data.issueId ? <><div className="flex flex-wrap items-center gap-2 pb-4"><Button size="sm" variant="outline" disabled={saved.has(chosen.attachment.id) || save.isPending || documents.isPending || documents.isError} onClick={() => save.mutate(chosen)}><Bookmark />{saved.has(chosen.attachment.id) ? "Saved for reuse" : "Save for reuse"}</Button><Button size="sm" variant="ghost" onClick={() => setPreviewStopped(value => !value)}>{previewStopped ? "Resume preview" : "Stop preview"}</Button><Button size="sm" variant="ghost" onClick={() => setPanel("library")}>All displays</Button></div>{previewStopped || data.unavailable ? <p className="text-sm">Preview stopped. Refresh the conversation to continue.</p> : <TaskAttachmentPanel key={chosen.attachment.id} issueId={data.issueId} attachmentId={chosen.attachment.id} />}</>
+        : <div className="space-y-4"><p className="text-sm text-muted-foreground">Ask Friday for a chart, report, calculator or interactive view. Saved displays remain available in this conversation.</p>{!canvases.length && <p className="agentos-empty">No displays published yet.</p>}{canvases.map(canvas => <button type="button" key={canvas.product.id} onClick={() => selectCanvas(canvas)} className="friday-work-task"><span>{canvas.product.title}</span><span className="text-xs text-muted-foreground">{saved.has(canvas.attachment.id) ? "Saved" : "Open"}</span></button>)}</div>}
+      {(save.error || documents.error) && <p role="alert" className="text-sm text-destructive">{save.error?.message ?? documents.error?.message}</p>}
     </section>}
   </div>;
 }

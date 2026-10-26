@@ -1,4 +1,5 @@
 import { TaskChatShimmerScope } from "@/components/task-chat/TaskChatShimmer";
+import { FridayConversationPanel } from "./FridayConversationPanel";
 import { CommentSubmissionUnknownError } from "../lib/comment-submit-result";
 import {
   ISSUE_DETAIL_CONTENT_PAINT_MARK,
@@ -3057,6 +3058,7 @@ export function TaskChatThread(props: TaskChatThreadProps) {
                 loading: historyPending,
               })}
             </div>}
+            <FridayConversationPanel focus={focusView} open={showHistory || !collapseComposer} required={!!focusView && ((showHistory && !focusView.showTranscript) || (!collapseComposer && !!focusView.composerCollapsed))}>
             <div
               hidden={!showHistory}
               className={cn(
@@ -3271,7 +3273,7 @@ export function TaskChatThread(props: TaskChatThreadProps) {
                       <TaskChatTurnStatusIsland model={tailTurnStatus} />
                     ) : null}
                     <RunnerGoalWidget control={runnerGoal} />
-                    {focusView?.composerCollapsed !== undefined && <div className="friday-type-toggle">
+                    {focusView?.composerCollapsed !== undefined && !focusView.canvas && <div className="friday-type-toggle">
                       <Button type="button" variant="ghost" size="sm" onClick={() => {
                         if (collapseComposer) {
                           focusView.onExpandComposer?.();
@@ -3384,6 +3386,7 @@ export function TaskChatThread(props: TaskChatThreadProps) {
                 ) : null}
               </TaskChatComposerDock>
             ) : null}
+            </FridayConversationPanel>
           </div>
         </TaskChatPresentationProvider>
       </TaskChatScrollReady.Provider>

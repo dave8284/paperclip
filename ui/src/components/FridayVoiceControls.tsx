@@ -19,12 +19,13 @@ export function spokenReply(text: string) {
 
 /** Microphone activation is explicit. Voice turns use the native sender, with
  * recoverable draft fallback; legacy dictation can remain draft-only. */
-export function FridayVoiceControls({ onTranscript, reply, disabled = false, renderPresence, compact = false, speakReplies = false, onVoiceMessage, assistantName = "Friday" }: {
+export function FridayVoiceControls({ onTranscript, reply, disabled = false, renderPresence, compact = false, minimal = false, speakReplies = false, onVoiceMessage, assistantName = "Friday" }: {
   assistantName?: string;
   onTranscript: (text: string) => void;
   reply?: { id: string; body: string; createdAt?: Date | string };
   disabled?: boolean;
   compact?: boolean;
+  minimal?: boolean;
   speakReplies?: boolean;
   onVoiceMessage?: (text: string) => Promise<void>;
   renderPresence?: (voice: { listening: boolean; speaking: boolean; starting: boolean; canListen: boolean; toggleListening: () => void }) => ReactNode;
@@ -148,13 +149,13 @@ export function FridayVoiceControls({ onTranscript, reply, disabled = false, ren
   </>;
   return <div className={compact ? "friday-voice" : "space-y-2"} aria-label={`${assistantName} voice controls`}>
     {renderPresence?.({ listening, speaking, starting, canListen: !!RecognitionClass && !disabled && !sending, toggleListening })}
-    <div className="flex flex-wrap items-center gap-2">
+    {!minimal && <div className="flex flex-wrap items-center gap-2">
       <Button type="button" size="sm" variant={listening ? "default" : "outline"} disabled={!RecognitionClass || disabled || sending} onClick={toggleListening}>{listening || starting ? <MicOff /> : <Mic />}{sending ? "Sending…" : listening ? onVoiceMessage ? "Send voice message" : "Stop listening" : starting ? "Cancel microphone" : `Talk to ${assistantName}`}</Button>
       <Button type="button" variant="outline" size="sm" disabled={!synthesis || !reply} onClick={() => reply && speak(reply.body)}><Volume2 />Read reply</Button>
       {compact && <Button type="button" variant="ghost" size="sm" disabled={!synthesis} aria-pressed={autoSpeak} onClick={() => { setAutoSpeak(value => !value); speakSince.current = Date.now(); if (autoSpeak) stopSpeaking(); }}>{autoSpeak ? "Mute replies" : "Unmute replies"}</Button>}
       {speaking && <Button type="button" variant="outline" size="sm" onClick={stopSpeaking}><Square />Stop speaking</Button>}
-    </div>
-    {compact ? <details className="friday-voice-settings"><summary className="cursor-pointer text-xs text-muted-foreground">Voice settings</summary><div className="space-y-2 pt-2">{preferences}</div></details> : preferences}
+    </div>}
+    {compact ? <details className="friday-voice-settings"><summary className="cursor-pointer text-xs text-muted-foreground">Voice settings</summary><div className="space-y-2 pt-2">{preferences}{minimal && <Button type="button" variant="outline" size="sm" disabled={!synthesis || !reply} onClick={() => speaking ? stopSpeaking() : reply && speak(reply.body)}><Volume2 />{speaking ? "Stop speaking" : "Read reply"}</Button>}</div></details> : preferences}
     {compact && !RecognitionClass && <p className="text-xs text-muted-foreground">Voice input is unavailable in this browser. You can still type and listen to replies.</p>}
     {onVoiceMessage && listening && <p className="text-xs text-muted-foreground">Tap the orb again to send when you finish speaking.</p>}
     {interim && <p role="status" className="text-sm text-muted-foreground">{interim}</p>}

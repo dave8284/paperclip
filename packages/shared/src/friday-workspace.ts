@@ -13,7 +13,8 @@ export const fridayWorkQuerySchema = z.object({
 export type FridayWorkQuery = z.infer<typeof fridayWorkQuerySchema>;
 export const fridayViewSchema = z.object({
   version: z.literal(1),
-  panel: z.enum(["attention", "work", "workforce", "team", "chat", "activity", "routines", "artifacts"]),
+  panel: z.enum(["companies", "attention", "work", "workforce", "team", "chat", "activity", "routines", "artifacts"]),
+  companyId: z.string().uuid().optional(),
   projectId: z.string().uuid().optional(),
   applicationId: z.string().uuid().optional(),
   agentId: z.string().uuid().optional(),

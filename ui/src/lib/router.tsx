@@ -27,10 +27,19 @@ function resolveTo(to: To, companyPrefix: string | null): To {
   return to;
 }
 
+const CompanyRoutePrefix = React.createContext<string | null>(null);
+/** Embedded portfolio records retain their owning company's deep links. */
+export function CompanyRouteScope({ companyPrefix, children }: { companyPrefix: string; children: React.ReactNode }) {
+  return <CompanyRoutePrefix.Provider value={normalizeCompanyPrefix(companyPrefix)}>{children}</CompanyRoutePrefix.Provider>;
+}
+
 export function useActiveCompanyPrefix(): string | null {
+  const scopedPrefix = React.useContext(CompanyRoutePrefix);
   const { selectedCompany } = useCompany();
   const params = RouterDom.useParams<{ companyPrefix?: string }>();
   const location = RouterDom.useLocation();
+
+  if (scopedPrefix) return scopedPrefix;
 
   if (params.companyPrefix) {
     return normalizeCompanyPrefix(params.companyPrefix);

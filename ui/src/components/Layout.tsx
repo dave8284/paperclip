@@ -7,6 +7,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 import { useQuery } from "@tanstack/react-query";
 import { Outlet, useLocation, useNavigate, useNavigationType, useParams } from "@/lib/router";
 import { Sidebar } from "./Sidebar";
+import { AgentOSNativeFrame } from "./AgentOSNativeFrame";
 import { CompanySettingsSidebar } from "./CompanySettingsSidebar";
 import { CompanySettingsNav } from "./access/CompanySettingsNav";
 import { AppsSidebar } from "./AppsSidebar";
@@ -571,6 +572,20 @@ export function Layout({ sidebarSections }: { sidebarSections?: ReactNode }) {
       resetNavigationScroll(main);
     }
   }, [location.key, location.pathname, location.state, navigationType]);
+
+  // Keep the upstream shell available for explicit compatibility checks.
+  const classicShell = new URLSearchParams(location.search).get("shell") === "classic";
+  if (!designSandbox && !classicShell) return <ChatSetupSidebarProvider>
+    <div className="agentos-root-frame">
+      <a href="#main-content" className="sr-only focus:not-sr-only">Skip to main content</a>
+      <DevRestartBanner devServer={health?.devServer} />
+      <main id="main-content" ref={mainContentRef} tabIndex={-1} className="agentos-root-scroll">
+        {hasUnknownCompanyPrefix ? <NotFoundPage scope="invalid_company_prefix" requestedPrefix={companyPrefix ?? selectedCompany?.issuePrefix} /> : <RouteErrorBoundary>{isFridayRoute ? <Outlet /> : <AgentOSNativeFrame context={secondarySidebar} properties={<PropertiesPanel taskDetailLayout={false} />}><Outlet /></AgentOSNativeFrame>}</RouteErrorBoundary>}
+      </main>
+      <CommandPalette /><BoardDialogs /><KeyboardShortcutsCheatsheet open={shortcutsOpen} onOpenChange={setShortcutsOpen} /><ToastViewport />
+      <PluginAppShellOverlays localTrusted={health?.deploymentMode === "local_trusted"} />
+    </div>
+  </ChatSetupSidebarProvider>;
 
   return (
     <ChatSetupSidebarProvider>

@@ -9,8 +9,9 @@ import { tenantSignInReturnPath } from "@/lib/cloudLinks";
 import { queryKeys } from "../lib/queryKeys";
 import { getRememberedInvitePath } from "../lib/invite-memory";
 import { Button } from "@/components/ui/button";
+import { AgentOSBrand } from "@/components/AgentOSBrand";
 import { FridayOrb } from "@/components/FridayOrb";
-import { PaperclipLoading } from "@/components/AnimatedPaperclipIcon";
+import { AgentOSLoading } from "@/components/AgentOSLoading";
 import { useTheme } from "@/context/ThemeContext";
 import { administrationApi } from "@/api/administration";
 import { navigateTopLevel } from "@/lib/browserNavigation";
@@ -94,7 +95,7 @@ export function AuthPage() {
   if (healthQuery.isLoading || isSessionLoading || session) {
     return (
       <div className="fixed inset-0 flex items-center justify-center">
-        <PaperclipLoading className="min-h-0" />
+        <AgentOSLoading className="min-h-0" />
       </div>
     );
   }
@@ -110,7 +111,7 @@ export function AuthPage() {
 
   if (healthQuery.data?.deploymentMode === "local_trusted") {
     return <main className="mx-auto flex min-h-dvh max-w-lg flex-col justify-center gap-5 px-6">
-      <Link to="/welcome" className="text-lg font-semibold">Agent OS</Link>
+      <AgentOSBrand to="/welcome" />
       <h1 className="text-2xl font-medium">Your local workspace is ready.</h1>
       <p className="text-sm leading-relaxed text-muted-foreground">This development instance trusts your device. Registration and Google sign-in become available when authenticated mode is configured.</p>
       <div><Button asChild><Link to="/workspace">Open workspace</Link></Button></div>
@@ -122,12 +123,12 @@ export function AuthPage() {
   }
 
   return (
-    <div className="fixed inset-0 flex bg-background">
+    <div className="agentos-public fixed inset-0 flex bg-background">
       {/* Left half — form */}
       <div className="w-full md:w-1/2 flex flex-col overflow-y-auto">
         <div className="w-full max-w-md mx-auto my-auto px-8 py-12">
           <div className="mb-8">
-            <Link to="/welcome" className="text-lg font-semibold tracking-tight">Agent OS</Link>
+            <AgentOSBrand to="/welcome" />
           </div>
 
           <h1 className="text-xl font-semibold">

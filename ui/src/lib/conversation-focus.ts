@@ -10,6 +10,9 @@ export interface ConversationFocusState {
   loading: boolean;
 }
 export interface ConversationFocusView {
+  canvas?: boolean;
+  docked?: boolean;
+  onClose?: () => void;
   assistantName?: string;
   showTranscript: boolean;
   composerCollapsed?: boolean;
@@ -27,6 +30,9 @@ export interface AgentConversationFocusData extends ConversationFocusState {
   voiceDisabled: boolean;
 }
 export interface AgentConversationFocusView {
+  canvas?: boolean;
+  docked?: boolean;
+  onClose?: () => void;
   assistantName?: string;
   showTranscript: boolean;
   composerCollapsed?: boolean;

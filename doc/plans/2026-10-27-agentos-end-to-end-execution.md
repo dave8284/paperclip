@@ -34,12 +34,28 @@ This is the master plan for the next implementation. It consolidates the [operat
 | --- | --- | --- |
 | Paperclip foundation | Native companies, agents, tasks, adapters, connections, execution, approvals, routines, artefacts, logs and recovery owners exist | Adapt their presentation and extend missing contracts without duplicating those owners |
 | Agent OS foundation | The fork contains application registration, Friday surfaces, portfolio/shared-employee/company-assignment records, scoped workforce operations and related tests | Complete delegated portfolio/CEO authority, capability adoption, account-wide admission and full operating journeys |
-| Selected interface | The HTML preview demonstrates the chosen white layout, orb, navigation, scoped views, Kanban, coloured Agent Map and sample conversation | Port into the React application, connect native data/actions and qualify browser/voice behaviour |
+| Selected interface | The chosen white Friday canvas is now implemented in the React routes, with native company/project/decision records, board-only Kanban, coloured Agent Map, employee table and docked native conversation; see the correction checkpoint below | Qualify real-browser/mobile layout, microphone and audible replies; complete the remaining operating journeys |
 | Model Intelligence | Independent-product architecture and execution plan are documented | Implement the service, host integration, outcome evaluation and automatic policy improvement |
 | Registration and administration | Landing, approval state, Google auth wiring, account management, instance audit and recorded model analytics implemented; see [delivery notes](2026-10-27-agentos-registration-administration.md) | Configure the Google web client and domain, verify real sign-in/browser flows, then connect independent learning-service evidence and policy controls |
 | Production autonomy | Some component and integration evidence exists in historical checkpoints | Qualify real end-to-end workflows, provider access, restart/recovery, release and rollback on the release revision |
 
 The preview's Northstar, Forma and Arbor records are examples. They are not live companies or execution evidence. Previous component tests do not certify the final interface or production integrations. The current browser integration failure must be resolved before claiming visual, microphone and audible-reply acceptance.
+
+### Production UI correction — 27 October 2026
+
+The registration/admin delivery left the approved design in the HTML preview and retained the upstream navigation shell. The public landing page also inherited the application's document scroll lock. This checkpoint corrects that gap directly in the application repository.
+
+- Public pages can scroll. Authenticated workspaces own a bounded, scrollable canvas instead of relying on the public document lock.
+- The default application shell is Agent OS regardless of the upstream Streamlined UI setting. Native record/settings pages retain their controls and company context inside the new navigation. The upstream shell remains an explicit `?shell=classic` compatibility path.
+- Friday Home uses the approved white canvas, dotted orb, company shortcuts and automatically surfaced decisions/blockers. Company cards open the centre canvas; project cards open scoped workspaces. Home, Kanban, Agent Map, Decisions, Routines and Artefacts retain company/project filters. Audit navigation remains visible. The employee table opens the existing profiles, skills, configuration and direct chat.
+- The portfolio graph combines real company/project/agent/task/evidence records. Colours distinguish record types and states; pan/zoom and native record selection remain available. Partial pages and unavailable data are labelled, without invented activity.
+- Talk uses the existing speech controls without opening a modal. The crossed-out microphone represents listening being off. Prefer to type opens a rounded conversation at the left of Home; workspace navigation docks Friday at the right. History, drafts, approval controls and sending remain owned by the native conversation. Native settings/record pages also expose the durable Friday conversation through a dock.
+- Shared company context and route-prefix scopes keep embedded record links associated with their owning company; the URL of the portfolio coordinator does not override them. These presentation scopes grant no new authority.
+- Browser title, manifest, favicon, loading, sign-in and bootstrap copy use Agent OS. Technical package names and external provider identities remain intact.
+
+Verification: workspace build/typecheck passed, Storybook built, and 455 targeted tests across 16 files passed, including native chat, portfolio journeys, both legacy feature-flag states, company routing and access gates. Token gates and diff checks also passed. Browser integration still fails before starting (`missing field sandboxPolicy`), so these checks do not certify the rendered visual match or actual audio. The prior incomplete broad-suite run and its isolated heartbeat failures remain recorded in the registration/admin delivery notes; this checkpoint does not claim a full-suite pass.
+
+This UI correction does not complete the independent learning service, cloud deployment or every autonomous company workflow in the plan.
 
 ## 3. Company and work structure
 

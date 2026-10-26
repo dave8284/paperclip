@@ -1,23 +1,27 @@
 import type { Agent, FridayWork } from "@paperclipai/shared";
 import { galaxyPoint } from "./galaxy-layout";
 
-export type FridayGraphNode = { id: string; recordId: string; kind: "application" | "project" | "agent" | "task" | "comment" | "artifact"; title: string;
+export type FridayGraphNode = { id: string; recordId: string; kind: "company" | "application" | "project" | "agent" | "task" | "comment" | "artifact"; title: string;
   x: number; y: number; taskId?: string; status?: string; running?: boolean };
 export type FridayGraphEdge = { id: string; from: string; to: string; kind: "contains" | "lead" | "assignment" | "creation" | "subtask" | "message" | "output" | "handoff"; label: string; active?: boolean; taskId?: string };
 
 /** Every point and relationship comes from an authorized source record. */
-export function fridayGraph(data: FridayWork, agents: Agent[], running: ReadonlySet<string>) {
+export function fridayGraph(data: FridayWork, agents: Agent[], running: ReadonlySet<string>, companies: Array<{ id: string; name: string; projectIds: string[] }> = []) {
   const nodes = new Map<string, FridayGraphNode>();
   const edges: FridayGraphEdge[] = [];
   const add = (node: FridayGraphNode) => nodes.set(node.id, node);
   const connect = (edge: FridayGraphEdge) => edges.push(edge);
   const projectApps = new Map(data.applications.flatMap(app => app.projectIds.map(id => [id, app.id] as const)));
+  const projectCompanies = new Map(companies.flatMap(company => company.projectIds.map(id => [id, company.id] as const)));
+  for (const company of companies) add({ id: `company:${company.id}`, recordId: company.id, kind: "company", title: company.name, ...galaxyPoint(company.id, 250) });
   for (const app of data.applications) add({ id: `application:${app.id}`, recordId: app.id, kind: "application", title: app.name, ...galaxyPoint(app.id, 320) });
   for (const project of data.projects) {
     const app = nodes.get(`application:${projectApps.get(project.id)}`);
-    const position = data.projects.length === 1 ? { x: 500, y: 300 } : galaxyPoint(project.id, app ? 95 : 230, app);
+    const company = nodes.get(`company:${projectCompanies.get(project.id)}`);
+    const position = company ? galaxyPoint(project.id, 90, company) : data.projects.length === 1 ? { x: 500, y: 300 } : galaxyPoint(project.id, app ? 95 : 230, app);
     add({ id: `project:${project.id}`, recordId: project.id, kind: "project", title: project.name, status: project.status, ...position });
     if (app) connect({ id: `contains:${app.id}:${project.id}`, from: app.id, to: `project:${project.id}`, kind: "contains", label: "Application initiative" });
+    if (company) connect({ id: `company-project:${project.id}`, from: company.id, to: `project:${project.id}`, kind: "contains", label: "Company project" });
     if (project.leadAgentId) connect({ id: `lead:${project.id}`, from: `agent:${project.leadAgentId}`, to: `project:${project.id}`, kind: "lead", label: "Project lead" });
   }
   const involvedAgents = new Set([...data.assignments.map(row => row.agentId), ...data.projects.flatMap(project => project.leadAgentId ? [project.leadAgentId] : []),

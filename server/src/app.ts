@@ -244,6 +244,7 @@ const VITE_DEV_ASSET_PREFIXES = [
   "/src/",
 ];
 const VITE_DEV_STATIC_PATHS = new Set([
+  "/agentos-mark.svg",
   "/apple-touch-icon.png",
   "/favicon-16x16.png",
   "/favicon-32x32.png",

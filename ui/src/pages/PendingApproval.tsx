@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { AgentOSBrand } from "@/components/AgentOSBrand";
 import { Clock3 } from "lucide-react";
 import { Link, Navigate } from "@/lib/router";
 import { administrationApi, registrationKey } from "@/api/administration";
@@ -16,7 +17,7 @@ export function PendingApproval() {
   if (state.data?.status === "anonymous") return <Navigate to="/auth" replace />;
   const pending = state.data?.status === "pending";
   return <main className="mx-auto flex min-h-dvh max-w-xl flex-col justify-center gap-6 px-6 py-12">
-    <Link to="/welcome" className="text-lg font-semibold">Agent OS</Link>
+    <AgentOSBrand to="/welcome" />
     <div className="space-y-5 rounded-2xl border border-border bg-card p-8">
       <Clock3 className="size-7 text-muted-foreground" />
       <h1 className="text-2xl font-medium">{state.isPending ? "Checking your account…" : state.error ? "Unable to check access" : pending ? "You're on the list." : "Your account is not active."}</h1>
