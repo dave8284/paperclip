@@ -49,6 +49,7 @@ import {
 } from "./ui/dropdown-menu";
 import { AttentionInteractionResolver } from "./AttentionInteractionResolver";
 import { DecisionResolver } from "./DecisionResolver";
+import { DecisionPresentation } from "./DecisionPresentation";
 import { StalledReviewActions } from "./StalledReviewActions";
 import { readIssueReviewPolicyMetadata } from "../lib/review-policy";
 
@@ -99,6 +100,8 @@ interface AttentionQueueRowProps {
   selected?: boolean;
   /** Agent OS opens every decision in place, with native resolvers intact. */
   inlineDetail?: ReactNode;
+  /** Agent OS keeps native decision controls visible without an expand step. */
+  presentation?: "classic" | "agentos";
 }
 
 /**
@@ -124,7 +127,9 @@ export const AttentionQueueRow = memo(function AttentionQueueRow({
   userLabelMap,
   selected = false,
   inlineDetail,
+  presentation = "classic",
 }: AttentionQueueRowProps) {
+  const agentOS = presentation === "agentos";
   const meta = sourceMeta(item.sourceKind);
   // Colour + glyph are borrowed wholesale from the task status system, so a
   // blocking decision reads exactly like a blocked task (DESIGN.md principle 5).
@@ -373,7 +378,7 @@ export const AttentionQueueRow = memo(function AttentionQueueRow({
                   Accept sitting alone asks for a decision without saying whose
                   it is (PAP-17287). */}
               {audience && <InteractionAudienceLine audience={audience} variant="compact" />}
-              {inline && renderFooter({ compact: true })}
+              {inline && !agentOS && renderFooter({ compact: true })}
             </div>
           </CollapsibleContent>
         </Collapsible>
@@ -391,7 +396,7 @@ export const AttentionQueueRow = memo(function AttentionQueueRow({
             {inlineDetail}
             {hasImages && <ExpandedImages images={images} issueHref={issueHref} />}
             {triageEnabled && <DecisionTriageStrip item={item} companyId={companyId} agents={agents} />}
-            {inline && (
+            {inline && !agentOS && (
               <InlineResolver
                 item={item}
                 companyId={companyId}
@@ -404,6 +409,11 @@ export const AttentionQueueRow = memo(function AttentionQueueRow({
           </div>
         </CollapsibleContent>
       </Collapsible>
+
+      {inline && agentOS && (
+        <DecisionPresentation value="approval"><InlineResolver item={item} companyId={companyId} agentMap={agentMap}
+          currentUserId={currentUserId} userLabelMap={userLabelMap} toggle={toggle} agentOS /></DecisionPresentation>
+      )}
 
       {/* A non-inline row keeps one footer across both states — its Open or
           Restore button and its toggle are the same control either way, so it
@@ -759,6 +769,7 @@ function InlineResolver({
   currentUserId,
   userLabelMap,
   toggle,
+  agentOS = false,
 }: {
   item: AttentionItem;
   companyId: string;
@@ -766,6 +777,7 @@ function InlineResolver({
   currentUserId?: string | null;
   userLabelMap?: ReadonlyMap<string, string> | null;
   toggle: ReactNode;
+  agentOS?: boolean;
 }) {
   if (item.sourceKind === "decision") {
     return (
@@ -774,6 +786,7 @@ function InlineResolver({
         decisionId={item.subject.id}
         originIssue={item.relatedIssue}
         agentMap={agentMap}
+        actionLabels={agentOS ? "approval" : "native"}
       />
     );
   }
@@ -799,11 +812,11 @@ function InlineResolver({
   }
 
   if (item.sourceKind === "approval") {
-    return <ApprovalResolver item={item} companyId={companyId} toggle={toggle} />;
+    return <ApprovalResolver item={item} companyId={companyId} toggle={toggle} agentOS={agentOS} />;
   }
 
   if (item.sourceKind === "join_request") {
-    return <JoinRequestResolver item={item} companyId={companyId} toggle={toggle} />;
+    return <JoinRequestResolver item={item} companyId={companyId} toggle={toggle} agentOS={agentOS} />;
   }
 
   if (item.sourceKind === "review") {
@@ -832,7 +845,7 @@ function ResolverFooter({ toggle, children }: { toggle: ReactNode; children: Rea
   );
 }
 
-function ApprovalResolver({ item, companyId, toggle }: { item: AttentionItem; companyId: string; toggle: ReactNode }) {
+function ApprovalResolver({ item, companyId, toggle, agentOS = false }: { item: AttentionItem; companyId: string; toggle: ReactNode; agentOS?: boolean }) {
   const queryClient = useQueryClient();
   const [note, setNote] = useState("");
   const invalidate = () => {
@@ -870,18 +883,19 @@ function ApprovalResolver({ item, companyId, toggle }: { item: AttentionItem; co
         </Button>
         <Button size="sm" variant="destructive" onClick={() => reject.mutate()} disabled={pending}>
           {reject.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-          Reject
+          {agentOS ? "Disapprove" : "Reject"}
         </Button>
         <Button size="sm" onClick={() => approve.mutate()} disabled={pending}>
           {approve.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
           Approve
         </Button>
       </ResolverFooter>
+      {(approve.error || reject.error || revise.error) && <p role="alert" className="text-sm text-destructive">{approve.error?.message ?? reject.error?.message ?? revise.error?.message}</p>}
     </>
   );
 }
 
-function JoinRequestResolver({ item, companyId, toggle }: { item: AttentionItem; companyId: string; toggle: ReactNode }) {
+function JoinRequestResolver({ item, companyId, toggle, agentOS = false }: { item: AttentionItem; companyId: string; toggle: ReactNode; agentOS?: boolean }) {
   const queryClient = useQueryClient();
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: queryKeys.attention(companyId) });
@@ -898,15 +912,16 @@ function JoinRequestResolver({ item, companyId, toggle }: { item: AttentionItem;
   const pending = approve.isPending || reject.isPending;
 
   return (
-    <ResolverFooter toggle={toggle}>
+    <><ResolverFooter toggle={toggle}>
       <Button size="sm" variant="destructive" onClick={() => reject.mutate()} disabled={pending}>
         {reject.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-        Reject
+        {agentOS ? "Disapprove" : "Reject"}
       </Button>
       <Button size="sm" onClick={() => approve.mutate()} disabled={pending}>
         {approve.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
         Approve
       </Button>
     </ResolverFooter>
+    {(approve.error || reject.error) && <p role="alert" className="text-sm text-destructive">{approve.error?.message ?? reject.error?.message}</p>}</>
   );
 }

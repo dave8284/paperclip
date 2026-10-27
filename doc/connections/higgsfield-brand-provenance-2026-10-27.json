@@ -1,0 +1,14 @@
+{
+  "retrievedAt": "2026-10-27",
+  "providers": [
+    {
+      "slug": "higgsfield",
+      "provider": "Higgsfield",
+      "localAsset": "/brands/apps/higgsfield.png",
+      "sourceUrl": "https://higgsfield.ai/icon.png",
+      "linkedFrom": "https://higgsfield.ai/mcp",
+      "sha256": "77edee005ae63f7881f930b815392b6cfa607f960ffb419d1c9df52e37fd50c1",
+      "note": "Official 192×192 PNG, retained without modification."
+    }
+  ]
+}

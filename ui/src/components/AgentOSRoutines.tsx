@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
+import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Agent, RoutineListItem } from "@paperclipai/shared";
 import { routinesApi } from "@/api/routines";
 import { projectsApi } from "@/api/projects";
@@ -8,6 +8,9 @@ import { queryKeys } from "@/lib/queryKeys";
 import { fridayKey } from "@/api/friday";
 import { Link } from "@/lib/router";
 import { MarkdownBody } from "./MarkdownBody";
+import { RoutineWorkflow } from "./RoutineWorkflow";
+import { RoutineWorkflowEditor } from "./RoutineWorkflowEditor";
+import { setFridayDisplaySelection } from "@/lib/friday-display-context";
 import { Button } from "./ui/button";
 
 export function AgentOSRoutines({ companyId, projectId, agentId, agents, onAsk }: { companyId: string; projectId?: string; agentId?: string; agents: Agent[]; onAsk: (text: string) => void }) {
@@ -41,24 +44,30 @@ export function AgentOSRoutines({ companyId, projectId, agentId, agents, onAsk }
     {!rows.length && !routines.isPending && <p className="agentos-empty">No loops in this scope yet.</p>}
     <div className="agentos-project-grid">{rows.map(routine => <button type="button" className="agentos-loop-card" key={routine.id} aria-pressed={selected === routine.id} onClick={() => setSelected(routine.id)}><div className="flex justify-between gap-3"><span className="agentos-eyebrow">Operating loop</span><span className="agentos-pill">{routine.status}</span></div><h3>{routine.title}</h3><p>{agents.find(agent => agent.id === routine.assigneeAgentId)?.name ?? "Unassigned"}</p><div className="agentos-loop-mini" aria-hidden="true"><span data-active={!!routine.activeIssue}>Work</span><i>→</i><span>Evidence</span><i>↻</i><span>Next trigger</span></div><p>{routine.activeIssue ? `${routine.activeIssue.identifier ?? "Current task"} · ${routine.activeIssue.status.replaceAll("_", " ")}` : routine.lastRun ? `Last cycle: ${routine.lastRun.status.replaceAll("_", " ")}` : "No cycles yet"}</p></button>)}</div>
     {!!related.length && <section className="space-y-2" aria-label="Related operating loops"><h3 className="text-sm font-semibold">Loops with the same parent task</h3><p className="text-xs text-muted-foreground">These loops share an objective. Each keeps its own trigger and recorded cycles.</p><div className="flex flex-wrap gap-2">{related.map(routine => <Button key={routine.id} variant="outline" onClick={() => setSelected(routine.id)}>{routine.title}</Button>)}</div></section>}
-    {chosen && <RoutineLoop key={chosen.id} routine={chosen} onClose={() => setSelected(null)} onToggle={() => update.mutate({ id: chosen.id, status: chosen.status === "active" ? "paused" : "active" })} busy={update.isPending} onAsk={onAsk} />}
+    {chosen && <RoutineLoop key={chosen.id} routine={chosen} agents={agents} onClose={() => setSelected(null)} onToggle={() => update.mutate({ id: chosen.id, status: chosen.status === "active" ? "paused" : "active" })} busy={update.isPending} onAsk={onAsk} />}
   </div>;
 }
-function RoutineLoop({ routine, onClose, onToggle, busy, onAsk }: { routine: RoutineListItem; onClose: () => void; onToggle: () => void; busy: boolean; onAsk: (text: string) => void }) {
+function RoutineLoop({ routine, agents, onClose, onToggle, busy, onAsk }: { routine: RoutineListItem; agents: Agent[]; onClose: () => void; onToggle: () => void; busy: boolean; onAsk: (text: string) => void }) {
   const detail = useQuery({ queryKey: [...fridayKey(routine.companyId), "routine-detail", routine.id, routine.updatedAt], queryFn: () => routinesApi.get(routine.id) });
   const [cycle, setCycle] = useState<string | null>(null);
+  const [editor, setEditor] = useState<{ triggerId?: string } | null>(null);
   const runs = detail.data?.recentRuns ?? [];
   const current = runs.find(run => run.id === cycle) ?? runs[0];
   const taskId = current?.linkedIssueId ?? routine.activeIssue?.id;
+  useEffect(() => { setFridayDisplaySelection(routine.companyId, "routines", { routineId: routine.id, ...(current?.id ? { cycleId: current.id } : {}), ...(taskId ? { taskId } : {}) }); }, [routine.companyId, routine.id, current?.id, taskId]);
   const tasks = useQuery({ queryKey: [...fridayKey(routine.companyId), "routine-tasks", taskId], queryFn: () => issuesApi.list(routine.companyId, { parentId: taskId!, includeAgentCreatedTasks: true, limit: 100 }), enabled: !!taskId });
+  const root = useQuery({ queryKey: queryKeys.issues.detail(taskId ?? ""), queryFn: () => issuesApi.get(taskId!), enabled: !!taskId });
+  const childOutputs = useQueries({ queries: (tasks.data ?? []).slice(0, 30).map(task => ({ queryKey: queryKeys.issues.workProducts(task.id), queryFn: () => issuesApi.listWorkProducts(task.id) })) });
   const outputs = useQuery({ queryKey: queryKeys.issues.workProducts(taskId ?? ""), queryFn: () => issuesApi.listWorkProducts(taskId!), enabled: !!taskId });
   const revisions = useQuery({ queryKey: [...fridayKey(routine.companyId), "routine-revisions", routine.id, routine.latestRevisionId], queryFn: () => routinesApi.listRevisions(routine.id) });
   const client = useQueryClient();
   const run = useMutation({ mutationFn: () => routinesApi.run(routine.id, { idempotencyKey: crypto.randomUUID() }), onSuccess: () => { void client.invalidateQueries({ queryKey: fridayKey(routine.companyId) }); void detail.refetch(); } });
-  return <section className="space-y-5 rounded-xl border p-5" aria-label="Operating loop detail"><div className="flex flex-wrap justify-between gap-3"><h2 className="text-lg font-semibold">{routine.title}</h2><Button variant="ghost" onClick={onClose}>Close loop</Button></div>{[detail.error, tasks.error, outputs.error, revisions.error, run.error].filter(Boolean).map((error, i) => <p role="alert" className="text-destructive" key={i}>{error!.message}</p>)}
+  return <section className="space-y-5 rounded-xl border p-5" aria-label="Operating loop detail"><div className="flex flex-wrap justify-between gap-3"><h2 className="text-lg font-semibold">{routine.title}</h2><Button variant="ghost" onClick={onClose}>Close loop</Button></div>{[detail.error, root.error, tasks.error, outputs.error, ...childOutputs.map(query => query.error), revisions.error, run.error].filter(Boolean).map((error, i) => <p role="alert" className="text-destructive" key={i}>{error!.message}</p>)}
     <MarkdownBody>{routine.description ?? "No objective recorded."}</MarkdownBody>
     {detail.data?.parentIssue && <p className="text-sm">Parent objective: <Link className="text-primary" to={`/issues/${detail.data.parentIssue.id}`}>{detail.data.parentIssue.title}</Link></p>}
-    <div className="agentos-loop-flow" aria-label="Loop execution"><section><span>01 · Trigger</span><h3>{current?.trigger?.label ?? current?.source ?? "Waiting for trigger"}</h3><p>{current ? new Date(current.triggeredAt).toLocaleString() : "No cycle recorded"}</p></section><i aria-hidden="true">→</i><section data-active={current?.linkedIssue?.status === "in_progress"}><span>02 · Work</span><h3>{current?.linkedIssue?.title ?? routine.activeIssue?.title ?? "No work dispatched"}</h3>{taskId && <Link to={`/issues/${taskId}`}>Inspect task →</Link>}</section><i aria-hidden="true">→</i><section><span>03 · Evidence & feedback</span><h3>{outputs.data?.length ?? 0} outputs on cycle task</h3><p>Inspect this task and its child tasks for results before changing the next cycle.</p></section><i aria-hidden="true">↻</i><section><span>04 · Next cycle</span><h3>{routine.status === "paused" ? "Paused" : routine.triggers.some(trigger => trigger.enabled && trigger.nextRunAt) ? "Scheduled" : "On request"}</h3>{routine.triggers.filter(trigger => trigger.enabled).map(trigger => <p key={trigger.id}>{trigger.nextRunAt ? new Date(trigger.nextRunAt).toLocaleString() : trigger.kind}</p>)}</section></div>
+    {detail.data && <RoutineWorkflow key={current?.id ?? "definition"} routine={detail.data} cycle={current} task={root.data} tasks={tasks.data ?? []} outputs={[...(outputs.data ?? []), ...childOutputs.flatMap(query => query.data ?? [])]} agents={agents} onEdit={triggerId => setEditor({ triggerId })} />}
+    {editor && detail.data && <RoutineWorkflowEditor key={editor.triggerId ?? "definition"} routine={detail.data} agents={agents} triggerId={editor.triggerId} onClose={() => setEditor(null)} />}
+
     {!!tasks.data?.length && <section className="space-y-2"><h3 className="text-sm font-semibold">Work breakdown · this cycle</h3>{tasks.data.map(task => <Link key={task.id} className="friday-work-task" to={`/issues/${task.identifier ?? task.id}`}><span>{task.title}</span><span className="text-xs text-muted-foreground">{task.status.replaceAll("_", " ")}</span></Link>)}</section>}
     {!!outputs.data?.length && <section className="space-y-2"><h3 className="text-sm font-semibold">Recorded outputs</h3>{outputs.data.map(output => <Link className="friday-work-task" key={output.id} to={`/issues/${taskId}`}><span>{output.title}</span><span className="text-xs text-muted-foreground">{output.status} · {output.reviewState}</span></Link>)}</section>}
     <div className="flex flex-wrap gap-3">{routine.status !== "archived" && <Button variant="outline" disabled={busy} onClick={onToggle}>{routine.status === "active" ? "Pause loop" : "Start loop"}</Button>}<Button variant="outline" disabled={run.isPending || routine.status !== "active"} onClick={() => run.mutate()}>Run one cycle</Button><Button variant="ghost" onClick={() => onAsk(`Review routine ${routine.id}, its recorded cycle ${current?.id ?? "history"}, outputs and feedback. Propose improvements and record changes as a new routine revision; retain output versions and approval gates.`)}>Review with Friday</Button><Button asChild variant="ghost"><Link to={`/routines/${routine.id}`}>Triggers and full history</Link></Button></div>

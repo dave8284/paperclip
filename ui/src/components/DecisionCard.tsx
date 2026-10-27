@@ -59,6 +59,8 @@ export interface DecisionCardProps {
   onDecide?: (optionId: string, inputValues: Record<string, string>) => void;
   onDismiss?: (reason?: string) => void;
   className?: string;
+  /** Wording only: typed effects, required inputs and stale-target gates stay native. */
+  actionLabels?: "native" | "approval";
 }
 
 // --- small helpers ----------------------------------------------------------
@@ -238,6 +240,7 @@ export function DecisionCard({
   onDecide,
   onDismiss,
   className,
+  actionLabels = "native",
 }: DecisionCardProps) {
   const [inputValues, setInputValues] = useState<Record<string, string>>({});
   const [confirmOptionId, setConfirmOptionId] = useState<string | null>(null);
@@ -463,7 +466,7 @@ export function DecisionCard({
                 >
                   <div className="flex items-center justify-between gap-2">
                     <span className={cn("text-sm font-medium", destructive && "text-rose-700 dark:text-rose-300")}>
-                      {option.label}
+                      {actionLabels === "approval" && option.effects.length > 0 && !/^approve\b/i.test(option.label) ? `Approve · ${option.label}` : option.label}
                     </span>
                     {blockedStale && (
                       <span className="shrink-0 rounded-full border border-amber-500/60 bg-amber-500/10 px-2 py-0.5 text-(length:--text-micro) font-medium text-amber-800 dark:text-amber-200">
@@ -559,11 +562,11 @@ export function DecisionCard({
           })}
 
           {/* Always-present zero-effect Dismiss (telemetered "no", distinct from expiry) */}
-          {!decision.options.some((option) => option.effects.length === 0) && (
+          {(actionLabels === "approval" || !decision.options.some((option) => option.effects.length === 0)) && (
             <div className="flex items-center justify-between gap-2 pt-1">
-              <span className="text-xs text-muted-foreground">Not now?</span>
+              <span className="text-xs text-muted-foreground">{actionLabels === "approval" ? "Decline the proposal without applying its changes." : "Not now?"}</span>
               <Button variant="ghost" size="sm" disabled={busy} onClick={() => onDismiss?.()}>
-                Dismiss — no effects
+                {actionLabels === "approval" ? "Disapprove" : "Dismiss — no effects"}
               </Button>
             </div>
           )}

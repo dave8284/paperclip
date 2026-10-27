@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import express from "express";
 import request from "supertest";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { agents, cases, caseAccessSources, caseHandoffs, companies, companyMemberships, createDb, issueComments, issues, issueWorkProducts, projects, projectAccessMembers } from "@paperclipai/db";
+import { agents, agentosDepartments, agentosDepartmentProjects, cases, caseAccessSources, caseHandoffs, companies, companyMemberships, createDb, issueComments, issues, issueWorkProducts, projects, projectAccessMembers } from "@paperclipai/db";
 import { startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
 import { errorHandler } from "../middleware/index.js";
 import { fridayRoutes } from "../routes/friday.js";
@@ -42,6 +42,16 @@ describe("Friday native awareness", () => {
     const actor: Express.Request["actor"] = { type: "board", source: "session", userId: "reader", companyIds: [companyId], memberships: [{ companyId, membershipRole: "operator", status: "active" }] };
     return { companyId, first, second, empty, secret, privateTask, active, done, worker, lead, comment, output, actor, base: `/api/companies/${companyId}/friday/work` };
   }
+  it("restricts company-wide learning receipts to local operators and instance administrators", async () => {
+    const f = await seed();
+    const restricted = await request(app(f.actor)).get(`/api/companies/${f.companyId}/friday/models`).expect(200);
+    expect(restricted.body.learning).toBeNull();
+    expect(restricted.body.learningAccess).toBe("restricted");
+    const admin = await request(app({ ...f.actor, isInstanceAdmin: true })).get(`/api/companies/${f.companyId}/friday/models`).expect(200);
+    expect(admin.body.learningAccess).toBe("admin");
+    const other = crypto.randomUUID();
+    await request(app(f.actor)).get(`/api/companies/${other}/friday/models`).expect(403);
+  });
   it("includes unregistered projects and counts every assigned project before task pagination", async () => {
     const f = await seed(); const api = app(f.actor);
     const page = await request(api).get(f.base).query({ agentId: f.worker.id, limit: 1 }).expect(200);
@@ -88,6 +98,64 @@ describe("Friday native awareness", () => {
     expect(result.body.handoffs.map((item: { id: string }) => item.id)).toEqual([handoffs[0].id]);
     expect(result.body.handoffs[0]).toMatchObject({ fromAgentId: f.lead.id, toAgentId: f.worker.id, taskId: f.active.id });
     expect(JSON.stringify(result.body)).not.toContain(handoffs[1].id);
+  });
+  it("projects authorized task owners, department heads and reporting chains without private work or configurations", async () => {
+    const f = await seed();
+    const [head, ceo, hiddenLead] = await db.insert(agents).values([
+      { companyId: f.companyId, name: "Engineering head", title: "Engineering manager", adapterConfig: { secret: "NEVER_PROJECT_CONFIG" } },
+      { companyId: f.companyId, name: "Company CEO", role: "ceo" },
+      { companyId: f.companyId, name: "Unrelated private lead" },
+    ]).returning();
+    await db.update(agents).set({ reportsTo: f.lead.id }).where(eq(agents.id, f.worker.id));
+    await db.update(agents).set({ reportsTo: head.id }).where(eq(agents.id, f.lead.id));
+    await db.update(agents).set({ reportsTo: ceo.id }).where(eq(agents.id, head.id));
+    await db.update(projects).set({ leadAgentId: hiddenLead.id }).where(eq(projects.id, f.secret.id));
+    const [department, hiddenDepartment] = await db.insert(agentosDepartments).values([
+      { companyId: f.companyId, name: "Engineering", leadAgentId: head.id },
+      { companyId: f.companyId, name: "Hidden department", leadAgentId: hiddenLead.id },
+    ]).returning();
+    await db.insert(agentosDepartmentProjects).values([
+      { companyId: f.companyId, projectId: f.first.id, departmentId: department.id },
+      { companyId: f.companyId, projectId: f.secret.id, departmentId: hiddenDepartment.id },
+    ]);
+    const result = await request(app(f.actor)).get(f.base).query({ projectId: f.first.id }).expect(200);
+    expect(result.body.tasks[0].assigneeAgentId).toBe(f.worker.id);
+    expect(result.body.accountability.projects).toEqual([{ projectId: f.first.id, leadAgentId: f.lead.id, department: { id: department.id, name: "Engineering", leadAgentId: head.id } }]);
+    expect(result.body.accountability.people).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: f.worker.id, reportsTo: f.lead.id }),
+      expect.objectContaining({ id: f.lead.id, reportsTo: head.id }),
+      expect.objectContaining({ id: head.id, name: "Engineering head", title: "Engineering manager", reportsTo: ceo.id }),
+      expect.objectContaining({ id: ceo.id, role: "ceo", reportsTo: null }),
+    ]));
+    expect(result.body.accountability.people).toHaveLength(4);
+    expect(result.body.accountability.reportingChainTruncated).toBe(false);
+    expect(JSON.stringify(result.body)).not.toContain("NEVER_PROJECT_CONFIG");
+    const portfolio = await request(app(f.actor)).get(f.base).expect(200);
+    for (const hidden of [hiddenLead.id, hiddenDepartment.id, f.secret.id, f.privateTask.id]) expect(JSON.stringify(portfolio.body.accountability)).not.toContain(hidden);
+    const nativeAgent = { type: "agent" as const, source: "agent_key" as const, companyId: f.companyId, agentId: f.worker.id, keyScope: { kind: "standard" as const } };
+    const agentView = await request(app(nativeAgent)).get(f.base).query({ projectId: f.first.id }).expect(200);
+    expect(agentView.body.accountability.projects[0].department.leadAgentId).toBe(head.id);
+    expect(JSON.stringify(agentView.body.accountability)).not.toContain(hiddenLead.id);
+  });
+  it("stops reporting cycles, bounds deep chains and does not expose cross-company managers", async () => {
+    const f = await seed();
+    await db.update(agents).set({ reportsTo: f.lead.id }).where(eq(agents.id, f.worker.id));
+    await db.update(agents).set({ reportsTo: f.worker.id }).where(eq(agents.id, f.lead.id));
+    const cycle = await request(app(f.actor)).get(f.base).query({ projectId: f.first.id }).expect(200);
+    expect(cycle.body.accountability.people).toHaveLength(2);
+    expect(cycle.body.accountability.reportingChainTruncated).toBe(false);
+    const foreign = await seed();
+    await db.update(agents).set({ reportsTo: foreign.lead.id }).where(eq(agents.id, f.lead.id));
+    const isolated = await request(app(f.actor)).get(f.base).query({ projectId: f.first.id }).expect(200);
+    expect(isolated.body.accountability.people.find((person: { id: string }) => person.id === f.lead.id).reportsTo).toBeNull();
+    expect(JSON.stringify(isolated.body.accountability)).not.toContain(foreign.lead.id);
+    const chain = await db.insert(agents).values(Array.from({ length: 9 }, (_, index) => ({ companyId: f.companyId, name: `Manager ${index}` }))).returning();
+    for (let index = 0; index < chain.length - 1; index++) await db.update(agents).set({ reportsTo: chain[index + 1].id }).where(eq(agents.id, chain[index].id));
+    await db.update(agents).set({ reportsTo: chain[0].id }).where(eq(agents.id, f.lead.id));
+    const bounded = await request(app(f.actor)).get(f.base).query({ projectId: f.first.id }).expect(200);
+    expect(bounded.body.accountability.reportingChainTruncated).toBe(true);
+    expect(bounded.body.accountability.people.length).toBeLessThanOrEqual(9);
+    expect(JSON.stringify(bounded.body.accountability)).not.toContain(chain[8].id);
   });
   it("rejects cross-company, restricted-key and malformed discovery requests", async () => {
     const f = await seed(); const foreign = await seed();

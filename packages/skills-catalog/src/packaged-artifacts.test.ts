@@ -51,6 +51,10 @@ describe("skills catalog package artifacts", () => {
     expect(paths).toContain("generated/catalog.json");
     expect(paths).toContain("catalog/bundled/software-development/github-pr-workflow/SKILL.md");
     expect(paths).toContain("catalog/optional/browser/agent-browser/SKILL.md");
+    const review = "catalog/bundled/paperclip-operations/agentos-context-review";
+    for (const file of ["SKILL.md", "references/scope-and-handoffs.md", "references/review-dispatch.md", "references/evidence-and-learning.md", "references/source.md", "references/upstream/LICENSE", "references/upstream/agents/zoom_out.md", "references/upstream/agents/comprehension.md", "references/upstream/agents/design_critic.md", "references/upstream/agents/implementation_readiness.md", "references/upstream/resources/document_standards/zoom-out-standard.md", "references/upstream/resources/document_standards/re-implementation-standard.md", "references/upstream/resources/document_standards/feature-spec-standard.md", "references/upstream/resources/document_standards/implementation-readiness-standard.md"]) {
+      expect(paths).toContain(`${review}/${file}`);
+    }
     expect(paths).toContain("package.json");
   }, 120_000);
 });

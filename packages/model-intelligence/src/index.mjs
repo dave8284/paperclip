@@ -1,6 +1,9 @@
 import { DatabaseSync } from "node:sqlite";
 import { createHash, randomUUID } from "node:crypto";
 
+import { taskFamilyCatalog } from "./task-families.mjs";
+export { classifyWork } from "./task-families.mjs";
+
 export const POLICY_VERSION = "evidence-v1";
 const hash = value => createHash("sha256").update(JSON.stringify(value)).digest("hex");
 const median = values => { const sorted = values.slice().sort((a,b) => a-b); return sorted.length ? sorted[Math.floor(sorted.length / 2)] : null; };
@@ -101,7 +104,22 @@ export function createModelIntelligence(path) {
       const evaluations = db.prepare(`SELECT payload,created_at FROM evaluations${where} ORDER BY created_at DESC,rowid DESC LIMIT 100`).all(...args).map(row => ({ ...JSON.parse(row.payload), createdAt: row.created_at }));
       const events = db.prepare(`SELECT namespace,id,candidate_id AS candidateId,action,reason,created_at AS createdAt FROM policy_events${where} ORDER BY created_at DESC,rowid DESC LIMIT 100`).all(...args);
       const counts = { selections: db.prepare(`SELECT count(*) AS n FROM routing_receipts${where}`).get(...args).n, evaluations: db.prepare(`SELECT count(*) AS n FROM evaluations${where}`).get(...args).n, policyEvents: db.prepare(`SELECT count(*) AS n FROM policy_events${where}`).get(...args).n };
-      return { policyVersion: POLICY_VERSION, counts, receipts, evaluations, events };
+      // Aggregate the complete selection library, independently of the bounded
+      // recent receipts list. Evidence uses the same rolling window as routing.
+      const groups = db.prepare(`SELECT namespace,task_type,candidate_id,count(*) AS selections FROM routing_receipts${where} GROUP BY namespace,task_type,candidate_id ORDER BY namespace,task_type,candidate_id`).all(...args);
+      const profiles = groups.map(group => {
+        const latest = db.prepare("SELECT receipt FROM routing_receipts WHERE namespace=? AND task_type=? AND candidate_id=? ORDER BY created_at DESC,rowid DESC LIMIT 1").get(group.namespace,group.task_type,group.candidate_id);
+        const receipt = JSON.parse(latest.receipt), stats = evidence(group.namespace,group.task_type,group.candidate_id), isBlocked = blocked(group.namespace,group.candidate_id);
+        const gaps = [];
+        if (isBlocked) gaps.push("Blocked by operator");
+        if (stats.evaluations < 5) gaps.push(`${5-stats.evaluations} more reviewed outcomes needed`);
+        if (stats.lowerBound < .7) gaps.push("Quality confidence below 70%");
+        if (stats.recentFailures >= 2) gaps.push("At least two recent failures");
+        if (stats.medianIterations === null || stats.medianIterations > 2) gaps.push("Median iterations must be two or fewer");
+        return { namespace: group.namespace, taskType: group.task_type, candidate: receipt.candidate, selections: group.selections, evidence: stats, blocked: isBlocked, qualityQualified: !gaps.length, gaps, promptFingerprint: receipt.promptFingerprint, lastSelectedAt: receipt.createdAt };
+      });
+      return { policyVersion: POLICY_VERSION, counts, receipts, evaluations, events, profiles, taskFamilies: taskFamilyCatalog(), qualification: { minimumReviews: 5, qualityConfidence: .7, maximumMedianIterations: 2, minimumLatencyImprovement: .15, evidenceWindow: 30, classifier: "task-families-v1 (ordered rules)" } };
+
     },
     close() { db.close(); },
   };

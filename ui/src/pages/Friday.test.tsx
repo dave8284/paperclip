@@ -25,7 +25,9 @@ vi.mock("@/api/ai-connections", () => ({ aiConnectionsApi: { list: async () => (
 vi.mock("@/api/agents", () => ({ agentsApi: { list: async (companyId: string) => [{ id: fixture.agent, companyId, name: "Friday", role: "coordinator", status: "idle", adapterType: "codex_local", adapterConfig: { model: "test-model" }, capabilities: "Coordinate projects" }], skills: async () => ({ entries: [], warnings: [] }) } }));
 vi.mock("@/api/friday", () => ({ fridayApi: { work: fixture.work }, fridayKey: (id: string) => ["work", id] }));
 vi.mock("@/api/attention", () => ({ attentionApi: { list: fixture.attention } }));
-vi.mock("@/api/projects", () => ({ projectsApi: { get: fixture.getProject } }));
+vi.mock("@/api/projects", () => ({ projectsApi: { get: fixture.getProject, list: async () => [{ id: fixture.project, companyId: fixture.first, name: "Customer portal", status: "in_progress" }] } }));
+vi.mock("@/api/departments", () => ({ departmentKey: (id: string) => ["departments", id], departmentsApi: { list: async () => [] } }));
+vi.mock("@/api/health", () => ({ healthApi: { get: async () => ({ deploymentMode: "local_trusted" }) } }));
 vi.mock("@/api/workforce", () => ({ workforceApi: { list: async () => [{ id: "portfolio", homeCompanyId: fixture.first }] }, workforceKeys: { list: () => ["portfolio"], detail: () => ["portfolio-detail"] } }));
 vi.mock("@/api/routines", () => ({ routinesApi: { list: fixture.routines } }));
 vi.mock("@/api/heartbeats", () => ({ heartbeatsApi: { liveRunsForCompany: async () => [] } }));
@@ -50,7 +52,7 @@ class Recognition {
 describe("Agent OS approved Friday experience", () => {
   let host: HTMLDivElement, root: Root, client: QueryClient;
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.clearAllMocks(); localStorage.clear(); sessionStorage.clear();
     Object.defineProperty(window, "SpeechRecognition", { configurable: true, value: Recognition });
     fixture.attention.mockResolvedValue({ items: [], totalCount: 0, generatedAt: new Date().toISOString(), nextCursor: null });
     fixture.routines.mockResolvedValue([]);
@@ -91,8 +93,8 @@ describe("Agent OS approved Friday experience", () => {
     expect(host.querySelector('[aria-label="Kanban board"]')).not.toBeNull();
     expect(host.querySelector('[aria-label="Project and agent work graph"]')).toBeNull();
     expect(host.textContent).not.toContain("Combined");
-    await click("Audit trail", host.querySelector('nav[aria-label="People and history"]')!);
-    expect(host.querySelector('aside[aria-label="Portfolio navigation"]')).not.toBeNull();
+    await click("Audit trail", host.querySelector('nav[aria-label="People, history and settings"]')!);
+    expect(host.querySelector('aside[aria-label="Company navigation"]')).not.toBeNull();
     expect(host.querySelector('nav[aria-label="Workspace"]')).not.toBeNull();
     expect(host.querySelector("h1")?.textContent).toBe("Audit trail");
   });
@@ -108,9 +110,22 @@ describe("Agent OS approved Friday experience", () => {
     await act(async () => Recognition.latest.onresult?.({ resultIndex: 0, results: [{ isFinal: false, 0: { transcript: "Show my projects" } }] }));
     const preview = host.querySelector('.agentos-live-transcript')!;
     expect(preview.textContent).toBe("Show my projects");
+    expect(preview.parentElement?.classList.contains("agentos-presence-status")).toBe(true);
+    expect(host.querySelector('.agentos-presence-status')?.textContent).not.toContain("Here when you need me");
     expect(preview.compareDocumentPosition(host.querySelector('.agentos-prefer-type')!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(fixture.send).not.toHaveBeenCalled();
     expect(host.querySelector('[data-testid="friday-mic-listening"]')).not.toBeNull();
+    expect(history.hidden).toBe(true);
+    await click("Toggle Friday conversation history");
+    expect(history.hidden).toBe(false);
+    await click("Toggle Friday conversation history");
+    expect(history.hidden).toBe(true);
+    expect(host.querySelector('.agentos-orb-microphone')?.getAttribute("data-enabled")).toBe("true");
+    await act(async () => {
+      Recognition.latest.onresult?.({ resultIndex: 0, results: [{ isFinal: true, 0: { transcript: "Show my projects" } }] });
+      Recognition.latest.onend?.();
+    });
+    expect(fixture.send).toHaveBeenCalledExactlyOnceWith("Show my projects");
     expect(history.hidden).toBe(true);
     await click("Pause microphone");
     expect(host.querySelector('[data-testid="friday-mic-paused"]')).not.toBeNull();
@@ -124,7 +139,7 @@ describe("Agent OS approved Friday experience", () => {
     expect(host.querySelector('.agentos-friday-presence')?.getAttribute("data-docked")).toBe("true");
     await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Minimise conversation"]')!.click());
     expect(history.hidden).toBe(true);
-    await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Open Friday conversation history"]')!.click());
+    await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Toggle Friday conversation history"]')!.click());
     expect(history.hidden).toBe(false);
   });
 
@@ -147,8 +162,10 @@ describe("Agent OS approved Friday experience", () => {
     await render("/NOR/company/settings", true);
     expect(host.textContent).toContain("Native record");
     expect(host.querySelector('.agentos-friday-presence')?.getAttribute("data-docked")).toBe("true");
-    await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Open Friday conversation history"]')!.click());
+    await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Toggle Friday conversation history"]')!.click());
     expect(host.querySelector<HTMLElement>('.agentos-conversation-panel')?.hidden).toBe(false);
+    await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Toggle Friday conversation history"]')!.click());
+    expect(host.querySelector<HTMLElement>('.agentos-conversation-panel')?.hidden).toBe(true);
     expect(host.textContent).toContain("Native record");
     expect(host.textContent).toContain("Persisted conversation");
   });

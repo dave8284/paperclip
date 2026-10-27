@@ -12,6 +12,7 @@ import {
   agentosPortfolios,
   agentosAssignments,
   agentosPortfolioCompanies,
+  agentosDepartments,
   agents,
   companyLogos,
   assets,
@@ -125,6 +126,9 @@ export async function deleteCompany(db: Db, id: string) {
         await requestRestorePointDeletion(tx, { companyId: id });
         await tx.delete(executionWorkspaces).where(eq(executionWorkspaces.companyId, id));
         await tx.delete(projects).where(eq(projects.companyId, id));
+        // Department heads reference company employees. Remove the company’s
+        // grouping records before the employee lifecycle performs its cleanup.
+        await tx.delete(agentosDepartments).where(eq(agentosDepartments.companyId, id));
         await agentLifecycleCompanyDeletion.deleteCompanyData(tx, id);
         const rows = await tx
           .delete(companies)

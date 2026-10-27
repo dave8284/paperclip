@@ -6,6 +6,7 @@ import { catalogManifest, catalogSkills, resolveCatalogSkillRef } from "./index.
 
 const EXPECTED_BUNDLED_KEYS = [
   "paperclipai/bundled/docs/doc-maintenance",
+  "paperclipai/bundled/paperclip-operations/agentos-context-review",
   "paperclipai/bundled/paperclip-operations/issue-triage",
   "paperclipai/bundled/paperclip-operations/reflection-coach",
   "paperclipai/bundled/paperclip-operations/status-card-query",
@@ -73,6 +74,22 @@ function readFrontmatterDescription(markdown: string): string | null {
 }
 
 describe("shipped skills catalog", () => {
+  it("ships every local reference needed by Agent OS context review", () => {
+    const skill = resolveCatalogSkillRef("agentos-context-review");
+    expect(skill).toBeDefined();
+    if (!skill) return;
+    const packaged = new Set(skill.files.map(file => file.path));
+    expect(packaged.has("references/upstream/LICENSE")).toBe(true);
+    for (const file of skill.files.filter(file => file.path.endsWith(".md"))) {
+      const body = readFileSync(path.join(REPO_ROOT, "packages/skills-catalog", skill.path, file.path), "utf8");
+      for (const match of body.matchAll(/\[[^\]]*\]\(([^)]+)\)/g)) {
+        const target = match[1]!.split("#")[0]!;
+        if (!target || /^[a-z]+:/i.test(target)) continue;
+        const resolved = path.posix.normalize(path.posix.join(path.posix.dirname(file.path), target));
+        expect(packaged.has(resolved), `${file.path} references missing packaged file ${resolved}`).toBe(true);
+      }
+    }
+  });
   it("ships the summarize-status streaming protocol", () => {
     const skill = readFileSync(
       path.join(

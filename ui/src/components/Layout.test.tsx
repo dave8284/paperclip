@@ -134,7 +134,7 @@ vi.mock("./PluginAppShellOverlays", () => ({
 }));
 
 vi.mock("./CommandPalette", () => ({
-  CommandPalette: () => null,
+  CommandPalette: () => <div data-testid="command-palette-mount" />,
 }));
 
 vi.mock("./NewIssueDialog", () => ({
@@ -374,6 +374,7 @@ describe("Layout", () => {
 
     expect(mockHealthApi.get).toHaveBeenCalled();
     expect(container.textContent).toContain("Breadcrumbs");
+    expect(container.querySelector('[data-testid="command-palette-mount"]')).not.toBeNull();
     expect(container.textContent).toContain("Outlet content");
     expect(container.querySelectorAll("[data-announcement-well]")).toHaveLength(1);
     expect(container.textContent).not.toContain("Company rail");
@@ -395,11 +396,12 @@ describe("Layout", () => {
     await act(async () => renderLayoutView(root, queryClient));
     await flushReact();
     expect(container.querySelector('[aria-label="Main navigation"]')?.textContent).toContain("Agent Map");
-    expect(container.querySelector('[aria-label="Portfolio navigation"]')).not.toBeNull();
+    expect(container.querySelector('[aria-label="Company navigation"]')).not.toBeNull();
     expect(container.textContent).toContain("Company settings sidebar");
     expect(container.textContent).toContain("Outlet content");
     expect(container.textContent).not.toContain("Main company nav");
     expect(container.querySelector(".agentos-root-scroll")).not.toBeNull();
+    expect(container.querySelector('[data-testid="command-palette-mount"]')).toBeNull();
     await act(async () => root.unmount());
   });
 
@@ -413,6 +415,7 @@ describe("Layout", () => {
     expect(container.textContent).toContain("Outlet content");
     expect(container.textContent).not.toContain("Main company nav");
     expect(container.querySelector(".agentos-native-frame")).toBeNull();
+    expect(container.querySelector('[data-testid="command-palette-mount"]')).toBeNull();
     expect(container.querySelector(".agentos-root-scroll")).not.toBeNull();
     await act(async () => root.unmount());
   });

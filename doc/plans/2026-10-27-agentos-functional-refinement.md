@@ -2,6 +2,42 @@
 
 User decisions: departments group projects; Stripe live changes require explicit approval. Deployment stays local. Implementation happens directly in this checkout.
 
+## Latest accepted refinements
+
+- Friday occupies the full white home canvas. Orb click toggles a far-left,
+  borderless, shadow-free transcript; the top-right mic controls listening.
+  Speech never opens the transcript by itself. Live words occupy the status area
+  below the orb. Listening, thinking and speaking have distinct colours.
+  Enabled voice supports interruption and continued turns during execution.
+- Agent OS does not mount the legacy command palette. Ordinary clarification
+  stays conversational; real action approvals retain native resolution.
+- Settings is last in the bottom-left navigation, below Saved displays. It owns
+  Company profile/deletion, Voice, Connectors and Models. Company deletion does
+  not appear in Workforce or ordinary work headers.
+- Company selection scopes all views. Departments appear above Projects in the
+  sidebar; department heads and native project leads are explicitly assigned.
+  Avoid a duplicate Departments/Projects tab layer.
+- Decisions expose native approve/disapprove or their actual effect choices
+  without an opening modal. Alternative instructions and discussion retain source
+  context. Blockers with no binary resolution must not pretend an approval ran.
+- Employee map nodes use Friday-style pastel dotted orbs, with distinct solid
+  task/evidence records, real activity, drill-down and zoom controls.
+- Company Performance has department/project filters and source-backed monthly
+  revisions. Missing metrics stay missing. The separate Model Intelligence
+  product has a central task-family/profile/outcome learning library; company-wide
+  private receipts are administrator-only.
+- Higgsfield account MCP is in the catalog; the operator deferred provider sign-in.
+  Supabase CLI now uses the intended GitHub-linked account and a new Free-plan
+  AgentOS project. Its company connection is project-pinned and a native storage
+  read passed. The local application database has not been migrated.
+- Google `elephant-goldfish-model` is the verified source for the requested
+  context-rich planning / isolated-review method. Native Agent OS records,
+  grants and audit remain authoritative; a role label never grants data access.
+
+The owner explicitly requested parallel subagents for these final refinements.
+Their changes are reviewed and tested together in this checkout; no platform
+agent is asked to implement the application itself.
+
 ## Ownership and delivery
 
 - Friday UI: persistent opt-in voice session across routes, automatic silence turn boundary, inline transcript on home, minimised transcript on navigation. Native chat owns sending, history and runtime approval resolution.
@@ -48,3 +84,56 @@ The broad UI run completed: 807 files passed, with 9,166 passing tests and eight
 The full repository run remains in progress and has reported server failures, including workspace/runner cases spanning long machine-suspension intervals. These are not assumed to be harmless or pre-existing; a focused reproduction is being run. Do not describe the repository-wide suite as green. The local backend was restarted while no company runs were active and its speech preparation endpoint returned ready. Implementation commit `cc82f5a68` is confirmed on the remote `agentos/platform` branch.
 
 Five sampled server failures were rerun: the chat-thread, Core workspace selection, temporary Git scan, and native Runner wrong-model cases passed. The `local_new_primary` workspace-source-trust case still timed out waiting for a resumed run to finish. The same case also failed waiting for its first run on the prior server revision `008e97c14`, in a separate detached worktree using the installed dependency/build folders. That comparison is evidence of a baseline timing problem, not proof that all remaining server failures are pre-existing. The full repository run is still incomplete; its output is retained locally at `/tmp/agentos-full-tests.log`. Voice checks, the final UI build and the corrected UI regression checks passed. No full-application or browser acceptance is claimed.
+
+## Integrated refinement checkpoint
+
+The latest settings, voice, decisions and map work was implemented by three Codex
+subagents and reviewed together directly in this checkout. Native platform agents
+did not implement these changes. Settings owns company deletion, voice preferences,
+connectors and model controls; department and project leaders now have real
+assignments. Friday's work awareness includes permission-filtered accountability,
+with bounded reporting-chain traversal and no extra grants. Decisions retain
+their actual native effects. Project maps exclude unrelated employees, and running
+map orbs share a visibility-aware animation clock.
+
+Validation passed: full workspace typecheck and production build; the full UI
+suite with three workers (821 files, 9,221 tests); final performance, model,
+department and awareness tests (18 tests); additional accountability/privacy and
+concurrency checks; both catalog validators, skill/team packaging tests, UI token
+gates, migration safety and structural map checks. The final home Settings entry
+passed five focused tests after that broad UI run. A preceding parallel UI run
+was stopped under excessive local build/test load; its timing failures are not
+claimed as product regressions or as passing evidence. The bounded UI run is the
+completed result. Build output still warns about large frontend chunks.
+
+The repository-wide suite is **not green**: its broader run was stopped after a
+workspace-preparation stall. That file subsequently passed all 59 tests in
+isolation, but this does not certify the remainder of the full suite. Logs are
+local under `/tmp/agentos-full-refinement-tests.log`,
+`/tmp/agentos-workspace-stall-repro.log`, `/tmp/agentos-ui-final-bounded.log`,
+`/tmp/agentos-final-domain-tests.log`, `/tmp/agentos-integrated-typecheck.log` and
+`/tmp/agentos-integrated-build.log`.
+
+The local server restarted with zero live runs. Migration 0387 is applied and
+health reports no pending migrations. Friday, departments, performance, models
+and local voice endpoints returned successfully. The live work read included
+14 tasks and ownership context for three projects; no synthetic work or financial
+reports were inserted. Browser connection still fails before bootstrap, so the
+latest appearance, mobile layout, acoustic interruption and physical microphone
+behavior remain unverified.
+
+The new Supabase Free-plan AgentOS project is CLI-linked and installed as the
+project-pinned company connection. A native `list_storage_buckets` invocation
+passed. Thirteen reads are enabled and four write-capable operations require
+review. The application database remains local; no existing Supabase project or
+application data was migrated. Higgsfield catalog/preflight/client setup is ready,
+but the owner deferred sign-in and no media was generated.
+
+The bundled `agentos-context-review` skill includes the pinned Google EGM reviewer
+prompts, standards and license. It was installed through the native catalog and
+assigned additively to all seven current company employees. Their existing
+instruction files were preserved and revision-updated with scoped handoff and
+accountability guidance. No employee run was launched. This supplies an auditable
+review method; it does not add automatic harness isolation, a new memory engine,
+or visibility into private model internals. Actual review isolation still needs
+runtime evidence.

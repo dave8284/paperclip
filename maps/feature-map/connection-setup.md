@@ -49,6 +49,14 @@ Open Apps (`/apps`), choose an app, and connect from its landing page. Select an
 available method and access, then complete setup. Existing connections open
 their details; unfinished ones offer a way to finish setup.
 
+Agent OS Settings → Connectors combines AI seats and company tool connections,
+with Edit/Disconnect and searchable available providers. Higgsfield uses official
+account OAuth for marketing media; Supabase retains hosted MCP and Management API
+methods. Both need actual account authorization. Higgsfield public preflight and
+DCR succeeded; account consent and generation are unqualified. See
+[Higgsfield](../../doc/connections/HIGGSFIELD.md) and
+[Supabase](../../doc/connections/SUPABASE.md).
+
 ### `mcp-link`
 
 Use **Connect with a link** or `/apps/byo` for a generic MCP server. Paste its

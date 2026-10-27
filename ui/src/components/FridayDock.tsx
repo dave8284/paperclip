@@ -11,6 +11,7 @@ import { fridayNavigationSearch, parseFridayView } from "@/lib/friday-navigation
 import { issuesApi } from "@/api/issues";
 import { queryKeys } from "@/lib/queryKeys";
 import { AgentOSCompanyScope } from "./AgentOSCompanyScope";
+import { syncFridayDisplayContext } from "@/lib/friday-display-context";
 import { FridayPresence } from "./FridayPresence";
 import { FridayOrb } from "./FridayOrb";
 import type { AgentConversationFocusData } from "@/lib/conversation-focus";
@@ -35,7 +36,7 @@ export function FridayDock() {
   const fridayPath = `/${company.issuePrefix}/friday`;
   const ready = !!profile.data?.fridayAgentId && chat.enabled;
   if (!ready) return <div className="agentos-friday-presence" data-docked="true"><div className="agentos-presence-controls"><FridayOrb compact state="idle" label="Open Friday" onActivate={() => navigate(fridayPath)} /><div className="agentos-presence-status"><strong>Friday</strong><span>Open your coordinator</span></div></div></div>;
-  return <div className="agentos-native-friday"><Suspense fallback={<p role="status">Connecting to Friday…</p>}><AgentOSCompanyScope company={company}><AgentChat agentRef={profile.data!.fridayAgentId!} focusView={{ canvas: true, docked: true, showTranscript: open, composerCollapsed: !open, onExpandComposer: () => setOpen(true), onCollapseComposer: () => setOpen(false), onClose: () => setOpen(false), render: data => <DockContent data={data} connected={!!models.data?.connections.some(connection => connection.method === "subscription" && connection.status === "connected")} onOpen={() => setOpen(true)} fridayPath={fridayPath} /> }} /></AgentOSCompanyScope></Suspense></div>;
+  return <div className="agentos-native-friday"><Suspense fallback={<p role="status">Connecting to Friday…</p>}><AgentOSCompanyScope company={company}><AgentChat agentRef={profile.data!.fridayAgentId!} focusView={{ beforeSend: issueId => syncFridayDisplayContext(issueId, { panel: null, companyId: selectedCompanyId ?? company.id }, location.pathname + location.search), canvas: true, docked: true, showTranscript: open, composerCollapsed: !open, onExpandComposer: () => setOpen(true), onCollapseComposer: () => setOpen(false), onClose: () => setOpen(false), render: data => <DockContent data={data} connected={!!models.data?.connections.some(connection => connection.method === "subscription" && connection.status === "connected")} onOpen={() => setOpen(value => !value)} fridayPath={fridayPath} /> }} /></AgentOSCompanyScope></Suspense></div>;
 }
 
 function DockContent({ data, connected, onOpen, fridayPath }: { data: AgentConversationFocusData; connected: boolean; onOpen: () => void; fridayPath: string }) {

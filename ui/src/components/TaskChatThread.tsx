@@ -1,5 +1,9 @@
 import { TaskChatShimmerScope } from "@/components/task-chat/TaskChatShimmer";
 import { FridayConversationPanel } from "./FridayConversationPanel";
+import { ConversationalQuestionsContext } from "./ConversationalQuestion";
+import { useConversationalQuestion, type ConversationalQuestion } from "@/hooks/useConversationalQuestion";
+import { conversationalRuntimeResponse } from "@/lib/conversational-question";
+import { questionSetToAskUserQuestionsPayload } from "@paperclipai/shared";
 import { CommentSubmissionUnknownError } from "../lib/comment-submit-result";
 import {
   ISSUE_DETAIL_CONTENT_PAINT_MARK,
@@ -2429,6 +2433,7 @@ export function TaskChatThread(props: TaskChatThreadProps) {
     [tailItems, tailStatus],
   );
   const pendingRuntimeRequest = latestPendingRuntimeRequest(tailItems);
+  const conversationalQuestions = !!props.focusView?.canvas && !!conversationMode;
   const handleRuntimeRequestDecision = useCallback(
     async (
       item: TaskChatRuntimeRequestItem,
@@ -2547,8 +2552,9 @@ export function TaskChatThread(props: TaskChatThreadProps) {
       ? Boolean(input.interaction.dismissedAt) || dismissedInputIds.has(input.interaction.id) || dismissedInputIds.has(input.key)
       : dismissedInputIds.has(input.key), [dismissedInputIds]);
   const pendingReminderInputs = useMemo(() => pendingComposerInputs.filter(input =>
-    !isInputDismissed(input) && !(input.kind === "durable" && input.interaction.kind === "ask_user_questions")),
-  [pendingComposerInputs, isInputDismissed]);
+    !isInputDismissed(input) && !(input.kind === "durable" && input.interaction.kind === "ask_user_questions")
+      && !(conversationalQuestions && input.kind === "runtime" && input.item.requestType === "input" && input.item.questionSet)),
+  [pendingComposerInputs, isInputDismissed, conversationalQuestions]);
   const [dismissError, setDismissError] = useState<string | null>(null);
   const latestUserComment = useMemo(() => comments
     .filter(comment => !comment.deletedAt && comment.authorUserId && !comment.authorAgentId && !comment.createdByRunId)
@@ -2596,6 +2602,21 @@ export function TaskChatThread(props: TaskChatThreadProps) {
     currentPendingInputs[0] ??
     null;
   const selectedPendingInputKeyRef = useRef<string | null>(null);
+  const questionRequest = useMemo<ConversationalQuestion | null>(() => {
+    if (!conversationalQuestions || !selectedPendingInput) return null;
+    if (selectedPendingInput.kind === "durable") {
+      const interaction = selectedPendingInput.interaction;
+      if (interaction.kind !== "ask_user_questions" || !onSubmitInteractionAnswers) return null;
+      return { key: selectedPendingInput.key, payload: interaction.payload,
+        submit: answers => onSubmitInteractionAnswers(interaction, answers) };
+    }
+    const item = selectedPendingInput.item;
+    if (item.requestType !== "input" || !item.questionSet) return null;
+    const payload = questionSetToAskUserQuestionsPayload(item.questionSet);
+    return { key: selectedPendingInput.key, payload,
+      submit: answers => handleRuntimeRequestDecision(item, { action: "submit", response: conversationalRuntimeResponse(payload, answers) }) };
+  }, [conversationalQuestions, selectedPendingInput, onSubmitInteractionAnswers, handleRuntimeRequestDecision]);
+  const clarification = useConversationalQuestion(`${companyId}:${issueId}:${currentUserId}`, questionRequest);
   useLayoutEffect(() => {
     selectedPendingInputKeyRef.current = selectedPendingInput?.key ?? null;
   }, [selectedPendingInput?.key]);
@@ -2658,6 +2679,10 @@ export function TaskChatThread(props: TaskChatThreadProps) {
   }, [runnerSubmissionPending, tailRunId]);
   const handleThreadAdd = useCallback(
     async (...args: Parameters<typeof onAdd>) => {
+      if (clarification.active) {
+        if (args[2] || args[3]?.length || args[5]) throw new Error("Please answer this question with text or voice before changing the task settings or attaching files.");
+        if (await clarification.submit(args[0])) return;
+      }
       if (hasAgentAssignee) {
         submissionRequestId.current = args[4] ?? null;
         setRunnerSubmissionPending(true);
@@ -2678,7 +2703,7 @@ export function TaskChatThread(props: TaskChatThreadProps) {
         throw error;
       }
     },
-    [hasAgentAssignee, onAdd, selectedPendingInput, dismissInput],
+    [hasAgentAssignee, onAdd, selectedPendingInput, dismissInput, clarification],
   );
   const optimisticRunnerStartup =
     hasAgentAssignee &&
@@ -2858,7 +2883,7 @@ export function TaskChatThread(props: TaskChatThreadProps) {
     )
   ) : null;
   const composerTakeover =
-    takeoverMode === "open" && selectedPendingInput && takeoverContent
+    !questionRequest && takeoverMode === "open" && selectedPendingInput && takeoverContent
       ? {
           id: selectedPendingInput.key,
           label: selectedPendingInput.label,
@@ -3033,6 +3058,7 @@ export function TaskChatThread(props: TaskChatThreadProps) {
   const showHistory = focusView?.canvas ? focusView.showTranscript : pendingInlineDecision || !focusView || focusView.showTranscript || !!props.recoveryAction || !!props.interruption || !!props.executionBlocked || tailStatus === "failed" || historyError;
 
   return (
+    <ConversationalQuestionsContext.Provider value={conversationalQuestions}>
     <TaskChatRequestHistoryContext.Provider value={issueId ?? "unknown"}>
     <TaskChatExpansionState.Provider value={expansionState.current}>
       <TaskChatScrollReady.Provider value={!historyPending || historyWaitExpired}>
@@ -3057,6 +3083,7 @@ export function TaskChatThread(props: TaskChatThreadProps) {
               {focusView.render({
                 runStatus: liveRun?.status === "running" ? "running" : liveRun || optimisticRunnerStartup ? "queued" : "idle",
                 awaitingInput: !!selectedPendingInput || pendingInlineDecision || !!composerTakeover,
+                clarification: clarification.prompt,
                 unavailable: historyError || initialHistoryError || tailStatus === "failed" || !!props.executionBlocked,
                 loading: historyPending,
               })}
@@ -3272,6 +3299,7 @@ export function TaskChatThread(props: TaskChatThreadProps) {
                   <>
                     {composerAccessory}
                     {dismissError ? <p role="alert" className="text-sm text-destructive">{dismissError}</p> : null}
+                    {clarification.error ? <p role="alert" className="text-sm text-destructive">{clarification.error}</p> : null}
                     {tailTurnStatus ? (
                       <TaskChatTurnStatusIsland model={tailTurnStatus} />
                     ) : null}
@@ -3395,5 +3423,6 @@ export function TaskChatThread(props: TaskChatThreadProps) {
       </TaskChatScrollReady.Provider>
     </TaskChatExpansionState.Provider>
     </TaskChatRequestHistoryContext.Provider>
+    </ConversationalQuestionsContext.Provider>
   );
 }

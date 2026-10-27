@@ -6,6 +6,7 @@ import { issueReadSqlCondition, projectReadSqlCondition, type AuthorizationActor
 import { caseReadSqlCondition, filterCasesForActor } from "./case-access.js";
 import { executionIssueCondition } from "./issue-visibility.js";
 import { managedApplicationService } from "./managed-applications.js";
+import { fridayAccountability } from "./friday-accountability.js";
 import { notFound } from "../errors.js";
 
 /** Rebuildable, request-driven views of native records. No model calls, timers,
@@ -62,7 +63,7 @@ export function fridayAwarenessService(db: Db) {
       // never exposed as an unchecked relationship to a private record.
       const taskSet = new Set(taskIds);
       const projectIds = [...new Set([...projectRows.slice(0, 200).map(project => project.id), ...tasks.flatMap(task => task.projectId ? [task.projectId] : [])])];
-      const [applicationRows, comments, products, handoffs] = await Promise.all([
+      const [applicationRows, comments, products, handoffs, accountability] = await Promise.all([
         projectIds.length ? db.select({ id: managedApplications.id, name: managedApplications.name, kind: managedApplications.kind, projectId: managedApplicationProjects.projectId })
           .from(managedApplicationProjects).innerJoin(managedApplications, and(eq(managedApplications.id, managedApplicationProjects.applicationId), eq(managedApplications.companyId, companyId)))
           .where(and(eq(managedApplicationProjects.companyId, companyId), inArray(managedApplicationProjects.projectId, projectIds), inArray(managedApplications.homeProjectId, visibleProjects))) : [],
@@ -77,6 +78,7 @@ export function fridayAwarenessService(db: Db) {
           .from(caseHandoffs).innerJoin(cases, and(eq(cases.id, caseHandoffs.caseId), eq(cases.companyId, companyId)))
           .where(and(eq(caseHandoffs.companyId, companyId), inArray(caseHandoffs.issueId, taskIds), await caseReadSqlCondition(db, actor)))
           .orderBy(desc(caseHandoffs.createdAt), desc(caseHandoffs.id)).limit(201) : [],
+        fridayAccountability(db, companyId, actor, projectIds, [...new Set(tasks.flatMap(task => task.assigneeAgentId ? [task.assigneeAgentId] : []))]),
       ]);
       const applications = new Map<string, FridayWork["applications"][number]>();
       const allowedCases = new Set((await filterCasesForActor(db, actor, [...new Set(handoffs.map(row => row.caseId))].map(id => ({ id })))).map(row => row.id));
@@ -85,7 +87,7 @@ export function fridayAwarenessService(db: Db) {
         const app = applications.get(row.id) ?? { id: row.id, name: row.name, kind: row.kind as "application" | "platform", projectIds: [] };
         app.projectIds.push(row.projectId); applications.set(row.id, app);
       }
-      return { observedAt: new Date().toISOString(), projects: projectRows.slice(0, 200), projectCount: totals[0].count,
+      return { observedAt: new Date().toISOString(), accountability, projects: projectRows.slice(0, 200), projectCount: totals[0].count,
         nextProjectOffset: projectRows.length > 200 ? query.projectOffset + 200 : null, applications: [...applications.values()],
         tasks: tasks.map(task => ({ ...task, parentId: task.parentId && taskSet.has(task.parentId) ? task.parentId : null })),
         counts: Object.fromEntries(counts.map(row => [row.status, Number(row.count)])),

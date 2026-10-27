@@ -134,6 +134,36 @@ function buildItem(overrides: Partial<AttentionItem> = {}): AttentionItem {
 const noop = () => {};
 
 describe("AttentionQueueRow", () => {
+  it("keeps Agent OS Approve and Disapprove available without expanding and uses native mutations", async () => {
+    const toggle = vi.fn();
+    vi.mocked(approvalsApi.approve).mockResolvedValue({} as never);
+    vi.mocked(approvalsApi.reject).mockResolvedValue({} as never);
+    const el = render(<AttentionQueueRow presentation="agentos" item={buildItem()} companyId="c1" expanded={false} onToggleExpand={toggle} onDismiss={noop} />);
+    const approve = [...el.querySelectorAll("button")].find(button => button.textContent === "Approve")!;
+    const disapprove = [...el.querySelectorAll("button")].find(button => button.textContent === "Disapprove")!;
+    expect(approve).toBeTruthy(); expect(disapprove).toBeTruthy();
+    expect(el.querySelector('a[href="/PAP/approvals/approval-1"]')).toBeNull();
+    act(() => approve.click());
+    await vi.waitFor(() => expect(approvalsApi.approve).toHaveBeenCalledWith("approval-1", undefined));
+    await vi.waitFor(() => expect(disapprove.disabled).toBe(false));
+    act(() => disapprove.click());
+    await vi.waitFor(() => expect(approvalsApi.reject).toHaveBeenCalledWith("approval-1", undefined));
+    expect(toggle).not.toHaveBeenCalled();
+  });
+
+  it("shows native approval failures in Agent OS instead of claiming success", async () => {
+    vi.mocked(approvalsApi.approve).mockRejectedValue(new Error("This approval changed. Refresh before deciding."));
+    const el = render(<AttentionQueueRow presentation="agentos" item={buildItem()} companyId="c1" expanded={false} onToggleExpand={noop} onDismiss={noop} />);
+    act(() => [...el.querySelectorAll("button")].find(button => button.textContent === "Approve")!.click());
+    await vi.waitFor(() => expect(el.querySelector('[role="alert"]')?.textContent).toContain("This approval changed"));
+  });
+
+  it("does not invent binary approvals for failed-run blockers", () => {
+    const el = render(<AttentionQueueRow presentation="agentos" inlineDetail={null} item={buildItem({ sourceKind: "failed_run", inlineResolvable: false })} companyId="c1" expanded={false} onToggleExpand={noop} onDismiss={noop} />);
+    const labels = [...el.querySelectorAll("button")].map(button => button.textContent);
+    expect(labels).not.toContain("Approve"); expect(labels).not.toContain("Disapprove");
+  });
+
   it("renders an inline approval resolver when expanded", () => {
     const el = render(
       <AttentionQueueRow

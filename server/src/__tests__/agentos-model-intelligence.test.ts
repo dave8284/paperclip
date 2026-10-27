@@ -41,7 +41,7 @@ it("records the configured subscription baseline before execution and requires a
   expect(selected.config.model).toBe(config.model);
   expect(selected.receipt?.evidence.evaluations).toBe(0);
   const [saved] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, run.id));
-  expect(saved.contextSnapshot?.modelIntelligence).toMatchObject({ id: run.id, namespace: companyId, taskType: "engineering" });
+  expect(saved.contextSnapshot?.modelIntelligence).toMatchObject({ id: run.id, namespace: companyId, taskType: "engineering.building" });
   // A new observed candidate may appear while a run waits for a subscription
   // slot. Retrying that run must replay its original selection request.
   await db.insert(costEvents).values({ companyId, agentId, model: "gpt-6.1-sol", provider: "openai", billingType: "subscription_included", costCents: 0, occurredAt: new Date() });

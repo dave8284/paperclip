@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "packageName": "@paperclipai/teams-catalog",
   "packageVersion": "0.1.0",
-  "generatedAt": "2026-10-27T07:12:02.150Z",
+  "generatedAt": "2026-10-27T10:33:02.890Z",
   "teams": [
     {
       "id": "paperclipai:bundled:company-defaults:agentos-operators",
@@ -34,7 +34,7 @@
         "tasks": 0,
         "routines": 2,
         "localSkills": 0,
-        "catalogSkills": 5,
+        "catalogSkills": 6,
         "externalSkillSources": 0
       },
       "rootAgentSlugs": [
@@ -54,6 +54,23 @@
         "portfolio-operations"
       ],
       "requiredSkills": [
+        {
+          "type": "catalog",
+          "ref": "agentos-context-review",
+          "agentSlugs": [
+            "coordinator",
+            "engineer",
+            "marketing",
+            "operations",
+            "product",
+            "qa",
+            "sales",
+            "support"
+          ],
+          "resolved": true,
+          "catalogSkillId": "paperclipai:bundled:paperclip-operations:agentos-context-review",
+          "catalogSkillKey": "paperclipai/bundled/paperclip-operations/agentos-context-review"
+        },
         {
           "type": "catalog",
           "ref": "doc-maintenance",
@@ -124,8 +141,8 @@
         {
           "path": "TEAM.md",
           "kind": "team",
-          "sizeBytes": 2474,
-          "sha256": "d1af15c4a045ad30c43e9e1006a24150401b66674bf6cd12912399b1ebc538fe"
+          "sizeBytes": 3169,
+          "sha256": "0208283c7d8d8e9f505f4f5b84b0d3a718f97a9cb528c6f72743291f4fb5b66d"
         },
         {
           "path": ".paperclip.yaml",
@@ -136,50 +153,50 @@
         {
           "path": "agents/coordinator/AGENTS.md",
           "kind": "agent",
-          "sizeBytes": 15068,
-          "sha256": "793453f62d23559bf9facef2ea971573c482cfcf859d02602e6f6818869e759b"
+          "sizeBytes": 20354,
+          "sha256": "7948ed0c17e37a08482d25820222c803beff7d8fcc5a790c8d26e2818b3d51bb"
         },
         {
           "path": "agents/engineer/AGENTS.md",
           "kind": "agent",
-          "sizeBytes": 3515,
-          "sha256": "7ff80507ba2b2bc1279bb446ee7343de12fe07508632b20ce49f20c1d2cc3b60"
+          "sizeBytes": 4623,
+          "sha256": "d6b3f6f97f3d601109566f24b439c02e67cdf10cb6667e9bea5335627e7990fe"
         },
         {
           "path": "agents/marketing/AGENTS.md",
           "kind": "agent",
-          "sizeBytes": 3492,
-          "sha256": "33004429e02f8bcf5d42d08fa4c927fc1791df766b4fbd522ac6411fe97fe0c6"
+          "sizeBytes": 4671,
+          "sha256": "ce6fce9d4c837700b382754d7f5981be12b0670aa9990de4f54b649972940dc2"
         },
         {
           "path": "agents/operations/AGENTS.md",
           "kind": "agent",
-          "sizeBytes": 3745,
-          "sha256": "608d1bc2fcb27996a6730a8eca48332421be1284839e6ad8131b14e13aa3e3d8"
+          "sizeBytes": 4847,
+          "sha256": "6ece27847170e235dd1027f8d769bfc33dda96cae3bfdd3e0a463e18e28df3c5"
         },
         {
           "path": "agents/product/AGENTS.md",
           "kind": "agent",
-          "sizeBytes": 3523,
-          "sha256": "3ce235d631549c1672238534c4c1d4e6f997be90a920e6af770d5141a7b61a4a"
+          "sizeBytes": 4739,
+          "sha256": "9cb40e2035fe05f8d6991599352b20b7e79eaf36598b3d746b72e2d3bfca4f0d"
         },
         {
           "path": "agents/qa/AGENTS.md",
           "kind": "agent",
-          "sizeBytes": 3363,
-          "sha256": "7fdb7febeba5345bae60459ecabda33556507d8bdd8050ac73863f2e030abf25"
+          "sizeBytes": 4553,
+          "sha256": "451fa9cd04f7b2145c6942c4716655dff234671275835146bcca5e69b722f5aa"
         },
         {
           "path": "agents/sales/AGENTS.md",
           "kind": "agent",
-          "sizeBytes": 3408,
-          "sha256": "d5e1df15fcb2522f0e3ad7c121163f9d43883e7ae40b8d10ce095f28d87988c0"
+          "sizeBytes": 4490,
+          "sha256": "fab424796df1892701c1a90a12cad5c4f5e6bd427ed3c0c640deb2e2e28dad7f"
         },
         {
           "path": "agents/support/AGENTS.md",
           "kind": "agent",
-          "sizeBytes": 3440,
-          "sha256": "13571538b8f9158eef26c977acf22861ac45ddf0a173704c3f1b2c780ea90b07"
+          "sizeBytes": 4491,
+          "sha256": "c54b55443d05d73bb2addfbbcf0e9861d7ff5b13e7b3f034711252e960feedb0"
         },
         {
           "path": "projects/portfolio-operations/PROJECT.md",
@@ -202,7 +219,7 @@
       ],
       "trustLevel": "assets",
       "compatibility": "compatible",
-      "contentHash": "sha256:98109f1f00d70a960d8ed6fd236f0da0d34d7a2f8d4941b09960fa534e93d305"
+      "contentHash": "sha256:08fdd2073fd16e7c2bb92dc086a03981d10559c9882752aae37464ba4a8f5c52"
     },
     {
       "id": "paperclipai:bundled:company-defaults:core-exec-team",

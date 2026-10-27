@@ -1,9 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
-import { createDb, companies, projects, activityLog, agentosDepartmentProjects, agentosDepartments, companyMemberships } from "@paperclipai/db";
+import { createDb, companies, projects, agents, activityLog, agentosDepartmentProjects, agentosDepartments, companyMemberships } from "@paperclipai/db";
 import { startEmbeddedPostgresTestDatabase } from "@paperclipai/db/test-embedded-postgres";
 import { departmentService } from "../services/agentos-departments.js";
+import { deleteCompany } from "../services/company-deletion.js";
+import { deleteAgentDependencies } from "../services/agent-deletion.js";
 let database: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>;
 let db: ReturnType<typeof createDb>;
 const companyId = randomUUID(), otherId = randomUUID(), projectId = randomUUID();
@@ -39,4 +41,41 @@ describe("company departments", () => {
     const rows = await service.list(companyId, { type: "board", source: "session", userId: "viewer", companyIds: [companyId] });
     expect(rows.find(row => row.id === department.id)?.projectIds).not.toContain(privateId);
   });
+  it("assigns only active company employees, preserves heads on legacy edits and records changes", async () => {
+    const service = departmentService(db);
+    const [lead, retired, foreign] = await db.insert(agents).values([
+      { companyId, name: "Engineering head" },
+      { companyId, name: "Retired head", status: "terminated" },
+      { companyId: otherId, name: "Other company head" },
+    ]).returning();
+    for (const invalid of [retired, foreign]) {
+      await expect(service.save(companyId, actor, who, { name: "Rejected head", description: "", leadAgentId: invalid.id })).rejects.toThrow("active employee in this company");
+    }
+    const department = await service.save(companyId, actor, who, { name: "Led department", description: "", leadAgentId: lead.id });
+    await expect(deleteAgentDependencies(db, companyId, lead.id)).rejects.toThrow("Reassign or clear");
+    expect((await db.select().from(agents).where(eq(agents.id, lead.id)))[0].lifecycleState).toBe("ready");
+    const [privateProject] = await db.insert(projects).values({ companyId, name: "Confidential launch", visibility: "private", privacyOwnerUserId: "owner" }).returning();
+    await service.assign(companyId, privateProject.id, department.id, actor, who);
+    const headView = await service.list(companyId, { type: "agent", agentId: lead.id, companyId, source: "agent_key" });
+    expect(headView.find(row => row.id === department.id)?.projectIds).not.toContain(privateProject.id);
+    const updated = await service.save(companyId, actor, who, { name: "Led department", description: "More context", expectedRevision: 1 }, department.id);
+    expect(updated.leadAgentId).toBe(lead.id);
+    await expect(db.update(agentosDepartments).set({ leadAgentId: foreign.id }).where(eq(agentosDepartments.id, department.id))).rejects.toThrow();
+    await service.save(companyId, actor, who, { name: "Led department", description: "", expectedRevision: 2, leadAgentId: null }, department.id);
+    await expect(service.save(companyId, actor, who, { name: "Stale head", description: "", expectedRevision: 2, leadAgentId: lead.id }, department.id)).rejects.toThrow("changed");
+    const audit = await db.select().from(activityLog).where(and(eq(activityLog.entityId, department.id), eq(activityLog.action, "department.updated")));
+    expect(audit.map(row => row.details)).toEqual(expect.arrayContaining([expect.objectContaining({ previousLeadAgentId: lead.id, leadAgentId: null, revision: 3 })]));
+    expect((await service.list(companyId, actor)).find(row => row.id === department.id)?.leadAgentId).toBeNull();
+  });
+  it("keeps native company deletion working when a department has a head", async () => {
+    const [company] = await db.insert(companies).values({ name: "Temporary company", issuePrefix: "DLT" }).returning();
+    const [lead] = await db.insert(agents).values({ companyId: company.id, name: "Temporary head", adapterType: "process" }).returning();
+    const department = await departmentService(db).save(company.id, actor, who, { name: "Temporary department", description: "", leadAgentId: lead.id });
+    // The isolated database has no lifecycle worker. Seed its completed
+    // termination receipt; native deletion must still enforce that boundary.
+    await db.update(agents).set({ status: "terminated", lifecycleState: "terminated" }).where(eq(agents.id, lead.id));
+    await expect(deleteCompany(db, company.id)).resolves.toMatchObject({ id: company.id });
+    expect(await db.select().from(agentosDepartments).where(eq(agentosDepartments.id, department.id))).toHaveLength(0);
+    expect(await db.select().from(agents).where(eq(agents.id, lead.id))).toHaveLength(0);
+  }, 30000);
 });

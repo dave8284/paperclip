@@ -1,4 +1,6 @@
 import { useContext, useEffect, useMemo, useState } from "react";
+import { questionSetToAskUserQuestionsPayload } from "@paperclipai/shared";
+import { ConversationalQuestionMessage, useConversationalQuestions } from "../ConversationalQuestion";
 import {
   AlertTriangle,
   Bot,
@@ -1104,6 +1106,10 @@ export function TaskChatProtocolCard({
   imageUploadHandler,
   mentions,
 }: TaskChatProtocolCardProps) {
+  const conversational = useConversationalQuestions();
+  if (conversational && item.surface === "runtime_request" && item.requestType === "input" && item.questionSet && item.status === "pending") {
+    return <ConversationalQuestionMessage payload={questionSetToAskUserQuestionsPayload(item.questionSet)} />;
+  }
   switch (item.surface) {
     case "provider_activity":
       return <ProviderActivityCard item={item} />;

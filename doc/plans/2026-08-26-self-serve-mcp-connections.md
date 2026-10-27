@@ -383,3 +383,14 @@ refresh; no client registration was performed during research. Its optional
 V2 `meeting.summarized` webhook uses a separately signed routine trigger.
 See [Fireflies setup and evidence](../connections/FIREFLIES.md) for ownership,
 public HTTPS requirements, artwork provenance, and live-proof boundaries.
+
+
+## Agent OS Higgsfield addition — 2026-10-27
+
+Added the official account-backed MCP at `https://mcp.higgsfield.ai/mcp` with
+DCR and the resource's exact identity/offline scopes. Reviewed override, local
+branding, permission review, instruction template and catalogue fixtures are
+checked in. Public native preflight and DCR succeeded. User deferred provider
+sign-in; no authenticated tool inventory, generation or lifecycle proof is claimed.
+See `doc/connections/HIGGSFIELD.md`. Supabase already has a native connection;
+CLI account selection and a dedicated AgentOS project are separate setup steps.

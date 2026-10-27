@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useMemo, useRef, useState, type R
 import type { Agent } from "@paperclipai/shared";
 import { AlertTriangle, ArrowUpRight, Bot, Check, CheckCircle2, ChevronDown, ChevronRight, CircleDashed, Clock, ExternalLink, FileText, GitBranch, ImagePlus, KeyRound, Loader2, MessageSquareQuote, MinusCircle, ShieldAlert, ThumbsUp, TriangleAlert, Wrench, X, XCircle } from "lucide-react";
 import { Link } from "@/lib/router";
+import { DecisionPresentation } from "./DecisionPresentation";
 import { formatAssigneeUserLabel } from "../lib/assignees";
 import { describeInteractionAudience, type InteractionAudienceDescription } from "../lib/interaction-audience";
 import { interactionResolutionErrorMessage } from "../lib/interaction-resolution-error";
@@ -2119,9 +2120,9 @@ const CONFIRMATION_REJECT_LABEL = "Reject";
  */
 function ConfirmationActionRow({
   resetKey,
-  approveLabel,
+  approveLabel: nativeApproveLabel,
   reviseLabel = CONFIRMATION_REVISE_LABEL,
-  rejectLabel,
+  rejectLabel: nativeRejectLabel,
   approveVariant = "default",
   primaryActionOnRight = false,
   allowRevise,
@@ -2171,6 +2172,9 @@ function ConfirmationActionRow({
    * hierarchy instead of relying on opportunistic flex wrapping. */
   stackActionsOnMobile?: boolean;
 }) {
+  const presentation = useContext(DecisionPresentation);
+  const approveLabel = presentation === "approval" && /^(accept|confirm|approve)$/i.test(nativeApproveLabel) ? "Approve" : nativeApproveLabel;
+  const rejectLabel = presentation === "approval" ? "Disapprove" : nativeRejectLabel;
   const [revising, setRevising] = useState(false);
   const [reason, setReason] = useState("");
   const [attempted, setAttempted] = useState(false);
@@ -2230,7 +2234,7 @@ function ConfirmationActionRow({
               setRevising((current) => !current);
             }}
           >
-            {reviseLabel}
+            {presentation === "approval" && rejectRequiresReason ? "Disapprove" : reviseLabel}
           </Button>
         ) : null}
         {!rejectRequiresReason ? (

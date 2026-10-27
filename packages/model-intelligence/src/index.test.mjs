@@ -48,3 +48,13 @@ test("rejects untrusted profiles and malformed evaluation claims",()=>{
  assert.throws(()=>engine.select(input("unavailable",{candidates:[{...candidates[0],available:false}]})),/available/);
  engine.select(input("run"));assert.throws(()=>engine.evaluate({namespace:"company-a",id:"eval",receiptId:"run",passed:true,iterations:0,latencyMs:-1,source:"process-exit",evaluator:"owner",evidenceRef:"no checked work"}),/Invalid evaluation/);engine.close();
 });
+test("learning library aggregates beyond the recent ledger and uses the routing qualification evidence",()=>{
+ const engine=createModelIntelligence(":memory:");
+ for(let i=0;i<5;i++){review(engine,`strong${i}`,"strong",1000);review(engine,`fast${i}`,"fast",400);}
+ for(let i=0;i<105;i++)engine.select(input(`extra${i}`,{namespace:"company-b",taskType:"engineering.testing"}));
+ const a=engine.analytics("company-a");assert.equal(a.profiles.length,2);assert.equal(a.profiles.find(row=>row.candidate.id==="fast").qualityQualified,true);
+ assert.equal(a.profiles[0].evidence.evaluations,5);assert(a.taskFamilies.some(row=>row.id==="engineering.testing"));
+ const all=engine.analytics();assert.equal(all.receipts.length,100);assert.equal(all.profiles.find(row=>row.namespace==="company-b").selections,105);
+ engine.policy({namespace:"company-a",candidateId:"fast",action:"block",reason:"Quality regression"});
+ assert.equal(engine.analytics("company-a").profiles.find(row=>row.candidate.id==="fast").qualityQualified,false);engine.close();
+});

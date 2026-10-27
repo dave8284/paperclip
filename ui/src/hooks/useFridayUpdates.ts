@@ -16,6 +16,7 @@ export function useFridayUpdates(companyId: string) {
     void client.invalidateQueries({ queryKey: applicationQueryKey(companyId) });
     void client.invalidateQueries({ queryKey: queryKeys.attention(companyId) });
     void client.invalidateQueries({ queryKey: departmentKey(companyId) });
+    void client.invalidateQueries({ queryKey: ["company-performance", companyId] });
   };
   useCompanyLiveEvent(event => {
     if (event.companyId !== companyId || event.type !== "activity.logged" && !event.type.startsWith("heartbeat.run.")) return;

@@ -26,6 +26,14 @@ Agent access: [companion](../agent-access-map/routines.md).
 
 Open `/routines`, create one, and inspect `/routines/:routineId` and its edit sections.
 
+Agent OS also exposes company/project Routines in Friday. Open a loop to see its
+current triggers, actual cycle owner, cycle task, child tasks and stored outputs
+on a pan/zoom workflow. Select a node to inspect or triage its native record;
+Edit loop and Edit trigger use revision-checked native updates. Current definition
+nodes are labelled separately from past cycle results. Only recorded work animates.
+The graph bounds child tasks and outputs to 30; complete history stays on the task.
+Workflow interaction tests pass; visual browser acceptance remains outstanding.
+
 ### `trigger-history`
 
 Use the routine's trigger controls and Runs/Recent Runs/Audit links; lists also

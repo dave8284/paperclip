@@ -12,7 +12,6 @@ import { AgentOSCompanyScope } from "./AgentOSCompanyScope";
 import { FridayAttention } from "./FridayAttention";
 import { FridayOperations } from "./FridayOperations";
 import { FridayWorkGraph } from "./FridayWorkGraph";
-import { AgentOSDelete } from "./AgentOSDelete";
 import { Button } from "./ui/button";
 
 type Navigation = (view: FridayNavigation) => void;
@@ -34,13 +33,13 @@ function CompanyCard({ company, navigate }: { company: Company; navigate: Naviga
     <div className="agentos-card-metrics"><span><strong>{work.isSuccess ? work.data.projectCount : "—"}</strong>projects</span><span><strong>{work.isSuccess ? work.data.counts.in_progress ?? 0 : "—"}</strong>in motion</span><span><strong>{attention.isSuccess ? attention.data.totalCount : "—"}</strong>decisions & blockers</span></div>
     {(work.error || attention.error) && <p className="text-destructive">Some information could not be refreshed.</p>}
     <div className="agentos-card-footer">Open company<ArrowRight /></div>
-  </button><AgentOSDelete compact kind="company" id={company.id} companyId={company.id} name={company.name} /></div>;
+  </button></div>;
 }
 
 export function AgentOSDecisionPeek({ companies, navigate }: { companies: Company[]; navigate: Navigation }) {
   const feeds = useQueries({ queries: companies.map(company => ({ queryKey: [...queryKeys.attention(company.id), "preview"], queryFn: () => attentionApi.list(company.id, { limit: 3, sort: "decide" }) })) });
   const items = feeds.flatMap((feed, index) => feed.isSuccess ? feed.data.items.map(item => ({ item, company: companies[index] })) : []).slice(0, 3);
-  return <section className="agentos-home-decisions" aria-label="Decisions and blockers"><div className="agentos-section-heading"><h2>A few things to move forward</h2><button type="button" onClick={() => navigate({ panel: "attention" })}>Review all <ArrowRight /></button></div>
+  return <section className="agentos-home-decisions" aria-label="Decisions and blockers"><div className="agentos-section-heading"><h2>A few things to move forward</h2><button type="button" onClick={() => navigate(companies.length === 1 ? { panel: "attention", companyId: companies[0].id } : { panel: "attention", scope: "portfolio" })}>Review all <ArrowRight /></button></div>
     <div className="agentos-decision-cards">{items.map(({ item, company }) => <button type="button" key={`${company.id}:${item.id}`} onClick={() => navigate({ panel: "attention", companyId: company.id, projectId: item.project?.id ?? undefined, decisionId: item.id })}><span className="agentos-eyebrow">{company.name}{item.project ? ` / ${item.project.name}` : ""}</span><strong>{item.subject.title ?? item.whyNow}</strong><span>{item.whyNow}<ArrowRight /></span></button>)}</div>
     {feeds.some(feed => feed.isPending) && <p className="text-sm text-muted-foreground">Checking what needs you…</p>}
     {feeds.some(feed => feed.isError) && <p role="alert" className="text-sm text-destructive">Some companies could not be checked. Open Decisions to retry.</p>}

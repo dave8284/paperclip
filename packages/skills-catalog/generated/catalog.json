@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "packageName": "@paperclipai/skills-catalog",
   "packageVersion": "0.3.1",
-  "generatedAt": "2026-10-06T01:21:47.421Z",
+  "generatedAt": "2026-10-27T10:33:01.576Z",
   "skills": [
     {
       "id": "paperclipai:bundled:docs:doc-maintenance",
@@ -37,6 +37,122 @@
         }
       ],
       "contentHash": "sha256:2e02299210fd17c1fe1867b4ee8c144a11b6fe1fe481f83b8268cfbaaf10f9aa"
+    },
+    {
+      "id": "paperclipai:bundled:paperclip-operations:agentos-context-review",
+      "key": "paperclipai/bundled/paperclip-operations/agentos-context-review",
+      "kind": "bundled",
+      "category": "paperclip-operations",
+      "slug": "agentos-context-review",
+      "name": "agentos-context-review",
+      "description": "Keep Agent OS delegation scoped and review substantial plans with fresh Elephant–Goldfish reviewers. Use for cross-team handoffs, design uncertainty or evidence-backed capability lessons; ordinary clear tasks do not need a review ceremony.",
+      "path": "catalog/bundled/paperclip-operations/agentos-context-review",
+      "entrypoint": "SKILL.md",
+      "trustLevel": "markdown_only",
+      "compatibility": "compatible",
+      "defaultInstall": false,
+      "recommendedForRoles": [
+        "general",
+        "manager",
+        "pm",
+        "engineer",
+        "qa"
+      ],
+      "requires": [],
+      "tags": [
+        "agentos",
+        "delegation",
+        "context",
+        "review",
+        "learning"
+      ],
+      "files": [
+        {
+          "path": "SKILL.md",
+          "kind": "skill",
+          "sizeBytes": 4363,
+          "sha256": "2b50e3d47eb5ec79982a94aa87cc49e06290c6bc889740b29aa9d82df5247b6f"
+        },
+        {
+          "path": "references/evidence-and-learning.md",
+          "kind": "reference",
+          "sizeBytes": 3801,
+          "sha256": "851cea253e84b56f49ce0850ded1393fdc90658e988d7e46273b17820acda9f9"
+        },
+        {
+          "path": "references/review-dispatch.md",
+          "kind": "reference",
+          "sizeBytes": 3851,
+          "sha256": "9662bce41dd1b40d41aba4598a6df2a4d76b13c81ed9aa660e6550cb78e09b99"
+        },
+        {
+          "path": "references/scope-and-handoffs.md",
+          "kind": "reference",
+          "sizeBytes": 4944,
+          "sha256": "c987cbe760b3403b10f81ca640da94dce7a54722855bbe9c5b3e14ecbe2844fc"
+        },
+        {
+          "path": "references/source.md",
+          "kind": "reference",
+          "sizeBytes": 1487,
+          "sha256": "721c5c59cec1edc017bbbdf28172e954df2dd904dc533f60c6d8ca658e690769"
+        },
+        {
+          "path": "references/upstream/agents/comprehension.md",
+          "kind": "reference",
+          "sizeBytes": 3972,
+          "sha256": "e9390a27b859dbd3b369059dc95887cd605f8cf0377a32fbecdcf4afb6a68fcc"
+        },
+        {
+          "path": "references/upstream/agents/design_critic.md",
+          "kind": "reference",
+          "sizeBytes": 3843,
+          "sha256": "cee6294735ce2bd4fea19245852b6eb07cbe8ede7e72a4bfc829f586e4a39d0f"
+        },
+        {
+          "path": "references/upstream/agents/implementation_readiness.md",
+          "kind": "reference",
+          "sizeBytes": 3929,
+          "sha256": "1f6aa61cfe7cb86dc94943ab3b3fd339e5baba533937198fd10edb06dfa64e8f"
+        },
+        {
+          "path": "references/upstream/agents/zoom_out.md",
+          "kind": "reference",
+          "sizeBytes": 4903,
+          "sha256": "adc9d7b7db4c304866e61d5e5e446502231abe188ce64656939305e07ae7995f"
+        },
+        {
+          "path": "references/upstream/LICENSE",
+          "kind": "reference",
+          "sizeBytes": 11358,
+          "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+        },
+        {
+          "path": "references/upstream/resources/document_standards/feature-spec-standard.md",
+          "kind": "reference",
+          "sizeBytes": 1489,
+          "sha256": "b3e4960fd884fde880a41da782fc73342fe232769e5835a4470b3c8c517644c4"
+        },
+        {
+          "path": "references/upstream/resources/document_standards/implementation-readiness-standard.md",
+          "kind": "reference",
+          "sizeBytes": 1379,
+          "sha256": "ed0d2a085eac0fd9581d504a2ec0df2a92d6b2538636a22b16e0b1370fba6dbb"
+        },
+        {
+          "path": "references/upstream/resources/document_standards/re-implementation-standard.md",
+          "kind": "reference",
+          "sizeBytes": 1535,
+          "sha256": "421aacbf5e9a0d4c5b794edfa4cac333f8cc67bc4cf0e3717efcad4f827e6e46"
+        },
+        {
+          "path": "references/upstream/resources/document_standards/zoom-out-standard.md",
+          "kind": "reference",
+          "sizeBytes": 2884,
+          "sha256": "0a01013bd363a8d744f8372b65495892360d7339e4e35c767003ae38f48e6799"
+        }
+      ],
+      "contentHash": "sha256:0561606bffadf47b5cff5c45c217a0f77c394255b77941b572064abf9b7e3b03"
     },
     {
       "id": "paperclipai:bundled:paperclip-operations:issue-triage",

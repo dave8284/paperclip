@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Agent, FridayWork } from "@paperclipai/shared";
-import { fridayGraph } from "./friday-graph";
+import { fridayGraph, fridayGraphAgents } from "./friday-graph";
 import { fridayConversationView, fridayNavigationSearch, parseFridayView, readFridayNavigation } from "./friday-navigation";
 
 const projectId = "00000000-0000-4000-8000-000000000001";
@@ -40,7 +40,12 @@ describe("Friday record graph", () => {
   const agents = [{ id: "lead", name: "Friday" }, { id: "worker", name: "Engineer" }, { id: "unused", name: "Unused" }] as Agent[];
   it("builds only record-backed nodes and distinguishes assignment from actual coordination", () => {
     const graph = fridayGraph(data, agents, new Set());
-    expect(graph.nodes.map(node => node.id).sort()).toEqual(["project:p", "agent:lead", "agent:worker", "task:task", "comment:message", "artifact:output"].sort());
+    expect(graph.nodes.map(node => node.id).sort()).toEqual(["project:p", "agent:lead", "agent:worker", "agent:unused", "task:task", "comment:message", "artifact:output"].sort());
+    // The authorized overview roster includes available employees, but never
+    // invents an assignment or a coordination edge for an unused employee.
+    expect(graph.edges.some(edge => edge.from === "agent:unused" || edge.to === "agent:unused")).toBe(false);
+    const scoped = fridayGraph(data, fridayGraphAgents(data, agents, true), new Set());
+    expect(scoped.nodes.map(node => node.id).sort()).toEqual(["project:p", "agent:lead", "agent:worker", "task:task", "comment:message", "artifact:output"].sort());
     expect(graph.edges.filter(edge => edge.kind === "handoff")).toEqual([]);
     expect(graph.edges.find(edge => edge.kind === "assignment")?.active).toBe(false);
     expect(graph.edges.find(edge => edge.kind === "lead")).toMatchObject({ from: "agent:lead", to: "project:p" });
@@ -56,4 +61,12 @@ describe("Friday record graph", () => {
     expect(finished.edges.some(edge => edge.active)).toBe(false);
     expect(finished.nodes.find(node => node.id === "task:task")?.status).toBe("done");
   });
+});
+
+it("keeps saved displays scoped and requires an explicit portfolio selection", async () => {
+  const { scopeFridayNavigation } = await import("./friday-navigation");
+  const companyId = projectId;
+  expect(readFridayNavigation(fridayNavigationSearch({ panel: "library", companyId, projectId: agentId }))).toMatchObject({ panel: "library", companyId, projectId: agentId });
+  expect(scopeFridayNavigation({ panel: "artifacts" }, companyId)).toMatchObject({ panel: "artifacts", companyId });
+  expect(scopeFridayNavigation({ panel: "attention", scope: "portfolio" }, companyId)).toEqual({ panel: "attention", scope: "portfolio" });
 });

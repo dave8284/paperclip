@@ -2851,3 +2851,4 @@ export * from "./operating-profile.js";
 export * from "./agentos-workforce.js";
 export * from "./agentos-administration.js";
 export * from "./agentos-departments.js";
+export * from "./company-performance.js";

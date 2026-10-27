@@ -8,6 +8,8 @@ export interface ConversationFocusState {
   awaitingInput: boolean;
   unavailable: boolean;
   loading: boolean;
+  /** A current clarification, spoken even while its provider run waits for input. */
+  clarification?: { id: string; body: string };
 }
 export interface ConversationFocusView {
   canvas?: boolean;
@@ -32,6 +34,7 @@ export interface AgentConversationFocusData extends ConversationFocusState {
   voiceDisabled: boolean;
 }
 export interface AgentConversationFocusView {
+  beforeSend?: (issueId: string) => Promise<void>;
   canvas?: boolean;
   docked?: boolean;
   onClose?: () => void;

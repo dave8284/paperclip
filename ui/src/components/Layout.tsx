@@ -582,7 +582,7 @@ export function Layout({ sidebarSections }: { sidebarSections?: ReactNode }) {
       <main id="main-content" ref={mainContentRef} tabIndex={-1} className="agentos-root-scroll">
         {hasUnknownCompanyPrefix ? <NotFoundPage scope="invalid_company_prefix" requestedPrefix={companyPrefix ?? selectedCompany?.issuePrefix} /> : <RouteErrorBoundary>{isFridayRoute ? <Outlet /> : <AgentOSNativeFrame context={secondarySidebar} properties={<PropertiesPanel taskDetailLayout={false} />}><Outlet /></AgentOSNativeFrame>}</RouteErrorBoundary>}
       </main>
-      <CommandPalette /><BoardDialogs /><KeyboardShortcutsCheatsheet open={shortcutsOpen} onOpenChange={setShortcutsOpen} /><ToastViewport />
+      <BoardDialogs /><KeyboardShortcutsCheatsheet open={shortcutsOpen} onOpenChange={setShortcutsOpen} /><ToastViewport />
       <PluginAppShellOverlays localTrusted={health?.deploymentMode === "local_trusted"} />
     </div>
   </ChatSetupSidebarProvider>;

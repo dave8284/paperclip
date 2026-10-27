@@ -1179,6 +1179,9 @@ importers:
 
   ui:
     dependencies:
+      '@agentos/model-intelligence':
+        specifier: workspace:*
+        version: link:../packages/model-intelligence
       '@assistant-ui/react':
         specifier: 0.15.22
         version: 0.15.22(@opentelemetry/api@1.9.1)(@types/react-dom@19.2.5(@types/react@19.2.18))(@types/react@19.2.18)(ai@7.0.130(zod@4.6.5))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(use-sync-external-store@1.7.0(react@19.2.8))

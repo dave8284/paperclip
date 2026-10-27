@@ -15,6 +15,7 @@ Agent access: [companion](../agent-access-map/companies.md).
 ## Sub-features
 
 - `selection`: `companies/selection` — create/select a company and keep navigation in its scope.
+- `performance`: `companies/performance` — inspect sourced monthly revenue, costs and marketing results with department/project filters and revision history.
 - `identity`: `companies/identity` — update company identity and configured settings.
 - `decision-models`: `companies/decision-models` — configure and test the company's decision model, then inspect invocation history and recorded usage.
 - `prompt-injection-prevention`: `companies/prompt-injection-prevention` — opt into a shared OpenRouter classifier for existing tool-result guards, test fixed samples, and recover unavailable selections.
@@ -28,6 +29,29 @@ Agent access: [companion](../agent-access-map/companies.md).
 ### `company-switcher`
 
 Use the company switcher or `/companies`, then enter company Settings.
+
+In Agent OS, the top company selector scopes the department → project tree, work,
+decisions, routines, artefacts and saved displays. Friday remains the portfolio
+coordinator. Settings is in the sidebar footer, below Saved displays; account/sign-out is top right.
+Settings opens Company information and contains Voice, Connectors and Models.
+Company archival/deletion is confined to Company settings in the Agent OS shell;
+ordinary Workforce and work headers have no company-delete action. The native
+review and portfolio-home retention rules still apply.
+Departments precede Projects in the sidebar. Assign department heads in
+Departments and project leads in Projects; these labels do not expand access.
+Friday can read the associated ownership/reporting chain through the work
+awareness API before asking an authorized lead for more context. The bundled
+Agent OS context/review skill records scoped handoffs and review evidence in
+native task documents; it does not promise hidden reasoning or automatic
+fresh-context support from a harness.
+Company Performance accepts sourced monthly snapshots; unknown values remain
+missing. Profit requires complete revenue and costs on one currency/basis.
+Project attribution is not added to a separate company total.
+
+Automated refinement evidence: Friday/navigation, display-context and performance
+unit tests plus the performance service tests. Settings, navigation and department
+tests cover profile/deletion placement, same-company active heads, revision
+conflicts and private-project filtering. Browser verification remains blocked.
 
 ### `package-transfer`
 

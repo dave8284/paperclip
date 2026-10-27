@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "slug": "higgsfield",
+  "name": "Higgsfield",
+  "description": "Create and edit marketing images and videos using your Higgsfield account.",
+  "categories": ["ai", "content"],
+  "tags": ["marketing", "video", "image", "creative"],
+  "featured": true,
+  "branding": { "logoUrl": "/brands/apps/higgsfield.png" },
+  "urlPatterns": ["https://mcp.higgsfield.ai/*"],
+  "docsUrl": "https://higgsfield.ai/mcp",
+  "agentInstructions": {
+    "id": "higgsfield-marketing-assets",
+    "version": 1,
+    "text": "Use Higgsfield within the current company, project and task. Inspect the discovered tools and account limits before proposing a generation. Creating or editing media consumes Higgsfield credits; follow the task's approved scope, budgets and native action permissions. Record the brief, selected tool/model, reference assets, provider job identifier, status and returned outputs in the task. Distinguish queued, running, completed and failed jobs; do not call a submission a completed asset. Attach completed media as a versioned task artifact using the native artifact workflow, preserving its provenance and previous versions. A generated video is not a published campaign. Publishing or spending beyond approved scope requires the appropriate separate authorization. Do not expose credentials or account tokens in task content."
+  },
+  "methods": [{
+    "key": "mcp-oauth",
+    "label": "Sign in with Higgsfield",
+    "transport": "mcp_remote",
+    "auth": "oauth",
+    "ownershipModes": ["dcr"],
+    "oauthClientRegistration": "dcr",
+    "whenToUse": "Connect your existing Higgsfield account for image and video workflows.",
+    "defaults": {
+      "serverUrl": "https://mcp.higgsfield.ai/mcp",
+      "scopesHint": ["openid", "email", "offline_access"]
+    },
+    "guidanceMd": "Sign in to the Higgsfield account your marketing agents should use. This connection uses Higgsfield's hosted MCP and your available plan credits. Review the discovered actions and grant access to the relevant employees after connecting.",
+    "consoleLinks": { "docs": "https://higgsfield.ai/mcp", "settings": "https://higgsfield.ai/" },
+    "warnings": ["Image and video generation consumes Higgsfield credits. No generation is performed during setup. Account sign-in and authenticated tool discovery are required before this connection can execute work."],
+    "riskTier": "S4"
+  }]
+}

@@ -1,37 +1,57 @@
-import { useEffect, useState } from "react";
+import type { Analytics } from "@agentos/model-intelligence";
+import type { Company } from "@paperclipai/shared";
+import { ModelIntelligenceInsights } from "./ModelIntelligenceInsights";
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { operatingProfileApi, operatingProfileKey } from "@/api/operating-profile";
-import { agentsApi } from "@/api/agents";
 import { aiConnectionsApi } from "@/api/ai-connections";
-import { toolsApi } from "@/api/tools";
+import { companiesApi } from "@/api/companies";
 import { api } from "@/api/client";
-import { instanceSettingsApi } from "@/api/instanceSettings";
-import { useAgentChatEnabled } from "@/hooks/useAgentChatEnabled";
 import { queryKeys } from "@/lib/queryKeys";
 import { Link } from "@/lib/router";
+import { AgentOSConnectors } from "./AgentOSConnectors";
+import { AgentOSVoiceSettings } from "./AgentOSVoiceSettings";
+import { AgentOSDelete } from "./AgentOSDelete";
 import { Button } from "./ui/button";
 
-export function AgentOSSettings({ companyId }: { companyId: string }) {
+function CompanyPreferences({ company, onRemoved }: { company: Company; onRemoved?: () => void }) {
   const client = useQueryClient();
-  const [tab, setTab] = useState("Coordinator");
-  const [selected, setSelected] = useState("");
-  const profile = useQuery({ queryKey: operatingProfileKey(companyId), queryFn: () => operatingProfileApi.get(companyId) });
-  const agents = useQuery({ queryKey: queryKeys.agents.list(companyId), queryFn: () => agentsApi.list(companyId) });
-  const models = useQuery({ queryKey: ["ai-connections", companyId], queryFn: () => aiConnectionsApi.list(companyId) });
-  const connections = useQuery({ queryKey: queryKeys.tools.connections(companyId), queryFn: () => toolsApi.listConnections(companyId), enabled: tab === "Connections" });
-  const voice = useQuery({ queryKey: ["friday-voice", companyId], queryFn: () => api.get<{ available: boolean; engine: string; reason: string | null }>(`/companies/${companyId}/friday/voice`), enabled: tab === "Voice" });
-  const catalog = useQuery({ queryKey: ["model-catalog", companyId], queryFn: () => api.get<{ models: Array<{ id: string; label: string; provider: string; observed: boolean; configuredAgents: Array<{ id: string; name: string }> }> }>(`/companies/${companyId}/friday/models`), enabled: tab === "Models" });
+  const [name, setName] = useState(company.name);
+  const [description, setDescription] = useState(company.description ?? "");
+  const [requireApproval, setRequireApproval] = useState(company.requireBoardApprovalForNewAgents);
+  const [saved, setSaved] = useState(false);
+  const save = useMutation({
+    mutationFn: () => companiesApi.update(company.id, { name: name.trim(), description: description.trim() || null, requireBoardApprovalForNewAgents: requireApproval }),
+    onSuccess: async () => {
+      setSaved(true);
+      await client.invalidateQueries({ queryKey: queryKeys.companies.all });
+      await client.invalidateQueries({ queryKey: ["agentos-company-settings", company.id] });
+    },
+  });
+  return <section className="space-y-8" aria-label="Company settings">
+    <form className="max-w-2xl space-y-5" onSubmit={event => { event.preventDefault(); setSaved(false); save.mutate(); }} onChange={() => setSaved(false)}>
+      <div><h2 className="text-lg font-semibold">Company information</h2><p className="mt-2 text-sm text-muted-foreground">Profile and hiring preferences for {company.name}. Friday remains your portfolio coordinator.</p></div>
+      <label className="block text-sm">Company name<input className="mt-2 w-full rounded-lg border bg-background p-3" value={name} onChange={event => setName(event.target.value)} required maxLength={200} /></label>
+      <label className="block text-sm">Purpose and description<textarea className="mt-2 min-h-28 w-full rounded-lg border bg-background p-3" value={description} onChange={event => setDescription(event.target.value)} /></label>
+      <label className="flex items-start gap-3 text-sm"><input type="checkbox" className="mt-1" checked={requireApproval} onChange={event => setRequireApproval(event.target.checked)} /><span>Require approval for new agents<span className="mt-1 block text-muted-foreground">Company leads can propose hires; you approve before the agent joins.</span></span></label>
+      <div className="flex items-center gap-4"><Button type="submit" disabled={save.isPending || !name.trim()}>{save.isPending ? "Saving…" : "Save company"}</Button>{saved && <p role="status" className="text-sm text-muted-foreground">Company preferences saved.</p>}</div>
+      {save.error && <p role="alert" className="text-sm text-destructive">{save.error.message}</p>}
+    </form>
+    <div className="space-y-3"><h3 className="font-semibold">Access and operations</h3><div className="flex flex-wrap gap-4 text-sm"><Link to="/company/settings">Branding and advanced company settings</Link><Link to="/company/settings/members">People and access</Link><Link to="/applications">Applications and repositories</Link><Link to="/teams-catalog?search=AgentOS">Operating teams</Link></div></div>
+    <div className="max-w-2xl space-y-3 border-t pt-6"><h3 className="font-semibold">Archive or delete company</h3><p className="text-sm text-muted-foreground">Archive to retain work and history. Permanent deletion removes this company’s records; shared employees in other companies are retained. You will review the action before anything changes.</p><AgentOSDelete kind="company" id={company.id} companyId={company.id} name={company.name} onRemoved={onRemoved} /></div>
+  </section>;
+}
+
+export function AgentOSSettings({ companyId, onCompanyRemoved }: { companyId: string; onCompanyRemoved?: () => void }) {
+  const [tab, setTab] = useState("Company");
+  const company = useQuery({ queryKey: ["agentos-company-settings", companyId], queryFn: () => companiesApi.get(companyId), enabled: tab === "Company" });
+  const models = useQuery({ queryKey: ["ai-connections", companyId], queryFn: () => aiConnectionsApi.list(companyId), enabled: tab === "Models" });
+  const catalog = useQuery({ queryKey: ["model-catalog", companyId], queryFn: () => api.get<{ learning: Analytics | null; learningAccess?: "admin" | "restricted"; models: Array<{ id: string; label: string; provider: string; observed: boolean; configuredAgents: Array<{ id: string; name: string }> }> }>(`/companies/${companyId}/friday/models`), enabled: tab === "Models" });
   const connectedProviders = new Set(models.data?.connections.filter(connection => connection.method === "subscription" && connection.status === "connected").map(connection => connection.provider));
-  const chat = useAgentChatEnabled();
-  useEffect(() => { setSelected(profile.data?.fridayAgentId ?? ""); }, [profile.data?.fridayAgentId]);
-  const save = useMutation({ mutationFn: () => operatingProfileApi.update(companyId, { fridayAgentId: selected || null, expectedRevision: profile.data!.revision }), onSuccess: value => client.setQueryData(operatingProfileKey(companyId), value) });
-  const enableChat = useMutation({ mutationFn: () => instanceSettingsApi.updateExperimental({ enableAgentChat: true }), onSuccess: () => client.invalidateQueries({ queryKey: queryKeys.instance.experimentalSettings }) });
-  return <div className="space-y-6"><nav className="agentos-workspace-tabs" aria-label="Settings sections">{["Coordinator", "Models", "Connections", "Voice", "Company"].map(label => <button type="button" key={label} aria-current={tab === label ? "page" : undefined} onClick={() => setTab(label)}>{label}</button>)}</nav>
-    {[profile.error, agents.error, models.error, connections.error, voice.error, catalog.error, save.error, enableChat.error].filter(Boolean).map((error, index) => <p role="alert" key={index} className="text-destructive">{error!.message}</p>)}
-    {tab === "Coordinator" && <section className="max-w-2xl space-y-4"><h2 className="text-lg font-semibold">Your coordinator</h2><p className="text-sm text-muted-foreground">Choose Friday’s employee profile. Conversations and task execution keep their existing history, access and spend controls.</p><label className="block text-sm">Friday<select className="mt-2 w-full rounded-lg border bg-background p-3" value={selected} onChange={event => setSelected(event.target.value)}><option value="">Choose an agent</option>{agents.data?.filter(agent => !["terminated", "pending_approval"].includes(agent.status)).map(agent => <option value={agent.id} key={agent.id}>{agent.name}</option>)}</select></label><div className="flex gap-3"><Button disabled={save.isPending || !profile.data} onClick={() => save.mutate()}>Save coordinator</Button>{!chat.enabled && <Button variant="outline" onClick={() => enableChat.mutate()} disabled={enableChat.isPending}>Enable conversations</Button>}</div>{save.isSuccess && <p role="status" className="text-sm">Coordinator saved.</p>}{selected && <Link className="block text-sm text-primary" to={`/agents/${selected}/configuration`}>Instructions, skills, runtime and spend controls →</Link>}</section>}
-    {tab === "Models" && <section className="space-y-4"><h2 className="text-lg font-semibold">Subscription seats</h2><p className="text-sm text-muted-foreground">Only connected subscription accounts can power company agents. Model access and limits come from the selected account and harness.</p><div className="overflow-x-auto"><table className="agentos-data-table"><thead><tr><th>Account</th><th>Provider</th><th>Billing</th><th>Status</th><th>Access</th></tr></thead><tbody>{models.data?.connections.map(connection => <tr key={connection.grantId}><td>{connection.name}</td><td>{connection.provider}</td><td>{connection.method}</td><td>{connection.status.replaceAll("_", " ")}</td><td><Link to={`/apps/${connection.id}/permissions`}>Manage</Link></td></tr>)}</tbody></table></div><div className="flex gap-4 text-sm"><Link to="/apps/connect?source=openai">Connect Codex</Link><Link to="/apps/connect?source=anthropic">Connect Claude</Link><Link to="/admin?tab=intelligence">Model intelligence and evaluations</Link></div><h3 className="font-semibold">Model catalogue for connected providers</h3><p className="text-sm text-muted-foreground">Models supported by the installed harness. An observed subscription receipt is evidence of previous use; current account entitlement is checked again when work starts. Unproven profiles cannot replace your configured model automatically.</p><div className="overflow-x-auto"><table className="agentos-data-table"><thead><tr><th>Model</th><th>Subscription evidence</th><th>Configured employees</th></tr></thead><tbody>{catalog.data?.models.filter(model => connectedProviders.has(model.provider as "openai" | "anthropic")).map(model => <tr key={`${model.provider}:${model.id}`}><td>{model.label}</td><td>{model.observed ? "Observed in this company" : "Not yet observed"}</td><td>{model.configuredAgents.map(agent => agent.name).join(", ") || "—"}</td></tr>)}</tbody></table></div></section>}
-    {tab === "Connections" && <section className="space-y-5"><div className="space-y-3 rounded-xl border p-5"><h2 className="text-lg font-semibold">Stripe</h2><p className="text-sm text-muted-foreground">Connect your Stripe account, then give selected employees access. Live changes must be proposed with the exact action and approved before execution. Reads stay within granted access.</p><Button asChild variant="outline"><Link to="/apps/connect?source=stripe">Connect Stripe</Link></Button></div><div className="overflow-x-auto"><table className="agentos-data-table"><thead><tr><th>Connection</th><th>Health</th><th>Access</th></tr></thead><tbody>{connections.data?.connections.map(connection => <tr key={connection.id}><td>{connection.name}</td><td>{connection.enabled ? connection.healthStatus.replaceAll("_", " ") : "Disabled"}</td><td><Link to={`/apps/${connection.id}/permissions`}>Manage permissions</Link></td></tr>)}</tbody></table></div><Link className="text-sm text-primary" to="/operating-connections">All connection capabilities →</Link></section>}
-    {tab === "Voice" && <section className="max-w-2xl space-y-4"><h2 className="text-lg font-semibold">Talk to Friday</h2><p>{voice.data?.available ? "Local voice is ready · Whisper + Kokoro" : voice.data?.reason ?? "Checking local speech…"}</p><p className="text-sm text-muted-foreground">Tap the mic once to begin. Pause briefly when you finish speaking; Friday sends the turn and speaks her reply. Navigation keeps your mic enabled and minimises the transcript. Tap the mic again to pause.</p><p className="text-sm text-muted-foreground">Local voice processes speech on this computer. The transcript is sent to your connected agent. Audio is not retained. The speech worker releases its models after five minutes without a request.</p><Button variant="outline" onClick={() => void voice.refetch()}>Check local voice</Button></section>}
-    {tab === "Company" && <section className="space-y-4"><h2 className="text-lg font-semibold">Company administration</h2><div className="flex flex-wrap gap-4 text-sm"><Link to="/company/settings">Company profile and access</Link><Link to="/applications">Applications and repositories</Link><Link to="/teams-catalog?search=AgentOS">Operating teams</Link></div></section>}
+  return <div className="space-y-6"><nav className="agentos-workspace-tabs" aria-label="Settings sections">{["Company", "Voice", "Connectors", "Models"].map(label => <button type="button" key={label} aria-current={tab === label ? "page" : undefined} onClick={() => setTab(label)}>{label}</button>)}</nav>
+    {[models.error, catalog.error].filter(Boolean).map((error, index) => <p role="alert" key={index} className="text-destructive">{error!.message}</p>)}
+    {tab === "Connectors" && <AgentOSConnectors companyId={companyId} />}
+    {tab === "Voice" && <AgentOSVoiceSettings companyId={companyId} />}
+    {tab === "Models" && <section className="space-y-4">{catalog.data?.learning && <ModelIntelligenceInsights learning={catalog.data.learning} />}{catalog.data?.learningAccess === "restricted" && <p className="text-sm text-muted-foreground">Company-wide learning and evaluations are available to instance administrators because they include private project work.</p>}<h2 className="text-lg font-semibold">Subscription seats</h2><p className="text-sm text-muted-foreground">Only connected subscription accounts can power company agents. Model access and limits come from the selected account and harness.</p><div className="overflow-x-auto"><table className="agentos-data-table"><thead><tr><th>Account</th><th>Provider</th><th>Billing</th><th>Status</th><th>Access</th></tr></thead><tbody>{models.data?.connections.map(connection => <tr key={connection.grantId}><td>{connection.name}</td><td>{connection.provider}</td><td>{connection.method}</td><td>{connection.status.replaceAll("_", " ")}</td><td><Link to={`/apps/${connection.id}/permissions`}>Manage</Link></td></tr>)}</tbody></table></div><div className="flex gap-4 text-sm"><Link to="/apps/connect?source=openai">Connect Codex</Link><Link to="/apps/connect?source=anthropic">Connect Claude</Link><Link to="/admin?tab=intelligence">Model intelligence and evaluations</Link></div><h3 className="font-semibold">Model catalogue for connected providers</h3><p className="text-sm text-muted-foreground">Models supported by the installed harness. An observed subscription receipt is evidence of previous use; current account entitlement is checked again when work starts. Unproven profiles cannot replace your configured model automatically.</p><div className="overflow-x-auto"><table className="agentos-data-table"><thead><tr><th>Model</th><th>Subscription evidence</th><th>Configured employees</th></tr></thead><tbody>{catalog.data?.models.filter(model => connectedProviders.has(model.provider as "openai" | "anthropic")).map(model => <tr key={`${model.provider}:${model.id}`}><td>{model.label}</td><td>{model.observed ? "Observed in this company" : "Not yet observed"}</td><td>{model.configuredAgents.map(agent => agent.name).join(", ") || "—"}</td></tr>)}</tbody></table></div></section>}
+    {tab === "Company" && (company.isPending ? <p role="status">Reading company settings…</p> : company.error ? <p role="alert" className="text-destructive">{company.error.message}</p> : company.data && <CompanyPreferences key={companyId} company={company.data} onRemoved={onCompanyRemoved} />)}
   </div>;
 }

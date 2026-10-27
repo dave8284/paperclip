@@ -1,10 +1,10 @@
 import { and, eq } from "drizzle-orm";
-import { agentosDepartments as departments, agentosDepartmentProjects as memberships, projects, type Db } from "@paperclipai/db";
+import { agentosDepartments as departments, agentosDepartmentProjects as memberships, projects, agents, type Db } from "@paperclipai/db";
 import type { AgentOSDepartment } from "@paperclipai/shared";
 import { accessService } from "./access.js";
 import { authorizationService, type AuthorizationActor } from "./authorization.js";
 import { persistActivity, publishActivity, type LogActivityInput } from "./activity-log.js";
-import { conflict, forbidden, notFound } from "../errors.js";
+import { badRequest, conflict, forbidden, notFound } from "../errors.js";
 
 type Who = Pick<LogActivityInput, "actorType" | "actorId" | "agentId" | "runId">;
 export function departmentService(db: Db) {
@@ -20,15 +20,22 @@ export function departmentService(db: Db) {
       const visible = links.filter((_, index) => decisions[index]?.allowed);
       return rows.map(row => ({ ...row, projectIds: visible.filter(link => link.departmentId === row.id).map(link => link.projectId) }));
     },
-    async save(companyId: string, actor: AuthorizationActor, who: Who, input: { name: string; description: string; expectedRevision?: number }, id?: string) {
+    async save(companyId: string, actor: AuthorizationActor, who: Who, input: { name: string; description: string; leadAgentId?: string | null; expectedRevision?: number }, id?: string) {
       const result = await db.transaction(async connection => {
         const tx = connection as unknown as Db;
         await manage(tx, actor, companyId);
-        const [row] = id ? await tx.update(departments).set({ name: input.name, description: input.description, revision: (input.expectedRevision ?? 0) + 1 })
+        const [previous] = id ? await tx.select().from(departments).where(and(eq(departments.id, id), eq(departments.companyId, companyId))).for("update") : [];
+        if (id && (!previous || previous.revision !== input.expectedRevision)) throw conflict("Department changed. Refresh before saving.");
+        const leadAgentId = input.leadAgentId === undefined ? previous?.leadAgentId ?? null : input.leadAgentId;
+        if (leadAgentId && leadAgentId !== previous?.leadAgentId) {
+          const [lead] = await tx.select().from(agents).where(and(eq(agents.id, leadAgentId), eq(agents.companyId, companyId))).for("share");
+          if (!lead || !["active", "idle", "running", "error"].includes(lead.status) || lead.lifecycleState !== "ready") throw badRequest("Department head must be an active employee in this company.");
+        }
+        const [row] = id ? await tx.update(departments).set({ name: input.name, description: input.description, leadAgentId, revision: (input.expectedRevision ?? 0) + 1 })
           .where(and(eq(departments.id, id), eq(departments.companyId, companyId), eq(departments.revision, input.expectedRevision ?? 0))).returning()
-          : await tx.insert(departments).values({ companyId, name: input.name, description: input.description }).returning();
+          : await tx.insert(departments).values({ companyId, name: input.name, description: input.description, leadAgentId }).returning();
         if (!row) throw conflict("Department changed. Refresh before saving.");
-        const { publication } = await persistActivity(tx, { ...who, companyId, action: id ? "department.updated" : "department.created", entityType: "department", entityId: row.id, details: { name: row.name, revision: row.revision } });
+        const { publication } = await persistActivity(tx, { ...who, companyId, action: id ? "department.updated" : "department.created", entityType: "department", entityId: row.id, details: { name: row.name, revision: row.revision, leadAgentId: row.leadAgentId, previousLeadAgentId: previous?.leadAgentId ?? null } });
         return { row, publication };
       }).catch(error => {
         if (error?.code === "23505" || error?.cause?.code === "23505") throw conflict("A department with this name already exists in the company.");

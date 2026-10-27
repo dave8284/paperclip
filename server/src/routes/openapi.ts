@@ -5039,7 +5039,7 @@ for (const operation of [
 }
 
 for (const operation of [
-  { method: "get", path: "/api/companies/{companyId}/friday/work", summary: "Read current work across projects for Friday or an individual agent: complete authorized counts, project assignments, paginated tasks, messages, artifacts and recorded case handoffs", query: fridayWorkQuerySchema },
+  { method: "get", path: "/api/companies/{companyId}/friday/work", summary: "Read current authorized work: project assignments, paginated tasks and owners, department heads, project leads and bounded reporting chains, messages, artifacts and recorded case handoffs", query: fridayWorkQuerySchema },
   { method: "get", path: "/api/companies/{companyId}/managed-applications", summary: "List accessible application portfolio with project and task counts", query: managedApplicationListSchema },
   { method: "post", path: "/api/companies/{companyId}/managed-applications", summary: "Register an application against its home project (operator or applications:manage grant, idempotent)", body: createManagedApplicationSchema },
   { method: "get", path: "/api/companies/{companyId}/managed-applications/galaxy", summary: "Read a bounded portfolio graph with authorized native projects, task dots, complete counts and observation time", query: managedApplicationListSchema },

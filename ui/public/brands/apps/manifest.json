@@ -715,6 +715,12 @@
       "provider": "Unikraft",
       "catalogVisible": true,
       "localAsset": "/brands/apps/unikraft.svg"
+    },
+    {
+      "slug": "higgsfield",
+      "provider": "Higgsfield",
+      "catalogVisible": true,
+      "localAsset": "/brands/apps/higgsfield.png"
     }
   ]
 }

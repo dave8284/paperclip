@@ -6,7 +6,7 @@ import { agents, agentInstructionHeads, companyOperatingProfiles, costEvents, he
 import { agentHarnessType, type AiConnectionBinding } from "@paperclipai/shared";
 import { models as codexModels } from "@paperclipai/adapter-codex-local";
 import { models as claudeModels } from "@paperclipai/adapter-claude-local";
-import { createModelIntelligence, type ModelIntelligence, type SelectionReceipt, type SelectionInput } from "@agentos/model-intelligence";
+import { createModelIntelligence, classifyWork, type ModelIntelligence, type SelectionReceipt, type SelectionInput } from "@agentos/model-intelligence";
 import { conflict, notFound } from "../errors.js";
 import { logActivity } from "./activity-log.js";
 import type { LogActivityInput } from "./activity-log.js";
@@ -20,15 +20,7 @@ export function modelIntelligenceProduct() {
   return product;
 }
 const fingerprint = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
-export function classifyModelWork(title: string, description: string | null) {
-  const text = `${title} ${description ?? ""}`.toLowerCase();
-  const taskType = /\b(code|bug|test|implement|refactor|deploy|migration)\b/.test(text) ? "engineering"
-    : /\b(campaign|marketing|copy|video|content|social)\b/.test(text) ? "content"
-    : /\b(analy[sz]e|research|compare|strategy|plan)\b/.test(text) ? "analysis"
-    : /\b(invoice|subscription|support|monitor|report)\b/.test(text) ? "operations" : "coordination";
-  const complexity = /\b(production|security|migration|architecture|financial|payment|refund|critical|incident|strategy)\b/.test(text) || text.length > 4000 ? "complex" : "routine";
-  return { taskType, complexity } as const;
-}
+export const classifyModelWork = classifyWork;
 
 /** Local product integration at execution-configuration admission. Only observed
  * subscription models in the current harness qualify as alternative candidates.
@@ -77,13 +69,14 @@ export async function selectCompanyModelProfile(db: Db, input: {
   return { config: { ...config, model: receipt.candidate.model }, receipt, request: frozen };
 }
 
-export async function modelCatalog(db: Db, companyId: string) {
+export async function modelCatalog(db: Db, companyId: string, includeLearning = false) {
   const roster = await db.select({ id: agents.id, name: agents.name, adapterType: agents.adapterType, config: agents.adapterConfig }).from(agents).where(eq(agents.companyId, companyId));
   const observed = await db.selectDistinct({ provider: costEvents.provider, model: costEvents.model }).from(costEvents).where(and(eq(costEvents.companyId, companyId), eq(costEvents.billingType, "subscription_included"))).limit(100);
   return { models: [...codexModels.map(model => ({ ...model, provider: "openai" })), ...claudeModels.map(model => ({ ...model, provider: "anthropic" }))].map(model => ({ ...model,
     observed: observed.some(row => row.model === model.id && row.provider === model.provider),
     configuredAgents: roster.filter(agent => agent.config.model === model.id).map(agent => ({ id: agent.id, name: agent.name })),
-  })), learning: modelIntelligenceProduct()?.analytics(companyId) ?? null };
+  })), learning: includeLearning ? modelIntelligenceProduct()?.analytics(companyId) ?? null : null,
+    learningAccess: includeLearning ? "admin" as const : "restricted" as const };
 }
 
 export async function evaluateModelRun(db: Db, companyId: string, runId: string, input: { passed: boolean; evidenceRef: string }, who: Pick<LogActivityInput, "actorType" | "actorId" | "agentId" | "runId">) {

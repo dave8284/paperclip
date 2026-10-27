@@ -4629,7 +4629,8 @@ describe("TaskChatThread live transcript", () => {
     }
   });
 
-  it.each([false, true])("resolves canonical input with stale adapter metadata (saved card: %s)", async (hasSavedCard) => {
+  it.each([[false, false], [true, false], [false, true], [true, true]])("resolves canonical input with stale adapter metadata (saved card: %s, conversational: %s)", async (hasSavedCard, conversational) => {
+    const composerRef = createRef<IssueChatComposerHandle>();
     transcriptState.transcriptByRun.set("run-input", [
       {
         kind: "runtime_request",
@@ -4671,6 +4672,9 @@ describe("TaskChatThread live transcript", () => {
     } as IssueThreadInteraction;
     render(
       <TaskChatThread
+        conversationMode={conversational}
+        composerRef={composerRef}
+        focusView={conversational ? { canvas: true, showTranscript: true, composerCollapsed: false, render: () => <div>Friday</div> } : undefined}
         interactions={hasSavedCard ? [saved] : []}
         onSubmitInteractionAnswers={onSubmitInteractionAnswers}
         comments={[]}
@@ -4694,6 +4698,11 @@ describe("TaskChatThread live transcript", () => {
       />,
     );
 
+    if (conversational) {
+      expect(container.querySelector('[data-testid="task-chat-composer-takeover"]')).toBeNull();
+      expect(container.textContent).not.toContain("Submit answers");
+      await act(async () => { expect(await composerRef.current!.sendVoice!("Starter API")).toBe(true); });
+    } else {
     const option = Array.from(container.querySelectorAll("button")).find(
       (button) => button.textContent?.includes("Starter API"),
     );
@@ -4702,6 +4711,8 @@ describe("TaskChatThread live transcript", () => {
       (button) => button.textContent?.trim() === "Submit answers",
     );
     await act(async () => submit?.click());
+
+    }
 
     if (hasSavedCard) {
       expect(resolveRuntimeRequest).not.toHaveBeenCalled();
@@ -4939,6 +4950,52 @@ it("explains a missing provider runtime with an installation repair", () => {
 });
 
 describe("conversation focus presentation", () => {
+  it("lets Friday ask a question in chat and accepts voice through the native answer handler", async () => {
+    const composerRef = createRef<IssueChatComposerHandle>();
+    const onAdd = vi.fn().mockResolvedValue(undefined), answer = vi.fn().mockResolvedValue(undefined);
+    const question = questionInteraction("friday-voice-choice", "Would you like a warmer voice?", "2026-10-27T08:00:00Z");
+    const focus = vi.fn((_state: import("@/lib/conversation-focus").ConversationFocusState) => <div>Friday</div>);
+    render(<TaskChatThread comments={[]} onAdd={onAdd} conversationMode composerRef={composerRef} issueId="friday-voice-chat" currentUserId="user-board"
+      interactions={[question]} onSubmitInteractionAnswers={answer} focusView={{ canvas: true, showTranscript: true, composerCollapsed: false, render: focus }} />);
+    expect(container.querySelector('[data-testid="task-chat-composer-takeover"]')).toBeNull();
+    expect(container.textContent).not.toContain("Submit answers");
+    expect(container.querySelector('[data-testid="conversational-question"]')?.textContent).toContain("Would you like a warmer voice?");
+    expect(focus.mock.lastCall?.[0].clarification?.body).toBe("Would you like a warmer voice?");
+    await act(async () => { expect(await composerRef.current!.sendVoice!("Yes")).toBe(true); });
+    expect(answer).toHaveBeenCalledExactlyOnceWith(question, [{ questionId: "friday-voice-choice-question", optionIds: ["yes"] }]);
+    expect(onAdd).not.toHaveBeenCalled();
+    expect(focus.mock.lastCall?.[0].clarification).toBeUndefined();
+  });
+
+  it("asks multiple Friday questions one at a time and keeps a failed final answer retryable", async () => {
+    const composerRef = createRef<IssueChatComposerHandle>();
+    const question = questionInteraction("friday-sequence", "Use a warmer voice?", "2026-10-27T08:00:00Z");
+    if (question.kind !== "ask_user_questions") throw new Error("question fixture");
+    question.payload.questions.push({ id: "pace", prompt: "How quickly should I speak?", selectionMode: "single", options: [], allowOther: true });
+    const answer = vi.fn().mockRejectedValueOnce(new Error("Connection interrupted")).mockResolvedValue(undefined);
+    const focus = vi.fn((_state: import("@/lib/conversation-focus").ConversationFocusState) => <div>Friday</div>);
+    render(<TaskChatThread comments={[]} onAdd={async () => {}} conversationMode composerRef={composerRef} issueId="friday-sequence-chat" currentUserId="user-board"
+      interactions={[question]} onSubmitInteractionAnswers={answer} focusView={{ canvas: true, showTranscript: true, composerCollapsed: false, render: focus }} />);
+    await act(async () => { await composerRef.current!.sendVoice!("Yes"); });
+    expect(answer).not.toHaveBeenCalled();
+    expect(focus.mock.lastCall?.[0].clarification?.body).toBe("How quickly should I speak?");
+    await act(async () => { await composerRef.current!.sendVoice!("A little slower"); });
+    expect(container.textContent).toContain("Connection interrupted");
+    expect(focus.mock.lastCall?.[0].clarification?.body).toContain("How quickly should I speak?");
+    await act(async () => container.querySelector<HTMLButtonElement>('[data-testid="task-chat-composer-send"]')!.click());
+    expect(answer).toHaveBeenLastCalledWith(question, [{ questionId: "friday-sequence-question", optionIds: ["yes"] }, { questionId: "pace", optionIds: [], otherText: "A little slower" }]);
+  });
+
+  it("keeps Friday's governed confirmations explicit instead of treating speech as approval", async () => {
+    const composerRef = createRef<IssueChatComposerHandle>();
+    const onAdd = vi.fn().mockResolvedValue(undefined), approve = vi.fn();
+    const approval = { ...planReviewInteraction(), title: "Approve this change?", payload: { version: 1, prompt: "Approve this change?" } } as IssueThreadInteraction;
+    render(<TaskChatThread comments={[]} onAdd={onAdd} onAcceptInteraction={approve} interactions={[approval]} conversationMode composerRef={composerRef}
+      focusView={{ canvas: true, showTranscript: true, composerCollapsed: false, render: () => <div>Friday</div> }} />);
+    expect(container.querySelector('[data-testid="task-chat-composer-takeover"]')).not.toBeNull();
+    await act(async () => { expect(await composerRef.current!.sendVoice!("Yes")).toBe(false); });
+    expect(approve).not.toHaveBeenCalled(); expect(onAdd).not.toHaveBeenCalled();
+  });
   it("keeps the voice sender connected while the composer is folded and expands typing on request", async () => {
     const composerRef = createRef<IssueChatComposerHandle>();
     const onAdd = vi.fn().mockResolvedValue(undefined);

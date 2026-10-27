@@ -5,6 +5,19 @@ export type FridayGraphNode = { id: string; recordId: string; kind: "company" | 
   x: number; y: number; taskId?: string; status?: string; running?: boolean };
 export type FridayGraphEdge = { id: string; from: string; to: string; kind: "contains" | "lead" | "assignment" | "creation" | "subtask" | "message" | "output" | "handoff"; label: string; active?: boolean; taskId?: string };
 
+function relatedEmployeeIds(data: FridayWork) {
+  return new Set([...data.assignments.map(row => row.agentId), ...data.projects.flatMap(project => project.leadAgentId ? [project.leadAgentId] : []),
+    ...data.tasks.flatMap(task => [task.assigneeAgentId, task.createdByAgentId].filter((id): id is string => !!id)),
+    ...data.evidence.flatMap(row => row.agentId ? [row.agentId] : []), ...data.handoffs.flatMap(row => [row.fromAgentId, row.toAgentId].filter((id): id is string => !!id))]);
+}
+
+/** A focused project/application map must not show the rest of its company roster. */
+export function fridayGraphAgents(data: FridayWork, agents: Agent[], scoped: boolean) {
+  if (!scoped) return agents;
+  const involved = relatedEmployeeIds(data);
+  return agents.filter(agent => involved.has(agent.id));
+}
+
 /** Every point and relationship comes from an authorized source record. */
 export function fridayGraph(data: FridayWork, agents: Agent[], running: ReadonlySet<string>, companies: Array<{ id: string; name: string; projectIds: string[] }> = []) {
   const nodes = new Map<string, FridayGraphNode>();
@@ -24,14 +37,12 @@ export function fridayGraph(data: FridayWork, agents: Agent[], running: Readonly
     if (company) connect({ id: `company-project:${project.id}`, from: company.id, to: `project:${project.id}`, kind: "contains", label: "Company project" });
     if (project.leadAgentId) connect({ id: `lead:${project.id}`, from: `agent:${project.leadAgentId}`, to: `project:${project.id}`, kind: "lead", label: "Project lead" });
   }
-  const involvedAgents = new Set([...data.assignments.map(row => row.agentId), ...data.projects.flatMap(project => project.leadAgentId ? [project.leadAgentId] : []),
-    ...data.tasks.flatMap(task => [task.assigneeAgentId, task.createdByAgentId].filter((id): id is string => !!id)),
-    ...data.evidence.flatMap(row => row.agentId ? [row.agentId] : []), ...data.handoffs.flatMap(row => [row.fromAgentId, row.toAgentId].filter((id): id is string => !!id))]);
-  for (const id of involvedAgents) add({ id: `agent:${id}`, recordId: id, kind: "agent", title: agents.find(agent => agent.id === id)?.name ?? "Agent", running: data.tasks.some(task => task.assigneeAgentId === id && running.has(task.id)), ...galaxyPoint(`agent:${id}`, 430) });
+  const involvedAgents = new Set([...agents.map(agent => agent.id), ...relatedEmployeeIds(data)]);
+  for (const id of involvedAgents) add({ id: `agent:${id}`, recordId: id, kind: "agent", title: agents.find(agent => agent.id === id)?.name ?? "Agent", status: agents.find(agent => agent.id === id)?.status, running: data.tasks.some(task => task.assigneeAgentId === id && running.has(task.id)), ...galaxyPoint(`agent:${id}`, 430) });
   for (const task of data.tasks) {
     const parent = task.projectId ? nodes.get(`project:${task.projectId}`) : undefined;
     const position = galaxyPoint(task.id, parent ? data.projects.length === 1 ? 155 : 75 : 180, parent);
-    add({ id: `task:${task.id}`, recordId: task.id, kind: "task", title: `${task.identifier ?? "Task"} · ${task.title}`, status: task.status, running: running.has(task.id), ...position });
+    add({ id: `task:${task.id}`, recordId: task.id, taskId: task.id, kind: "task", title: `${task.identifier ?? "Task"} · ${task.title}`, status: task.status, running: running.has(task.id), ...position });
     if (parent) connect({ id: `contains:${task.id}`, from: parent.id, to: `task:${task.id}`, kind: "contains", label: "Project task", taskId: task.id });
     if (task.assigneeAgentId) connect({ id: `assignment:${task.id}`, from: `agent:${task.assigneeAgentId}`, to: `task:${task.id}`, kind: "assignment", label: "Current assignment", active: running.has(task.id), taskId: task.id });
     if (task.createdByAgentId) connect({ id: `creation:${task.id}`, from: `agent:${task.createdByAgentId}`, to: `task:${task.id}`, kind: "creation", label: "Created this task", taskId: task.id });
@@ -48,5 +59,35 @@ export function fridayGraph(data: FridayWork, agents: Agent[], running: Readonly
     connect({ id: `handoff:${handoff.id}`, from: `agent:${handoff.fromAgentId}`, to: `agent:${handoff.toAgentId}`, kind: "handoff", label: `${handoff.phase} · ${handoff.state}`, taskId: handoff.taskId,
       active: handoff.state === "pending_dispatch" || handoff.state === "awaiting_release" });
   }
-  return { nodes: [...nodes.values()], edges: edges.filter(edge => nodes.has(edge.from) && nodes.has(edge.to)) };
+  return { nodes: spaceGraphNodes([...nodes.values()]), edges: edges.filter(edge => nodes.has(edge.from) && nodes.has(edge.to)) };
+}
+
+/** Deterministic collision spacing: status changes never move an employee. */
+export function spaceGraphNodes(nodes: FridayGraphNode[]): FridayGraphNode[] {
+  const ordered = [...nodes].sort((a, b) => a.id.localeCompare(b.id));
+  const clearance = (node: FridayGraphNode) => node.kind === "agent" ? 78 : ["project", "company", "application"].includes(node.kind) ? 65 : node.kind === "task" ? 17 : 10;
+  // A spatial grid keeps the pass bounded for larger company portfolios.
+  for (let pass = 0; pass < 36; pass++) {
+    const buckets = new Map<string, FridayGraphNode[]>();
+    let shifted = false;
+    for (const node of ordered) {
+      const cellX = Math.floor(node.x / 180), cellY = Math.floor(node.y / 180);
+      for (let x = cellX - 1; x <= cellX + 1; x++) for (let y = cellY - 1; y <= cellY + 1; y++) {
+        for (const other of buckets.get(`${x}:${y}`) ?? []) {
+          const dx = node.x - other.x, dy = node.y - other.y;
+          const distance = Math.hypot(dx, dy), minimum = clearance(node) + clearance(other);
+          if (distance >= minimum) continue;
+          const move = (minimum - distance) / 2;
+          const ux = distance > .001 ? dx / distance : 1, uy = distance > .001 ? dy / distance : 0;
+          node.x += ux * move; node.y += uy * move;
+          other.x -= ux * move; other.y -= uy * move;
+          shifted = true;
+        }
+      }
+      const key = `${Math.floor(node.x / 180)}:${Math.floor(node.y / 180)}`;
+      const bucket = buckets.get(key) ?? []; bucket.push(node); buckets.set(key, bucket);
+    }
+    if (!shifted) break;
+  }
+  return nodes;
 }

@@ -294,7 +294,7 @@ describe("AppDefinition catalog", () => {
         "google-workspace-search",
       ]),
     );
-    expect(SELF_SERVE_MCP_CANDIDATES).toHaveLength(65);
+    expect(SELF_SERVE_MCP_CANDIDATES).toHaveLength(66);
     expect(BLOCKED_MCP_PROVIDERS.map((entry) => entry.slug)).toEqual([
       "g2",
       "vercel",
@@ -460,15 +460,15 @@ describe("AppDefinition catalog", () => {
     expect(channel("slack")?.guidanceMd).toContain("reactions");
     expect(channel("slack")?.guidanceMd).toContain("direct messages");
   });
-  it("keeps a complete, unique, dated evidence ledger for all 69 researched MCP providers", () => {
+  it("keeps a complete, unique, dated evidence ledger for all 70 researched MCP providers", () => {
     // Ledger-wide date reflects the last full re-verification (2026-08-26);
     // later provider additions carry their own research evidence, but
     // bumping the shared date would overstate freshness for the other providers.
     expect(SELF_SERVE_MCP_RESEARCH.verifiedAt).toBe("2026-08-26");
-    expect(SELF_SERVE_MCP_RESEARCH.entries).toHaveLength(69);
+    expect(SELF_SERVE_MCP_RESEARCH.entries).toHaveLength(70);
     expect(
       new Set(SELF_SERVE_MCP_RESEARCH.entries.map((entry) => entry.slug)),
-    ).toHaveProperty("size", 69);
+    ).toHaveProperty("size", 70);
     for (const entry of SELF_SERVE_MCP_RESEARCH.entries) {
       expect(new URL(entry.docsUrl).protocol).toBe("https:");
       expect(new URL(entry.serverUrl).protocol).toBe("https:");
@@ -476,6 +476,19 @@ describe("AppDefinition catalog", () => {
       expect(entry.prerequisite.length).toBeGreaterThan(10);
       expect(["S1", "S2", "S3", "S4"]).toContain(entry.riskTier);
     }
+  });
+  it("connects Higgsfield through account OAuth without a separately billed API key", () => {
+    const app = getAppStoreDefinition("higgsfield")!;
+    expect(app.methods).toHaveLength(1);
+    expect(app.methods[0]).toMatchObject({
+      key: "mcp-oauth", transport: "mcp_remote", auth: "oauth", ownershipModes: ["dcr"],
+      oauthClientRegistration: "dcr", riskTier: "S4",
+      defaults: { serverUrl: "https://mcp.higgsfield.ai/mcp", scopesHint: ["openid", "email", "offline_access"] },
+    });
+    expect(app.methods[0].credentialFields).toBeUndefined();
+    expect(app.agentInstructions?.text).toContain("versioned task artifact");
+    expect(getAppDefinitionForUrl("https://mcp.higgsfield.ai/mcp")?.slug).toBe("higgsfield");
+    expect(getAppDefinitionForUrl("https://mcp.higgsfield.ai.example.com/mcp")).toBeNull();
   });
   it("offers Fireflies browser sign-in and a vaulted bearer key on the same official MCP endpoint", () => {
     const app = APP_STORE_DEFINITIONS.find((entry) => entry.slug === "fireflies")!;
@@ -896,7 +909,7 @@ describe("AppDefinition catalog", () => {
       "ticktick",
       "xero",
     ]);
-    expect(APP_STORE_DEFINITIONS).toHaveLength(88);
+    expect(APP_STORE_DEFINITIONS).toHaveLength(89);
     const connectableSlugs = new Set(
       CONNECTABLE_APP_DEFINITIONS.map((entry) => entry.slug),
     );

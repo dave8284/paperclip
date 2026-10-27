@@ -106,6 +106,10 @@ remaining operations before qualifying the whole capability.
 Gaps: Scheduled/waiting native agents cannot independently call this operation:
 native authority requires a running bound run. A separate control binding remains absent.
 
+Agent OS workflow editing uses these same definition/trigger APIs and captured
+revision IDs. Its diagram is a board projection of authorized routine/run/task
+records, not a new executor. Agent entry points and approvals are unchanged.
+
 ## `history`
 
 Capability ID: `routines/history`.

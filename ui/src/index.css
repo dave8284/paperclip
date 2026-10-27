@@ -5346,3 +5346,200 @@ html:has(.design-proposal-theme) [data-canonical-toolbar] .collection-toolbar-ta
 .agentos-friday-presence[data-docked="true"] .agentos-live-transcript { flex-basis: 100%; width: 16rem; max-height: 5rem; font-size: .8125rem; text-align: left; }
 @keyframes friday-transcript-caret { from { opacity: .35; } to { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .agentos-live-transcript::after { animation: none !important; } }
+
+/* Agent OS company hierarchy and role palette. */
+.agentos-company-picker { min-width: 8rem; max-width: 14rem; border: 1px solid var(--border); border-radius: .75rem; padding: .5rem .75rem; font-size: .8125rem; background: var(--background); }
+.agentos-sidebar-content { display: flex; flex-direction: column; min-height: 100%; }
+.agentos-sidebar-bottom { margin-top: auto; padding-top: 1rem; }
+.agentos-company-tree summary { display: flex; gap: .5rem; align-items: center; padding: .65rem .75rem; font-size: .75rem; cursor: pointer; list-style: none; }
+.agentos-company-tree summary > svg { width: .875rem; height: .875rem; flex-shrink: 0; }
+.agentos-company-tree details[open] > summary > svg { transform: rotate(90deg); }
+.agentos-company-tree summary small { margin-left: auto; color: var(--muted-foreground); }
+.agentos-company-tree details > button { padding-left: 2rem; font-size: .75rem; }
+.agentos-category-legend { display: flex; flex-wrap: wrap; gap: 1rem; padding: .75rem 1rem; font-size: .6875rem; color: var(--muted-foreground); }
+.agentos-category-legend span { display: inline-flex; align-items: center; gap: .4rem; }
+.agentos-category-legend i { width: .5rem; height: .5rem; border-radius: 50%; background: var(--agentos-role-ink); }
+[data-category="Coordination"] { --agentos-role-ink: #a283da; --graph-orb: #cfbaf0; }
+[data-category="Engineering"] { --agentos-role-ink: #5c9fe8; --graph-orb: #abd5ff; }
+[data-category="Marketing"] { --agentos-role-ink: #e68aaf; --graph-orb: #ffc2dc; }
+[data-category="Product"] { --agentos-role-ink: #ce9a48; --graph-orb: #ffe0a9; }
+[data-category="Sales"] { --agentos-role-ink: #cf9380; --graph-orb: #ffcbbb; }
+[data-category="Operations"] { --agentos-role-ink: #55ae99; --graph-orb: #a3e6d5; }
+[data-category="Specialist"] { --agentos-role-ink: #959bc8; --graph-orb: #c6ccf1; }
+.agentos-map-sphere-dot { r: .8px; fill: var(--agentos-role-ink); opacity: .7; }
+.agentos-map-sphere-dot[data-depth="front"] { r: 1px; opacity: 1; }
+.agentos-map-sphere-dot[data-depth="back"] { r: .6px; opacity: .22; }
+.friday-graph-node[data-kind="agent"] .friday-graph-halo { fill: var(--graph-orb); opacity: .12; r: 32px; }
+.friday-graph-node[data-running="true"] .agentos-map-sphere { animation: agentos-sphere-working 7s linear infinite; }
+.agentos-map-completed { fill: none; stroke: var(--node-ink); stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.friday-graph-node[data-kind="task"] .friday-graph-core, .friday-graph-node[data-kind="artifact"] .friday-graph-core, .friday-graph-node[data-kind="comment"] .friday-graph-core { fill: var(--node-fill); }
+@keyframes agentos-sphere-working { to { transform: rotate(360deg); } }
+.friday-work-graph[data-quiet="true"] .agentos-map-sphere { animation-play-state: paused; }
+@media (prefers-reduced-motion: reduce) { .agentos-map-sphere { animation: none !important; } }
+@media (max-width: 900px) { .agentos-header { flex-wrap: wrap; } .agentos-company-picker { max-width: 11rem; } }
+
+.agentos-performance-metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; }
+.agentos-performance-metrics section { border: 1px solid var(--border); border-radius: 1.25rem; padding: 1.5rem; background: #faf9fd; }
+.agentos-performance-metrics section:nth-child(2n) { background: #f1faf7; }
+.agentos-performance-metrics span { display: block; font-size: .75rem; color: var(--muted-foreground); }
+.agentos-performance-metrics strong { display: block; margin-top: .75rem; font-size: 1.5rem; font-weight: 500; overflow-wrap: anywhere; }
+@media (max-width: 767px) { .agentos-performance-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); } .agentos-performance-metrics section { padding: 1rem; } .agentos-performance-metrics strong { font-size: 1.125rem; } }
+
+.agentos-workflow { border: 1px solid var(--border); border-radius: 1.25rem; overflow: hidden; }
+.agentos-workflow-body { display: flex; align-items: flex-start; }
+.agentos-workflow-canvas { flex: 1; min-width: 0; width: 100%; height: 36rem; touch-action: none; background: radial-gradient(#ded8e7 .8px, transparent .8px) 0 0 / 18px 18px; cursor: grab; }
+.agentos-workflow-edge { fill: none; stroke: #c4b9d6; stroke-width: 1.5; }
+.agentos-workflow-edge[data-active="true"] { stroke: #7699d4; stroke-dasharray: 5 8; animation: friday-work-flow 2s linear infinite; }
+.agentos-workflow-node { cursor: pointer; outline: none; }
+.agentos-workflow-node rect { fill: #faf5ff; stroke: #d8c8ea; stroke-width: 1; }
+.agentos-workflow-node[data-kind="task"] rect { fill: #eff7ff; stroke: #c3daf1; }
+.agentos-workflow-node[data-kind="output"] rect { fill: #eefbf5; stroke: #b9e4d2; }
+.agentos-workflow-node[data-kind="trigger"] rect, .agentos-workflow-node[data-kind="next"] rect { fill: #fff8ea; stroke: #e8d8b3; }
+.agentos-workflow-node[data-selected="true"] rect, .agentos-workflow-node:focus-visible rect { stroke: #9b80c2; stroke-width: 2.5; }
+.agentos-workflow-kind { fill: #88799e; font-size: 9px; text-transform: uppercase; letter-spacing: .08em; }
+.agentos-workflow-title { fill: var(--foreground); font-size: 11px; font-weight: 550; }
+.agentos-workflow-status { fill: var(--muted-foreground); font-size: 9px; }
+.agentos-workflow-inspector { width: min(27rem, 45%); max-height: 36rem; overflow-y: auto; padding: 1.25rem; border-left: 1px solid var(--border); }
+.agentos-workflow-inspector > * + * { margin-top: 1rem; }
+@media (max-width: 900px) { .agentos-workflow-body { display: block; } .agentos-workflow-inspector { width: 100%; max-height: none; border-left: none; border-top: 1px solid var(--border); } .agentos-workflow-canvas { height: 26rem; } }
+@media (prefers-reduced-motion: reduce) { .agentos-workflow-edge { animation: none !important; } }
+
+.agentos-learning-flow { display: flex; flex-wrap: wrap; align-items: center; gap: .65rem; font-size: .75rem; }
+.agentos-learning-flow span { padding: .75rem 1rem; border-radius: .75rem; background: #f5f0fc; }
+.agentos-learning-flow span:nth-of-type(2n) { background: #eef9f5; }
+.agentos-learning-flow i { font-style: normal; color: #a28ac4; }
+
+.agentos-workflow-canvas[data-quiet="true"] .agentos-workflow-edge { animation-play-state: paused; }
+
+/* Agent OS constellation revision: Friday particles, real records, calm white canvas. */
+.agentos-map-constellation { --map-record-surface: #fff; --map-record-ink: #526475; --map-active-track: #b9a2e8; --map-hairline: #e9e7f1; }
+.agentos-map-constellation.friday-map-shell .friday-work-graph { background: var(--map-record-surface); min-height: 34rem; height: clamp(34rem, 70dvh, 56rem); width: 100%; touch-action: none; }
+.agentos-map-constellation .friday-map-toolbar { padding: 1.5rem 1.75rem; border-bottom: 1px solid var(--map-hairline); }
+.agentos-map-constellation .agentos-eyebrow { color: var(--map-record-ink); }
+.agentos-map-constellation .friday-graph-edge { stroke: var(--graph-orb, var(--map-hairline)); stroke-width: 1.2; opacity: .56; }
+.agentos-map-constellation .friday-graph-edge[data-kind="assignment"] { stroke-dasharray: none; }
+.agentos-map-constellation .friday-graph-edge[data-kind="creation"] { stroke-dasharray: 2 7; opacity: .25; }
+.agentos-map-constellation .friday-graph-edge[data-active="true"] { stroke: var(--agentos-role-ink, var(--map-active-track)); stroke-width: 2; stroke-dasharray: 2 11; stroke-linecap: round; opacity: .8; }
+.agentos-map-constellation .friday-graph-edge[data-dimmed="true"] { opacity: .1; }
+.agentos-map-orb-frame { overflow: visible; pointer-events: none; }
+.agentos-map-orb-canvas { display: block; width: 100%; height: 100%; color: var(--agentos-role-ink, var(--primary)); }
+.agentos-map-constellation .friday-graph-node .agentos-map-hit { fill: transparent; stroke: none; cursor: pointer; }
+.agentos-map-constellation .friday-graph-node:focus-visible .agentos-map-hit, .agentos-map-constellation .friday-graph-node[data-focused="true"] .agentos-map-hit { fill: color-mix(in srgb, var(--graph-orb, var(--node-fill)) 14%, transparent); stroke: var(--graph-orb, var(--node-ink)); stroke-width: 1; }
+.agentos-map-constellation .friday-graph-node .friday-graph-core { filter: none; fill: var(--node-fill); stroke: var(--node-ink); stroke-opacity: .35; stroke-width: 1; }
+.agentos-map-constellation .friday-graph-node[data-kind="task"] .friday-graph-core { r: 7px; }
+.agentos-map-constellation .friday-graph-node[data-kind="comment"] .friday-graph-core, .agentos-map-constellation .friday-graph-node[data-kind="artifact"] .friday-graph-core { r: 4px; }
+.agentos-map-constellation .friday-graph-node[data-kind="company"] .friday-graph-core { r: 18px; }
+.agentos-map-constellation .friday-graph-node[data-kind="project"] .friday-graph-core, .agentos-map-constellation .friday-graph-node[data-kind="application"] .friday-graph-core { r: 12px; }
+.agentos-map-constellation .friday-graph-node .friday-graph-label { font-size: 12px; font-weight: 500; fill: var(--map-record-ink); stroke-width: 5px; pointer-events: none; }
+.agentos-map-employee-status { font-size: 9px; fill: var(--agentos-role-ink); font-weight: 450; paint-order: stroke; stroke: var(--background); stroke-width: 3px; pointer-events: none; }
+.agentos-map-constellation .friday-map-inspector { top: 1rem; right: 1rem; width: 16rem; background: var(--background); border-color: var(--map-hairline); border-radius: 1.25rem; box-shadow: none; }
+.agentos-map-record-actions { display: flex; gap: .5rem; flex-wrap: wrap; margin-top: 1rem; }
+.agentos-map-assigned-tasks { margin-top: 1rem; display: grid; gap: .25rem; max-height: 16rem; overflow-y: auto; }
+.agentos-map-assigned-tasks button { width: 100%; text-align: left; padding: .65rem .5rem; border-radius: .5rem; font-size: .75rem; line-height: 1.5; cursor: pointer; }
+.agentos-map-assigned-tasks button:hover { background: var(--muted); }
+.agentos-map-assigned-tasks button span { display: block; margin-top: .2rem; color: var(--muted-foreground); font-size: .6875rem; }
+.agentos-map-constellation .agentos-category-legend { padding: 1rem 1.75rem; gap: 1.25rem; }
+.agentos-map-constellation .agentos-category-legend i { width: .65rem; height: .65rem; background: var(--graph-orb); border: 1px solid var(--agentos-role-ink); }
+@media (max-width: 767px) { .agentos-map-constellation .friday-map-inspector { position: static; width: auto; margin: 1rem; } .agentos-map-constellation .friday-work-graph { min-height: 28rem; height: 60dvh; } .agentos-map-constellation .friday-map-toolbar { padding: 1rem; } }
+
+/* Friday voice canvas — expansive home, quiet transcript and explicit speech states. */
+.agentos-friday-presence {
+  --friday-listening-ink: #397fe8;
+  --friday-thinking-ink: #9972d9;
+  --friday-speaking-ink: #2fa68d;
+  --friday-home-orb-size: clamp(23rem, min(74dvh, 64vw), 46rem);
+}
+.agentos-friday-presence .friday-orb[data-state="listening"] { --friday-orb-ink: var(--friday-listening-ink); }
+.agentos-friday-presence .friday-orb[data-state="thinking"] { --friday-orb-ink: var(--friday-thinking-ink); }
+.agentos-friday-presence .friday-orb[data-state="speaking"] { --friday-orb-ink: var(--friday-speaking-ink); }
+.agentos-app[data-home="true"] { min-height: 100dvh; }
+.agentos-friday-presence[data-docked="false"] { min-height: calc(100dvh - var(--agentos-header-height) - 3rem); align-items: center; padding: 1.5rem 0 3rem; }
+.agentos-friday-presence[data-docked="false"] .friday-orb { width: var(--friday-home-orb-size); height: var(--friday-home-orb-size); max-width: 100%; margin-bottom: -2rem; }
+.agentos-friday-presence[data-docked="false"] .agentos-presence-controls { width: 100%; gap: 1rem; }
+.agentos-friday-presence[data-docked="false"] .agentos-presence-orb { max-width: 100%; }
+.agentos-friday-presence[data-docked="false"] .agentos-presence-status { min-height: 3rem; }
+.agentos-presence-status > .agentos-live-transcript { color: var(--foreground); font-size: 1rem; margin: .4rem auto 0; }
+.agentos-presence-controls[data-voice-state="thinking"] .agentos-presence-status > span { color: var(--friday-thinking-ink); }
+.agentos-presence-controls[data-voice-state="speaking"] .agentos-presence-status > span { color: var(--friday-speaking-ink); }
+.agentos-presence-controls[data-voice-state="listening"] .agentos-presence-status > span { color: var(--friday-listening-ink); }
+.agentos-orb-microphone { box-shadow: none; }
+.agentos-friday-thread[data-friday-docked="false"]:has(> .agentos-conversation-panel:not([hidden])) {
+  grid-template-columns: minmax(17rem, .7fr) minmax(0, 1.7fr);
+  width: 100%; max-width: none; margin: 0; padding: 0 1.5rem 0 .75rem; column-gap: 1.5rem;
+}
+.agentos-friday-thread[data-friday-docked="false"] > .agentos-conversation-panel:not([hidden]) {
+  height: min(68dvh, 43rem); margin: 0; align-self: center; background: transparent;
+}
+.agentos-conversation-panel,
+.agentos-conversation-panel [data-testid="task-chat-composer-dock"],
+.agentos-conversation-panel [data-testid="task-chat-composer-stack"],
+.agentos-conversation-panel [data-testid="task-chat-composer-stack"] > *,
+.agentos-conversation-panel .paperclip-task-chat-composer,
+.agentos-conversation-panel form { box-shadow: none; border: 0; background: transparent; }
+.agentos-friday-thread[data-friday-docked="false"] .agentos-home-content { padding-top: 1.5rem; padding-bottom: 3rem; }
+@media (max-width: 767px) {
+  .agentos-friday-presence { --friday-home-orb-size: min(92vw, 31rem); }
+  .agentos-friday-presence[data-docked="false"] { min-height: calc(85dvh - var(--agentos-header-height)); padding: 1rem 0 2rem; }
+  .agentos-friday-thread[data-friday-docked="false"]:has(> .agentos-conversation-panel:not([hidden])) { grid-template-columns: minmax(0, 1fr); padding: 0 1rem; gap: 0; }
+  .agentos-friday-thread[data-friday-docked="false"] > .agentos-conversation-panel:not([hidden]) { height: min(30rem, 65dvh); grid-column: 1; grid-row: 3; }
+  .agentos-friday-thread[data-friday-docked="false"]:has(> .agentos-conversation-panel:not([hidden])) .agentos-friday-presence { grid-column: 1; grid-row: 2; }
+}
+
+/* Agent OS selected-company tree and persistent settings navigation. */
+.agentos-company-tree { margin-inline-start: .5rem; }
+.agentos-company-tree details > button {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  width: 100%;
+  padding: .5rem .75rem .5rem 2rem;
+  border-radius: var(--radius-md);
+  text-align: left;
+  color: var(--muted-foreground);
+  cursor: pointer;
+}
+.agentos-company-tree details > button > span { overflow: hidden; text-overflow: ellipsis; }
+.agentos-company-tree details > button:hover,
+.agentos-company-tree details > button[aria-current="page"] { background: var(--muted); color: var(--foreground); }
+.agentos-company-tree summary:focus-visible,
+.agentos-company-tree details > button:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+@media (max-width: 767px) {
+  .agentos-sidebar[data-expanded="false"] .agentos-sidebar-content { display: none; }
+  .agentos-sidebar[data-expanded="true"] .agentos-sidebar-content { display: flex; }
+}
+
+/* Agent OS home settings: a quiet corner entry, separate from the transcript. */
+.agentos-app {
+  --agentos-home-utility-inset: 1rem;
+  --agentos-home-utility-reserve: 4.5rem;
+  --agentos-home-utility-size: .75rem;
+}
+.agentos-home-utilities {
+  position: fixed;
+  z-index: 20;
+  inset-inline-start: max(var(--agentos-home-utility-inset), env(safe-area-inset-left));
+  bottom: max(var(--agentos-home-utility-inset), env(safe-area-inset-bottom));
+}
+.agentos-home-utilities > button {
+  display: inline-flex;
+  align-items: center;
+  gap: .5rem;
+  min-height: 2.75rem;
+  padding: .5rem .75rem;
+  border: 0;
+  border-radius: var(--radius-lg);
+  background: var(--background);
+  color: var(--muted-foreground);
+  font-size: var(--agentos-home-utility-size);
+  box-shadow: none;
+  cursor: pointer;
+}
+.agentos-home-utilities > button > svg { width: 1rem; height: 1rem; }
+.agentos-home-utilities > button:hover { color: var(--foreground); background: var(--muted); }
+.agentos-home-utilities > button:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.agentos-app[data-home="true"] .agentos-friday-thread { padding-block-end: var(--agentos-home-utility-reserve); }
+@media (max-width: 767px) {
+  .agentos-app { --agentos-home-utility-inset: .5rem; }
+  .agentos-home-utilities { bottom: max(.5rem, env(safe-area-inset-bottom)); }
+  .agentos-app[data-home="true"] .agentos-conversation-panel { scroll-margin-block-end: var(--agentos-home-utility-reserve); }
+}

@@ -37,6 +37,25 @@ owns portfolio administration and audit context; the native delete service retur
 available. Explicit deletion of another linked company removes only that
 company's assignments and portfolio link, retaining shared employees.
 
+Agent OS department grouping supports a nullable `leadAgentId`, validated against
+an active, ready employee of the same company. Updates require the current
+department revision, persist an audit event and retain native project visibility.
+The composite company/agent foreign key prevents foreign-company heads; company
+deletion removes department grouping before employee cleanup. Native individual
+employee deletion must first clear any department-head assignment. Neither a
+department-head label nor the existing project-lead label grants private-project
+access. Source: `server/src/services/agentos-departments.ts`,
+`server/src/services/company-deletion.ts`, `server/src/services/agent-deletion.ts`.
+
+`GET /api/companies/{companyId}/friday/work` also projects accountability for
+authorized work on the current page: task owners remain on tasks, while project
+and department heads and their reporting chains appear in `accountability`.
+Native employee-read checks filter people; no credentials or instruction bundles
+are included. Traversal stops at eight levels or 512 people, with a truncation
+flag; permission checks run in batches of at most 16. Tests cover private projects,
+foreign managers, cycles and bounds. This is a read model for choosing whom to
+consult, not a new delegation grant or orchestration engine.
+
 Evidence: `source-only` — [implementation](../../server/src/routes/companies.ts#L1245)
 at the reviewed commit above.
 
@@ -256,3 +275,30 @@ Verification: `not-run` — Reject agent management and foreign-company requests
 verdicts at admitted result boundaries and the original regex on dependency failure.
 
 Gaps: No agent-facing mechanism to request a board configuration change is added.
+
+## `performance`
+
+Capability ID: `companies/performance`.
+
+Review: `baseline`.
+
+API: `present` — `GET /api/companies/{companyId}/friday/performance?period=YYYY-MM`
+and `POST /api/companies/{companyId}/friday/performance`.
+
+Agent access: `available` — native `call_api`/REST; Friday's instructions describe
+read-before-write, sources, completeness and optimistic revision matching.
+
+Policy: company membership/discovery and normal agent key required. Project reads
+are authorized before pagination. Writes require `applications:manage`, validate
+same-company project access, append an immutable revision and transactional audit.
+No external provider write or automatic Stripe import occurs here.
+
+Evidence: `source-only` for the agent entry point. Passing isolated database tests cover company/project privacy,
+revision conflicts, validation and persistence; a local board GET returned no
+invented metrics. [Tests](../../server/src/__tests__/company-performance.test.ts).
+
+Verification: `not-run` — no real agent write, source ingestion or browser proof.
+The fixture tests do not qualify an end-to-end provider reporting loop.
+
+Gaps: automatic provider ingestion, actual agent execution and browser acceptance
+remain unverified. Manual sourced snapshots are the implemented entry point.

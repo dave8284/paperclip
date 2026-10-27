@@ -6573,6 +6573,10 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
       clientRequestId?: string,
       runSettings?: ComposerRunSettings,
     ) => {
+      if (conversation?.focusView?.beforeSend) {
+        try { await conversation.focusView.beforeSend(await resolveWritableIssueId()); }
+        catch (error) { pushToast({ title: "Couldn’t share the current display", body: error instanceof Error ? error.message : "Your message is still a draft. Please try again.", tone: "error" }); throw error; }
+      }
       if (reassignment || runSettings) {
         await addCommentAndReassign.mutateAsync({
           body,
@@ -6586,7 +6590,7 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
       }
       await addComment.mutateAsync({ body, reopen, attachmentIds, clientRequestId });
     },
-    [addComment, addCommentAndReassign],
+    [addComment, addCommentAndReassign, conversation?.focusView?.beforeSend, resolveWritableIssueId, pushToast],
   );
   const handleCommentImageUpload = useCallback(
     async (file: File) => {
@@ -8276,7 +8280,7 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
                       ...state,
                       issueId: conversation.issue?.id ?? null,
                       companyId: conversation.agent.companyId,
-                      voiceSessionKey: `${conversation.agent.companyId}:${conversation.agent.id}`,
+                      voiceSessionKey: `${conversation.agent.companyId}:${conversation.agent.id}:${currentUserId ?? "local"}`,
                       reply: comments.filter(comment => comment.authorAgentId === conversation.agent.id && !comment.deletedAt && comment.origin !== "fast_response").at(-1),
                       attachments: attachments ?? [],
                       workProducts: workProducts ?? [],

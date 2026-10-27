@@ -1,11 +1,17 @@
 import { and, eq, or, sql } from "drizzle-orm";
 import { agents, agentApiKeys, agentRuntimeState, agentTaskSessions, agentWakeupRequests, activityLog,
   budgetReservations, heartbeatRunEvents, heartbeatRuns, issueExecutionDecisions, issues, issueComments,
-  caseHandoffs, agentosAssignments, principalPermissionGrants, type Db } from "@paperclipai/db";
+  caseHandoffs, agentosAssignments, agentosDepartments, principalPermissionGrants, type Db } from "@paperclipai/db";
 import { conflict } from "../errors.js";
 import { issueThreadInteractionService } from "./issue-thread-interactions.js";
 
 export async function deleteAgentDependencies(tx: Db, companyId: string, id: string) {
+  const [department] = await tx.select({ id: agentosDepartments.id }).from(agentosDepartments).where(and(
+    eq(agentosDepartments.companyId, companyId), eq(agentosDepartments.leadAgentId, id),
+  )).limit(1);
+  if (department) throw conflict("Reassign or clear this employee’s department head role before permanently deleting the agent", {
+    code: "agent_department_head_assigned",
+  });
   const [assignment] = await tx.select({ id: agentosAssignments.id }).from(agentosAssignments).where(and(
     eq(agentosAssignments.companyId, companyId), eq(agentosAssignments.agentId, id),
   )).limit(1);

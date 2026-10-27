@@ -1,4 +1,5 @@
 import type { ComponentProps } from "react";
+import { ConversationalQuestionMessage, useConversationalQuestions } from "../ConversationalQuestion";
 import type { IssueDocument } from "@paperclipai/shared";
 import type { MentionOption } from "@/components/MarkdownEditor";
 import { IssueThreadInteractionCard } from "@/components/IssueThreadInteractionCard";
@@ -47,6 +48,10 @@ export function TaskChatInteractionCard({
   ...cardProps
 }: TaskChatInteractionCardProps) {
   const interaction = item.interaction;
+  const conversational = useConversationalQuestions();
+  if (conversational && interaction.kind === "ask_user_questions" && interaction.status === "pending" && !shouldHideInteractionCard(interaction)) {
+    return <ConversationalQuestionMessage payload={interaction.payload} />;
+  }
   if (presentation === "timeline" && showUnansweredQuestion && !shouldHideInteractionCard(interaction) && interaction.kind === "ask_user_questions" && interaction.status === "pending") {
     const prompt = interaction.payload.questionSet?.questions[0]?.prompt ?? interaction.payload.questions[0]?.prompt ?? interaction.title ?? "Question";
     return (

@@ -67,6 +67,13 @@ Ordinary MCP calls retain assignment and Allowed / Ask first / Off policy.
 Live deployed publication and hosted/self-hosted OAuth remain release checks.
 
 
+Higgsfield catalog addition (2026-10-27): official hosted MCP, native OAuth/DCR,
+only `openid email offline_access` scopes, vaulted credentials and existing grant/
+gateway audit controls. Public preflight and DCR passed; account authorization and
+agent execution are not yet verified. No generation or paid API call was made.
+Supabase uses its existing connector; a CLI login alone does not grant agents
+access or migrate the local database.
+
 ## `identity-and-access`
 
 Capability ID: `connection-setup/identity-and-access`.

@@ -1,9 +1,10 @@
 import { Router, json } from "express";
 import { z } from "zod";
 import type { Db } from "@paperclipai/db";
-import { fridayWorkQuerySchema, createDepartmentSchema, updateDepartmentSchema, assignDepartmentProjectSchema } from "@paperclipai/shared";
+import { fridayWorkQuerySchema, createDepartmentSchema, updateDepartmentSchema, assignDepartmentProjectSchema, createPerformanceReportSchema, performancePeriodSchema } from "@paperclipai/shared";
 import { modelCatalog } from "../services/model-intelligence.js";
 import { fridayVoiceStatus, fridayVoiceRequest } from "../services/friday-voice.js";
+import { companyPerformanceService } from "../services/company-performance.js";
 import { departmentService } from "../services/agentos-departments.js";
 import { fridayAwarenessService } from "../services/friday-awareness.js";
 import { forbidden } from "../errors.js";
@@ -14,6 +15,7 @@ export function fridayRoutes(db: Db) {
   const router = Router();
   const service = fridayAwarenessService(db);
   const departments = departmentService(db);
+  const performance = companyPerformanceService(db);
   router.use("/companies/:companyId/friday", async (req, _res, next) => {
     const companyId = z.string().uuid().parse(req.params.companyId);
     assertCompanyAccess(req, companyId);
@@ -31,7 +33,15 @@ export function fridayRoutes(db: Db) {
     res.status(204).end();
   });
   router.put("/companies/:companyId/friday/projects/:projectId/department", async (req, res) => res.json(await departments.assign(req.params.companyId as string, z.string().uuid().parse(req.params.projectId), assignDepartmentProjectSchema.parse(req.body).departmentId, req.actor, getActorInfo(req))));
-  router.get("/companies/:companyId/friday/models", async (req, res) => { assertBoard(req); res.json(await modelCatalog(db, req.params.companyId as string)); });
+  router.get("/companies/:companyId/friday/performance", async (req, res) => res.json(await performance.list(req.params.companyId as string, performancePeriodSchema.parse(req.query.period), req.actor)));
+  router.post("/companies/:companyId/friday/performance", async (req, res) => res.status(201).json(await performance.record(req.params.companyId as string, createPerformanceReportSchema.parse(req.body), req.actor, getActorInfo(req))));
+  router.get("/companies/:companyId/friday/models", async (req, res) => {
+    assertBoard(req);
+    // Company-wide learning contains receipts from private projects. It follows
+    // the same instance-admin boundary as the evaluation ledger.
+    const includeLearning = req.actor.type === "board" && (req.actor.source === "local_implicit" || req.actor.isInstanceAdmin === true);
+    res.json(await modelCatalog(db, req.params.companyId as string, includeLearning));
+  });
   router.get("/companies/:companyId/friday/voice", async (req, res) => { assertBoard(req); res.json(await fridayVoiceStatus()); });
   router.post("/companies/:companyId/friday/voice", json({ limit: "8mb" }), async (req, res) => {
     assertBoard(req);

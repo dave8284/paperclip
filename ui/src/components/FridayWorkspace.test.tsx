@@ -61,6 +61,22 @@ describe("Friday published displays", () => {
     expect(fridayCanvases("chat", [file], [{ ...product, metadata: { url: "https://untrusted.invalid" } }])).toHaveLength(0);
     expect(savedFridayCanvases([{ key: "friday-canvas-file", body: "invalid" } as never], fridayCanvases("chat", [file], [product])).size).toBe(0);
   });
+  it("keeps a direct home Settings entry after introductions disappear and opens the selected company without a modal", async () => {
+    const navigate = vi.fn();
+    const renderHome = async (companyId?: string) => act(async () => root.render(<QueryClientProvider client={client}><FridayWorkspace companyId="company" data={data} panel={null} setPanel={setPanel} compact connected view={{ panel: null, companyId }} navigate={navigate} /></QueryClientProvider>));
+    await renderHome("selected-company");
+    expect(host.textContent).not.toContain("A little clarity.");
+    const entry = host.querySelector<HTMLButtonElement>('nav[aria-label="Workspace settings"] button')!;
+    expect(entry.textContent).toBe("Settings");
+    await act(async () => entry.click());
+    expect(navigate).toHaveBeenLastCalledWith({ panel: "settings", companyId: "selected-company" });
+    expect(host.querySelector('[role="dialog"]')).toBeNull();
+    await renderHome();
+    await act(async () => host.querySelector<HTMLButtonElement>('nav[aria-label="Workspace settings"] button')!.click());
+    expect(navigate).toHaveBeenLastCalledWith({ panel: "settings", companyId: "company" });
+    await render(data, "library");
+    expect(host.querySelector('nav[aria-label="Workspace settings"]')).toBeNull();
+  });
   it("opens newly saved typed view requests without replaying history or executing invalid requests", async () => {
     api.listDocuments.mockResolvedValue([{ key: "friday-view", latestRevisionId: "old" }]);
     api.getDocument.mockResolvedValue({ latestRevisionId: "old", body: '{"version":1,"panel":"work"}' });

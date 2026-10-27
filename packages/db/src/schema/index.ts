@@ -269,3 +269,4 @@ export { managedApplications, managedApplicationProjects } from "./managed_appli
 export { companyOperatingProfiles } from "./company_operating_profiles.js";
 export { agentosPortfolios, agentosPortfolioCompanies, agentosEmployees, agentosAssignments } from "./agentos_workforce.js";
 export * from "./agentos_departments.js";
+export { companyPerformanceReports } from "./company_performance.js";

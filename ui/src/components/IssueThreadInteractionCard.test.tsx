@@ -8,6 +8,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { Agent } from "@paperclipai/shared";
 import { ApiError } from "../api/client";
 import { IssueThreadInteractionCard } from "./IssueThreadInteractionCard";
+import { DecisionPresentation } from "./DecisionPresentation";
 import { ThemeProvider } from "../context/ThemeContext";
 import { TooltipProvider } from "./ui/tooltip";
 import {
@@ -123,6 +124,7 @@ vi.mock("./task-chat/TaskChatRichInput", () => ({
 
 function renderCard(
   props: Partial<ComponentProps<typeof IssueThreadInteractionCard>> = {},
+  presentation: "native" | "approval" = "native",
 ) {
   container = document.createElement("div");
   document.body.appendChild(container);
@@ -136,10 +138,10 @@ function renderCard(
       <QueryClientProvider client={queryClient}>
         <TooltipProvider>
           <ThemeProvider>
-            <IssueThreadInteractionCard
+            <DecisionPresentation value={presentation}><IssueThreadInteractionCard
               interaction={pendingAskUserQuestionsInteraction}
               {...props}
-            />
+            /></DecisionPresentation>
           </ThemeProvider>
         </TooltipProvider>
       </QueryClientProvider>,
@@ -161,6 +163,17 @@ afterEach(() => {
 });
 
 describe("IssueThreadInteractionCard", () => {
+  it("keeps required rejection reasons inline when Agent OS says Disapprove", async () => {
+    const reject = vi.fn(async () => undefined);
+    const host = renderCard({ interaction: pendingRequestConfirmationInteraction, onRejectInteraction: reject }, "approval");
+    const button = [...host.querySelectorAll("button")].find(button => button.textContent?.trim() === "Disapprove")!;
+    expect(button).toBeTruthy();
+    await act(async () => button.click());
+    expect(reject).not.toHaveBeenCalled();
+    expect(host.querySelector("textarea")).not.toBeNull();
+    expect(host.querySelector('[role="dialog"]')).toBeNull();
+  });
+
   const canonicalDraftInteraction = {
     ...pendingAskUserQuestionsInteraction,
     payload: {

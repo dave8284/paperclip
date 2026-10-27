@@ -8,6 +8,7 @@ import { heartbeatsApi } from "../api/heartbeats";
 import { issuesApi } from "../api/issues";
 import { queryKeys } from "../lib/queryKeys";
 import type { FridayNavigation } from "../lib/friday-navigation";
+import { fridayGraphAgents } from "../lib/friday-graph";
 import { AgentOSDelete } from "./AgentOSDelete";
 import { Button } from "./ui/button";
 import { FridayWorkGraph } from "./FridayWorkGraph";
@@ -52,7 +53,7 @@ export function FridayWork({ companyId, agents, view, navigate, onAsk, assistant
       <div className="agentos-work-metrics" aria-label="Work totals">{[["In motion", data.counts.in_progress ?? 0], ["To do", (data.counts.todo ?? 0) + (data.counts.backlog ?? 0)], ["Needs attention", (data.counts.blocked ?? 0) + (data.counts.in_review ?? 0)], ["Completed", data.counts.done ?? 0]].map(([label, value]) => <div key={label}><strong>{value}</strong><span>{label}</span></div>)}</div>
       {mode === "combined" && !view.projectId && <section><div className="agentos-section-heading"><h2>Projects</h2><span className="text-sm text-muted-foreground">{data.projectCount} in this company</span></div><div className="agentos-project-grid">{data.projects.map(project => <AgentOSProjectCard key={project.id} companyId={companyId} project={project} lead={agents.find(agent => agent.id === project.leadAgentId)?.name} onOpen={() => navigate({ ...view, projectId: project.id, taskId: undefined, mode: "combined" })} />)}</div></section>}
       {!data.tasks.length && !data.projectCount && <p className="agentos-empty">No work in this scope yet. Tell Friday what you want to start.</p>}
-      {mode === "graph" && <FridayWorkGraph data={data} agents={agents} running={running} onSelect={node => {
+      {mode === "graph" && <FridayWorkGraph data={data} agents={fridayGraphAgents(data, agents, !!(view.projectId || view.applicationId || view.agentId))} running={running} onSelect={node => {
         if (node.kind === "application") navigate({ ...view, applicationId: node.recordId, projectId: undefined, taskId: undefined });
         else if (node.kind === "project") navigate({ ...view, projectId: node.recordId, taskId: undefined });
         else if (node.kind === "agent") navigate({ panel: "team", companyId, agentId: node.recordId });
