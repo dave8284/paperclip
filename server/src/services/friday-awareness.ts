@@ -30,7 +30,7 @@ export function fridayAwarenessService(db: Db) {
     const work = and(issueAccess, query.projectId ? eq(issues.projectId, query.projectId) : undefined,
       linkedProjects ? inArray(issues.projectId, linkedProjects) : undefined,
       query.agentId ? eq(issues.assigneeAgentId, query.agentId) : undefined);
-    const projectScope = and(projectAccess, query.projectId ? eq(projects.id, query.projectId) : undefined,
+    const projectScope = and(projectAccess, query.projectId ? eq(projects.id, query.projectId) : isNull(projects.archivedAt),
       linkedProjects ? inArray(projects.id, linkedProjects) : undefined,
       query.agentId ? or(eq(projects.leadAgentId, query.agentId), inArray(projects.id,
         db.select({ id: issues.projectId }).from(issues).where(and(issueAccess, executionIssueCondition(), eq(issues.assigneeAgentId, query.agentId))))) : undefined);

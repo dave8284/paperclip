@@ -3025,11 +3025,12 @@ export function TaskChatThread(props: TaskChatThreadProps) {
   };
 
   const focusView = props.focusView;
-  // Keep native recovery notices visible. Runtime decisions remain in the
-  // native composer takeover even while the transcript is folded away.
+  // The Friday canvas opens only on request. Pending decisions and failures
+  // update the orb's status; they must not open the user's transcript for them.
+  // Ordinary task threads retain their existing recovery/takeover behaviour.
   const pendingInlineDecision = (interactions ?? []).some(interaction => interaction.status === "pending" && interaction.kind === "connection_intent" && !shouldHideInteractionCard(interaction));
-  const collapseComposer = !!focusView?.composerCollapsed && !composerTakeover && !pendingInlineDecision && !composerPause && !queuedEdit && !runtimeComposerDisabledReason;
-  const showHistory = pendingInlineDecision || !focusView || focusView.showTranscript || !!props.recoveryAction || !!props.interruption || !!props.executionBlocked || tailStatus === "failed" || historyError;
+  const collapseComposer = focusView?.canvas ? !!focusView.composerCollapsed : !!focusView?.composerCollapsed && !composerTakeover && !pendingInlineDecision && !composerPause && !queuedEdit && !runtimeComposerDisabledReason;
+  const showHistory = focusView?.canvas ? focusView.showTranscript : pendingInlineDecision || !focusView || focusView.showTranscript || !!props.recoveryAction || !!props.interruption || !!props.executionBlocked || tailStatus === "failed" || historyError;
 
   return (
     <TaskChatRequestHistoryContext.Provider value={issueId ?? "unknown"}>
@@ -3045,16 +3046,18 @@ export function TaskChatThread(props: TaskChatThreadProps) {
           <div
             className={cn(
               "flex flex-col",
+              focusView?.canvas && "agentos-friday-thread",
               !isMobile && "min-h-0 flex-1",
               isMobile && !historyRevealed && "task-chat-history-pending",
             )}
             data-testid="task-chat-thread"
+            data-friday-docked={focusView?.docked ?? false}
           >
-            {focusView && <div className={showHistory ? "shrink-0" : "flex min-h-0 flex-1 flex-col"}>
+            {focusView && <div className={cn("agentos-focus-content", showHistory ? "shrink-0" : "flex min-h-0 flex-1 flex-col")}>
               {focusView.render({
                 runStatus: liveRun?.status === "running" ? "running" : liveRun || optimisticRunnerStartup ? "queued" : "idle",
-                awaitingInput: !!selectedPendingInput || pendingInlineDecision,
-                unavailable: historyError || initialHistoryError,
+                awaitingInput: !!selectedPendingInput || pendingInlineDecision || !!composerTakeover,
+                unavailable: historyError || initialHistoryError || tailStatus === "failed" || !!props.executionBlocked,
                 loading: historyPending,
               })}
             </div>}

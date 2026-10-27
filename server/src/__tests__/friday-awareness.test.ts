@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { eq } from "drizzle-orm";
 import express from "express";
 import request from "supertest";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -54,6 +55,16 @@ describe("Friday native awareness", () => {
     const completed = await request(api).get(f.base).query({ agentId: f.worker.id, status: "completed" }).expect(200);
     expect(completed.body.tasks.map((task: { id: string }) => task.id)).toEqual([f.done.id]);
     expect(completed.body.counts).toEqual({ in_progress: 1, done: 1 });
+  });
+  it("removes archived projects from portfolio cards while retaining explicit history access", async () => {
+    const f = await seed(); const api = app(f.actor);
+    await db.update(projects).set({ archivedAt: new Date() }).where(eq(projects.id, f.first.id));
+    const portfolio = await request(api).get(f.base).expect(200);
+    expect(portfolio.body.projectCount).toBe(2);
+    expect(portfolio.body.projects.some((project: { id: string }) => project.id === f.first.id)).toBe(false);
+    const history = await request(api).get(f.base).query({ projectId: f.first.id }).expect(200);
+    expect(history.body.projects.map((project: { id: string }) => project.id)).toEqual([f.first.id]);
+    expect(history.body.tasks).toHaveLength(1);
   });
   it("filters private projects, tasks, parent links and evidence before returning the graph", async () => {
     const f = await seed(); const api = app(f.actor);

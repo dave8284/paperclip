@@ -5,6 +5,7 @@ import type { AgentConversationFocusData } from "@/lib/conversation-focus";
 import { fridayCanvases, fridayCanvasKey, savedFridayCanvases, type FridayCanvas } from "@/lib/friday-canvas";
 import { issuesApi } from "@/api/issues";
 import { queryKeys } from "@/lib/queryKeys";
+import { AgentOSDelete } from "./AgentOSDelete";
 import { Button } from "./ui/button";
 import { FridayPresence } from "./FridayPresence";
 import { AgentOSCompanies, AgentOSDecisionPeek, AgentOSPortfolioMap, AgentOSScopedRecords, AgentOSWorkforceTable } from "./AgentOSPortfolio";
@@ -100,6 +101,8 @@ export function FridayWorkspace({ companyId, data, panel, setPanel, compact, con
     {panel && <section className="agentos-page" aria-label="Friday workspace">
       {panel !== "companies" && <><div className="agentos-breadcrumbs"><button type="button" onClick={() => go({ panel: "companies" })}>Portfolio</button>{scopeCompany && <><span>/</span><button type="button" onClick={() => go({ panel: "work", companyId: scopeCompany.id, mode: "combined" })}>{scopeCompany.name}</button></>}{nav.projectId && <><span>/</span><button type="button" onClick={() => scopedGo({ panel: "work", projectId: nav.projectId, mode: "combined" })}>{project.data?.name ?? "Project"}</button></>}</div>
         <div className="agentos-page-heading"><div><p className="agentos-eyebrow">{nav.projectId ? "Project workspace" : scopeCompany ? "Company workspace" : "Across your portfolio"}</p><h1>{title}</h1><p>{panel === "work" && nav.mode === "graph" ? "Every point is a record. Follow the people, handoffs and work behind it." : panel === "team" ? "Your digital employees. Skills, assignments and execution profiles, together." : panel === "attention" ? "The decisions and blockers that need you, with their context intact." : scopeCompany?.description ?? "A clear view of the work and the people moving it forward."}</p></div>
+          {scopeCompany && !nav.projectId && <AgentOSDelete kind="company" id={scopeCompany.id} companyId={scopeCompany.id} name={scopeCompany.name} onRemoved={() => go({ panel: "companies" })} />}
+          {scopeCompany && nav.projectId && project.data?.companyId === scopeCompany.id && <AgentOSDelete kind="project" id={project.data.id} companyId={scopeCompany.id} name={project.data.name} onRemoved={() => go({ panel: "work", companyId: scopeCompany.id, mode: "combined" })} />}
           {panel === "team" && <Button variant="outline" onClick={() => go({ panel: "workforce" })}>Manage shared workforce</Button>}
         </div>
         {scopeCompany && !["team", "chat", "workforce", "activity"].includes(panel) && <nav className="agentos-workspace-tabs" aria-label="Workspace views">{scopeTabs.map(([label, next]) => <button key={label} type="button" aria-current={panel === next.panel && (next.panel !== "work" || (nav.mode ?? "combined") === next.mode) ? "page" : undefined} onClick={() => go({ ...next, companyId: nav.companyId, projectId: nav.projectId })}>{label}</button>)}</nav>}

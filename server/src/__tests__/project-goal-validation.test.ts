@@ -4,6 +4,7 @@ import {
   companies,
   createDb,
   goals,
+  issues,
   projectGoals,
   projects as projectsTable,
 } from "@paperclipai/db";
@@ -39,6 +40,7 @@ describeEmbeddedPostgres("project goal validation", () => {
   }, 20_000);
 
   afterEach(async () => {
+    await db.delete(issues);
     await db.delete(projectGoals);
     await db.delete(projectsTable);
     await db.delete(goals);
@@ -65,6 +67,19 @@ describeEmbeddedPostgres("project goal validation", () => {
       .returning();
     return goal.id;
   }
+
+  it("deletes an empty project but retains a referenced project with a useful conflict", async () => {
+    const companyId = await seedCompany("Deletion Co");
+    const svc = projectService(db);
+    const empty = await svc.create(companyId, { name: "Empty" });
+    expect((await svc.remove(empty.id))?.id).toBe(empty.id);
+    expect(await svc.getById(empty.id)).toBeNull();
+    const retained = await svc.create(companyId, { name: "Retained" });
+    const [task] = await db.insert(issues).values({ companyId, projectId: retained.id, title: "Keep this work" }).returning();
+    await expect(svc.remove(retained.id)).rejects.toMatchObject({ status: 409, message: expect.stringContaining("linked tasks or accounting records") });
+    expect((await svc.getById(retained.id))?.name).toBe("Retained");
+    expect((await db.select().from(issues).where(eq(issues.id, task.id)))[0].projectId).toBe(retained.id);
+  });
 
   function expectUnprocessable(error: unknown, unknownGoalId: string) {
     expect(error).toBeInstanceOf(HttpError);

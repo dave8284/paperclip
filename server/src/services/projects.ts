@@ -36,6 +36,7 @@ import {
   type PluginManagedProjectResolution,
 } from "@paperclipai/shared";
 import { conflict, unprocessable } from "../errors.js";
+import { isForeignKeyViolation } from "../db-errors.js";
 import { listCurrentRuntimeServicesForProjectWorkspaces } from "./workspace-runtime-read-model.js";
 import { parseProjectExecutionWorkspacePolicy } from "./execution-workspace-policy.js";
 import { mergeProjectWorkspaceRuntimeConfig, readProjectWorkspaceRuntimeConfig } from "./project-workspace-runtime-config.js";
@@ -1085,8 +1086,13 @@ export function projectService(db: Db, options: { captureWorkspaceUpdates?: bool
       await tx.select({ id: projectWorkspaces.id }).from(projectWorkspaces).where(eq(projectWorkspaces.projectId, id)).for("update");
       await recordProjectLifecycleEvent(tx as unknown as Db, project.companyId, id, "delete");
       await notifyDeliveryWork(tx, DELIVERY_QUEUES.skillSourceSync);
-      const [row] = await tx.delete(projects).where(eq(projects.id, id)).returning();
-      return row ? { ...row, urlKey: deriveProjectUrlKey(row.name, row.id) } : null;
+      try {
+        const [row] = await tx.delete(projects).where(eq(projects.id, id)).returning();
+        return row ? { ...row, urlKey: deriveProjectUrlKey(row.name, row.id) } : null;
+      } catch (error) {
+        if (isForeignKeyViolation(error)) throw conflict("This project still has linked tasks or accounting records. Move or remove those records first, or archive the project to retain its history.");
+        throw error;
+      }
     }),
 
     listWorkspaces: async (projectId: string): Promise<ProjectWorkspace[]> => {

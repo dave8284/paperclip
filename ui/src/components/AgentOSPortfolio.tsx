@@ -12,6 +12,7 @@ import { AgentOSCompanyScope } from "./AgentOSCompanyScope";
 import { FridayAttention } from "./FridayAttention";
 import { FridayOperations } from "./FridayOperations";
 import { FridayWorkGraph } from "./FridayWorkGraph";
+import { AgentOSDelete } from "./AgentOSDelete";
 import { Button } from "./ui/button";
 
 type Navigation = (view: FridayNavigation) => void;
@@ -27,13 +28,13 @@ export function AgentOSCompanies({ companies, navigate, onCreate }: { companies:
 function CompanyCard({ company, navigate }: { company: Company; navigate: Navigation }) {
   const work = useQuery({ queryKey: [...fridayKey(company.id), "summary"], queryFn: () => fridayApi.work(company.id, { limit: 1 }) });
   const attention = useQuery({ queryKey: [...queryKeys.attention(company.id), "summary"], queryFn: () => attentionApi.list(company.id, { limit: 1, sort: "decide" }) });
-  return <button type="button" className="agentos-company-card" onClick={() => navigate({ panel: "work", companyId: company.id, mode: "combined" })}>
+  return <div className="agentos-card-shell"><button type="button" className="agentos-company-card" onClick={() => navigate({ panel: "work", companyId: company.id, mode: "combined" })}>
     <div className="flex items-center justify-between gap-3"><span className="agentos-company-mark">{company.name[0]}</span><span className="agentos-pill">{company.status.replaceAll("_", " ")}</span></div>
     <h2>{company.name}</h2><p>{company.description || "A workspace for your team, projects and decisions."}</p>
     <div className="agentos-card-metrics"><span><strong>{work.isSuccess ? work.data.projectCount : "—"}</strong>projects</span><span><strong>{work.isSuccess ? work.data.counts.in_progress ?? 0 : "—"}</strong>in motion</span><span><strong>{attention.isSuccess ? attention.data.totalCount : "—"}</strong>decisions & blockers</span></div>
     {(work.error || attention.error) && <p className="text-destructive">Some information could not be refreshed.</p>}
     <div className="agentos-card-footer">Open company<ArrowRight /></div>
-  </button>;
+  </button><AgentOSDelete compact kind="company" id={company.id} companyId={company.id} name={company.name} /></div>;
 }
 
 export function AgentOSDecisionPeek({ companies, navigate }: { companies: Company[]; navigate: Navigation }) {

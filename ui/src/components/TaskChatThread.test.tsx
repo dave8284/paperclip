@@ -5012,11 +5012,24 @@ describe("conversation focus presentation", () => {
     expect(container.querySelector('[data-testid="mock-editor"]')).toBe(editor);
   });
 
-  it("surfaces a required native decision even when the Friday panel is closed", async () => {
-    render(<TaskChatThread comments={[]} onAdd={async () => {}} currentUserId="user-board" interactions={[pendingConnectionIntentInteraction]} focusView={{ canvas: true, showTranscript: false, composerCollapsed: true, render: () => <div>Friday canvas</div> }} />);
+  it("keeps Friday closed for a pending decision until the user opens the transcript", async () => {
+    const focus = vi.fn((_state: import("@/lib/conversation-focus").ConversationFocusState) => <div>Friday canvas</div>);
+    const props = { comments: [], onAdd: async () => {}, currentUserId: "user-board", interactions: [pendingConnectionIntentInteraction] };
+    render(<TaskChatThread {...props} focusView={{ canvas: true, showTranscript: false, composerCollapsed: true, render: focus }} />);
+    expect(focus.mock.lastCall?.[0]).toMatchObject({ awaitingInput: true });
+    expect(container.querySelector<HTMLElement>(".agentos-conversation-panel")?.hidden).toBe(true);
+    render(<TaskChatThread {...props} focusView={{ canvas: true, showTranscript: true, composerCollapsed: false, render: focus }} />);
     expect(container.querySelector<HTMLElement>(".agentos-conversation-panel")?.hidden).toBe(false);
-    expect(container.querySelector('[data-testid="task-chat-composer-dock"]')?.closest('[hidden]')).toBeNull();
     await act(async () => { await new Promise(resolve => requestAnimationFrame(resolve)); });
     expect(container.textContent).toContain("Notion");
+    render(<TaskChatThread {...props} focusView={{ canvas: true, showTranscript: false, composerCollapsed: true, render: focus }} />);
+    expect(container.querySelector<HTMLElement>(".agentos-conversation-panel")?.hidden).toBe(true);
+  });
+
+  it("keeps a Friday history failure in the presence state without opening text chat", () => {
+    const focus = vi.fn((_state: import("@/lib/conversation-focus").ConversationFocusState) => <div>Friday canvas</div>);
+    render(<TaskChatThread comments={[]} onAdd={async () => {}} initialHistoryError focusView={{ canvas: true, showTranscript: false, composerCollapsed: true, render: focus }} />);
+    expect(focus.mock.lastCall?.[0]).toMatchObject({ unavailable: true });
+    expect(container.querySelector<HTMLElement>(".agentos-conversation-panel")?.hidden).toBe(true);
   });
 });
