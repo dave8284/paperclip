@@ -1,13 +1,15 @@
 import { createServer, type RequestListener, type ServerOptions } from "node:http";
 import { setupPluginApiWebSocketServer } from "../realtime/plugin-api-ws.js";
 import { setupRunnerPrpWebSocketServer } from "../realtime/runner-prp-ws.js";
+import { protectPublicTunnel } from "./public-tunnel.js";
 
 /** Create the HTTP listener used by both production and custom launchers. */
 export function createPaperclipHttpServer(
   listener: RequestListener,
-  options: { apiUrl: string; httpOptions?: ServerOptions },
+  options: { apiUrl: string; httpOptions?: ServerOptions; publicTunnelAuthenticated?: boolean },
 ) {
   const server = createServer(options.httpOptions ?? {}, listener);
+  protectPublicTunnel(server, options.publicTunnelAuthenticated === true);
   // Native execution uses the listener even when a launcher has no browser
   // realtime connection. Register it before any run can be admitted.
   setupRunnerPrpWebSocketServer(server, { apiUrl: options.apiUrl });

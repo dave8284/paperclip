@@ -994,6 +994,7 @@ async function startServerWithDatabaseTeardown(
   // Upgrade admission runs before every WebSocket listener, outside Express.
   const server = createPaperclipHttpServer(app as unknown as RequestListener, {
     apiUrl: configuredApiUrl,
+    publicTunnelAuthenticated: config.deploymentMode === "authenticated" && config.deploymentExposure === "public" && authReady,
     httpOptions: cloudWarmStandbyServerOptions(() => isWarmStandby() || isIdleTaskDrainActive()),
   });
   // Outlive reverse-proxy idle timeouts to avoid intermittent resets.
