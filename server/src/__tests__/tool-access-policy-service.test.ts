@@ -261,6 +261,21 @@ describeEmbeddedPostgres("tool access policy service", () => {
     });
   });
 
+  it("requires a fresh approval for Stripe writes even with an allow policy, without granting unassigned access", async () => {
+    const company = await createCompany(db), agent = await createAgent(db, company.id);
+    const { application, connection, catalogEntry } = await createTool(db, company.id);
+    await db.update(toolApplications).set({ applicationKey: `app-gallery:stripe:${randomUUID()}` }).where(eq(toolApplications.id, application.id));
+    const input = sendEmailDecisionInput(company, agent, connection, catalogEntry);
+    expect((await toolAccessPolicyService(db).decide(input)).decision).toBe("deny");
+    await db.insert(toolPolicies).values({ companyId: company.id, policyKey: `stripe-${randomUUID()}`, name: "Fixture allow", policyType: "allow", priority: 1, selectors: {} });
+    const decision = await toolAccessPolicyService(db).decide({ ...input, request: { ...input.request, applicationKey: "pretend-not-stripe", riskLevel: "read" } });
+    expect(decision).toMatchObject({ decision: "require_approval", allowed: false });
+    const receipt = await toolAccessPolicyService(db).recordInvocation(input, decision);
+    expect(receipt.actionRequest).toBeTruthy();
+    await db.update(toolCatalogEntries).set({ riskLevel: "read" }).where(eq(toolCatalogEntries.id, catalogEntry.id));
+    expect((await toolAccessPolicyService(db).decide(input)).decision).toBe("allow");
+  });
+
   it("allows calls through an effective agent profile", async () => {
     const company = await createCompany(db);
     const agent = await createAgent(db, company.id);

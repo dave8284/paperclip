@@ -41,7 +41,9 @@ vi.mock("./AgentChat", async () => {
 });
 
 class Recognition {
-  onstart?: () => void; onend?: () => void; onerror?: unknown; onresult?: unknown;
+  static latest: Recognition;
+  constructor() { Recognition.latest = this; }
+  onstart?: () => void; onend?: () => void; onerror?: unknown; onresult?: (event: unknown) => void;
   start() { this.onstart?.(); } stop() { this.onend?.(); } abort() {}
 }
 
@@ -59,7 +61,7 @@ describe("Agent OS approved Friday experience", () => {
   afterEach(async () => { await act(async () => root.unmount()); client.clear(); host.remove(); delete (window as any).SpeechRecognition; });
   async function settle() { await act(async () => { await new Promise(resolve => setTimeout(resolve, 15)); }); }
   async function render(path = "/friday", native = false) { await act(async () => root.render(<QueryClientProvider client={client}><MemoryRouter initialEntries={[path]}>{native ? <AgentOSNativeFrame><h1>Native record</h1></AgentOSNativeFrame> : <Friday />}</MemoryRouter></QueryClientProvider>)); await settle(); await settle(); }
-  async function click(text: string, within: ParentNode = host) { const button = [...within.querySelectorAll("button")].find(node => node.textContent?.trim() === text); expect(button, text).toBeDefined(); await act(async () => button!.click()); await settle(); await settle(); }
+  async function click(text: string, within: ParentNode = host) { const button = [...within.querySelectorAll("button")].find(node => node.textContent?.trim() === text || node.getAttribute("aria-label") === text); expect(button, text).toBeDefined(); await act(async () => button!.click()); await settle(); await settle(); }
   const navigation = () => host.querySelector('nav[aria-label="Main navigation"]')!;
 
   it("opens real company and project cards in the canvas with scoped decisions and routines", async () => {
@@ -100,10 +102,17 @@ describe("Agent OS approved Friday experience", () => {
     const history = host.querySelector<HTMLElement>('.agentos-conversation-panel')!;
     expect(history.hidden).toBe(true);
     expect(host.querySelector('[data-testid="friday-mic-paused"]')).not.toBeNull();
+    expect(host.querySelector('.agentos-presence-orb .agentos-orb-microphone')?.getAttribute("data-enabled")).toBe("false");
     await click("Talk to Friday");
+    expect(host.querySelector('.agentos-orb-microphone')?.getAttribute("data-enabled")).toBe("true");
+    await act(async () => Recognition.latest.onresult?.({ resultIndex: 0, results: [{ isFinal: false, 0: { transcript: "Show my projects" } }] }));
+    const preview = host.querySelector('.agentos-live-transcript')!;
+    expect(preview.textContent).toBe("Show my projects");
+    expect(preview.compareDocumentPosition(host.querySelector('.agentos-prefer-type')!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(fixture.send).not.toHaveBeenCalled();
     expect(host.querySelector('[data-testid="friday-mic-listening"]')).not.toBeNull();
     expect(history.hidden).toBe(true);
-    await click("Send voice message");
+    await click("Pause microphone");
     expect(host.querySelector('[data-testid="friday-mic-paused"]')).not.toBeNull();
     await click("Prefer to type?");
     expect(history.hidden).toBe(false);
@@ -111,6 +120,7 @@ describe("Agent OS approved Friday experience", () => {
     await click("Companies", navigation());
     expect(host.querySelector('.agentos-conversation-panel')).toBe(history);
     expect(history.dataset.docked).toBe("true");
+    expect(history.hidden).toBe(true);
     expect(host.querySelector('.agentos-friday-presence')?.getAttribute("data-docked")).toBe("true");
     await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Minimise conversation"]')!.click());
     expect(history.hidden).toBe(true);

@@ -1,0 +1,11 @@
+{
+  "name": "@agentos/model-intelligence",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Auditable, evidence-gated model profile selection with independent storage and HTTP API",
+  "license": "MIT",
+  "exports": { ".": { "types": "./src/index.d.ts", "import": "./src/index.mjs" } },
+  "files": ["src", "README.md"],
+  "engines": { "node": ">=22.16.0" },
+  "scripts": { "start": "node src/server.mjs", "test": "node --test src/*.test.mjs", "build": "node --check src/index.mjs && node --check src/server.mjs", "typecheck": "node --check src/index.mjs" }
+}

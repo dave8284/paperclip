@@ -8,6 +8,12 @@ Agent OS operates a portfolio of companies through Friday, a reusable workforce 
 
 This is the master plan for the next implementation. It consolidates the [operating model](2026-10-25-agentos-operating-model.md), [capability inventory](2026-10-25-agentos-capability-inventory.md), [Friday design blueprint](../../prototypes/agentos-designs/friday/design.html), and [Model Intelligence architecture](2026-10-27-agentos-model-intelligence.md). It takes precedence where earlier plans describe different navigation, a Combined tab, or policy-adoption behaviour. Historical implementation and verification records remain intact.
 
+## Implementation checkpoint — 2026-10-27
+
+The [functional refinement record](2026-10-27-agentos-functional-refinement.md) documents the implementation now in this fork: company departments and project memberships, local speech, inline task/decision detail, pastel record orbs, audit tables, native routine-cycle views, retained artefact versions, consolidated Settings and mandatory native Stripe write review. The independent Model Intelligence library/HTTP product is implemented and integrated into native execution admission, with local storage, selection receipts, operator-reviewed outcomes, conservative automatic selection and rollback. Existing sessions remain pinned. No production qualification evidence has been collected yet; connected does not mean trained.
+
+The earlier sections below preserve the original plan and baseline. They are not claims that all future experiments, connectors, automated quality evaluators, cross-provider migration or cloud deployment have shipped. Deployment remains local. The owner confirmed live microphone input and spoken replies in the local app. Automated browser visual and mobile acceptance remain unverified because the Browser integration cannot connect.
+
 ## 1. Accepted product decisions
 
 - Agent OS is the platform, built on the Paperclip fork. Internal platform maintenance is separate from the customer-company and application portfolio.

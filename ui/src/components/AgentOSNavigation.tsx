@@ -30,6 +30,7 @@ export function AgentOSSidebar({ companies, view, navigate }: { companies: Compa
   const scope = { companyId: view.companyId, projectId: view.projectId };
   const links = [
     { label: "Home", Icon: Home, next: { panel: "work", ...scope, mode: "combined" } },
+    ...(!view.projectId ? [{ label: "Projects", Icon: FolderKanban, next: { panel: "projects" as const, companyId: view.companyId } }, { label: "Departments", Icon: Boxes, next: { panel: "departments" as const, companyId: view.companyId } }] : []),
     { label: "Kanban", Icon: FolderKanban, next: { panel: "work", ...scope, mode: "kanban" } },
     { label: "Agent Map", Icon: Network, next: { panel: "work", ...scope, mode: "graph" } },
     { label: "Decisions", Icon: CheckCheck, next: { panel: "attention", ...scope } },
@@ -44,7 +45,7 @@ export function AgentOSSidebar({ companies, view, navigate }: { companies: Compa
       <nav aria-label="Companies">{companies.map(item => <button key={item.id} type="button" aria-current={company?.id === item.id ? "page" : undefined} onClick={() => go({ panel: "work", companyId: item.id, mode: "combined" })}><span className="agentos-company-initial">{item.name[0]}</span><span>{item.name}</span></button>)}{!companies.length && <p className="p-3 text-sm text-muted-foreground">No companies yet.</p>}</nav>
       <div className="agentos-sidebar-divider" />
       <p className="agentos-eyebrow">{view.projectId ? "Project workspace" : company ? "Company workspace" : "Across your portfolio"}</p>
-      {view.projectId && <button type="button" className="agentos-back" onClick={() => go({ panel: "work", companyId: view.companyId, mode: "combined" })}><Boxes />All projects</button>}
+      {view.projectId && <button type="button" className="agentos-back" onClick={() => go({ panel: "projects", companyId: view.companyId })}><Boxes />All projects</button>}
       <nav aria-label="Workspace">{links.map(({ label, Icon, next }) => <button key={label} type="button" onClick={() => go(next)} aria-current={view.panel === next.panel && (next.panel !== "work" || (view.mode ?? "combined") === next.mode) ? "page" : undefined}><Icon /><span>{label}</span></button>)}</nav>
       <div className="agentos-sidebar-divider" />
       <nav aria-label="People and history"><button type="button" onClick={() => go({ panel: "team", companyId: view.companyId })} aria-current={view.panel === "team" ? "page" : undefined}><Users />Workforce</button><button type="button" onClick={() => go({ panel: "activity", ...scope })} aria-current={view.panel === "activity" ? "page" : undefined}><Activity />Audit trail</button><button type="button" onClick={() => go({ panel: "library" })}><CircleHelp />Saved displays</button></nav>

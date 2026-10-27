@@ -1,3 +1,4 @@
+import { modelIntelligenceProduct } from "./model-intelligence.js";
 import { and, gte, lte, sql } from "drizzle-orm";
 import { costEvents, decisionInvocations, heartbeatRuns, type Db } from "@paperclipai/db";
 import { assertAdministration, type AdminPrincipal } from "./agentos-administration.js";
@@ -31,9 +32,10 @@ export async function modelIntelligenceAnalytics(db: Db, actor: AdminPrincipal, 
     db.select({ status: heartbeatRuns.status, count: sql<number>`count(*)::int` }).from(heartbeatRuns)
       .where(and(gte(heartbeatRuns.createdAt, since), lte(heartbeatRuns.createdAt, now))).groupBy(heartbeatRuns.status),
   ]);
+  const learning = modelIntelligenceProduct()?.analytics();
   return { since: since.toISOString(), through: now.toISOString(), usage, decisions, runs,
-    learning: { status: "not_connected" as const, evaluations: null, policyReleases: null,
-      explanation: "The independent learning service is not connected. Recorded usage and execution status are available; verified quality outcomes, experiments, policy promotion and rollback are not available yet.",
+    learning: { status: learning ? "connected" as const : "not_connected" as const, evaluations: learning?.counts.evaluations ?? null, policyReleases: learning?.counts.policyEvents ?? null, selections: learning?.counts.selections ?? 0,
+      explanation: learning ? "Local Model Intelligence records selection receipts and learns from reviewed outcomes. Unqualified and complex work retain the configured model. A replacement requires sufficient quality evidence and measured latency improvement. Active sessions preserve their model; no paid API fallback is used." : "Model Intelligence is not configured. Execution and usage records remain available; no learned model changes are being applied.",
     },
   };
 }

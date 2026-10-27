@@ -97,6 +97,8 @@ interface AttentionQueueRowProps {
   currentUserId?: string | null;
   userLabelMap?: ReadonlyMap<string, string> | null;
   selected?: boolean;
+  /** Agent OS opens every decision in place, with native resolvers intact. */
+  inlineDetail?: ReactNode;
 }
 
 /**
@@ -121,6 +123,7 @@ export const AttentionQueueRow = memo(function AttentionQueueRow({
   currentUserId,
   userLabelMap,
   selected = false,
+  inlineDetail,
 }: AttentionQueueRowProps) {
   const meta = sourceMeta(item.sourceKind);
   // Colour + glyph are borrowed wholesale from the task status system, so a
@@ -144,7 +147,7 @@ export const AttentionQueueRow = memo(function AttentionQueueRow({
   // gives a header/thumbnail click somewhere to go. Non-inline, image-less rows
   // with no triage keep the explicit Open button and never toggle on a stray click.
   const triageEnabled = showTriage && !isHidden;
-  const expandable = inline || (!isHidden && hasImages) || triageEnabled;
+  const expandable = inlineDetail !== undefined || inline || (!isHidden && hasImages) || triageEnabled;
   const activate = () => {
     if (expandable) onToggleExpand(item);
   };
@@ -164,7 +167,7 @@ export const AttentionQueueRow = memo(function AttentionQueueRow({
   // travels with the feed item; null for every non-interaction source and for a
   // feed built before the metadata existed (PAP-17287).
   const audience = describeAttentionResolverAudience(item);
-  const showOpen = !inline && !!href;
+  const showOpen = inlineDetail === undefined && !inline && !!href;
   const showRestore = isHidden && !!onRestore;
   // An expanded inline row hands its footer to the resolver, which owns the
   // decision verbs — so the toggle rides alongside them on one row rather than
@@ -385,6 +388,7 @@ export const AttentionQueueRow = memo(function AttentionQueueRow({
       <Collapsible open={expanded} onOpenChange={() => onToggleExpand(item)} className="contents">
         <CollapsibleContent data-decision-disclosure className="-mt-4">
           <div className="flex flex-col gap-4 pt-4">
+            {inlineDetail}
             {hasImages && <ExpandedImages images={images} issueHref={issueHref} />}
             {triageEnabled && <DecisionTriageStrip item={item} companyId={companyId} agents={agents} />}
             {inline && (

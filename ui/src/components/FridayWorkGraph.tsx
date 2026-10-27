@@ -1,10 +1,17 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { ArrowUpRight, Maximize, Minus, Plus, X } from "lucide-react";
 import type { Agent, FridayWork } from "@paperclipai/shared";
 import { fridayGraph, type FridayGraphNode } from "../lib/friday-graph";
 import { Button } from "./ui/button";
 
+const taskStatuses = ["backlog", "todo", "in_progress", "in_review", "blocked", "done", "cancelled"];
+const orbGradients = [
+  ...["company", "application", "project", "agent", "task", "comment", "artifact"].map(kind => ({ id: kind, kind, status: undefined as string | undefined })),
+  ...taskStatuses.map(status => ({ id: `task-${status}`, kind: "task", status })),
+];
+
 export function FridayWorkGraph({ data, agents, running, onSelect, companies }: { data: FridayWork; agents: Agent[]; running: ReadonlySet<string>; onSelect: (node: FridayGraphNode) => void; companies?: Array<{ id: string; name: string; projectIds: string[] }> }) {
+  const gradient = useId().replaceAll(":", "");
   const [view, setView] = useState({ x: 0, y: 0, zoom: 1 });
   const [evidence, setEvidence] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -21,7 +28,7 @@ export function FridayWorkGraph({ data, agents, running, onSelect, companies }: 
   const width = 1100 / view.zoom, height = 700 / view.zoom;
   const zoom = (factor: number) => setView(value => ({ ...value, zoom: Math.max(.5, Math.min(8, value.zoom * factor)) }));
   return <div className="friday-map-shell">
-    <div className="friday-map-toolbar"><div><p className="agentos-eyebrow">A living view of your work</p><span>{graph.nodes.length} records · {graph.nodes.filter(node => node.running).length} running tasks</span></div><div className="friday-map-controls"><label><input type="checkbox" checked={evidence} onChange={event => setEvidence(event.target.checked)} />Evidence</label>
+    <div className="friday-map-toolbar"><div><p className="agentos-eyebrow">A living view of your work</p><span>{graph.nodes.length} records · {graph.nodes.filter(node => node.running && node.kind === "task").length} running tasks</span></div><div className="friday-map-controls"><label><input type="checkbox" checked={evidence} onChange={event => setEvidence(event.target.checked)} />Evidence</label>
       <Button size="icon-sm" variant="ghost" aria-label="Zoom out" onClick={() => zoom(1 / 1.3)}><Minus /></Button><span className="friday-map-zoom">{Math.round(view.zoom * 100)}%</span>
       <Button size="icon-sm" variant="ghost" aria-label="Zoom in" onClick={() => zoom(1.3)}><Plus /></Button>
       <Button size="icon-sm" variant="ghost" aria-label="Fit work graph" onClick={() => setView({ x: 0, y: 0, zoom: 1 })}><Maximize /></Button>
@@ -32,6 +39,7 @@ export function FridayWorkGraph({ data, agents, running, onSelect, companies }: 
         onPointerMove={event => { if (!drag.current) return; const rect = event.currentTarget.getBoundingClientRect(); if (!rect.width || !rect.height) return; const dx = (event.clientX - drag.current.x) * width / rect.width, dy = (event.clientY - drag.current.y) * height / rect.height; drag.current = { x: event.clientX, y: event.clientY }; setView(value => ({ ...value, x: value.x - dx, y: value.y - dy })); }}
         onPointerUp={() => { drag.current = null; }} onPointerCancel={() => { drag.current = null; }}
         onWheel={event => { if (!event.ctrlKey) return; event.preventDefault(); zoom(event.deltaY < 0 ? 1.15 : 1 / 1.15); }}>
+        <defs>{orbGradients.map(entry => <radialGradient key={entry.id} id={`${gradient}-${entry.id}`} className="friday-orb-gradient" data-kind={entry.kind} data-status={entry.status} cx="30%" cy="25%" r="80%"><stop offset="0%" className="friday-orb-highlight" /><stop offset="55%" className="friday-orb-color" /><stop offset="100%" className="friday-orb-shade" /></radialGradient>)}</defs>
         {graph.edges.map(edge => {
           const from = positions.get(edge.from)!, to = positions.get(edge.to)!;
           const bend = edge.kind === "handoff" ? .2 : .08;
@@ -44,7 +52,8 @@ export function FridayWorkGraph({ data, agents, running, onSelect, companies }: 
           return <g key={node.id} role="button" tabIndex={0} aria-label={`${node.kind}: ${node.title}${node.status ? ` · ${node.status}` : ""}`} aria-pressed={selected?.id === node.id} className="friday-graph-node" data-kind={node.kind} data-status={node.status} data-running={node.running} data-dimmed={!!focusId && !related.has(node.id)} data-focused={focused}
             onMouseEnter={() => setHovered(node.id)} onMouseLeave={() => setHovered(null)} onFocus={() => setHovered(node.id)} onBlur={() => setHovered(null)} onClick={() => setSelectedId(node.id)} onDoubleClick={() => onSelect(node)} onKeyDown={event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setSelectedId(node.id); } }}>
             {anchor && <circle className="friday-graph-halo" cx={node.x} cy={node.y} aria-hidden="true" />}
-            <circle className="friday-graph-core" cx={node.x} cy={node.y} /><title>{node.title}{node.status ? ` · ${node.status}` : ""}</title>
+            <circle className="friday-graph-core" cx={node.x} cy={node.y} style={{ fill: `url(#${gradient}-${node.kind === "task" && node.status && taskStatuses.includes(node.status) ? `task-${node.status}` : node.kind})` }} />
+            {node.kind === "agent" && <circle className="friday-agent-orbit" cx={node.x} cy={node.y} aria-hidden="true" />}<title>{node.title}{node.status ? ` · ${node.status}` : ""}</title>
             {node.kind === "agent" && <text className="friday-graph-initial" x={node.x} y={node.y} textAnchor="middle" dominantBaseline="central" aria-hidden="true">{node.title.split(/\s+/).slice(0, 2).map(word => word[0]).join("")}</text>}
             {(anchor || focused) && <text className="friday-graph-label" x={node.x} y={node.y + (anchor ? 39 : 23)} textAnchor="middle">{node.title.length > 30 ? `${node.title.slice(0, 29)}…` : node.title}</text>}
           </g>;

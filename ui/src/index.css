@@ -5239,12 +5239,12 @@ html:has(.design-proposal-theme) [data-canonical-toolbar] .collection-toolbar-ta
 
 /* Muted pastel record colours with legible ink. Halos belong to real nodes. */
 .friday-map-shell {
-  --map-lilac: #ded4f1; --map-lilac-ink: #82709b;
-  --map-blue: #cde2f1; --map-blue-ink: #658899;
-  --map-peach: #f3dbc8; --map-peach-ink: #a78062;
-  --map-mint: #cee5db; --map-mint-ink: #658c7d;
-  --map-rose: #f0d0d5; --map-rose-ink: #aa7b83;
-  --map-sand: #eee5c8; --map-sand-ink: #9e9065;
+  --map-lilac: #d3b6ff; --map-lilac-ink: #7b58a8;
+  --map-blue: #acdaff; --map-blue-ink: #4980b0;
+  --map-peach: #ffc6a5; --map-peach-ink: #b57a64;
+  --map-mint: #a9ebd3; --map-mint-ink: #408e79;
+  --map-rose: #ffb9ce; --map-rose-ink: #b15b7a;
+  --map-sand: #ffe4a4; --map-sand-ink: #9b813e;
   --map-edge: #d1d7df; --map-label: #616776;
   --map-node-radius: 6px; --map-halo-radius: 20px;
   border: 1px solid var(--border); border-radius: 1.5rem; overflow: hidden; background: var(--background);
@@ -5265,6 +5265,7 @@ html:has(.design-proposal-theme) [data-canonical-toolbar] .collection-toolbar-ta
 .friday-map-shell [data-kind="comment"] { --node-fill: var(--map-lilac); --node-ink: var(--map-lilac-ink); --map-node-radius: 3px; }
 .friday-map-shell [data-kind="artifact"] { --node-fill: var(--map-sand); --node-ink: var(--map-sand-ink); --map-node-radius: 4px; }
 .friday-map-shell [data-kind="task"][data-status="blocked"] { --node-fill: var(--map-rose); --node-ink: var(--map-rose-ink); }
+.friday-map-shell [data-kind="task"][data-status="in_review"] { --node-fill: var(--map-lilac); --node-ink: var(--map-lilac-ink); }
 .friday-map-shell [data-kind="task"][data-status="in_progress"] { --node-fill: var(--map-blue); --node-ink: var(--map-blue-ink); }
 .friday-map-shell [data-kind="task"][data-status="backlog"], .friday-map-shell [data-kind="task"][data-status="todo"] { --node-fill: var(--map-sand); --node-ink: var(--map-sand-ink); }
 .friday-map-shell .friday-graph-node .friday-graph-core { r: var(--map-node-radius); fill: var(--node-fill); stroke: var(--node-ink); stroke-opacity: .5; stroke-width: 1; animation: none; }
@@ -5293,3 +5294,55 @@ html:has(.design-proposal-theme) [data-canonical-toolbar] .collection-toolbar-ta
 @media (max-width: 767px) { .friday-map-inspector { position: static; width: auto; margin: 0 1rem 1rem; box-shadow: none; } .friday-map-toolbar { padding: 1rem; } }
 @media (prefers-reduced-motion: reduce) { .friday-map-shell .friday-work-graph * { animation: none !important; } }
 .friday-map-shell .friday-work-graph[data-quiet="true"] * { animation: none !important; }
+
+/* Record orbs: ornament stays inside real record nodes; only observed work moves. */
+.friday-orb-gradient { --node-fill: var(--map-mint); --node-ink: var(--map-mint-ink); }
+.friday-orb-highlight { stop-color: #fff; }
+.friday-orb-color { stop-color: var(--node-fill); }
+.friday-orb-shade { stop-color: var(--node-ink); stop-opacity: .7; }
+.friday-map-shell .friday-graph-node .friday-graph-core { stroke-opacity: .25; filter: drop-shadow(0 3px 5px color-mix(in srgb, var(--node-fill) 60%, transparent)); }
+.friday-map-shell .friday-graph-node .friday-agent-orbit { r: 25px; fill: none; stroke: var(--node-fill); stroke-width: 1; stroke-dasharray: 2 5; opacity: .8; }
+.friday-map-shell .friday-graph-node[data-running="true"] .friday-agent-orbit { animation: friday-work-flow var(--friday-graph-motion) linear infinite; }
+.agentos-data-table { width: 100%; border-collapse: collapse; font-size: .8125rem; text-align: left; }
+.agentos-data-table th { color: var(--muted-foreground); font-weight: 500; font-size: .6875rem; padding: 1rem; border-bottom: 1px solid var(--border); white-space: nowrap; }
+.agentos-data-table td { padding: 1rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+.agentos-data-table tbody tr:hover { background: var(--muted); }
+.agentos-data-table td a { color: var(--primary); }
+@media (prefers-reduced-motion: reduce) { .friday-map-shell .friday-agent-orbit { animation: none !important; } }
+
+.agentos-loop-card { padding: 1.5rem; border: 1px solid var(--border); border-radius: 1.25rem; text-align: left; background: var(--background); transition: box-shadow .2s ease; }
+.agentos-loop-card[aria-pressed="true"] { box-shadow: 0 0 0 2px #c7b6ee; }
+.agentos-loop-card h3 { font-size: 1.0625rem; margin: 1rem 0 .5rem; font-weight: 550; }
+.agentos-loop-card p { color: var(--muted-foreground); font-size: .75rem; line-height: 1.7; }
+.agentos-loop-mini { display: flex; align-items: center; gap: .65rem; margin: 1.25rem 0; font-size: .6875rem; }
+.agentos-loop-mini span { padding: .5rem .65rem; background: #f5f1fc; border-radius: .6rem; }
+.agentos-loop-mini [data-active="true"] { background: #ccf1e4; }
+.agentos-loop-mini i, .agentos-loop-flow > i { font-style: normal; color: #a290c2; }
+.agentos-loop-flow { display: grid; grid-template-columns: 1fr auto 1fr auto 1fr auto 1fr; gap: .75rem; align-items: center; }
+.agentos-loop-flow section { min-width: 0; align-self: stretch; padding: 1rem; border-radius: 1rem; background: #f6f2fc; border: 1px solid #ede6f7; }
+.agentos-loop-flow section:nth-of-type(2) { background: #edf7ff; border-color: #dcecff; }
+.agentos-loop-flow section:nth-of-type(3) { background: #eefaf5; border-color: #d9eee4; }
+.agentos-loop-flow section:nth-of-type(4) { background: #fff6e9; border-color: #f3e8d7; }
+.agentos-loop-flow h3 { font-size: .875rem; line-height: 1.6; margin: .75rem 0; }
+.agentos-loop-flow span, .agentos-loop-flow p, .agentos-loop-flow a { font-size: .6875rem; line-height: 1.7; color: var(--muted-foreground); }
+.agentos-loop-flow [data-active="true"] { box-shadow: 0 0 0 2px #aad7ed; }
+@media (max-width: 900px) { .agentos-loop-flow { grid-template-columns: 1fr; } .agentos-loop-flow > i { text-align: center; transform: rotate(90deg); } }
+
+/* The microphone follows Friday; live words remain part of her presence. */
+.agentos-friday-presence { --friday-mic-muted: #c54451; --friday-mic-muted-surface: #fff0f2; --friday-mic-active: #397fe8; --friday-mic-active-surface: #edf5ff; }
+.agentos-presence-orb { position: relative; flex-shrink: 0; }
+.agentos-orb-microphone { position: absolute; top: 12%; right: 8%; z-index: 2; display: grid; place-items: center; width: 2.75rem; height: 2.75rem; border-radius: 50%; border: 1px solid color-mix(in srgb, var(--friday-mic-muted) 24%, transparent); background: var(--friday-mic-muted-surface); color: var(--friday-mic-muted); box-shadow: var(--agentos-panel-shadow); cursor: pointer; transition: color var(--agentos-motion), background var(--agentos-motion), box-shadow var(--agentos-motion); }
+.agentos-orb-microphone svg { width: 1.125rem; height: 1.125rem; }
+.agentos-orb-microphone[data-enabled="true"] { color: var(--friday-mic-active); background: var(--friday-mic-active-surface); border-color: color-mix(in srgb, var(--friday-mic-active) 24%, transparent); }
+.agentos-orb-microphone[data-listening="true"] { box-shadow: 0 0 0 .35rem color-mix(in srgb, var(--friday-mic-active) 10%, transparent); }
+.agentos-orb-microphone:focus-visible { outline: 2px solid var(--ring); outline-offset: 3px; }
+.agentos-orb-microphone:disabled { cursor: not-allowed; opacity: .6; }
+.agentos-friday-presence .friday-orb[data-state="listening"] { --friday-orb-ink: var(--friday-mic-active); }
+.agentos-live-transcript { width: min(28rem, 75vw); max-height: 8rem; overflow: auto; margin: .25rem 0; font-size: 1rem; line-height: 1.6; text-align: center; color: var(--foreground); overflow-wrap: anywhere; }
+.agentos-live-transcript[data-listening="true"]::after { content: ""; display: inline-block; width: 2px; height: 1em; margin-left: .25rem; vertical-align: -.125em; background: var(--friday-mic-active); animation: friday-transcript-caret 800ms ease-in-out infinite alternate; }
+.agentos-friday-presence[data-docked="true"] .agentos-orb-microphone { top: -.2rem; right: -.2rem; width: 2rem; height: 2rem; }
+.agentos-friday-presence[data-docked="true"] .agentos-orb-microphone svg { width: .9rem; height: .9rem; }
+.agentos-friday-presence[data-docked="true"] .agentos-presence-controls { flex-wrap: wrap; max-width: 18rem; }
+.agentos-friday-presence[data-docked="true"] .agentos-live-transcript { flex-basis: 100%; width: 16rem; max-height: 5rem; font-size: .8125rem; text-align: left; }
+@keyframes friday-transcript-caret { from { opacity: .35; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .agentos-live-transcript::after { animation: none !important; } }

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Agent, AttentionItem } from "@paperclipai/shared";
 import { attentionApi } from "../api/attention";
@@ -6,6 +6,8 @@ import { authApi } from "../api/auth";
 import { inboxDismissalsApi } from "../api/inboxDismissals";
 import { queryKeys } from "../lib/queryKeys";
 import { AttentionQueueRow } from "./AttentionQueueRow";
+import { ApplicationTaskInspector } from "./ApplicationTaskInspector";
+import { issuesApi } from "../api/issues";
 import { Button } from "./ui/button";
 
 export function useFridayAttention(companyId: string, projectId?: string, cursor?: string) {
@@ -13,13 +15,14 @@ export function useFridayAttention(companyId: string, projectId?: string, cursor
     queryFn: () => attentionApi.list(companyId, { projectId, cursor, limit: 50, sort: "decide" }), staleTime: 15_000 });
 }
 
-export function FridayAttention({ companyId, projectId, agents, onProject, onAsk, compact = false, assistantName = "Friday" }: {
+export function FridayAttention({ companyId, projectId, agents, onProject, onAsk, compact = false, decisionId, assistantName = "Friday" }: {
   companyId: string; projectId?: string; agents: Agent[]; onProject: (id: string) => void;
-  onAsk: (text: string) => void; compact?: boolean; assistantName?: string;
+  onAsk: (text: string) => void; decisionId?: string; compact?: boolean; assistantName?: string;
 }) {
   const client = useQueryClient();
   const [cursors, setCursors] = useState<string[]>([]);
   const [expanded, setExpanded] = useState<string | null>(null);
+  useEffect(() => { setExpanded(decisionId ?? null); }, [decisionId]);
   const feed = useFridayAttention(companyId, projectId, cursors.at(-1));
   const session = useQuery({ queryKey: queryKeys.auth.session, queryFn: () => authApi.getSession() });
   const agentMap = useMemo(() => new Map(agents.map(agent => [agent.id, agent])), [agents]);
@@ -40,7 +43,7 @@ export function FridayAttention({ companyId, projectId, agents, onProject, onAsk
     {[...groups].map(([key, group]) => <section key={key} className="space-y-2">
       <div className="flex items-center justify-between gap-2"><h4 className="text-xs font-medium text-muted-foreground">{group.name}</h4>{group.projectId && <Button variant="ghost" size="sm" onClick={() => onProject(group.projectId!)}>See project</Button>}</div>
       {group.items.map(item => <div key={item.id} className="rounded-lg border bg-background">
-        <AttentionQueueRow item={item} companyId={companyId} expanded={expanded === item.id} onToggleExpand={next => setExpanded(current => current === next.id ? null : next.id)}
+        <AttentionQueueRow item={item} companyId={companyId} inlineDetail={expanded === item.id ? <DecisionContext item={item} companyId={companyId} onAsk={onAsk} /> : null} expanded={expanded === item.id} onToggleExpand={next => setExpanded(current => current === next.id ? null : next.id)}
           onDismiss={item => { if (!dismiss.isPending) dismiss.mutate(item); }} agentMap={agentMap} agents={agents} currentUserId={session.data?.user?.id ?? session.data?.session?.userId ?? null} />
         <div className="px-3 pb-2"><Button variant="ghost" size="sm" onClick={() => onAsk(`Explain this current decision and recommend the next step. Re-read its native source before acting: ${item.subject.href ?? item.subject.id}. Attention record: ${item.id}. ${item.whyNow}`)}>Discuss with {assistantName}</Button></div>
       </div>)}
@@ -48,4 +51,14 @@ export function FridayAttention({ companyId, projectId, agents, onProject, onAsk
     {!compact && <div className="flex items-center justify-between gap-2"><Button variant="outline" size="sm" disabled={!cursors.length} onClick={() => { setCursors(value => value.slice(0, -1)); setExpanded(null); }}>Previous</Button><Button variant="outline" size="sm" disabled={!feed.data?.nextCursor || !!feed.error} onClick={() => { setCursors(value => [...value, feed.data!.nextCursor!]); setExpanded(null); }}>Next decisions</Button></div>}
     {feed.data && !feed.error && <p className="text-xs text-muted-foreground">Updated {new Date(feed.data.generatedAt).toLocaleTimeString()} · decisions retain their native permissions and revision checks.</p>}
   </div>;
+}
+
+function DecisionContext({ item, companyId, onAsk }: { item: AttentionItem; companyId: string; onAsk: (text: string) => void }) {
+  const taskId = item.relatedIssue?.id ?? (item.subject.kind === "issue" ? item.subject.id : undefined);
+  const task = useQuery({ queryKey: queryKeys.issues.detail(taskId ?? ""), queryFn: () => issuesApi.get(taskId!), enabled: !!taskId });
+  const [alternative, setAlternative] = useState("");
+  return <section className="space-y-4" aria-label="Decision context"><div><h3 className="text-sm font-semibold">Decision needed</h3><p className="mt-2 text-sm">{item.whyNow}</p></div>
+    <form className="space-y-2" onSubmit={event => { event.preventDefault(); onAsk(`For decision ${item.id}, source ${item.subject.href ?? item.subject.id}, I want this alternative: ${alternative}. Re-read the decision and retain its native approval requirements. Do not treat a changed action as approval of the original.`); setAlternative(""); }}><label className="block text-sm">Suggest a different approach<textarea className="mt-2 w-full rounded-lg border bg-background p-3" value={alternative} onChange={event => setAlternative(event.target.value)} placeholder="Do it this way instead…" /></label><Button size="sm" variant="outline" disabled={!alternative.trim()}>Send instructions to Friday</Button><p className="text-xs text-muted-foreground">You can also speak to Friday about this decision. A changed proposal keeps its approval gate.</p></form>
+    {task.error && <p role="alert" className="text-destructive">{task.error.message}</p>}{task.data?.companyId === companyId && <ApplicationTaskInspector task={task.data} />}
+  </section>;
 }

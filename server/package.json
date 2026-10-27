@@ -117,7 +117,8 @@
     "svix": "1.76.1",
     "ws": "^8.22.0",
     "zod": "^4.4.3",
-    "@opentelemetry/resources": "2.10.0"
+    "@opentelemetry/resources": "2.10.0",
+    "@agentos/model-intelligence": "workspace:*"
   },
   "bundleDependencies": [
     "@agentclientprotocol/claude-agent-acp",

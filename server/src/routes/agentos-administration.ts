@@ -4,9 +4,13 @@ import { z } from "zod";
 import { instanceUserRoles, type Db } from "@paperclipai/db";
 import { adminInvitationCreateSchema, adminUserDeleteSchema, adminUserUpdateSchema } from "@paperclipai/shared";
 import { googleSignInConfiguration, readUserApproval } from "../auth/agentos-registration.js";
-import { administrationService, type AdminPrincipal } from "../services/agentos-administration.js";
+import { administrationService, assertAdministration, type AdminPrincipal } from "../services/agentos-administration.js";
 import { assertBoard } from "./authz.js";
 import type { Request } from "express";
+import { modelIntelligenceProduct, evaluateModelRun } from "../services/model-intelligence.js";
+import { conflict } from "../errors.js";
+import { logActivity } from "../services/activity-log.js";
+import { assertCompanyAccess, getActorInfo } from "./authz.js";
 import { modelIntelligenceAnalytics } from "../services/agentos-model-analytics.js";
 
 export function agentosAdministrationRoutes(db: Db, options: { deploymentMode: "local_trusted" | "authenticated"; authDisableSignUp?: boolean }) {
@@ -48,5 +52,24 @@ export function agentosAdministrationRoutes(db: Db, options: { deploymentMode: "
   router.delete("/admin/preapprovals/:id", async (req, res) => res.json(await service.revokeInvitation(principal(req), z.uuid().parse(req.params.id))));
   router.get("/admin/events", async (req, res) => res.json(await service.events(principal(req))));
   router.get("/admin/model-intelligence", async (req, res) => res.json(await modelIntelligenceAnalytics(db, principal(req))));
+  router.get("/admin/model-intelligence/learning", async (req, res) => {
+    await assertAdministration(db, principal(req));
+    res.json(modelIntelligenceProduct()?.analytics() ?? null);
+  });
+  router.post("/admin/model-intelligence/evaluations", async (req, res) => {
+    await assertAdministration(db, principal(req));
+    const input = z.object({ companyId: z.string().uuid(), runId: z.string().uuid(), passed: z.boolean(), evidenceRef: z.string().trim().min(10).max(300) }).strict().parse(req.body);
+    assertCompanyAccess(req, input.companyId);
+    res.json(await evaluateModelRun(db, input.companyId, input.runId, input, getActorInfo(req)));
+  });
+  router.post("/admin/model-intelligence/policy", async (req, res) => {
+    await assertAdministration(db, principal(req));
+    const input = z.object({ namespace: z.string().uuid(), candidateId: z.string().min(1).max(300), action: z.enum(["block", "restore"]), reason: z.string().trim().min(10).max(300) }).strict().parse(req.body);
+    assertCompanyAccess(req, input.namespace);
+    const engine = modelIntelligenceProduct(); if (!engine) throw conflict("Model Intelligence is not configured");
+    const event = engine.policy(input);
+    await logActivity(db, { ...getActorInfo(req), companyId: input.namespace, action: "model_intelligence.policy_changed", entityType: "model_policy", entityId: event.id, details: { candidateId: input.candidateId, action: input.action, reason: input.reason } });
+    res.json(event);
+  });
   return router;
 }

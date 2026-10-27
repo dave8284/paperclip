@@ -15,6 +15,8 @@ import { agentsApi } from "@/api/agents";
 import type { Agent, Company } from "@paperclipai/shared";
 import type { FridayNavigation } from "../lib/friday-navigation";
 import { parseFridayView } from "../lib/friday-navigation";
+import { AgentOSSettings } from "./AgentOSSettings";
+import { AgentOSProjects } from "./AgentOSProjects";
 import { FridayWork } from "./FridayWork";
 import { FridayTeam } from "./FridayTeam";
 import { TaskAttachmentPanel } from "./task-side-panel/TaskAttachmentPanel";
@@ -37,7 +39,7 @@ export function FridayWorkspace({ companyId, data, panel, setPanel, compact, con
   const go = navigate ?? ((next: FridayNavigation) => setPanel(next.panel));
   const ask = async (text: string) => {
     if (asking.current) return;
-    asking.current = true; setAskError("");
+    asking.current = true; setAskError(""); onConversation?.();
     try { if (data.onVoiceMessage) await data.onVoiceMessage(text); else data.onTranscript(text); }
     catch (error) { data.onTranscript(text); setAskError(error instanceof Error ? error.message : "The message was preserved as a draft."); }
     finally { asking.current = false; }
@@ -84,9 +86,9 @@ export function FridayWorkspace({ companyId, data, panel, setPanel, compact, con
   const visibleCompanies = scopeCompany ? [scopeCompany] : companies;
   const scopedGo = (next: FridayNavigation) => go({ ...next, companyId: nav.companyId });
   const title = panel === "work" ? nav.mode === "graph" ? "Agent Map" : nav.mode === "kanban" ? "Kanban" : project.data?.name ?? scopeCompany?.name ?? "Work in motion"
-    : panel === "attention" ? "Decisions" : panel === "team" || panel === "chat" ? "Workforce" : panel === "activity" ? "Audit trail" : panel === "routines" ? "Routines" : panel === "artifacts" ? "Artefacts" : panel === "workforce" ? "Workforce management" : panel === "library" ? "Saved displays" : chosen?.product.title ?? "Canvas";
+    : panel === "projects" ? "Projects" : panel === "departments" ? "Departments" : panel === "settings" ? "Settings" : panel === "attention" ? "Decisions" : panel === "team" || panel === "chat" ? "Workforce" : panel === "activity" ? "Audit trail" : panel === "routines" ? "Routines" : panel === "artifacts" ? "Artefacts" : panel === "workforce" ? "Workforce management" : panel === "library" ? "Saved displays" : chosen?.product.title ?? "Canvas";
   const scopeTabs = [
-    ["Home", { panel: "work", mode: "combined" }], ["Kanban", { panel: "work", mode: "kanban" }], ["Agent Map", { panel: "work", mode: "graph" }],
+    ["Home", { panel: "work", mode: "combined" }], ...(!nav.projectId ? [["Projects", { panel: "projects" }], ["Departments", { panel: "departments" }]] as const : []), ["Kanban", { panel: "work", mode: "kanban" }], ["Agent Map", { panel: "work", mode: "graph" }],
     ["Decisions", { panel: "attention" }], ["Routines", { panel: "routines" }], ["Artefacts", { panel: "artifacts" }],
   ] as const;
   return <div className="agentos-canvas-stage" data-panel={!!panel}>
@@ -105,9 +107,11 @@ export function FridayWorkspace({ companyId, data, panel, setPanel, compact, con
           {scopeCompany && nav.projectId && project.data?.companyId === scopeCompany.id && <AgentOSDelete kind="project" id={project.data.id} companyId={scopeCompany.id} name={project.data.name} onRemoved={() => go({ panel: "work", companyId: scopeCompany.id, mode: "combined" })} />}
           {panel === "team" && <Button variant="outline" onClick={() => go({ panel: "workforce" })}>Manage shared workforce</Button>}
         </div>
-        {scopeCompany && !["team", "chat", "workforce", "activity"].includes(panel) && <nav className="agentos-workspace-tabs" aria-label="Workspace views">{scopeTabs.map(([label, next]) => <button key={label} type="button" aria-current={panel === next.panel && (next.panel !== "work" || (nav.mode ?? "combined") === next.mode) ? "page" : undefined} onClick={() => go({ ...next, companyId: nav.companyId, projectId: nav.projectId })}>{label}</button>)}</nav>}
+        {scopeCompany && !["team", "chat", "workforce", "activity", "settings"].includes(panel) && <nav className="agentos-workspace-tabs" aria-label="Workspace views">{scopeTabs.map(([label, next]) => <button key={label} type="button" aria-current={panel === next.panel && (next.panel !== "work" || (nav.mode ?? "combined") === next.mode) ? "page" : undefined} onClick={() => go({ ...next, companyId: nav.companyId, projectId: nav.projectId })}>{label}</button>)}</nav>}
       </>}
       {panel === "companies" ? <AgentOSCompanies companies={companies} navigate={go} onCreate={() => { data.onTranscript("I want to create a new company: "); onType?.(); }} />
+        : panel === "settings" ? <AgentOSCompanyScope company={scopeCompany ?? companies.find(company => company.id === companyId)!}><AgentOSSettings key={scopeId} companyId={scopeId} /></AgentOSCompanyScope>
+        : panel === "projects" || panel === "departments" ? visibleCompanies.map(company => <AgentOSCompanyScope key={company.id} company={company}><section className="mb-8">{!scopeCompany && <h2 className="mb-4 text-lg font-semibold">{company.name}</h2>}<AgentOSProjects companyId={company.id} view={nav} navigate={go} onCreate={text => { data.onTranscript(text); onType?.(); }} /></section></AgentOSCompanyScope>)
         : panel === "workforce" ? <Workforce embedded />
         : panel === "work" ? !scopeCompany && nav.mode === "graph" ? <AgentOSPortfolioMap companies={companies} navigate={go} />
           : visibleCompanies.map(company => <AgentOSCompanyScope key={company.id} company={company}><div className="agentos-company-work">{!scopeCompany && <div className="agentos-section-heading"><h2>{company.name}</h2><button type="button" onClick={() => go({ panel: "work", companyId: company.id, mode: "combined" })}>Open company <ArrowRight /></button></div>}<FridayWork key={[company.id, nav.projectId, nav.applicationId, nav.agentId].join(":")} companyId={company.id} agents={roster} view={{ ...nav, companyId: company.id }} navigate={next => go({ ...next, companyId: company.id })} onAsk={text => void ask(text)} assistantName={assistantName} /></div></AgentOSCompanyScope>)

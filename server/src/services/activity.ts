@@ -27,6 +27,7 @@ import { classifyRunLiveness } from "./run-liveness.js";
 export interface ActivityFilters {
   companyId: string;
   agentId?: string;
+  projectId?: string;
   entityType?: string;
   entityId?: string;
   limit?: number;
@@ -372,6 +373,14 @@ export function activityService(db: Db) {
         conditions.push(eq(activityLog.entityId, filters.entityId));
       }
 
+      if (filters.projectId) {
+        // Project records and their authorized tasks only. Do not pull unrelated
+        // company activity into a project workspace or infer scope from free text.
+        conditions.push(or(
+          and(eq(activityLog.entityType, "project"), eq(activityLog.entityId, filters.projectId)),
+          and(eq(activityLog.entityType, "issue"), eq(issues.projectId, filters.projectId)),
+        )!);
+      }
       return db
         .select({ activityLog })
         .from(activityLog)

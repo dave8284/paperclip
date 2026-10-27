@@ -1,3 +1,4 @@
+import { selectCompanyModelProfile } from "../model-intelligence.js";
 import { agentHarnessType } from "@paperclipai/shared";
 import { assertCompanyModelPolicy, defaultCompanyModelBinding } from "../company-model-policy.js";
 import { observabilitySecretValues } from "@paperclipai/adapter-utils/agent-observability";
@@ -90,7 +91,7 @@ export async function prepareHeartbeatExecutionConfiguration(db: Db, input: Hear
   const time = createHeartbeatPreparationTiming(run.id);
   const { issueId, context, responsibleUserId, acceptedPlanContinuationWake, acceptedPlanWakeRoutingDecision, taskProjectContext, routineEnvContext } = input.task;
   const { selectedEnvironmentId, selectedEnvironmentForConfig, resolvedInstanceSettings, persistedNativeExecutionInput } = input.environment;
-  const sourceWorkspaceConfig = agent.adapterType === "paperclip_runner"
+  let sourceWorkspaceConfig = agent.adapterType === "paperclip_runner"
     ? { ...input.config.sourceWorkspaceConfig,
         homeMode: bindHeartbeatRunnerHomeMode(parseObject(agent.adapterConfig), persistedNativeExecutionInput).homeMode }
     : input.config.sourceWorkspaceConfig;
@@ -111,6 +112,15 @@ export async function prepareHeartbeatExecutionConfiguration(db: Db, input: Hear
   const aiBinding = preconfiguredHome ? undefined : input.config.aiBinding
     ?? await defaultCompanyModelBinding(db, agent.companyId, agent.adapterType, sourceWorkspaceConfig);
   if (preconfiguredHome) await assertCompanyModelPolicy(db, agent.companyId, null);
+  const modelSelection = await selectCompanyModelProfile(db, { runId: run.id, issueId, agent, config: sourceWorkspaceConfig, binding: aiBinding, resumed: !!persistedNativeExecutionInput || !!run.sessionIdBefore });
+  sourceWorkspaceConfig = modelSelection.config;
+  if (modelSelection.receipt) {
+    // Later lifecycle checkpoints persist this same context object. Keep the
+    // native receipt/request there as well as in the admission database update.
+    context.modelIntelligence = modelSelection.receipt;
+    context.modelIntelligenceRequest = modelSelection.request;
+    await input.services.appendRunEvent(run, { eventType: "lifecycle", stream: "system", level: "info", message: "Model profile selected", payload: { receiptId: modelSelection.receipt.id, model: modelSelection.receipt.candidate.model, taskType: modelSelection.receipt.taskType, policyVersion: modelSelection.receipt.policyVersion, reason: modelSelection.receipt.reason } });
+  }
   const { trustPreset, useIsolatedTaskDirectory, explicitTaskDirectory, requestedExecutionWorkspaceMode } = input.policy;
   const { secretsSvc, companySkills, appendRunEvent, finalizeAiConnectionBusyDeferral } = input.services;
   let managedAiRuntime: ManagedAiRuntime | undefined;

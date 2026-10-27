@@ -22,6 +22,8 @@ export interface ConversationFocusView {
 }
 export interface AgentConversationFocusData extends ConversationFocusState {
   issueId: string | null;
+  voiceSessionKey?: string;
+  companyId?: string;
   reply: IssueComment | undefined;
   attachments: IssueAttachment[];
   workProducts: IssueWorkProduct[];

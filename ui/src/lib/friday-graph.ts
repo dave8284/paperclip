@@ -27,7 +27,7 @@ export function fridayGraph(data: FridayWork, agents: Agent[], running: Readonly
   const involvedAgents = new Set([...data.assignments.map(row => row.agentId), ...data.projects.flatMap(project => project.leadAgentId ? [project.leadAgentId] : []),
     ...data.tasks.flatMap(task => [task.assigneeAgentId, task.createdByAgentId].filter((id): id is string => !!id)),
     ...data.evidence.flatMap(row => row.agentId ? [row.agentId] : []), ...data.handoffs.flatMap(row => [row.fromAgentId, row.toAgentId].filter((id): id is string => !!id))]);
-  for (const id of involvedAgents) add({ id: `agent:${id}`, recordId: id, kind: "agent", title: agents.find(agent => agent.id === id)?.name ?? "Agent", ...galaxyPoint(`agent:${id}`, 430) });
+  for (const id of involvedAgents) add({ id: `agent:${id}`, recordId: id, kind: "agent", title: agents.find(agent => agent.id === id)?.name ?? "Agent", running: data.tasks.some(task => task.assigneeAgentId === id && running.has(task.id)), ...galaxyPoint(`agent:${id}`, 430) });
   for (const task of data.tasks) {
     const parent = task.projectId ? nodes.get(`project:${task.projectId}`) : undefined;
     const position = galaxyPoint(task.id, parent ? data.projects.length === 1 ? 155 : 75 : 180, parent);

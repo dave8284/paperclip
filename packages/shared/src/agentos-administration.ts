@@ -67,7 +67,8 @@ export const adminModelIntelligenceSchema = z.object({
     meanDurationMs: z.number().nullable(),
   })),
   runs: z.array(z.object({ status: z.string(), count: z.number() })),
-  learning: z.object({ status: z.literal("not_connected"), evaluations: z.null(), policyReleases: z.null(),
+  learning: z.object({ status: z.enum(["not_connected", "connected"]), evaluations: z.number().nullable(), policyReleases: z.number().nullable(),
+    selections: z.number().default(0),
     explanation: z.string(),
   }),
 });

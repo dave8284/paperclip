@@ -231,8 +231,16 @@ export function activityRoutes(db: Db) {
     assertCompanyAccess(req, companyId);
     if (!(await assertCompanyScopeReadAllowed(req, res, companyId))) return;
 
+    const projectInput = z.string().uuid().optional().safeParse(req.query.projectId);
+    if (!projectInput.success) throw badRequest("Invalid project ID");
+    const projectId = projectInput.data;
+    if (projectId) {
+      const decision = await access.decide({ actor: req.actor, action: "project:read", resource: { type: "project", companyId, projectId } });
+      if (!decision.allowed) { res.status(404).json({ error: "Project not found" }); return; }
+    }
     const filters = {
       companyId,
+      projectId,
       agentId: req.query.agentId as string | undefined,
       entityType: req.query.entityType as string | undefined,
       entityId: req.query.entityId as string | undefined,

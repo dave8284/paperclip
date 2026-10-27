@@ -8,6 +8,12 @@ Related: [Agent OS operating model](2026-10-25-agentos-operating-model.md), [cap
 
 The [master execution plan](2026-10-27-agentos-end-to-end-execution.md) consolidates the full Agent OS UI, work structure and implementation sequence. This document specifies the independent model product.
 
+## Implementation checkpoint — 2026-10-27
+
+The [functional refinement record](2026-10-27-agentos-functional-refinement.md) documents the implementation now in this fork: company departments and project memberships, local speech, inline task/decision detail, pastel record orbs, audit tables, native routine-cycle views, retained artefact versions, consolidated Settings and mandatory native Stripe write review. The independent Model Intelligence library/HTTP product is implemented and integrated into native execution admission, with local storage, selection receipts, operator-reviewed outcomes, conservative automatic selection and rollback. Existing sessions remain pinned. No production qualification evidence has been collected yet; connected does not mean trained.
+
+The earlier sections below preserve the original plan and baseline. They are not claims that all future experiments, connectors, automated quality evaluators, cross-provider migration or cloud deployment have shipped. Deployment remains local. The owner confirmed live microphone input and spoken replies in the local app. Automated browser visual and mobile acceptance remain unverified because the Browser integration cannot connect.
+
 ## Product decision
 
 Build **Model Intelligence** as an independent product, with Agent OS as its first host integration. The name is provisional. It selects a qualified execution profile for a unit of work, explains the selection, measures the outcome, and learns which profiles perform best. It has its own API, versioned policies, evaluation history, storage migrations, SDK, and independently runnable distribution from the first implementation. Packaging it separately must not require extracting business logic from Paperclip later.

@@ -1,0 +1,24 @@
+{
+  "models": [
+    {
+      "path": "kokoro-v1.0.onnx",
+      "url": "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/kokoro-v1.0.onnx",
+      "sha256": "7d5df8ecf7d4b1878015a32686053fd0eebe2bc377234608764cc0ef3636a6c5"
+    },
+    {
+      "path": "voices-v1.0.bin",
+      "url": "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin",
+      "sha256": "bca610b8308e8d99f32e6fe4197e7ec01679264efed0cac9140fe9c29f1fbf7d"
+    },
+    {
+      "path": "whisper/config.json",
+      "url": "https://huggingface.co/mlx-community/whisper-base.en-mlx/resolve/aa0678c3466ed62c5c6114ec600a0e1f96820089/config.json",
+      "sha256": "b0f55e86f8092c1188306dc346742253f759aecea0da7b00ae526e566fd53b14"
+    },
+    {
+      "path": "whisper/weights.npz",
+      "url": "https://huggingface.co/mlx-community/whisper-base.en-mlx/resolve/aa0678c3466ed62c5c6114ec600a0e1f96820089/weights.npz",
+      "sha256": "b6c8ee500656e04e8e57c2949a5253f0dda002ba36cd1561846574dbcf01132e"
+    }
+  ]
+}

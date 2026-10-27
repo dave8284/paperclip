@@ -2850,3 +2850,4 @@ export * from "./friday-workspace.js";
 export * from "./operating-profile.js";
 export * from "./agentos-workforce.js";
 export * from "./agentos-administration.js";
+export * from "./agentos-departments.js";

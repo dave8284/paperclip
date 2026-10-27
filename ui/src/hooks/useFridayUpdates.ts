@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCompanyLiveEvent } from "../context/LiveUpdatesProvider";
 import { applicationQueryKey } from "./useApplicationUpdates";
+import { departmentKey } from "../api/departments";
 import { queryKeys } from "../lib/queryKeys";
 
 /** Coalesce observed changes; no idle polling and no hidden-tab work. */
@@ -14,6 +15,7 @@ export function useFridayUpdates(companyId: string) {
     dirty.current = false;
     void client.invalidateQueries({ queryKey: applicationQueryKey(companyId) });
     void client.invalidateQueries({ queryKey: queryKeys.attention(companyId) });
+    void client.invalidateQueries({ queryKey: departmentKey(companyId) });
   };
   useCompanyLiveEvent(event => {
     if (event.companyId !== companyId || event.type !== "activity.logged" && !event.type.startsWith("heartbeat.run.")) return;

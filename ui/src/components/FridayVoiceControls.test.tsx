@@ -28,12 +28,12 @@ describe("Friday browser voice", () => {
   it("does not activate the microphone on mount and adds final transcript once without sending", async () => {
     await render(); expect(transcript).not.toHaveBeenCalled();
     await click("Talk to Friday");
-    expect(host.textContent).toContain("Stop listening");
+    expect(host.textContent).toContain("Pause microphone");
     await act(async () => Recognition.latest.onresult?.({ resultIndex: 0, results: [{ isFinal: false, 0: { transcript: "Create" } }] }));
     expect(transcript).not.toHaveBeenCalled();
     await act(async () => Recognition.latest.onresult?.({ resultIndex: 0, results: [{ isFinal: true, 0: { transcript: "Create a project" } }] }));
     expect(transcript).toHaveBeenCalledExactlyOnceWith("Create a project");
-    await click("Stop listening"); expect(Recognition.latest.stop).toHaveBeenCalledOnce();
+    await click("Pause microphone"); expect(Recognition.latest.abort).toHaveBeenCalledOnce();
   });
   it("shows denied permission without losing the text path and cleans up on leaving", async () => {
     await render(); await click("Talk to Friday");
@@ -67,9 +67,10 @@ describe("Friday browser voice", () => {
     const result = (text: string) => Recognition.latest.onresult?.({ resultIndex: 0, results: [{ isFinal: true, 0: { transcript: text } }] });
     await act(async () => { result("Create a project"); result("for the website"); });
     expect(send).not.toHaveBeenCalled();
-    await click("Send voice message");
+    await act(async () => { Recognition.latest.onend?.(); });
     await act(async () => Recognition.latest.onend?.());
     expect(send).toHaveBeenCalledExactlyOnceWith("Create a project for the website");
+    await click("Pause microphone");
     await click("Talk to Friday");
     await act(async () => { result("Keep this draft"); Recognition.latest.onerror?.({ error: "network" }); Recognition.latest.onend?.(); });
     expect(send).toHaveBeenCalledOnce();

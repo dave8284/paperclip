@@ -29,6 +29,7 @@ export function FridayDock() {
   const chat = useAgentChatEnabled();
   const [open, setOpen] = useState(false);
   const location = useLocation();
+  useEffect(() => { setOpen(false); }, [location.pathname, location.search]);
   const navigate = useNavigate();
   if (!company || location.pathname.includes("/chats/")) return null;
   const fridayPath = `/${company.issuePrefix}/friday`;

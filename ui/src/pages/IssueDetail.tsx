@@ -8275,6 +8275,8 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
                     render: state => conversation.focusView!.render({
                       ...state,
                       issueId: conversation.issue?.id ?? null,
+                      companyId: conversation.agent.companyId,
+                      voiceSessionKey: `${conversation.agent.companyId}:${conversation.agent.id}`,
                       reply: comments.filter(comment => comment.authorAgentId === conversation.agent.id && !comment.deletedAt && comment.origin !== "fast_response").at(-1),
                       attachments: attachments ?? [],
                       workProducts: workProducts ?? [],

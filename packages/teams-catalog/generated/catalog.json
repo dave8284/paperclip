@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "packageName": "@paperclipai/teams-catalog",
   "packageVersion": "0.1.0",
-  "generatedAt": "2026-10-25T11:02:13.029Z",
+  "generatedAt": "2026-10-27T07:12:02.150Z",
   "teams": [
     {
       "id": "paperclipai:bundled:company-defaults:agentos-operators",
@@ -136,8 +136,8 @@
         {
           "path": "agents/coordinator/AGENTS.md",
           "kind": "agent",
-          "sizeBytes": 12427,
-          "sha256": "7a89721e061d9136cdd5f5e535b7f6202123bc68f22a0f93c6bec7eca839266f"
+          "sizeBytes": 15068,
+          "sha256": "793453f62d23559bf9facef2ea971573c482cfcf859d02602e6f6818869e759b"
         },
         {
           "path": "agents/engineer/AGENTS.md",
@@ -202,7 +202,7 @@
       ],
       "trustLevel": "assets",
       "compatibility": "compatible",
-      "contentHash": "sha256:7d4fda41cb9909d5ad6a46f1ec5a8b794cb1f3e4a430e10a1152d14fbafc60b7"
+      "contentHash": "sha256:98109f1f00d70a960d8ed6fd236f0da0d34d7a2f8d4941b09960fa534e93d305"
     },
     {
       "id": "paperclipai:bundled:company-defaults:core-exec-team",

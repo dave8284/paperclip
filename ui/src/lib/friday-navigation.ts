@@ -5,7 +5,7 @@ export function readFridayNavigation(search: string): FridayNavigation {
   const params = new URLSearchParams(search);
   const panel = params.get("panel");
   const result = fridayViewSchema.safeParse({ version: 1, panel,
-    ...Object.fromEntries(["companyId", "projectId", "applicationId", "agentId", "taskId", "mode"].flatMap(key => params.get(key) ? [[key, params.get(key)]] : [])) });
+    ...Object.fromEntries(["companyId", "departmentId", "decisionId", "projectId", "applicationId", "agentId", "taskId", "mode"].flatMap(key => params.get(key) ? [[key, params.get(key)]] : [])) });
   const speaker = fridayViewSchema.shape.agentId.safeParse(params.get("speakerId") ?? undefined);
   const speakerId = speaker.success ? speaker.data : undefined;
   const company = fridayViewSchema.shape.companyId.safeParse(params.get("speakerCompanyId") ?? undefined);
