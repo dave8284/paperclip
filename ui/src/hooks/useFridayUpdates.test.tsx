@@ -4,6 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useFridayUpdates } from "./useFridayUpdates";
+import { departmentKey } from "../api/departments";
 const events = vi.hoisted(() => ({ listener: (_event: any) => {} }));
 vi.mock("../context/LiveUpdatesProvider", () => ({ useCompanyLiveEvent: (callback: typeof events.listener) => { events.listener = callback; } }));
 
@@ -17,8 +18,9 @@ describe("Friday event-driven refresh", () => {
     events.listener({ companyId: "other", type: "activity.logged" });
     await vi.advanceTimersByTimeAsync(60000); expect(invalidate).not.toHaveBeenCalled();
     for (let i = 0; i < 20; i++) events.listener({ companyId: "company", type: "activity.logged" });
-    await vi.advanceTimersByTimeAsync(1000); expect(invalidate).toHaveBeenCalledTimes(2);
-    await vi.advanceTimersByTimeAsync(60000); expect(invalidate).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(1000); expect(invalidate).toHaveBeenCalledTimes(3);
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: departmentKey("company") });
+    await vi.advanceTimersByTimeAsync(60000); expect(invalidate).toHaveBeenCalledTimes(3);
   });
   it("defers hidden-tab changes until visibility returns and cancels pending work on unmount", async () => {
     const invalidate = vi.spyOn(client, "invalidateQueries");
@@ -26,9 +28,9 @@ describe("Friday event-driven refresh", () => {
     events.listener({ companyId: "company", type: "heartbeat.run.status" });
     await vi.advanceTimersByTimeAsync(1000); expect(invalidate).not.toHaveBeenCalled();
     vi.spyOn(document, "hidden", "get").mockReturnValue(false);
-    document.dispatchEvent(new Event("visibilitychange")); expect(invalidate).toHaveBeenCalledTimes(2);
+    document.dispatchEvent(new Event("visibilitychange")); expect(invalidate).toHaveBeenCalledTimes(3);
     events.listener({ companyId: "company", type: "activity.logged" });
     await act(async () => root.render(null)); await vi.advanceTimersByTimeAsync(2000);
-    expect(invalidate).toHaveBeenCalledTimes(2);
+    expect(invalidate).toHaveBeenCalledTimes(3);
   });
 });

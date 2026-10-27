@@ -20,7 +20,7 @@ describe("Agent OS administration screens", () => {
     mocks.overview.mockResolvedValue({ counts: { users: 1, pending: 1, approved: 0, suspended: 0, admins: 1 }, google: { configured: false, callbackPath: "/api/auth/callback/google" }, mode: "authenticated" });
     mocks.people.mockResolvedValue({ people: [{ id: "pending-user", name: "New Person", email: "new@example.com", approvalStatus: "pending", approvalRevision: 1, isInstanceAdmin: false, providers: ["google"], activeCompanyMembershipCount: 0, emailVerified: true }], total: 1, offset: 0, limit: 30 });
     mocks.update.mockResolvedValue({ approvalRevision: 2 });
-    mocks.intelligence.mockResolvedValue({ usage: [], decisions: [], runs: [], learning: { explanation: "No learning service connected." } });
+    mocks.intelligence.mockResolvedValue({ usage: [], decisions: [], runs: [], learning: { status: "not_connected", evaluations: null, policyReleases: null, selections: null, explanation: "No learning service connected." } });
     mocks.registration.mockResolvedValue({ status: "pending", userId: "admin", isInstanceAdmin: false });
     host = document.createElement("div"); document.body.append(host); root = createRoot(host);
     client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
@@ -51,7 +51,9 @@ describe("Agent OS administration screens", () => {
   });
   it("distinguishes absent learning evidence from recorded performance", async () => {
     await render("/admin?tab=intelligence");
-    expect(host.textContent).toContain("Learning & improvement · Not connected");
+    expect(host.textContent).toContain("Learning & improvement · Setup required");
+    expect(host.textContent).toContain("No learning service connected.");
+    expect(host.textContent).not.toContain("Selection & evaluation ledger");
     expect(host.textContent).toContain("No model usage receipts in this period.");
     expect(host.textContent).not.toContain("100%");
   });

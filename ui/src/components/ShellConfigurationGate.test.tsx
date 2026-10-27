@@ -10,11 +10,12 @@ import { useStreamlinedUiEnabled } from "../hooks/useStreamlinedUiEnabled";
 
 vi.mock("@/lib/router", async () => await import("react-router-dom"));
 vi.mock("./AnimatedPaperclipIcon", () => ({ PaperclipLoading: () => <div>Loading shell</div> }));
-const { health, session, access, settings } = vi.hoisted(() => ({ health: vi.fn(), session: vi.fn(), access: vi.fn(), settings: vi.fn() }));
+const { health, session, access, settings, registration } = vi.hoisted(() => ({ health: vi.fn(), session: vi.fn(), access: vi.fn(), settings: vi.fn(), registration: vi.fn() }));
 vi.mock("../api/health", () => ({ healthApi: { get: health } }));
 vi.mock("../api/auth", () => ({ authApi: { getSession: session } }));
 vi.mock("../api/access", () => ({ accessApi: { getCurrentBoardAccess: access } }));
 vi.mock("../api/instanceSettings", () => ({ instanceSettingsApi: { getExperimental: settings } }));
+vi.mock("../api/administration", () => ({ administrationApi: { registration }, registrationKey: (userId: string | null) => ["registration", userId] }));
 (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;
 
 afterEach(() => vi.resetAllMocks());
@@ -23,6 +24,7 @@ it.each([false, true])("runs access checks while shell settings are pending (mem
   let resolveSettings!: (value: unknown) => void;
   health.mockResolvedValue({ status: "ok", deploymentMode: "authenticated", bootstrapStatus: "ready" });
   session.mockResolvedValue({ user: { id: "user" } });
+  registration.mockResolvedValue({ status: "approved", userId: "user", isInstanceAdmin: false });
   access.mockResolvedValue({ companyIds: ["company"] });
   settings.mockReturnValue(new Promise(resolve => { resolveSettings = resolve; }));
   function RoutesUnderTest() {
@@ -38,9 +40,13 @@ it.each([false, true])("runs access checks while shell settings are pending (mem
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   try {
     await act(async () => root.render(<QueryClientProvider client={client}><MemoryRouter initialEntries={["/apps"]}><RoutesUnderTest /></MemoryRouter></QueryClientProvider>));
-    await act(async () => { await new Promise(resolve => setTimeout(resolve, 20)); });
+    await vi.waitFor(async () => {
+      await act(async () => { await new Promise(resolve => setTimeout(resolve, 10)); });
+      expect(access).toHaveBeenCalledTimes(1);
+    });
     expect(health).toHaveBeenCalledTimes(1);
     expect(session).toHaveBeenCalledTimes(1);
+    expect(registration).toHaveBeenCalledTimes(1);
     expect(access).toHaveBeenCalledTimes(1);
     expect(container.textContent).not.toContain("Streamlined shell");
     expect(container.textContent).not.toContain("Legacy shell");

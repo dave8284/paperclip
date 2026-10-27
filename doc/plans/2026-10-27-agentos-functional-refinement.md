@@ -40,3 +40,9 @@ The actual local preparation request took 2.88 seconds. Subsequent 1.2, 2.4 and 
 ## Checkpoint status
 
 The full repository suite and the broad UI suite are still running at this implementation checkpoint; their completion is not claimed. Focused checks and build results above passed. The working local revision is being saved to the existing `agentos/platform` fork branch; no cloud deployment, paid inference, live Stripe change or autonomous platform-build task was started.
+
+## UI regression follow-up
+
+The broad UI run completed: 807 files passed, with 9,166 passing tests and eight failures in five files. Inspection found stale expectations for the Agent OS title/loading text, the new department refresh, the learning setup label, and a shell fixture missing the now-required approved registration. Those expectations/fixtures were corrected without weakening the production access gate. All 35 tests in those five files then passed on a focused rerun; the final administration fixture also passed separately. UI typecheck and the final production UI build passed.
+
+The full repository run remains in progress and has reported server failures, including workspace/runner cases spanning long machine-suspension intervals. These are not assumed to be harmless or pre-existing; a focused reproduction is being run. Do not describe the repository-wide suite as green. The local backend was restarted while no company runs were active and its speech preparation endpoint returned ready. Implementation commit `cc82f5a68` is confirmed on the remote `agentos/platform` branch.

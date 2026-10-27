@@ -145,7 +145,7 @@ describe("AuthPage", () => {
     healthMock.mockReturnValue(new Promise(() => {}));
     const { root } = await mount();
     expect(container.querySelector("form")).toBeNull();
-    expect(container.textContent).toContain("Loading");
+    expect(container.querySelector('[role="status"]')?.textContent).toContain("Opening Agent OS");
     await act(() => root.unmount());
   });
 
