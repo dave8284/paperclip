@@ -71,7 +71,7 @@ function CompanyVoiceCalls({ children }: { children: React.ReactNode }) {
 }
 
 const rootElement = document.getElementById("root");
-if (!rootElement) throw new Error("Paperclip root element is missing");
+if (!rootElement) throw new Error("AgentOS root element is missing");
 
 getOrCreatePaperclipReactRoot(window, rootElement).render(
   <StrictMode>

@@ -1,5 +1,5 @@
 import { and, eq, inArray, ne, or, sql } from "drizzle-orm";
-import { agents, companies, companyMemberships, agentosPortfolios, agentosPortfolioCompanies, agentosEmployees, agentosAssignments, type Db } from "@paperclipai/db";
+import { agents, authUsers, companies, companyMemberships, companyOperatingProfiles, principalPermissionGrants, instanceUserRoles, agentosPortfolios, agentosPortfolioCompanies, agentosEmployees, agentosAssignments, type Db } from "@paperclipai/db";
 import type { AgentosWorkforce, CreateAgentosPortfolio, CreateAgentosEmployee, CreateAgentosAssignment, RetireAgentosAssignment } from "@paperclipai/shared";
 import { conflict, forbidden, notFound } from "../errors.js";
 import { accessService } from "./access.js";
@@ -45,6 +45,125 @@ export function agentosWorkforceService(db: Db) {
     return row;
   }
 
+  async function companyStaffingAuthority(connection: Db, actor: AuthorizationActor, companyId: string) {
+    // A request may already have resolved a responsible-user snapshot before
+    // waiting for a database lock. Staffing always uses the current rows.
+    actor = { ...actor, onBehalfOfMemberships: undefined };
+    Reflect.deleteProperty(actor, "__responsibleUserSnapshotMemo");
+    if (actor.type === "board") {
+      const [linked] = await connection.select({ portfolio: agentosPortfolios }).from(agentosPortfolioCompanies)
+        .innerJoin(agentosPortfolios, eq(agentosPortfolios.id, agentosPortfolioCompanies.portfolioId))
+        .where(and(eq(agentosPortfolioCompanies.companyId, companyId), eq(agentosPortfolios.ownerUserId, ownerId(actor))));
+      if (!linked || !(await companyAccess(connection, actor, companyId, true))) throw notFound("Company workforce not found");
+      await portfolio(connection, actor, linked.portfolio.id, true);
+      return { portfolio: linked.portfolio, actor };
+    }
+    // A company coordinator is not a portfolio-wide principal. Resolve the
+    // owner from authenticated run context, never from the request body.
+    const responsibleUserId = actor.onBehalfOfUserId?.trim();
+    if (actor.type !== "agent" || actor.companyId !== companyId || !actor.agentId || !responsibleUserId
+      || (actor.keyScope && actor.keyScope.kind !== "standard")) throw forbidden("Company staffing authority is required");
+    const [membership] = await connection.select({ membership: companyMemberships }).from(companyMemberships)
+      .innerJoin(authUsers, eq(authUsers.id, companyMemberships.principalId))
+      .where(and(eq(companyMemberships.companyId, companyId), eq(companyMemberships.principalType, "user"),
+        eq(companyMemberships.principalId, responsibleUserId), eq(companyMemberships.status, "active"), eq(authUsers.approvalStatus, "approved")));
+    if (!membership || membership.membership.membershipRole === "viewer") throw forbidden("The responsible portfolio owner is unavailable for staffing");
+    const [manager] = await connection.select().from(agents).where(and(eq(agents.id, actor.agentId), eq(agents.companyId, companyId)));
+    const [profile] = await connection.select().from(companyOperatingProfiles).where(eq(companyOperatingProfiles.companyId, companyId));
+    if (!manager || !["active", "idle", "running", "error"].includes(manager.status) || manager.lifecycleState !== "ready"
+      || (manager.role !== "ceo" && profile?.fridayAgentId !== manager.id)) throw forbidden("Only the current company coordinator or CEO can bind its workforce");
+    const effectiveActor: AuthorizationActor = { ...actor, onBehalfOfMemberships: [membership.membership] };
+    const access = accessService(connection);
+    for (const action of ["applications:manage", "agents:create"] as const) {
+      const decision = await access.decide({ actor: effectiveActor, action, resource: { type: "company", companyId } });
+      if (!decision.allowed) throw forbidden(decision.explanation);
+    }
+    const [linked] = await connection.select({ portfolio: agentosPortfolios }).from(agentosPortfolioCompanies)
+      .innerJoin(agentosPortfolios, eq(agentosPortfolios.id, agentosPortfolioCompanies.portfolioId))
+      .where(and(eq(agentosPortfolioCompanies.companyId, companyId), eq(agentosPortfolios.ownerUserId, responsibleUserId)));
+    if (!linked) throw notFound("Company workforce not found");
+    // This is an additional owner ceiling, not an actor substitution for the
+    // mutation. Losing portfolio administration must revoke delegated binding.
+    const owner: AuthorizationActor = { type: "board", source: "session", userId: responsibleUserId,
+      companyIds: [linked.portfolio.homeCompanyId], ignoreInstanceAdmin: true };
+    if (!(await companyAccess(connection, owner, linked.portfolio.homeCompanyId, true))) throw notFound("Company workforce not found");
+    return { portfolio: linked.portfolio, actor: effectiveActor };
+  }
+
+  async function lockCompanyStaffingAuthority(tx: Db, actor: AuthorizationActor, companyId: string, portfolioId: string, targetAgentId: string) {
+    // Match the binding owner's lock order before waiting for the target. All
+    // definitive authorization reads happen after this wait, under row locks.
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`agentos-assignment:${companyId}`}, 0))`);
+    const [target] = await tx.select({ id: agents.id, reportsTo: agents.reportsTo }).from(agents)
+      .where(and(eq(agents.id, targetAgentId), eq(agents.companyId, companyId))).for("update");
+    if (!target) throw notFound("Company agent not found");
+    // Native membership/account revokers can lock authority before agents. Do
+    // not wait in the reverse direction: a busy authority row aborts this
+    // transaction, and a retry performs admission again. SHARE locks fence
+    // existing native UPDATE/DELETE revocations through the binding commit.
+    const lock = { noWait: true } as const;
+    const [parent] = await tx.select().from(agentosPortfolios).where(eq(agentosPortfolios.id, portfolioId)).for("share", lock);
+    if (!parent) throw notFound("Company workforce not found");
+    await tx.select({ id: agentosPortfolioCompanies.id }).from(agentosPortfolioCompanies)
+      .where(and(eq(agentosPortfolioCompanies.portfolioId, portfolioId), eq(agentosPortfolioCompanies.companyId, companyId))).for("share", lock);
+    const userIds = [...new Set([actor.userId, actor.onBehalfOfUserId, actor.authorizingUserId].filter((id): id is string => !!id))];
+    const companyIds = [...new Set([companyId, parent.homeCompanyId])];
+    if (userIds.length) {
+      await tx.select({ id: authUsers.id }).from(authUsers).where(inArray(authUsers.id, userIds)).orderBy(authUsers.id).for("share", lock);
+      await tx.select({ id: instanceUserRoles.id }).from(instanceUserRoles).where(inArray(instanceUserRoles.userId, userIds)).orderBy(instanceUserRoles.id).for("share", lock);
+    }
+    const principals = or(
+      actor.type === "agent" && actor.agentId ? and(eq(companyMemberships.principalType, "agent"), eq(companyMemberships.principalId, actor.agentId)) : undefined,
+      userIds.length ? and(eq(companyMemberships.principalType, "user"), inArray(companyMemberships.principalId, userIds)) : undefined,
+    );
+    if (principals) await tx.select({ id: companyMemberships.id }).from(companyMemberships)
+      .where(and(inArray(companyMemberships.companyId, companyIds), principals)).orderBy(companyMemberships.id).for("share", lock);
+    const grantPrincipals = or(
+      actor.type === "agent" && actor.agentId ? and(eq(principalPermissionGrants.principalType, "agent"), eq(principalPermissionGrants.principalId, actor.agentId)) : undefined,
+      userIds.length ? and(eq(principalPermissionGrants.principalType, "user"), inArray(principalPermissionGrants.principalId, userIds)) : undefined,
+    );
+    if (grantPrincipals) await tx.select({ id: principalPermissionGrants.id }).from(principalPermissionGrants)
+      .where(and(inArray(principalPermissionGrants.companyId, companyIds), grantPrincipals)).orderBy(principalPermissionGrants.id).for("share", lock);
+    await tx.select({ companyId: companyOperatingProfiles.companyId }).from(companyOperatingProfiles)
+      .where(eq(companyOperatingProfiles.companyId, companyId)).for("share", lock);
+    if (actor.type === "agent" && actor.agentId) await tx.select({ id: agents.id }).from(agents)
+      .where(and(eq(agents.id, actor.agentId), eq(agents.companyId, companyId))).for("share", lock);
+    // Native configure grants may name an ancestor's subtree. Keep the target's
+    // reporting path stable, without locking unrelated company employees.
+    let ancestorId = target.reportsTo;
+    const visited = new Set([target.id]);
+    while (ancestorId && !visited.has(ancestorId)) {
+      visited.add(ancestorId);
+      const [ancestor] = await tx.select({ id: agents.id, reportsTo: agents.reportsTo }).from(agents)
+        .where(and(eq(agents.id, ancestorId), eq(agents.companyId, companyId))).for("share", lock);
+      ancestorId = ancestor?.reportsTo ?? null;
+    }
+  }
+
+  async function bindAssignment(tx: Db, publications: ActivityPublication[], who: Who, portfolioId: string, input: CreateAgentosAssignment) {
+    const [company] = await tx.select().from(agentosPortfolioCompanies).where(and(eq(agentosPortfolioCompanies.portfolioId, portfolioId), eq(agentosPortfolioCompanies.companyId, input.companyId)));
+    const [employee] = await tx.select().from(agentosEmployees).where(and(eq(agentosEmployees.id, input.employeeId), eq(agentosEmployees.portfolioId, portfolioId)));
+    if (!company || !employee) throw notFound("Employee or company not found in this portfolio");
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`agentos-assignment:${input.companyId}`}, 0))`);
+    const [existing] = await tx.select().from(agentosAssignments).where(eq(agentosAssignments.id, input.id));
+    if (existing) {
+      if (existing.portfolioId !== portfolioId) throw notFound("Assignment not found");
+      if (existing.companyId !== input.companyId || existing.employeeId !== input.employeeId || existing.agentId !== input.agentId || existing.department !== input.department) throw conflict("This request already created a different assignment");
+      return existing;
+    }
+    const [agent] = await tx.select().from(agents).where(and(eq(agents.id, input.agentId), eq(agents.companyId, input.companyId))).for("update");
+    if (!agent) throw notFound("Company agent not found");
+    if (["terminated", "pending_approval"].includes(agent.status) || ["terminating", "cleaning_up", "rejected", "deleting"].includes(agent.lifecycleState)) throw conflict("Choose an approved, available company agent");
+    const previous = await tx.select({ assignment: agentosAssignments, lifecycleState: agents.lifecycleState }).from(agentosAssignments)
+      .innerJoin(agents, and(eq(agents.id, agentosAssignments.agentId), eq(agents.companyId, agentosAssignments.companyId)))
+      .where(and(eq(agentosAssignments.companyId, input.companyId), or(eq(agentosAssignments.agentId, input.agentId), eq(agentosAssignments.employeeId, input.employeeId))));
+    if (previous.some(({ assignment }) => assignment.agentId === input.agentId || assignment.status === "active")) throw conflict("This agent or employee already has a company assignment");
+    if (previous.some(({ lifecycleState }) => !["terminated", "rejected"].includes(lifecycleState))) throw conflict("Wait for the previous assignment's runtime cleanup to finish before reassigning this employee in the same company");
+    const [created] = await tx.insert(agentosAssignments).values({ ...input, portfolioId }).returning();
+    await audit(tx, publications, who, input.companyId, "agentos.assignment_created", created.id, { employeeId: input.employeeId, agentId: input.agentId, department: input.department });
+    return created;
+  }
+
   async function audit(connection: Db, publications: ActivityPublication[], who: Who, companyId: string, action: string, id: string, details: Record<string, unknown>) {
     const result = await persistActivity(connection, { ...who, companyId, action, entityType: "agentos_workforce", entityId: id, details });
     publications.push(result.publication);
@@ -61,6 +180,36 @@ export function agentosWorkforceService(db: Db) {
   }
 
   return {
+    async readCompany(actor: AuthorizationActor, companyId: string) {
+      const authorized = await companyStaffingAuthority(db, actor, companyId);
+      const rows = await db.select({ assignment: agentosAssignments, employee: {
+        id: agentosEmployees.id, name: agentosEmployees.name, specialty: agentosEmployees.specialty, revision: agentosEmployees.revision,
+      } }).from(agentosAssignments).innerJoin(agentosEmployees, eq(agentosEmployees.id, agentosAssignments.employeeId))
+        .where(and(eq(agentosAssignments.companyId, companyId), eq(agentosAssignments.portfolioId, authorized.portfolio.id)))
+        .orderBy(agentosAssignments.createdAt);
+      const decisions = await Promise.all(rows.map(row => accessService(db).decide({ actor: authorized.actor, action: "agent:read",
+        resource: { type: "agent", companyId, agentId: row.assignment.agentId } })));
+      return { companyId, assignments: rows.filter((_, index) => decisions[index].allowed), observedAt: new Date().toISOString() };
+    },
+
+    async assignCompany(actor: AuthorizationActor, who: Who, companyId: string, input: Omit<CreateAgentosAssignment, "companyId">) {
+      const preliminary = await companyStaffingAuthority(db, actor, companyId);
+      return withAccountingTransaction(db, companyId, async (tx, publications) => {
+        await lockCompanyStaffingAuthority(tx, actor, companyId, preliminary.portfolio.id, input.agentId);
+        const authorized = await companyStaffingAuthority(tx, actor, companyId);
+        if (authorized.portfolio.id !== preliminary.portfolio.id) throw conflict("Company workforce changed. Retry the staffing request.");
+        const access = accessService(tx);
+        for (const action of ["agent:read", "agent_config:update"] as const) {
+          const decision = await access.decide({ actor: authorized.actor, action, resource: { type: "agent", companyId, agentId: input.agentId }, scope: { targetAgentId: input.agentId } });
+          if (!decision.allowed) throw notFound("Company agent not found or not configurable");
+        }
+        return bindAssignment(tx, publications, who, authorized.portfolio.id, { ...input, companyId });
+      }).catch(error => {
+        if ((error?.cause?.code ?? error?.code) === "55P03") throw conflict("Staffing authority is changing. Retry the request.", { retryable: true });
+        throw error;
+      });
+    },
+
     async list(actor: AuthorizationActor) {
       const rows = await db.select().from(agentosPortfolios).where(eq(agentosPortfolios.ownerUserId, ownerId(actor))).orderBy(agentosPortfolios.createdAt);
       const visible = [];
@@ -130,34 +279,14 @@ export function agentosWorkforceService(db: Db) {
       return withAccountingTransaction(db, input.companyId, async (tx, publications) => {
         await portfolio(tx, actor, portfolioId, true);
         if (!(await companyAccess(tx, actor, input.companyId, true))) throw notFound("Company not found");
-        const [company] = await tx.select().from(agentosPortfolioCompanies).where(and(eq(agentosPortfolioCompanies.portfolioId, portfolioId), eq(agentosPortfolioCompanies.companyId, input.companyId)));
-        const [employee] = await tx.select().from(agentosEmployees).where(and(eq(agentosEmployees.id, input.employeeId), eq(agentosEmployees.portfolioId, portfolioId)));
-        if (!company || !employee) throw notFound("Employee or company not found in this portfolio");
-        await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`agentos-assignment:${input.companyId}`}, 0))`);
-        const [existing] = await tx.select().from(agentosAssignments).where(eq(agentosAssignments.id, input.id));
-        if (existing) {
-          if (existing.portfolioId !== portfolioId) throw notFound("Assignment not found");
-          if (existing.companyId !== input.companyId || existing.employeeId !== input.employeeId || existing.agentId !== input.agentId || existing.department !== input.department) throw conflict("This request already created a different assignment");
-          return existing;
-        }
-        const [agent] = await tx.select().from(agents).where(and(eq(agents.id, input.agentId), eq(agents.companyId, input.companyId))).for("update");
-        if (!agent) throw notFound("Company agent not found");
-        if (["terminated", "pending_approval"].includes(agent.status) || ["terminating", "cleaning_up", "rejected", "deleting"].includes(agent.lifecycleState)) throw conflict("Choose an approved, available company agent");
-        const previous = await tx.select({ assignment: agentosAssignments, lifecycleState: agents.lifecycleState }).from(agentosAssignments)
-          .innerJoin(agents, and(eq(agents.id, agentosAssignments.agentId), eq(agents.companyId, agentosAssignments.companyId)))
-          .where(and(eq(agentosAssignments.companyId, input.companyId), or(eq(agentosAssignments.agentId, input.agentId), eq(agentosAssignments.employeeId, input.employeeId))));
-        if (previous.some(({ assignment }) => assignment.agentId === input.agentId || assignment.status === "active")) throw conflict("This agent or employee already has a company assignment");
-        if (previous.some(({ lifecycleState }) => !["terminated", "rejected"].includes(lifecycleState))) throw conflict("Wait for the previous assignment's runtime cleanup to finish before reassigning this employee in the same company");
-        const [created] = await tx.insert(agentosAssignments).values({ ...input, portfolioId }).returning();
-        await audit(tx, publications, who, input.companyId, "agentos.assignment_created", created.id, { employeeId: input.employeeId, agentId: input.agentId, department: input.department });
-        return created;
+        return bindAssignment(tx, publications, who, portfolioId, input);
       });
     },
 
     async read(actor: AuthorizationActor, portfolioId: string): Promise<AgentosWorkforce> {
       const parent = await portfolio(db, actor, portfolioId);
       const linked = await db.select({ id: companies.id, name: companies.name, issuePrefix: companies.issuePrefix, status: companies.status, description: companies.description }).from(agentosPortfolioCompanies)
-        .innerJoin(companies, eq(companies.id, agentosPortfolioCompanies.companyId)).where(eq(agentosPortfolioCompanies.portfolioId, portfolioId));
+        .innerJoin(companies, eq(companies.id, agentosPortfolioCompanies.companyId)).where(and(eq(agentosPortfolioCompanies.portfolioId, portfolioId), ne(companies.purpose, "platform")));
       const visible = [];
       for (const company of linked) if (await companyAccess(db, actor, company.id)) visible.push({ ...company, canManage: await companyAccess(db, actor, company.id, true) });
       const employees = await db.select({ id: agentosEmployees.id, name: agentosEmployees.name, specialty: agentosEmployees.specialty, revision: agentosEmployees.revision })

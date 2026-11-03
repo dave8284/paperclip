@@ -163,7 +163,7 @@ afterEach(() => {
 });
 
 describe("IssueThreadInteractionCard", () => {
-  it("keeps required rejection reasons inline when Agent OS says Disapprove", async () => {
+  it("keeps required rejection reasons inline when AgentOS says Disapprove", async () => {
     const reject = vi.fn(async () => undefined);
     const host = renderCard({ interaction: pendingRequestConfirmationInteraction, onRejectInteraction: reject }, "approval");
     const button = [...host.querySelectorAll("button")].find(button => button.textContent?.trim() === "Disapprove")!;
@@ -1025,7 +1025,7 @@ describe("IssueThreadInteractionCard", () => {
     expect((resumeFailed.firstElementChild as HTMLElement).className).toContain("border-amber-500/70");
     expect(resumeFailed.textContent).toContain("Approved — agent resume failed");
     expect(resumeFailed.textContent).toContain("Agent resume failed");
-    expect(resumeFailed.textContent).toContain("Paperclip needs attention before the agent can resume this approved work.");
+    expect(resumeFailed.textContent).toContain("AgentOS needs attention before the agent can resume this approved work.");
     expect(resumeFailed.textContent).toContain("adapter_failed");
 
     act(() => root?.unmount());

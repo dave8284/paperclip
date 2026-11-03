@@ -26,7 +26,7 @@ import {
   projects,
   projectWorkspaces,
 } from "@paperclipai/db";
-import { deriveProjectUrlKey } from "@paperclipai/shared";
+import { deriveProjectUrlKey, isAttentionProposal, isAttentionWorkItem } from "@paperclipai/shared";
 import type {
   AttentionDecisionVerb,
   AttentionFeed,
@@ -1166,6 +1166,7 @@ export function attentionService(db: Db, serviceOptions: AttentionServiceOptions
       for (const approval of pendingApprovals) {
         const linkedIssueId = approvalIssueMap.get(approval.id) ?? null;
         if (linkedIssueId && !readableApprovalIssues.has(linkedIssueId)) continue;
+        const linkedIssue = linkedIssueId ? readableApprovalIssues.get(linkedIssueId) ?? null : null;
         const dedupKey = `approval:${approval.id}`;
         const title = approvalTitle(approval.type, approval.payload);
         add(createItem({
@@ -1200,7 +1201,8 @@ export function attentionService(db: Db, serviceOptions: AttentionServiceOptions
           activityAt: toIso(approval.updatedAt),
           createdAt: toIso(approval.createdAt),
           updatedAt: toIso(approval.updatedAt),
-          relatedIssue: null,
+          relatedIssue: linkedIssue ? issueSubject(prefix, linkedIssue) : null,
+          ...issueContext(linkedIssue),
           detail: approvalDetail(approval.type, approval.payload),
         }));
       }
@@ -1935,6 +1937,8 @@ export function attentionService(db: Db, serviceOptions: AttentionServiceOptions
       }
       const queueKey = options.queue?.trim() || null;
       const visibleItems = enrichedItems.filter((item) => {
+        if (options.category === "proposals" && !isAttentionProposal(item)) return false;
+        if (options.category === "work" && !isAttentionWorkItem(item)) return false;
         if (options.projectId && item.project?.id !== options.projectId) return false;
         if (options.archived === true ? !item.archivedAt : Boolean(item.archivedAt)) return false;
         if (!includeDismissed && item.snoozedUntil && timestamp(item.snoozedUntil) > now) return false;

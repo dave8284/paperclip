@@ -4,7 +4,8 @@ import { createRoot } from "react-dom/client";
 import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { appearanceForPalette, agentAvatarUrl, type CostDataQualityItem, type CostDataQualityReason, type CostDataQualityReport } from "@paperclipai/shared";
+import { appearanceForPalette, type CostDataQualityItem, type CostDataQualityReason, type CostDataQualityReport } from "@paperclipai/shared";
+import { agentAvatarUrl } from "@/lib/agent-avatar-url";
 import { ToastProvider, useToastState } from "../context/ToastContext";
 import { CostDataQualityNotice } from "./CostDataQualityNotice";
 
@@ -104,14 +105,14 @@ describe("actionable cost notices", () => {
     });
     await render(); await click("16 run costs unavailable"); await loaded();
     const groups = [...container.querySelectorAll('[aria-label="Cost details by agent"] > li')];
-    expect(groups.map(group => group.querySelector("h3")!.textContent)).toEqual(["Codie", "Codie", "fry", "Leela", "Paperclip services"]);
-    const codieItems = groups[0].querySelectorAll("li");
+    expect(groups.map(group => group.querySelector("h3")!.textContent)).toEqual(["AgentOS services", "Codie", "Codie", "fry", "Leela"]);
+    const codieItems = groups[1].querySelectorAll("li");
     expect(codieItems).toHaveLength(2);
     expect(codieItems[0].textContent).toContain("Ready to record");
     expect(codieItems[1].textContent).toContain("Cost unavailable");
-    expect(groups[1].querySelectorAll("li")).toHaveLength(1);
-    expect(groups[0].querySelector("img")?.getAttribute("src")).toBe(agentAvatarUrl(appearance, 20));
-    expect(groups[4].querySelector("a")).toBeNull();
+    expect(groups[2].querySelectorAll("li")).toHaveLength(1);
+    expect(groups[1].querySelector("img")?.getAttribute("src")).toBe(agentAvatarUrl(appearance, 20));
+    expect(groups[0].querySelector("a")).toBeNull();
   });
 
   it("does not label priced unknown billing or estimates as unavailable costs", async () => {

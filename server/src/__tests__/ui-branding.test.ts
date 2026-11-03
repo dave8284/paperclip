@@ -100,7 +100,7 @@ describe("ui branding", () => {
     expect(branded).not.toContain('href="/favicon.svg"');
 
     const defaultHtml = applyUiBranding(TEMPLATE, {});
-    expect(defaultHtml).toContain('href="/agentos-mark.svg"');
+    expect(defaultHtml).toContain('href="/agentos-mark.svg?v=friday-1"');
     expect(defaultHtml).not.toContain('name="paperclip-worktree-name"');
   });
 });

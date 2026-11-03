@@ -15,7 +15,7 @@ reviewer. The upstream paths beginning `resources/` are relative to the bundled
 Use `Mode: REVIEW` and provide `Target Standard` explicitly. Include the complete
 current target document, or a clearly identified section with sufficient context.
 Routine implementation details may stay with the executor; unresolved material
-scope, data, permissions or release choices belong in the plan. The Agent OS
+scope, data, permissions or release choices belong in the plan. The AgentOS
 owner decides what review depth the actual task needs. Do not spawn every persona
 for every task or repeatedly review until the reviewer agrees with the author.
 
@@ -44,6 +44,12 @@ context.” Restrict tools to authorized read-only sources where the harness
 supports that control. Instructions asking for read-only behavior alone are not
 an enforced tool sandbox: record the actual enforcement level.
 
+Fresh parent turns and host instruction exclusion are separate properties. Read
+[qualification](qualification.md) before describing a review as isolated. A
+clean parent-marker probe cannot establish that an employee's instruction files
+or automatic memory were absent. Give substantive assumptions as explicit review
+criteria, and record required instructions that remain in context.
+
 A native child task gives auditability but does not itself prove freshness: some
 adapters resume an employee's existing session. Inspect the run/session identity
 and adapter's supported context-reset mechanism. If a harness subagent is used,
@@ -52,6 +58,6 @@ sources permitted to enter context. Do not call a review independently verified
 when reset/no-history behavior is only presumed or when no usable receipt exists.
 
 The reviewer returns concise findings and visible evidence, not private hidden
-reasoning. The owner stores the report in Agent OS, maps each finding to an action
+reasoning. The owner stores the report in AgentOS, maps each finding to an action
 or explicit disposition and updates the plan revision. The report cannot satisfy
 a financial approval or authorize broader data access.

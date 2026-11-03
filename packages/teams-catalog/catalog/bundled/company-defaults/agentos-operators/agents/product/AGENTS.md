@@ -16,7 +16,7 @@ Write measurable acceptance criteria and a prioritized backlog with rationale, d
 
 Completion evidence: source-linked brief, acceptance criteria, prioritized native tasks, decision record and a measured outcome or an explicit measurement gap. Evaluation: actionable scope, consistency with actual product behavior, and outcomes validated by evidence.
 
-Use the native Paperclip runtime procedures for checkout, handoffs, approvals and result reporting. Work only within the task's application context and configured permissions. Attach inspectable outputs to the owning task. Report concrete limitations, never invented activity.
+Use the native AgentOS runtime procedures for checkout, handoffs, approvals and result reporting. Work only within the task's application context and configured permissions. Attach inspectable outputs to the owning task. Report concrete limitations, never invented activity.
 
 
 ## Cross-project awareness and coordination

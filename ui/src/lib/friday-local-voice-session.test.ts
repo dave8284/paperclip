@@ -56,6 +56,44 @@ it("drops a late preview after changing employee and never delivers it", async (
   finish({ text: "Private words from the old company" }); await flush();
   expect(session.snapshot().interim).toBe(""); expect(send).not.toHaveBeenCalled(); expect(session.snapshot().enabled).toBe(false);
 });
+it("ends a spoken turn over steady room noise instead of waiting for absolute silence", async () => {
+  api.post.mockImplementation(async (_path, body) => body.op === "prepare" ? { ready: true } : { text: "Show my decisions" });
+  session.bind(binding); await flush(); session.toggle(); await flush();
+  for (let i = 0; i < 6; i++) LocalAudio.processor.frame(.06); await flush();
+  expect(session.snapshot().interim).toBe("Show my decisions");
+  // Fan noise above the previous fixed .012 RMS threshold is not continued speech.
+  for (let i = 0; i < 6; i++) LocalAudio.processor.frame(.018); await flush(); await flush();
+  expect(send).toHaveBeenCalledExactlyOnceWith("Show my decisions"); expect(session.snapshot().enabled).toBe(true);
+});
+it("waits for an outstanding preview before final transcription so the worker queue cannot reject the turn", async () => {
+  let finish!: (result: { text: string }) => void;
+  let transcriptions = 0;
+  api.post.mockImplementation((_path, body) => body.op === "prepare" ? Promise.resolve({ ready: true }) : ++transcriptions === 1 ? new Promise(resolve => { finish = resolve; }) : Promise.resolve({ text: "Show my decisions" }));
+  session.bind(binding); await flush(); session.toggle(); await flush();
+  for (let i = 0; i < 6; i++) LocalAudio.processor.frame(.06);
+  for (let i = 0; i < 6; i++) LocalAudio.processor.frame(0);
+  await flush(); expect(transcriptions).toBe(1); expect(send).not.toHaveBeenCalled();
+  finish({ text: "Show my" }); await flush(); await flush();
+  expect(transcriptions).toBe(2); expect(send).toHaveBeenCalledExactlyOnceWith("Show my decisions");
+});
+it("does not mistake steady noise for a confirmed user turn and lose a completed reply", async () => {
+  api.post.mockImplementation(async (_path, body) => body.op === "prepare" ? { ready: true } : body.op === "speak" ? { audio: "YQ==" } : { text: "" });
+  session.bind(binding); await flush(); session.toggle(); await flush();
+  for (let i = 0; i < 6; i++) LocalAudio.processor.frame(.018); await flush();
+  expect(session.snapshot().hearingSpeech).toBe(false);
+  session.bind({ ...binding, reply: { id: "reply", body: "The launch review is ready." } }); await flush();
+  expect(session.snapshot().speaking).toBe(true);
+  expect(Playback.latest.play).toHaveBeenCalledOnce(); expect(send).not.toHaveBeenCalled();
+});
+it("does not start a new reply over a recognised local user turn", async () => {
+  api.post.mockImplementation(async (_path, body) => body.op === "prepare" ? { ready: true } : { text: "Wait, I need to add more detail" });
+  session.bind(binding); await flush(); session.toggle(); await flush();
+  for (let i = 0; i < 6; i++) LocalAudio.processor.frame(.06); await flush();
+  expect(session.snapshot().hearingSpeech).toBe(true);
+  session.bind({ ...binding, reply: { id: "reply", body: "The launch review is ready." } }); await flush();
+  expect(session.snapshot().speaking).toBe(false);
+  expect(api.post.mock.calls.some(call => call[1].op === "speak")).toBe(false);
+});
 it("keeps local capture alive during speech, drops playback echo and accepts an interruption", async () => {
   let words = "Here are your projects and decisions";
   api.post.mockImplementation(async (_path, body) => body.op === "prepare" ? { ready: true } : body.op === "speak" ? { audio: "YQ==" } : { text: words });

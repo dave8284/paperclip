@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from "vitest";
-import { appearanceForPalette, agentAvatarUrl, legacyAgentAppearance } from "@paperclipai/shared";
+import { appearanceForPalette, legacyAgentAppearance } from "@paperclipai/shared";
+import { agentAvatarUrl } from "./agent-avatar-url";
 import { applyMentionChipDecoration, clearMentionChipDecoration, mentionChipInlineStyle, parseMentionChipHref } from "./mention-chips";
 
 describe("agent mention avatars", () => {
@@ -23,7 +24,7 @@ describe("agent mention avatars", () => {
     anchor.style.setProperty("--paperclip-mention-icon-mask", "old-icon");
     applyMentionChipDecoration(anchor, { kind: "agent", agentId: "agent", icon: "code" });
     expect(anchor.style.getPropertyValue("--paperclip-mention-icon-mask")).toBe("");
-    expect(anchor.style.getPropertyValue("--paperclip-mention-avatar-image")).toContain("/api/agent-avatars/");
+    expect(anchor.style.getPropertyValue("--paperclip-mention-avatar-image")).toContain("/agentos-orbs/");
     clearMentionChipDecoration(anchor);
     expect(anchor.hasAttribute("data-mention-kind")).toBe(false);
     expect(anchor.style.getPropertyValue("--paperclip-mention-avatar-image")).toBe("");

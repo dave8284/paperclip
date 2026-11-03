@@ -10,13 +10,13 @@ import { AgentOSNativeFrame } from "@/components/AgentOSNativeFrame";
 const fixture = vi.hoisted(() => {
   const first = "00000000-0000-4000-8000-000000000001", second = "00000000-0000-4000-8000-000000000002";
   const project = "00000000-0000-4000-8000-000000000003", agent = "00000000-0000-4000-8000-000000000004";
-  return { first, second, project, agent,
+  return { first, second, project, agent, platformOnly: false,
     companies: [{ id: first, name: "Northstar", issuePrefix: "NOR", status: "active", description: "Useful tools." }, { id: second, name: "Forma", issuePrefix: "FOR", status: "active", description: "Creative work." }],
     work: vi.fn(), attention: vi.fn(), routines: vi.fn(), getProject: vi.fn(), transcript: vi.fn(), send: vi.fn(),
   };
 });
 vi.mock("@/lib/router", async () => ({ ...await import("react-router-dom"), CompanyRouteScope: ({ children }: { children: ReactNode }) => children }));
-vi.mock("@/context/CompanyContext", () => ({ useCompany: () => ({ selectedCompanyId: fixture.first, companies: fixture.companies }), CompanyViewProvider: ({ children }: { children: ReactNode }) => children }));
+vi.mock("@/context/CompanyContext", () => ({ useCompany: () => ({ selectedCompanyId: fixture.first, companies: fixture.platformOnly ? [] : fixture.companies, allCompanies: fixture.platformOnly ? [{ ...fixture.companies[0], purpose: "platform" }] : fixture.companies }), CompanyViewProvider: ({ children }: { children: ReactNode }) => children }));
 vi.mock("@/context/ThemeContext", () => ({ useTheme: () => ({ setTheme: () => {} }) }));
 vi.mock("@/api/companies-query", () => ({ useAccountIdentity: () => ({ userId: "owner" }) }));
 vi.mock("@/api/administration", () => ({ administrationApi: { registration: async () => ({ status: "approved", isInstanceAdmin: true }) }, registrationKey: () => ["registration"] }));
@@ -49,10 +49,10 @@ class Recognition {
   start() { this.onstart?.(); } stop() { this.onend?.(); } abort() {}
 }
 
-describe("Agent OS approved Friday experience", () => {
+describe("AgentOS approved Friday experience", () => {
   let host: HTMLDivElement, root: Root, client: QueryClient;
   beforeEach(() => {
-    vi.clearAllMocks(); localStorage.clear(); sessionStorage.clear();
+    vi.clearAllMocks(); localStorage.clear(); sessionStorage.clear(); fixture.platformOnly = false;
     Object.defineProperty(window, "SpeechRecognition", { configurable: true, value: Recognition });
     fixture.attention.mockResolvedValue({ items: [], totalCount: 0, generatedAt: new Date().toISOString(), nextCursor: null });
     fixture.routines.mockResolvedValue([]);
@@ -143,6 +143,17 @@ describe("Agent OS approved Friday experience", () => {
     expect(history.hidden).toBe(false);
   });
 
+  it("keeps Friday available with only an internal platform context and no business companies", async () => {
+    fixture.platformOnly = true;
+    await render();
+    expect(host.querySelector('[aria-label="Talk to Friday"]')).not.toBeNull();
+    expect(host.textContent).not.toContain("Create your first company to bring your team");
+    expect(host.querySelector('select[aria-label="Selected company"]')?.textContent ?? "").not.toContain("Northstar");
+    await click("Companies", navigation());
+    expect(host.querySelector('.agentos-company-card')).toBeNull();
+    expect(host.querySelector('[aria-label="Toggle Friday conversation history"]')).not.toBeNull();
+  });
+
   it("shows a clickable employee table", async () => {
     await render("/friday?panel=team");
     expect(host.querySelector('.agentos-employee-table')).not.toBeNull();
@@ -150,6 +161,16 @@ describe("Agent OS approved Friday experience", () => {
     const profile = host.querySelector<HTMLButtonElement>('[aria-label="Open Friday profile"]')!;
     await act(async () => profile.click()); await settle();
     expect(host.textContent).toContain("Profile & instructions");
+  });
+  it("normalizes an internal context URL to portfolio work and never lists it as a company", async () => {
+    fixture.platformOnly = true;
+    await render(`/friday?panel=work&companyId=${fixture.first}`);
+    expect(host.textContent).not.toContain("Company unavailable");
+    expect(host.querySelector<HTMLSelectElement>('select[aria-label="Selected company"]')?.value).toBe("portfolio");
+    expect(fixture.work).not.toHaveBeenCalled();
+    await click("Projects", host.querySelector('nav[aria-label="Workspace"]')!);
+    expect(host.textContent).not.toContain("Northstar");
+    expect(host.textContent).toContain("Your portfolio is ready for its first company");
   });
 
   it("rejects an unknown company scope without querying its work", async () => {

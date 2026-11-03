@@ -9,7 +9,7 @@ import { queryKeys } from "@/lib/queryKeys";
 import { latestPerformance, performanceSummary, formatPerformanceMoney, currencyScale } from "@/lib/company-performance";
 import { Button } from "./ui/button";
 
-export function AgentOSPerformance({ companyId, projectId, departmentId, onAsk }: { companyId: string; projectId?: string; departmentId?: string; onAsk: (message: string) => void }) {
+export function AgentOSPerformance({ companyId, projectId, departmentId }: { companyId: string; projectId?: string; departmentId?: string; onAsk: (message: string) => void }) {
   const [period, setPeriod] = useState(() => { const now = new Date(); return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`; });
   const [department, setDepartment] = useState(departmentId ?? "");
   const [project, setProject] = useState(projectId ?? "");
@@ -29,7 +29,7 @@ export function AgentOSPerformance({ companyId, projectId, departmentId, onAsk }
   return <div className="space-y-6"><div className="flex flex-wrap items-end gap-4"><label className="text-sm">Period<input type="month" className="mt-2 block rounded-lg border bg-background p-3" value={period} onChange={event => { if (event.target.value) { setPeriod(event.target.value); setEditing(false); } }} /></label>
     {!projectId && <><label className="text-sm">Department<select className="mt-2 block rounded-lg border bg-background p-3" value={department} onChange={event => { setDepartment(event.target.value); setProject(""); setEditing(false); }}><option value="">Company totals</option>{departments.data?.map(row => <option key={row.id} value={row.id}>{row.name}</option>)}</select></label><label className="text-sm">Project<select className="mt-2 block rounded-lg border bg-background p-3" value={project} onChange={event => { setProject(event.target.value); setEditing(false); }}><option value="">{department ? "All projects in department" : "Company-wide report"}</option>{filteredProjects.map(row => <option key={row.id} value={row.id}>{row.name}</option>)}</select></label></>}
     <Button variant="outline" disabled={!!department && !project || !reports.isSuccess || reports.data.truncated} onClick={() => setEditing(value => !value)}>{selectedReport ? "Record new revision" : "Record results"}</Button>
-    <Button variant="ghost" onClick={() => onAsk(`Review performance for company ${companyId}, period ${period}${project ? `, project ${project}` : department ? `, department ${department}` : ""}. Read the recorded reports and sources. Explain missing coverage, results and the next actions. Do not invent metrics.`)}>Discuss with Friday</Button></div>
+    </div>
     {[reports.error, projects.error, departments.error].filter(Boolean).map((error, index) => <p key={index} role="alert" className="text-destructive">{error!.message}</p>)}
     {reports.isPending && <p role="status">Reading performance reports…</p>}
     <p className="text-sm text-muted-foreground">{department && !project ? "Totals from this department’s accessible projects. Every project must report before totals are shown." : project ? "Results attributed to this project." : "Company-wide figures, recorded separately from project attribution to avoid double counting."} Reports retain their original source and every revision.</p>

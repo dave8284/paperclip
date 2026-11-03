@@ -22,10 +22,10 @@ export function buildSlackAppManifest(input: {
   redirectUri?: string;
 }) {
   return {
-    display_information: { name: input.app.appName, description: `Talk to ${input.agentName} and manage work in Paperclip.`.slice(0, 140) },
+    display_information: { name: input.app.appName, description: `Talk to ${input.agentName} and manage work in AgentOS.`.slice(0, 140) },
     features: {
       app_home: { home_tab_enabled: false, messages_tab_enabled: true, messages_tab_read_only_enabled: false },
-      agent_view: { agent_description: "Work with a Paperclip agent in a task-backed conversation." },
+      agent_view: { agent_description: "Work with a AgentOS agent in a task-backed conversation." },
       bot_user: { display_name: input.app.botName },
       slash_commands: [{ command: input.app.command, description: `Start or manage work with ${input.agentName}`,
         usage_hint: "status | new | close | <task>", should_escape: false, url: input.webhookUrl }],
@@ -118,9 +118,9 @@ export function slackRegistrationErrorMessage(code: string): string {
     slack_install_failed: "Slack installation could not be completed. Authorize the same app again.",
     slack_install_identity_mismatch: "Slack returned a different app, workspace, or bot. Install the app created for this connection.",
     slack_install_scopes_missing: "Slack did not grant all required bot permissions. Install the app again and approve its requested permissions.",
-    slack_bot_already_connected: "This Slack bot is already connected to Paperclip. Resume its existing connection or use a different app.",
+    slack_bot_already_connected: "This Slack bot is already connected to AgentOS. Resume its existing connection or use a different app.",
     slack_install_token_invalid: "Slack rejected the saved bot credentials. Continue in Slack to authorize this app again.",
-    slack_configuration_incomplete: "The app is installed, but Paperclip could not finish connecting it. Retry connecting the saved installation.",
+    slack_configuration_incomplete: "The app is installed, but AgentOS could not finish connecting it. Retry connecting the saved installation.",
     slack_install_account_missing: "Slack did not identify your account. Authorize the same app again to connect your Slack account.",
     slack_install_account_conflict: "This Slack account already has an existing link. Manage account links in connection settings, or authorize with your own Slack account.",
   };

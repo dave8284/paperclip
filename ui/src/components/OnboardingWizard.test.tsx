@@ -3306,7 +3306,7 @@ describe("OnboardingWizard restore-gate (stale localStorage across accounts)", (
           {
             code: "environment_identity",
             level: "info",
-            message: 'Environment test identity for "Paperclip Computer".',
+            message: 'Environment test identity for "AgentOS Computer".',
             detail: "paperclipLeaseId=ff9e58e9; provider=daytona",
           },
         ],

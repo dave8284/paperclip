@@ -5,6 +5,7 @@ import { skillFileLinkHref } from "@/lib/skill-file-links";
 import { SkillSourceProvenance } from "../components/SkillSourceProvenance";
 import { AgentIdentity } from "@/components/AgentIdentity";
 import { AgentAvatar } from "@/components/AgentAvatar";
+import { AnimatedPaperclipIcon as AgentOSMark } from "@/components/AnimatedPaperclipIcon";
 import { useCallback, useEffect, useMemo, useRef, useState, type SVGProps } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "@/lib/router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -157,7 +158,6 @@ import {
   ExternalLink,
   FlaskConical,
   MoreHorizontal,
-  Paperclip,
   Pause,
   Pencil,
   Pin,
@@ -284,7 +284,7 @@ function sourceMeta(sourceBadge: CompanySkillSourceBadge, sourceLabel: string | 
     case "local":
       return { icon: Folder, label: sourceLabel ?? "Folder", managedLabel: "Folder managed" };
     case "paperclip":
-      return { icon: Paperclip, label: sourceLabel ?? "Paperclip", managedLabel: "Paperclip managed" };
+      return { icon: AgentOSMark, label: sourceLabel ?? "AgentOS", managedLabel: "AgentOS managed" };
     default:
       return { icon: Boxes, label: sourceLabel ?? "Catalog", managedLabel: "Catalog managed" };
   }
@@ -515,7 +515,7 @@ function CompatChip({ compatibility }: { compatibility: CompanySkillCompatibilit
     unknown: {
       icon: HelpCircle,
       label: "Unknown format",
-      tooltip: "Paperclip could not validate this skill as Agent Skills markdown. Install at your own risk.",
+      tooltip: "AgentOS could not validate this skill as Agent Skills markdown. Install at your own risk.",
       className: "border-yellow-500/40 bg-yellow-500/10 text-yellow-800 dark:text-yellow-200",
     },
     invalid: {
@@ -723,7 +723,7 @@ export function buildDiscoveryCards(
       catalogRef: entry.id,
       name: entry.name,
       slug: entry.slug,
-      author: entry.packageName ?? "Paperclip",
+      author: entry.packageName ?? "AgentOS",
       version: discoveryVersionLabel({ packageVersion: entry.packageVersion ?? null, sourceRef: null }, required),
       tagline: null,
       description: entry.description,
@@ -4381,7 +4381,7 @@ export function CompanySkills({ collectionView }: { collectionView?: "authored" 
       pushToast({
         tone: "success",
         title: skill.forkedFromSkillId ? "Skill fork created" : "Skill created",
-        body: `${skill.name} is now editable in the Paperclip workspace.`,
+        body: `${skill.name} is now editable in the AgentOS workspace.`,
       });
     },
     onError: (error) => {
@@ -5115,7 +5115,7 @@ export function CompanySkills({ collectionView }: { collectionView?: "authored" 
   const studioTitle = studioForkFromId ? "Fork skill" : "Create a new skill";
   const studioDescription = studioForkFromId
     ? "Review the fork metadata and create an editable organization copy."
-    : "Create an editable organization skill in the Paperclip workspace.";
+    : "Create an editable organization skill in the AgentOS workspace.";
   return (
     <>
       {policyDenial.denial ? (

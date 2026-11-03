@@ -24,6 +24,20 @@ vi.mock("./companies", () => ({
 }));
 
 describe("companyListQueryOptions", () => {
+  it("keeps internal contexts available to Friday without listing them as companies", async () => {
+    const internal = { id: "platform", purpose: "platform" };
+    const business = { id: "venture", purpose: "business" };
+    mockCompaniesApi.list.mockResolvedValueOnce([internal, business]);
+    await expect(companyListQueryOptions("owner").queryFn()).resolves.toEqual({ companies: [business], allCompanies: [internal, business], unauthorized: false });
+    expect(mockCompaniesApi.list).toHaveBeenCalledWith({ includeInternal: true });
+  });
+
+  it("supports an internal home with no business companies", async () => {
+    const internal = { id: "platform", purpose: "platform" };
+    mockCompaniesApi.list.mockResolvedValueOnce([internal]);
+    await expect(companyListQueryOptions("owner").queryFn()).resolves.toEqual({ companies: [], allCompanies: [internal], unauthorized: false });
+  });
+
   it.each([401, 403])("treats %s company-list failures as unauthorized bootstrap state", async (status) => {
     mockCompaniesApi.list.mockRejectedValueOnce(new ApiError("Board access required", status, { error: "Board access required" }));
 

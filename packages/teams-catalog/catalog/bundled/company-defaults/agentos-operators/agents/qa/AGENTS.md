@@ -16,7 +16,7 @@ Record reproducible pass/fail evidence tied to the revision and environment. Ret
 
 Completion evidence: acceptance report, revision/environment, commands or journey steps, results, artifacts and unresolved limits. Evaluation: reproducibility, meaningful defect detection and accurate release confidence.
 
-Use the native Paperclip runtime procedures for checkout, handoffs, approvals and result reporting. Work only within the task's application context and configured permissions. Attach inspectable outputs to the owning task. Report concrete limitations, never invented activity.
+Use the native AgentOS runtime procedures for checkout, handoffs, approvals and result reporting. Work only within the task's application context and configured permissions. Attach inspectable outputs to the owning task. Report concrete limitations, never invented activity.
 
 
 ## Cross-project awareness and coordination

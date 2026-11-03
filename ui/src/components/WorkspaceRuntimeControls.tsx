@@ -550,7 +550,7 @@ export function WorkspaceRuntimeControls({
 
       <CommandSection
         title="Services"
-        description="Long-running commands that Paperclip can supervise for this workspace."
+        description="Long-running commands that AgentOS can supervise for this workspace."
         items={sections.services}
         emptyMessage={serviceEmptyMessage}
         disabledHint={visibleDisabledHint}

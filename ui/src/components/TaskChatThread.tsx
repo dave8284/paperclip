@@ -1690,7 +1690,7 @@ export function TaskChatThread(props: TaskChatThreadProps) {
             : source.status === "interrupted"
               ? `The run was interrupted${responseBoundary}.`
               : code === "native_provider_runtime_missing"
-                ? "The selected provider runtime is missing a required package. Reinstall or rebuild Paperclip with its bundled provider dependencies, restart the server, then test the agent's runtime before retrying."
+                ? "The selected provider runtime is missing a required package. Reinstall or rebuild AgentOS with its bundled provider dependencies, restart the server, then test the agent's runtime before retrying."
               : code === "native_provider_approval_required"
                 ? "This operation requires approval, but this runner has no interactive approval handler. Review the operation and update the agent's permission setting before retrying."
                 : code === "native_provider_model_rejected"

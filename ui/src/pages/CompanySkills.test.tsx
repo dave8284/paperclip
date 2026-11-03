@@ -414,7 +414,7 @@ describe("DiscoveryGrid IA presentation", () => {
       catalogRef: null,
       name: "Installed Skill",
       slug: "installed",
-      author: "Paperclip",
+      author: "AgentOS",
       version: null,
       tagline: null,
       description: null,
@@ -440,7 +440,7 @@ describe("DiscoveryGrid IA presentation", () => {
       slug: "available",
       installed: false,
       sourceBadge: "catalog" as const,
-      sourceLabel: "Paperclip catalog",
+      sourceLabel: "AgentOS catalog",
     };
     const node = await renderDiscoveryGrid({
       tab: "discover",
@@ -451,7 +451,7 @@ describe("DiscoveryGrid IA presentation", () => {
     expect(node.textContent).toContain("Not enabled for any agents");
     expect(node.textContent).toContain("Available to install");
     expect(node.textContent).toContain("Local workspace");
-    expect(node.textContent).toContain("Paperclip catalog");
+    expect(node.textContent).toContain("AgentOS catalog");
   });
 
   it("uses the create callback from the New menu and empty state", async () => {
@@ -556,7 +556,7 @@ describe("DiscoveryGrid IA presentation", () => {
       catalogRef: null,
       name: "Demo Skill",
       slug: "demo-skill",
-      author: "Paperclip",
+      author: "AgentOS",
       version: null,
       tagline: null,
       description: null,
@@ -596,7 +596,7 @@ describe("DiscoveryGrid IA presentation", () => {
       catalogRef: null,
       name: "Bundled Skill",
       slug: "bundled-skill",
-      author: "Paperclip",
+      author: "AgentOS",
       version: null,
       tagline: null,
       description: null,
@@ -673,7 +673,7 @@ describe("skills discovery card reconciliation", () => {
       slug: "review",
       updatedAt: new Date("2026-08-30T00:00:00Z"),
       folderId: null,
-      authorName: "Paperclip",
+      authorName: "AgentOS",
       packageVersion: "2.0.0",
       sourceRef: null,
       tagline: null,
@@ -687,7 +687,7 @@ describe("skills discovery card reconciliation", () => {
       catalogKind: "optional",
       forkedFromSkillId: null,
       sourceBadge: "catalog",
-      sourceLabel: "Paperclip",
+      sourceLabel: "AgentOS",
     } as unknown as CompanySkillListItem;
     const olderDuplicate = {
       ...installed,
@@ -703,7 +703,7 @@ describe("skills discovery card reconciliation", () => {
       kind: "optional",
       category: "quality",
       description: "Catalog copy",
-      packageName: "Paperclip",
+      packageName: "AgentOS",
       packageVersion: "2.0.0",
       tags: [],
     } as unknown as CatalogSkill;

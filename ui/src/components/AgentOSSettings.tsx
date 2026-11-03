@@ -15,6 +15,7 @@ import { Button } from "./ui/button";
 
 function CompanyPreferences({ company, onRemoved }: { company: Company; onRemoved?: () => void }) {
   const client = useQueryClient();
+  const internal = company.purpose === "platform";
   const [name, setName] = useState(company.name);
   const [description, setDescription] = useState(company.description ?? "");
   const [requireApproval, setRequireApproval] = useState(company.requireBoardApprovalForNewAgents);
@@ -27,17 +28,17 @@ function CompanyPreferences({ company, onRemoved }: { company: Company; onRemove
       await client.invalidateQueries({ queryKey: ["agentos-company-settings", company.id] });
     },
   });
-  return <section className="space-y-8" aria-label="Company settings">
+  return <section className="space-y-8" aria-label={internal ? "Platform settings" : "Company settings"}>
     <form className="max-w-2xl space-y-5" onSubmit={event => { event.preventDefault(); setSaved(false); save.mutate(); }} onChange={() => setSaved(false)}>
-      <div><h2 className="text-lg font-semibold">Company information</h2><p className="mt-2 text-sm text-muted-foreground">Profile and hiring preferences for {company.name}. Friday remains your portfolio coordinator.</p></div>
-      <label className="block text-sm">Company name<input className="mt-2 w-full rounded-lg border bg-background p-3" value={name} onChange={event => setName(event.target.value)} required maxLength={200} /></label>
+      <div><h2 className="text-lg font-semibold">{internal ? "Platform information" : "Company information"}</h2><p className="mt-2 text-sm text-muted-foreground">{internal ? "Friday, shared connections and platform configuration. This internal context is separate from your companies." : `Profile and hiring preferences for ${company.name}. Friday remains your portfolio coordinator.`}</p></div>
+      <label className="block text-sm">{internal ? "Platform name" : "Company name"}<input className="mt-2 w-full rounded-lg border bg-background p-3" value={name} onChange={event => setName(event.target.value)} required maxLength={200} /></label>
       <label className="block text-sm">Purpose and description<textarea className="mt-2 min-h-28 w-full rounded-lg border bg-background p-3" value={description} onChange={event => setDescription(event.target.value)} /></label>
       <label className="flex items-start gap-3 text-sm"><input type="checkbox" className="mt-1" checked={requireApproval} onChange={event => setRequireApproval(event.target.checked)} /><span>Require approval for new agents<span className="mt-1 block text-muted-foreground">Company leads can propose hires; you approve before the agent joins.</span></span></label>
-      <div className="flex items-center gap-4"><Button type="submit" disabled={save.isPending || !name.trim()}>{save.isPending ? "Saving…" : "Save company"}</Button>{saved && <p role="status" className="text-sm text-muted-foreground">Company preferences saved.</p>}</div>
+      <div className="flex items-center gap-4"><Button type="submit" disabled={save.isPending || !name.trim()}>{save.isPending ? "Saving…" : internal ? "Save platform" : "Save company"}</Button>{saved && <p role="status" className="text-sm text-muted-foreground">{internal ? "Platform preferences saved." : "Company preferences saved."}</p>}</div>
       {save.error && <p role="alert" className="text-sm text-destructive">{save.error.message}</p>}
     </form>
     <div className="space-y-3"><h3 className="font-semibold">Access and operations</h3><div className="flex flex-wrap gap-4 text-sm"><Link to="/company/settings">Branding and advanced company settings</Link><Link to="/company/settings/members">People and access</Link><Link to="/applications">Applications and repositories</Link><Link to="/teams-catalog?search=AgentOS">Operating teams</Link></div></div>
-    <div className="max-w-2xl space-y-3 border-t pt-6"><h3 className="font-semibold">Archive or delete company</h3><p className="text-sm text-muted-foreground">Archive to retain work and history. Permanent deletion removes this company’s records; shared employees in other companies are retained. You will review the action before anything changes.</p><AgentOSDelete kind="company" id={company.id} companyId={company.id} name={company.name} onRemoved={onRemoved} /></div>
+    {!internal && <div className="max-w-2xl space-y-3 border-t pt-6"><h3 className="font-semibold">Archive or delete company</h3><p className="text-sm text-muted-foreground">Archive to retain work and history. Permanent deletion removes this company’s records; shared employees in other companies are retained. You will review the action before anything changes.</p><AgentOSDelete kind="company" id={company.id} companyId={company.id} name={company.name} onRemoved={onRemoved} /></div>}
   </section>;
 }
 
@@ -47,7 +48,7 @@ export function AgentOSSettings({ companyId, onCompanyRemoved }: { companyId: st
   const models = useQuery({ queryKey: ["ai-connections", companyId], queryFn: () => aiConnectionsApi.list(companyId), enabled: tab === "Models" });
   const catalog = useQuery({ queryKey: ["model-catalog", companyId], queryFn: () => api.get<{ learning: Analytics | null; learningAccess?: "admin" | "restricted"; models: Array<{ id: string; label: string; provider: string; observed: boolean; configuredAgents: Array<{ id: string; name: string }> }> }>(`/companies/${companyId}/friday/models`), enabled: tab === "Models" });
   const connectedProviders = new Set(models.data?.connections.filter(connection => connection.method === "subscription" && connection.status === "connected").map(connection => connection.provider));
-  return <div className="space-y-6"><nav className="agentos-workspace-tabs" aria-label="Settings sections">{["Company", "Voice", "Connectors", "Models"].map(label => <button type="button" key={label} aria-current={tab === label ? "page" : undefined} onClick={() => setTab(label)}>{label}</button>)}</nav>
+  return <div className="space-y-6"><nav className="agentos-workspace-tabs" aria-label="Settings sections">{["Company", "Voice", "Connectors", "Models"].map(label => <button type="button" key={label} aria-current={tab === label ? "page" : undefined} onClick={() => setTab(label)}>{label === "Company" && company.data?.purpose === "platform" ? "Platform" : label}</button>)}</nav>
     {[models.error, catalog.error].filter(Boolean).map((error, index) => <p role="alert" key={index} className="text-destructive">{error!.message}</p>)}
     {tab === "Connectors" && <AgentOSConnectors companyId={companyId} />}
     {tab === "Voice" && <AgentOSVoiceSettings companyId={companyId} />}

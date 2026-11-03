@@ -13,7 +13,7 @@ vi.mock("@/api/companies-query", () => ({ useAccountIdentity: () => ({ userId: "
 vi.mock("@/api/access", () => ({ accessApi: { getUserCompanyAccess: async () => ({ companyAccess: [] }) } }));
 vi.mock("@/lib/router", async () => await import("react-router-dom"));
 
-describe("Agent OS administration screens", () => {
+describe("AgentOS administration screens", () => {
   let host: HTMLDivElement, root: Root, client: QueryClient;
   beforeEach(() => {
     vi.clearAllMocks();

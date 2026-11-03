@@ -4,9 +4,9 @@ import { agentAvatarUrl as productionUrl } from "../../src/lib/agent-avatar-url"
 import { agentAvatarUrl } from "./agent-avatar-url";
 
 describe("packaged Storybook avatar URLs", () => {
-  it("keeps production on the public API and resolves preview assets under a branch prefix", () => {
+  it("uses orb avatars in production and resolves the archived native preview under a branch prefix", () => {
     const appearance = appearanceForPalette("bubblegum-sky");
-    expect(productionUrl(appearance, 24, 2)).toBe("/api/agent-avatars/cap-v1/bubblegum-sky/rest.png?size=24&scale=2");
+    expect(productionUrl(appearance, 24, 2)).toBe("/agentos-orbs/bubblegum-sky.svg");
     expect(new URL(agentAvatarUrl(appearance, 24, 2), "https://example.com/branches/personas/builds/123/iframe.html").href)
       .toBe("https://example.com/branches/personas/builds/123/agent-avatar-images/cap-v1/bubblegum-sky/rest-24-2.png");
     expect(agentAvatarUrl(appearance)).toBe("./agent-avatar-images/cap-v1/bubblegum-sky/rest-512-1.png");

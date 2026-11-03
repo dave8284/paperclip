@@ -3,7 +3,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { FridayAttention } from "./FridayAttention";
+import { FridayAttention, fridayDecisionContext } from "./FridayAttention";
 import { queryKeys } from "../lib/queryKeys";
 
 const api = vi.hoisted(() => ({ list: vi.fn(), dismiss: vi.fn(async () => ({})), session: vi.fn(async () => ({ user: { id: "operator" } })) }));
@@ -33,10 +33,19 @@ describe("Friday project attention", () => {
     await click("Dismiss decision"); expect(api.dismiss).toHaveBeenCalledWith("company", "native-key");
   });
   it("keeps project scope across native pagination and hides cached decisions after access fails", async () => {
-    await render("project"); expect(api.list).toHaveBeenLastCalledWith("company", expect.objectContaining({ projectId: "project", limit: 50 }));
+    await render("project"); expect(api.list).toHaveBeenLastCalledWith("company", expect.objectContaining({ category: "proposals", projectId: "project", limit: 50 }));
     await click("Next decisions"); expect(api.list).toHaveBeenLastCalledWith("company", expect.objectContaining({ projectId: "project", cursor: "next" }));
     api.list.mockRejectedValue(new Error("Access revoked"));
     await act(async () => { await client.invalidateQueries({ queryKey: queryKeys.attention("company") }); await new Promise(resolve => setTimeout(resolve, 0)); });
     expect(host.textContent).toContain("Access revoked"); expect(host.textContent).not.toContain("Approve the release");
+  });
+  it("describes an empty proposal category without labelling raw blockers as decisions", async () => {
+    api.list.mockResolvedValue({ ...feed, items: [], totalCount: 0, nextCursor: null }); await render("project");
+    expect(host.textContent).toContain("0 current decisions"); expect(host.textContent).toContain("Work blockers remain in the Work view");
+    expect(host.textContent).not.toContain("Discuss with Friday");
+  });
+  it("supplies native identity, task, scope and observed proposal to the spoken discussion", () => {
+    const context = fridayDecisionContext({ ...item, sourceKind: "decision", updatedAt: "2026-10-28T00:00:00Z", detail: { kind: "generic", summaryExcerpt: "Approve staged rollout", images: [] }, relatedIssue: { id: "task-id", href: "/issues/AGE-2" } } as any, "company");
+    for (const expected of ["Company: company", "Project: project", "Native source kind: decision", "id: task", "Related task id: task-id", "/issues/AGE-2", "2026-10-28T00:00:00Z", "Approve staged rollout", "current revision"]) expect(context).toContain(expected);
   });
 });

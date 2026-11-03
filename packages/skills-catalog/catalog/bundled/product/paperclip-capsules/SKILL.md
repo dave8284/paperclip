@@ -1,6 +1,6 @@
 ---
 name: paperclip-capsules
-description: Generate, implement, or review Paperclip capsule visuals. Use for capsule art, agent capsules, heartbeat status capsules, identicons, capsule banks, or brand-usage validation.
+description: Archived upstream capsule artwork reference. AgentOS uses particle orbs; do not apply this legacy capsule brand to AgentOS displays.
 key: paperclipai/bundled/product/paperclip-capsules
 recommendedForRoles:
   - designer
@@ -16,7 +16,9 @@ tags:
   - hyperframes
 ---
 
-# Paperclip Capsules
+# Legacy capsule artwork reference
+
+This upstream Paperclip reference is retained for compatibility and historical assets. It is not the AgentOS design system. AgentOS displays use particle orbs and the coordinator is Friday; do not introduce capsule artwork into AgentOS screens. The original guidance below applies only when explicitly maintaining an upstream capsule asset.
 
 Use this skill when creating or checking Paperclip capsule visuals. The central rule is simple: **the capsule is the agent**. A capsule is not generic chrome, a button shape, a random status pill, or background decoration.
 

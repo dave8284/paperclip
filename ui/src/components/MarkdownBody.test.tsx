@@ -164,7 +164,7 @@ describe("MarkdownBody", () => {
       <QueryClientProvider client={new QueryClient()}>
         <ThemeProvider>
           <MarkdownBody>
-            {`[@Taylor](${buildUserMentionHref("user-123")}) [@CodexCoder](${buildAgentMentionHref("agent-123", "code")}) [@Paperclip App](${buildProjectMentionHref("project-456", "#336699")}) [/release-changelog](${buildSkillMentionHref("skill-789", "release-changelog")}) [/routine:Weekly review](${buildRoutineMentionHref("routine-123")})`}
+            {`[@Taylor](${buildUserMentionHref("user-123")}) [@CodexCoder](${buildAgentMentionHref("agent-123", "code")}) [@AgentOS App](${buildProjectMentionHref("project-456", "#336699")}) [/release-changelog](${buildSkillMentionHref("skill-789", "release-changelog")}) [/routine:Weekly review](${buildRoutineMentionHref("routine-123")})`}
           </MarkdownBody>
         </ThemeProvider>
       </QueryClientProvider>,
@@ -206,7 +206,7 @@ describe("MarkdownBody", () => {
         </ThemeProvider>
       </QueryClientProvider>,
     );
-    expect(html).toContain("/cap-v1/electric-grove/rest.png");
+    expect(html).toContain("/agentos-orbs/electric-grove.svg");
     expect(html).not.toContain("mention-icon-mask");
   });
 

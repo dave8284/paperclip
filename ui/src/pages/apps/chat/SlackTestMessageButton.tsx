@@ -65,7 +65,7 @@ export function SlackTestMessageButton({ endpointId }: { endpointId: string }) {
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Connect your Slack account</DialogTitle>
-          <DialogDescription>Choose your account. Messages to this agent will use your Paperclip permissions.</DialogDescription>
+          <DialogDescription>Choose your account. Messages to this agent will use your AgentOS permissions.</DialogDescription>
         </DialogHeader>
         <Input aria-label="Find your Slack account" placeholder="Find your name" value={search} onChange={event => setSearch(event.target.value)} />
         <div className="max-h-64 space-y-1 overflow-y-auto" role="radiogroup" aria-label="Your Slack account">

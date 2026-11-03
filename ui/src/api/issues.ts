@@ -575,9 +575,10 @@ export const issuesApi = {
     api.get<IssueDocument[]>(
       `/issues/${id}/documents${options?.includeSystem ? "?includeSystem=true" : ""}`,
     ),
-  getDocument: (id: string, key: string) =>
+  getDocument: (id: string, key: string, options?: RequestOptions) =>
     api.get<IssueDocument>(
       `/issues/${id}/documents/${encodeURIComponent(key)}`,
+      options,
     ),
   upsertDocument: (id: string, key: string, data: UpsertIssueDocument) =>
     api.put<IssueDocument>(

@@ -1,6 +1,6 @@
 import { Fragment, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Activity, ArrowLeft, Boxes, ChartNoAxesCombined, CheckCheck, ChevronRight, CircleHelp, FileText, FolderKanban, Home, Menu, Network, Repeat2, Settings2, Users, X } from "lucide-react";
+import { Activity, ArrowLeft, Boxes, ChartNoAxesCombined, CheckCheck, ChevronRight, Monitor, FileText, FolderKanban, Home, Menu, Network, Repeat2, Settings2, Users, X } from "lucide-react";
 import type { Company } from "@paperclipai/shared";
 import { departmentsApi, departmentKey } from "@/api/departments";
 import { projectsApi } from "@/api/projects";
@@ -72,7 +72,7 @@ export function AgentOSSidebar({ companies, view, navigate }: { companies: Compa
       <div className="agentos-sidebar-bottom"><div className="agentos-sidebar-divider" /><nav aria-label="People, history and settings">
         <button type="button" onClick={() => go({ panel: "team", companyId: view.companyId, scope: view.scope })} aria-current={view.panel === "team" ? "page" : undefined}><Users />Workforce</button>
         <button type="button" onClick={() => go({ panel: "activity", ...scope })} aria-current={view.panel === "activity" ? "page" : undefined}><Activity />Audit trail</button>
-        <button type="button" onClick={() => go({ panel: "library", ...scope })}><CircleHelp />Saved displays</button>
+        <button type="button" onClick={() => go({ panel: "library", ...scope })}><Monitor />Saved displays</button>
         <button type="button" onClick={() => go({ panel: "settings", companyId: view.companyId })} aria-current={view.panel === "settings" ? "page" : undefined}><Settings2 />Settings</button>
       </nav></div>
     </div>

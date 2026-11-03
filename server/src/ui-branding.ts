@@ -3,7 +3,7 @@ const FAVICON_BLOCK_END = "<!-- PAPERCLIP_FAVICON_END -->";
 const RUNTIME_BRANDING_BLOCK_START = "<!-- PAPERCLIP_RUNTIME_BRANDING_START -->";
 const RUNTIME_BRANDING_BLOCK_END = "<!-- PAPERCLIP_RUNTIME_BRANDING_END -->";
 
-const DEFAULT_FAVICON_LINKS = '<link rel="icon" href="/agentos-mark.svg" type="image/svg+xml" />';
+const DEFAULT_FAVICON_LINKS = '<link rel="icon" href="/agentos-mark.svg?v=friday-1" type="image/svg+xml" />';
 
 export type WorktreeUiBranding = {
   enabled: boolean;
@@ -133,10 +133,19 @@ function escapeHtmlAttribute(value: string): string {
 }
 
 function createFaviconDataUrl(background: string, foreground: string): string {
+  const particles = Array.from({ length: 72 }, (_, index) => {
+    const y = 1 - (index + 0.5) / 36;
+    const radius = Math.sqrt(1 - y * y);
+    const angle = index * Math.PI * (3 - Math.sqrt(5));
+    const depth = radius * Math.sin(angle);
+    const x = 12 + radius * Math.cos(angle) * 8;
+    const cy = 12 + y * 8;
+    return `<circle cx="${x.toFixed(2)}" cy="${cy.toFixed(2)}" r="${(0.4 + (depth + 1) * 0.12).toFixed(2)}" fill="${foreground}" opacity="${(0.42 + (depth + 1) * 0.25).toFixed(2)}"/>`;
+  }).join("");
   const svg = [
-    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none">',
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" role="img" aria-label="AgentOS">',
     `<rect width="24" height="24" rx="6" fill="${background}"/>`,
-    `<path stroke="${foreground}" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.15" d="m16 6-8.414 8.586a2 2 0 0 0 2.829 2.829l8.414-8.586a4 4 0 1 0-5.657-5.657l-8.379 8.551a6 6 0 1 0 8.485 8.485l8.379-8.551"/>`,
+    particles,
     "</svg>",
   ].join("");
   return `data:image/svg+xml,${encodeURIComponent(svg)}`;

@@ -55,6 +55,23 @@ test("provider overrides keep manifest branding and pass normal review validatio
   });
 });
 
+test("generated catalog uses AgentOS copy and preserves native connection identity and cited content", (t) => {
+  const root = makeFixture();
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const notebookPath = path.join(root, "scripts/app-definition-overrides/paperclip-notebook.json");
+  const notebook = JSON.parse(fs.readFileSync(notebookPath, "utf8"));
+  notebook.methods[0].guidanceMd = "Use Paperclip with `Paperclip command` and [Paperclip upstream](https://paperclip.ing).";
+  fs.writeFileSync(notebookPath, JSON.stringify(notebook));
+  const result = runIngestion(root);
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const emitted = JSON.parse(fs.readFileSync(path.join(root, "packages/shared/src/app-definitions/paperclip-notebook.json"), "utf8"));
+  assert.equal(emitted.name, "AgentOS Notebook");
+  assert.equal(emitted.slug, "paperclip-notebook");
+  assert.equal(emitted.experimentalFeatureKey, "enablePaperclipNotebook");
+  assert.deepEqual(emitted.methods[0].defaults, notebook.methods[0].defaults);
+  assert.equal(emitted.methods[0].guidanceMd, "Use AgentOS with `Paperclip command` and [Paperclip upstream](https://paperclip.ing).");
+});
+
 test("provider overrides cannot add an unreviewed tool method", (t) => {
   const root = makeFixture();
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));

@@ -9,6 +9,7 @@ export const attentionApi = {
    */
   list: (companyId: string, options: AttentionFeedQuery = {}) => {
     const params = new URLSearchParams();
+    if (options.category) params.set("category", options.category);
     if (options.projectId) params.set("projectId", options.projectId);
     if (options.includeDismissed) params.set("includeDismissed", "true");
     if (options.archived) params.set("archived", "true");

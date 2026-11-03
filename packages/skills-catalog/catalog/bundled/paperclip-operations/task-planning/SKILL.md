@@ -1,6 +1,6 @@
 ---
 name: task-planning
-description: Write or revise a useful Paperclip plan with a clear outcome and verification. Use when a plan is requested or uncertainty needs resolving before execution.
+description: Write or revise a useful AgentOS plan with a clear outcome and verification. Use when a plan is requested or uncertainty needs resolving before execution.
 key: paperclipai/bundled/paperclip-operations/task-planning
 recommendedForRoles:
   - manager

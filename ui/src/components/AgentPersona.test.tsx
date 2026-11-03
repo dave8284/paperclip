@@ -35,7 +35,8 @@ describe("agent persona presentation", () => {
     expect(host.querySelectorAll("img")).toHaveLength(500);
     expect(host.querySelector("canvas")).toBeNull();
     expect(createCharacter).not.toHaveBeenCalled();
-    expect(host.querySelector("img")?.getAttribute("srcset")).toContain("size=24&scale=2");
+    expect(host.querySelector("img")?.getAttribute("src")).toBe("/agentos-orbs/bubblegum-sky.svg");
+    expect(host.querySelector("img")?.hasAttribute("srcset")).toBe(false);
     expect(host.querySelector("img")?.getAttribute("width")).toBe("24");
   });
   it("keeps reserved image dimensions and falls back to initials after an image error", async () => {
@@ -45,16 +46,14 @@ describe("agent persona presentation", () => {
     expect(host.textContent).toBe("CS");
     expect(host.querySelector('[role="img"]')?.getAttribute("aria-label")).toBe("Chief of Staff");
   });
-  it("allows only one live character, releases it offscreen and disposes on unmount", async () => {
+  it("uses employee orbs without ever starting the inherited mascot renderer", async () => {
     await act(async () => root.render(<><AgentCharacter appearance={appearance} /><AgentCharacter appearance={appearance} /></>));
     expect(createCharacter).not.toHaveBeenCalled();
     await show();
-    expect(createCharacter).toHaveBeenCalledTimes(1);
-    await act(async () => { observers[0]([{ isIntersecting: false }]); });
-    expect(renderer.destroy).toHaveBeenCalledTimes(1);
-    expect(createCharacter).toHaveBeenCalledTimes(2);
+    expect(createCharacter).not.toHaveBeenCalled();
+    expect(host.querySelectorAll('img[src="/agentos-orbs/bubblegum-sky.svg"]')).toHaveLength(2);
     await act(async () => root.render(null));
-    expect(renderer.destroy).toHaveBeenCalledTimes(2);
+    expect(renderer.destroy).not.toHaveBeenCalled();
   });
   it("uses only static images for reduced motion and an explicit still policy", async () => {
     reduced = true;

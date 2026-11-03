@@ -3,13 +3,24 @@ import { z } from "zod";
 import type { Db } from "@paperclipai/db";
 import { createAgentosPortfolioSchema, createAgentosEmployeeSchema, createAgentosAssignmentSchema, retireAgentosAssignmentSchema } from "@paperclipai/shared";
 import { agentosWorkforceService } from "../services/agentos-workforce.js";
-import { assertBoard, getActorInfo } from "./authz.js";
+import { assertBoard, assertCompanyAccess, getActorInfo } from "./authz.js";
 
 export function agentosWorkforceRoutes(db: Db) {
   const router = Router();
   const service = agentosWorkforceService(db);
-  router.use("/agentos/portfolios", (req, _res, next) => { assertBoard(req); next(); });
   const id = (value: unknown) => z.uuid().parse(value);
+  router.get("/companies/:companyId/workforce", async (req, res) => {
+    const companyId = id(req.params.companyId);
+    assertCompanyAccess(req, companyId);
+    res.json(await service.readCompany(req.actor, companyId));
+  });
+  router.post("/companies/:companyId/workforce/assignments", async (req, res) => {
+    const companyId = id(req.params.companyId);
+    assertCompanyAccess(req, companyId);
+    const input = createAgentosAssignmentSchema.omit({ companyId: true }).parse(req.body);
+    res.status(201).json(await service.assignCompany(req.actor, getActorInfo(req), companyId, input));
+  });
+  router.use("/agentos/portfolios", (req, _res, next) => { assertBoard(req); next(); });
   router.get("/agentos/portfolios", async (req, res) => res.json(await service.list(req.actor)));
   router.post("/agentos/portfolios", async (req, res) => res.status(201).json(await service.create(req.actor, getActorInfo(req), createAgentosPortfolioSchema.parse(req.body))));
   router.get("/agentos/portfolios/:portfolioId", async (req, res) => res.json(await service.read(req.actor, id(req.params.portfolioId))));

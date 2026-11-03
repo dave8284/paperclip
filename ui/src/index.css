@@ -151,13 +151,13 @@ button.friday-work-task:hover, a.friday-work-task:hover { background: var(--card
 @plugin "@tailwindcss/typography";
 
 /* offline-recovery:start */
-.paperclip-offline {
-  --offline-background: #171716;
-  --offline-foreground: #fafafa;
-  --offline-muted: #a3a3a3;
-  --offline-control: #262626;
-  --offline-control-hover: #333333;
-  --offline-border: #404040;
+.agentos-offline {
+  --offline-background: #ffffff;
+  --offline-foreground: #263244;
+  --offline-muted: #637185;
+  --offline-control: #f5f5f9;
+  --offline-control-hover: #eeedf6;
+  --offline-border: #e4e3ed;
   --offline-focus: #6995ff;
   --offline-font: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --offline-space: 1.5rem;
@@ -167,12 +167,6 @@ button.friday-work-task:hover, a.friday-work-task:hover { background: var(--card
   --offline-title-size: 1.75rem;
   --offline-body-size: 0.9375rem;
   --offline-character-size: 9.6rem;
-  --offline-character-outer-start: #252525;
-  --offline-character-outer-end: #686c6e;
-  --offline-character-inner-start: #292929;
-  --offline-character-inner-end: #727679;
-  --offline-character-face: #333333;
-  --offline-character-tear: #f6fdff;
   --offline-content-width: 32rem;
   --offline-control-height: 2.75rem;
   --offline-radius: 0.5rem;
@@ -183,7 +177,7 @@ button.friday-work-task:hover, a.friday-work-task:hover { background: var(--card
   --offline-leading: 1.5;
   --offline-heading-leading: 1.25;
   --offline-tracking: -0.025em;
-  color-scheme: dark;
+  color-scheme: light;
   box-sizing: border-box;
   margin: 0;
   min-height: 100vh;
@@ -198,7 +192,7 @@ button.friday-work-task:hover, a.friday-work-task:hover { background: var(--card
   line-height: var(--offline-leading);
   text-align: center;
 }
-.paperclip-offline main {
+.agentos-offline main {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -206,23 +200,23 @@ button.friday-work-task:hover, a.friday-work-task:hover { background: var(--card
   width: 100%;
   max-width: var(--offline-content-width);
 }
-.paperclip-offline-message,
-.paperclip-offline-identity {
+.agentos-offline-message,
+.agentos-offline-identity {
   display: flex;
   flex-direction: column;
   align-items: center;
 }
-.paperclip-offline-message {
+.agentos-offline-message {
   gap: var(--offline-message-gap);
 }
-.paperclip-offline-identity {
+.agentos-offline-identity {
   gap: var(--offline-identity-gap);
 }
-.paperclip-offline-character {
+.agentos-offline-character {
   width: var(--offline-character-size);
   height: var(--offline-character-size);
 }
-.paperclip-offline h1 {
+.agentos-offline h1 {
   margin: 0;
   font-size: var(--offline-title-size);
   font-weight: var(--offline-weight);
@@ -230,12 +224,12 @@ button.friday-work-task:hover, a.friday-work-task:hover { background: var(--card
   letter-spacing: var(--offline-tracking);
   text-wrap: balance;
 }
-.paperclip-offline p {
+.agentos-offline p {
   margin: 0;
   color: var(--offline-muted);
   text-wrap: pretty;
 }
-.paperclip-offline button {
+.agentos-offline button {
   min-height: var(--offline-control-height);
   padding: var(--offline-copy-gap) var(--offline-space);
   border: var(--offline-stroke) solid var(--offline-border);
@@ -246,10 +240,10 @@ button.friday-work-task:hover, a.friday-work-task:hover { background: var(--card
   font-weight: var(--offline-weight);
   cursor: pointer;
 }
-.paperclip-offline button:hover {
+.agentos-offline button:hover {
   background: var(--offline-control-hover);
 }
-.paperclip-offline button:focus-visible {
+.agentos-offline button:focus-visible {
   outline: var(--offline-focus-width) solid var(--offline-focus);
   outline-offset: var(--offline-focus-offset);
 }
@@ -1848,41 +1842,7 @@ select:where(:not([multiple]):not(.appearance-none)):where(:not([size]), [size="
   animation: shimmer-text-slide 2.5s linear infinite;
 }
 
-.paperclip-thinking-icon {
-  transform-origin: 50% 50%;
-}
 
-@keyframes paperclip-thinking-draw {
-  0% {
-    stroke-dasharray: 0 85.717;
-    stroke-dashoffset: -85.717;
-    opacity: 1;
-    animation-timing-function: cubic-bezier(0.455, 0.03, 0.515, 0.955);
-  }
-  39.0625% {
-    stroke-dasharray: 85.717 85.717;
-    stroke-dashoffset: 0;
-    opacity: 1;
-    animation-timing-function: cubic-bezier(0.55, 0.055, 0.675, 0.19);
-  }
-  78.125% {
-    stroke-dasharray: 0 85.717;
-    stroke-dashoffset: 0;
-    opacity: 1;
-  }
-  78.225% {
-    opacity: 0;
-  }
-  100% {
-    stroke-dasharray: 0 85.717;
-    stroke-dashoffset: 0;
-    opacity: 0;
-  }
-}
-
-.paperclip-thinking-icon-path {
-  animation: paperclip-thinking-draw 1s linear infinite;
-}
 
 /* Muted variant (task-chat v7 activity rows): the sweep runs over the
    muted-foreground tier so live "Thinking…"/"Working…" labels stay subordinate
@@ -5508,38 +5468,19 @@ html:has(.design-proposal-theme) [data-canonical-toolbar] .collection-toolbar-ta
   .agentos-sidebar[data-expanded="true"] .agentos-sidebar-content { display: flex; }
 }
 
-/* Agent OS home settings: a quiet corner entry, separate from the transcript. */
-.agentos-app {
-  --agentos-home-utility-inset: 1rem;
-  --agentos-home-utility-reserve: 4.5rem;
-  --agentos-home-utility-size: .75rem;
-}
-.agentos-home-utilities {
-  position: fixed;
-  z-index: 20;
-  inset-inline-start: max(var(--agentos-home-utility-inset), env(safe-area-inset-left));
-  bottom: max(var(--agentos-home-utility-inset), env(safe-area-inset-bottom));
-}
-.agentos-home-utilities > button {
-  display: inline-flex;
-  align-items: center;
-  gap: .5rem;
-  min-height: 2.75rem;
-  padding: .5rem .75rem;
-  border: 0;
-  border-radius: var(--radius-lg);
-  background: var(--background);
-  color: var(--muted-foreground);
-  font-size: var(--agentos-home-utility-size);
-  box-shadow: none;
-  cursor: pointer;
-}
-.agentos-home-utilities > button > svg { width: 1rem; height: 1rem; }
-.agentos-home-utilities > button:hover { color: var(--foreground); background: var(--muted); }
-.agentos-home-utilities > button:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
-.agentos-app[data-home="true"] .agentos-friday-thread { padding-block-end: var(--agentos-home-utility-reserve); }
+
+/* AgentOS visual identity: Friday orbs replace inherited logo and mascot motion. */
+.agentos-route-loading { gap: 1rem; }
+.agentos-route-loading .friday-orb[data-compact="true"] { width: 6rem; height: 6rem; }
+.agentos-wordmark text { font-family: var(--font-sans); font-size: 25px; font-weight: 550; letter-spacing: -.04em; }
+.agent-cap-slot, .agent-cap-liquid, .agent-cap-online, .agent-cap-online-blue { animation: none; }
+.agent-cap-liquid { height: 100%; }
+.agent-cap-layer { transition: none; }
+
+/* Home remains a borderless left transcript; workspace discussion is an opaque panel. */
+.agentos-friday-thread[data-friday-docked="false"]:has(> .agentos-conversation-panel:not([hidden])) { padding-left: calc(.75rem * 1.1); }
+.agentos-conversation-panel[data-docked="true"] { background: var(--background); border: 1px solid var(--border); border-radius: 1.25rem; box-shadow: var(--agentos-panel-shadow); }
 @media (max-width: 767px) {
-  .agentos-app { --agentos-home-utility-inset: .5rem; }
-  .agentos-home-utilities { bottom: max(.5rem, env(safe-area-inset-bottom)); }
-  .agentos-app[data-home="true"] .agentos-conversation-panel { scroll-margin-block-end: var(--agentos-home-utility-reserve); }
+  .agentos-friday-thread[data-friday-docked="false"]:has(> .agentos-conversation-panel:not([hidden])) { padding-left: 1.1rem; }
+  .agentos-conversation-panel[data-docked="true"] { bottom: 7rem; max-height: calc(100dvh - 9rem); }
 }

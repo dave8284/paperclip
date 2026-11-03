@@ -1117,7 +1117,7 @@ export function CompanyImport() {
   );
 
   const localZipHelpText =
-    "Upload a .zip exported directly from Paperclip. Re-zipped archives created by Finder, Explorer, or other zip tools may not import correctly.";
+    "Upload a .zip exported directly from AgentOS. Re-zipped archives created by Finder, Explorer, or other zip tools may not import correctly.";
 
   useEffect(() => {
     setBreadcrumbs([
@@ -1693,8 +1693,8 @@ export function CompanyImport() {
         const available = nativeHarness ? runnerInstalled : adapterChoice === "openai_dot" ? dotAvailable : adapterChoice === "muse" ? museAvailable : nativeRunnerAvailable;
         if (!available && (availableAdapterTypes || !nativeHarness)) {
           availabilityWarning = nativeHarness
-            ? "Paperclip Runner is unavailable here. Choose a runner or another harness explicitly."
-            : `Paperclip Runner provider ${String(a.adapterConfig?.provider)} requires its experimental feature to be enabled. This import keeps its saved harness until you choose another one.`;
+            ? "AgentOS Runner is unavailable here. Choose a runner or another harness explicitly."
+            : `AgentOS Runner provider ${String(a.adapterConfig?.provider)} requires its experimental feature to be enabled. This import keeps its saved harness until you choose another one.`;
         }
       } else if (availableAdapterTypes && !availableAdapterTypes.has(a.adapterType)) {
         // The fallback must itself be installed: the CEO's adapter when it is,
@@ -1745,7 +1745,7 @@ export function CompanyImport() {
       if (configVals && (selectedType !== agent.adapterChoice || adapterConfigEditedSlugs.has(agent.slug))) {
         const provider = configVals.adapterSchemaValues?.provider;
         if (configVals.adapterType === "paperclip_runner" && provider !== undefined && !isPaperclipRunnerProvider(provider)) {
-          throw new Error(`Unknown Paperclip Runner provider ${String(provider)}. Keep the package configuration or explicitly choose another harness.`);
+          throw new Error(`Unknown AgentOS Runner provider ${String(provider)}. Keep the package configuration or explicitly choose another harness.`);
         }
         if (selectedType === "openai_dot" && configVals.adapterSchemaValues?.allowUnmeteredProvider !== true) {
           throw new Error("OpenAI Dot requires acknowledgement of external billing. Configure the Dot adapter and enable Allow externally billed provider.");
@@ -2004,7 +2004,7 @@ export function CompanyImport() {
         <div>
           <h2 className="text-base font-semibold">Import source</h2>
           <p className="text-xs text-muted-foreground mt-1">
-            Choose a GitHub repo or upload a local Paperclip zip package.
+            Choose a GitHub repo or upload a local AgentOS zip package.
           </p>
         </div>
 

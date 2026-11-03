@@ -44,7 +44,7 @@ it("keeps component names through the production bundle for React error traces",
     runInNewContext(code, scope);
     expect(scope.componentNames).toEqual(["DiagnosticComponent", "DiagnosticBoundary", "DiagnosticArrow"]);
     const worker = await readFile(path.join(root, "dist/sw.js"), "utf8");
-    expect(worker).toContain(".paperclip-offline");
+    expect(worker).toContain(".agentos-offline");
     expect(worker).not.toMatch(/__PAPERCLIP_/);
   } finally {
     await rm(root, { recursive: true, force: true });

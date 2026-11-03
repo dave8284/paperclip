@@ -6,6 +6,8 @@ import {
 import { api, detachInflightGet } from "./client";
 import { toolsApi } from "./tools";
 import { museInvitationsApi } from "./museInvitations";
+import { issuesApi } from "./issues";
+import { fridayApi } from "./friday";
 
 interface Deferred<T> {
   promise: Promise<T>;
@@ -42,6 +44,37 @@ afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
+
+it("preserves the native visibility and route header names across the product rebrand", async () => {
+  vi.stubGlobal("window", { location: { pathname: "/AGE/friday" } });
+  fetchMock.mockResolvedValue(jsonResponse({ ok: true }));
+  await api.get("/header-protocol");
+  const headers = fetchMock.mock.calls[0][1].headers as Headers;
+  expect(headers.has("X-Paperclip-Tab-Visible")).toBe(true);
+  expect(headers.get("X-Paperclip-Route")).toBe("/AGE/friday");
+  expect(headers.has("X-AgentOS-Tab-Visible")).toBe(false);
+  expect(headers.has("X-AgentOS-Route")).toBe(false);
+});
+
+for (const [name, read] of [
+  ["document", (signal: AbortSignal) => issuesApi.getDocument("cancel-display", "friday-display-current", { signal, cache: "no-store" })],
+  ["work", (signal: AbortSignal) => fridayApi.work("cancel-display", {}, { signal, cache: "no-store" })],
+] as const) {
+  it(`cancels a saved display's ${name} request and starts a new fetch on resume`, async () => {
+    const waiting = deferred<Response>();
+    fetchMock.mockReturnValueOnce(waiting.promise).mockResolvedValue(jsonResponse({ fresh: true }));
+    const controller = new AbortController();
+    const first = read(controller.signal);
+    const rejected = expect(first).rejects.toMatchObject({ name: "AbortError" });
+    const underlying = fetchMock.mock.calls[0][1].signal as AbortSignal;
+    expect(fetchMock.mock.calls[0][1].cache).toBe("no-store");
+    controller.abort(); await rejected;
+    expect(underlying.aborted).toBe(true);
+    await expect(read(new AbortController().signal)).resolves.toEqual({ fresh: true });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    waiting.resolve(jsonResponse({ stale: true }));
+  });
+}
 
 describe("tenant-session recovery", () => {
   it("loads anonymous Dot consent despite concurrent protected background probes", async () => {

@@ -132,7 +132,7 @@ export function AuthPage() {
           </div>
 
           <h1 className="text-xl font-semibold">
-            {mode === "sign_in" ? "Sign in to Agent OS" : "Create your Agent OS account"}
+            {mode === "sign_in" ? "Sign in to AgentOS" : "Create your AgentOS account"}
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
             {mode === "sign_in"

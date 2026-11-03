@@ -32,7 +32,7 @@ export function OperatingConnections() {
       {models.data?.connections.length === 0 && <p className="text-sm text-muted-foreground">No model account is connected. Connect an account and assign it through the agent settings before starting work.</p>}
       {models.data?.connections.map(connection => <div key={connection.grantId} className="flex flex-wrap justify-between gap-3 text-sm"><Link className="text-primary" to={`/apps/${connection.id}/permissions`}>{connection.name}</Link><span className="text-muted-foreground">{connection.provider} · {connection.status.replaceAll("_", " ")}{connection.isDefault ? " · Your default" : ""}</span></div>)}
       <div className="flex flex-wrap gap-4 text-sm"><Link className="text-primary" to="/apps/connect?source=openai">Connect OpenAI / Codex</Link><Link className="text-primary" to="/apps/connect?source=anthropic">Connect Anthropic / Claude</Link><Link className="text-primary" to="/agents">Configure agent accounts</Link></div>
-      <p className="text-xs text-muted-foreground">Account status is reported by Paperclip. Agent grants, runtime compatibility, and budget limits still determine whether a run can start.</p>
+      <p className="text-xs text-muted-foreground">Account status is reported by AgentOS. Agent grants, runtime compatibility, and budget limits still determine whether a run can start.</p>
     </CardContent></Card>
     {connections.isLoading && <p className="text-sm text-muted-foreground">Loading connections…</p>}
     {connections.data?.connections.length === 0 && <EmptyState icon={Plug} message="No connections configured yet. Connect accounts to make their capabilities available to your agents." />}

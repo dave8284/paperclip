@@ -383,7 +383,8 @@ export function companyRoutes(db: Db, storage?: StorageService, options?: Compan
     if (scope !== undefined && scope !== "accessible") {
       throw badRequest("scope must be a single accessible value when provided");
     }
-    const result = await svc.list();
+    const includeInternal = z.enum(["true", "false"]).optional().parse(req.query.includeInternal) === "true";
+    const result = (await svc.list()).filter(company => includeInternal || company.purpose !== "platform");
     // Navigation needs the same membership scope as company detail routes.
     // Instance admins can inspect the directory without membership, but that
     // visibility alone does not let them open a company's inbox or tasks.
@@ -405,11 +406,14 @@ export function companyRoutes(db: Db, storage?: StorageService, options?: Compan
       ? null
       : new Set(req.actor.companyIds ?? []);
     const stats = await svc.stats();
+    const includeInternal = z.enum(["true", "false"]).optional().parse(req.query.includeInternal) === "true";
+    const visibleIds = new Set((await svc.list()).filter(company => includeInternal || company.purpose !== "platform").map(company => company.id));
+    const visibleStats = Object.fromEntries(Object.entries(stats).filter(([companyId]) => visibleIds.has(companyId)));
     if (!allowed) {
-      res.json(stats);
+      res.json(visibleStats);
       return;
     }
-    const filtered = Object.fromEntries(Object.entries(stats).filter(([companyId]) => allowed.has(companyId)));
+    const filtered = Object.fromEntries(Object.entries(visibleStats).filter(([companyId]) => allowed.has(companyId)));
     res.json(filtered);
   });
 
@@ -1259,6 +1263,12 @@ export function companyRoutes(db: Db, storage?: StorageService, options?: Compan
     if (!existingCompany) {
       res.status(404).json({ error: "Company not found" });
       return;
+    }
+
+    if (body.purpose !== undefined) {
+      assertBoard(req);
+      const permission = await access.decide({ actor: req.actor, action: "users:manage_permissions", resource: { type: "company", companyId } });
+      if (!permission.allowed) throw forbidden("Company permission management is required to classify the platform context");
     }
 
     if (req.actor.type !== "agent") {

@@ -12,12 +12,17 @@ import { setFridayDisplaySelection } from "@/lib/friday-display-context";
 import { Button } from "./ui/button";
 
 export function fridayDecisionContext(item: AttentionItem, companyId: string) {
-  return `Company: ${companyId}. Project: ${item.project?.id ?? "company-wide"}. Decision: ${item.subject.title ?? item.id}. Attention record: ${item.id}. Native source (${item.sourceKind}): ${item.subject.href ?? item.subject.id}. Related task: ${item.relatedIssue?.href ?? item.relatedIssue?.id ?? "none"}. Reason: ${item.whyNow}. Re-read the source, consult the responsible project lead when more detail is needed, and preserve native permissions, approval requirements and revision checks.`;
+  return `Company: ${companyId}. Project: ${item.project?.id ?? "company-wide"}. Decision: ${item.subject.title ?? item.id}. Attention record: ${item.id}. Native source kind: ${item.sourceKind}; id: ${item.subject.id}; href: ${item.subject.href ?? "none"}. Related task id: ${item.relatedIssue?.id ?? item.subject.metadata?.issueId ?? "none"}; href: ${item.relatedIssue?.href ?? "none"}. Source updated: ${item.updatedAt ?? "re-read current revision"}. Proposal detail: ${JSON.stringify(item.detail ?? null)}. Reason: ${item.whyNow}. Re-read the full native proposal and its current revision before answering, explain the recommended course and impact, consult the responsible project lead when more detail is needed, and preserve native permissions, approval requirements and revision checks.`;
+}
+
+function selectDecision(item: AttentionItem, companyId: string) {
+  const taskId = item.relatedIssue?.id ?? (typeof item.subject.metadata?.issueId === "string" ? item.subject.metadata.issueId : undefined);
+  setFridayDisplaySelection(companyId, "attention", { decisionId: item.id, sourceKind: item.sourceKind, sourceId: item.subject.id, ...(item.project?.id ? { projectId: item.project.id } : {}), ...(taskId ? { taskId } : {}) });
 }
 
 export function useFridayAttention(companyId: string, projectId?: string, cursor?: string) {
-  return useQuery({ queryKey: [...queryKeys.attention(companyId), "friday", projectId ?? null, cursor ?? null],
-    queryFn: () => attentionApi.list(companyId, { projectId, cursor, limit: 50, sort: "decide" }), staleTime: 15_000 });
+  return useQuery({ queryKey: [...queryKeys.attention(companyId), "friday", "proposals", projectId ?? null, cursor ?? null],
+    queryFn: () => attentionApi.list(companyId, { category: "proposals", projectId, cursor, limit: 50, sort: "decide" }), staleTime: 15_000 });
 }
 
 export function FridayAttention({ companyId, projectId, agents, onProject, onAsk, compact = false, decisionId, assistantName = "Friday" }: {
@@ -42,16 +47,16 @@ export function FridayAttention({ companyId, projectId, agents, onProject, onAsk
     group.items.push(item); groups.set(key, group);
   }
   return <div className="space-y-4" aria-label="Project attention dashboard">
-    <div className="flex flex-wrap items-center justify-between gap-2"><div><h3 className="text-sm font-semibold">Needs your attention</h3><p className="text-xs text-muted-foreground">{feed.data && !feed.error ? `${feed.data.totalCount} current decisions and blockers` : "Reading current decisions…"}</p></div>
+    <div className="flex flex-wrap items-center justify-between gap-2"><div><h3 className="text-sm font-semibold">Ready for your decision</h3><p className="text-xs text-muted-foreground">{feed.data && !feed.error ? `${feed.data.totalCount} current decisions with a proposed course of action` : "Reading current decisions…"}</p></div>
       <Button variant="ghost" size="sm" onClick={() => void feed.refetch()}>Refresh</Button></div>
     {(feed.error || dismiss.error) && <p role="alert" className="text-sm text-destructive">{feed.error?.message ?? dismiss.error?.message}</p>}
-    {!feed.isPending && !feed.error && !items.length && <p className="text-sm text-muted-foreground">No decisions or blockers currently need your attention. New ones appear here automatically.</p>}
+    {!feed.isPending && !feed.error && !items.length && <p className="text-sm text-muted-foreground">No proposals currently need your decision. Work blockers remain in the Work view; Friday asks clarifying questions in your conversation.</p>}
     {[...groups].map(([key, group]) => <section key={key} className="space-y-2">
       <div className="flex items-center justify-between gap-2"><h4 className="text-xs font-medium text-muted-foreground">{group.name}</h4>{group.projectId && <Button variant="ghost" size="sm" onClick={() => onProject(group.projectId!)}>See project</Button>}</div>
       {group.items.map(item => <div key={item.id} className="rounded-lg border bg-background">
-        <AttentionQueueRow presentation="agentos" item={item} companyId={companyId} inlineDetail={expanded === item.id ? <DecisionContext item={item} companyId={companyId} onAsk={onAsk} /> : null} expanded={expanded === item.id} onToggleExpand={next => { setExpanded(current => current === next.id ? null : next.id); setFridayDisplaySelection(companyId, "attention", { decisionId: next.id, sourceId: next.subject.id, ...(next.relatedIssue?.id ? { taskId: next.relatedIssue.id } : {}) }); }}
+        <AttentionQueueRow presentation="agentos" item={item} companyId={companyId} inlineDetail={expanded === item.id ? <DecisionContext item={item} companyId={companyId} onAsk={onAsk} /> : null} expanded={expanded === item.id} onToggleExpand={next => { setExpanded(current => current === next.id ? null : next.id); selectDecision(next, companyId); }}
           onDismiss={item => { if (!dismiss.isPending) dismiss.mutate(item); }} agentMap={agentMap} agents={agents} currentUserId={session.data?.user?.id ?? session.data?.session?.userId ?? null} />
-        <div className="px-3 pb-2"><Button variant="ghost" size="sm" onClick={() => { setFridayDisplaySelection(companyId, "attention", { decisionId: item.id, sourceId: item.subject.id, ...(item.relatedIssue?.id ? { taskId: item.relatedIssue.id } : {}) }); onAsk(`Explain this decision and recommend the next step. ${fridayDecisionContext(item, companyId)}`); }}>Discuss with {assistantName}</Button></div>
+        <div className="px-3 pb-2"><Button variant="ghost" size="sm" onClick={() => { selectDecision(item, companyId); onAsk(`Explain this decision and recommend the next step. ${fridayDecisionContext(item, companyId)}`); }}>Discuss with {assistantName}</Button></div>
       </div>)}
     </section>)}
     {!compact && <div className="flex items-center justify-between gap-2"><Button variant="outline" size="sm" disabled={!cursors.length} onClick={() => { setCursors(value => value.slice(0, -1)); setExpanded(null); }}>Previous</Button><Button variant="outline" size="sm" disabled={!feed.data?.nextCursor || !!feed.error} onClick={() => { setCursors(value => [...value, feed.data!.nextCursor!]); setExpanded(null); }}>Next decisions</Button></div>}
@@ -64,7 +69,7 @@ function DecisionContext({ item, companyId, onAsk }: { item: AttentionItem; comp
   const task = useQuery({ queryKey: queryKeys.issues.detail(taskId ?? ""), queryFn: () => issuesApi.get(taskId!), enabled: !!taskId });
   const [alternative, setAlternative] = useState("");
   return <section className="space-y-4" aria-label="Decision context"><div><h3 className="text-sm font-semibold">Decision needed</h3><p className="mt-2 text-sm">{item.whyNow}</p></div>
-    <form className="space-y-2" onSubmit={event => { event.preventDefault(); if (!alternative.trim()) return; onAsk(`${fridayDecisionContext(item, companyId)} I want this alternative: ${alternative}. Do not treat a changed action as approval of the original.`); setAlternative(""); }}><label className="block text-sm">Suggest a different approach<textarea className="mt-2 w-full rounded-lg border bg-background p-3" value={alternative} onChange={event => setAlternative(event.target.value)} placeholder="Do it this way instead…" /></label><Button size="sm" variant="outline" disabled={!alternative.trim()}>Send instructions to Friday</Button><p className="text-xs text-muted-foreground">You can also speak to Friday about this decision. A changed proposal keeps its approval gate.</p></form>
+    <form className="space-y-2" onSubmit={event => { event.preventDefault(); if (!alternative.trim()) return; selectDecision(item, companyId); onAsk(`${fridayDecisionContext(item, companyId)} I want this alternative: ${alternative}. Do not treat a changed action as approval of the original.`); setAlternative(""); }}><label className="block text-sm">Suggest a different approach<textarea className="mt-2 w-full rounded-lg border bg-background p-3" value={alternative} onChange={event => setAlternative(event.target.value)} placeholder="Do it this way instead…" /></label><Button size="sm" variant="outline" disabled={!alternative.trim()}>Send instructions to Friday</Button><p className="text-xs text-muted-foreground">You can also speak to Friday about this decision. A changed proposal keeps its approval gate.</p></form>
     {task.error && <p role="alert" className="text-destructive">{task.error.message}</p>}{task.data?.companyId === companyId && <ApplicationTaskInspector task={task.data} />}
   </section>;
 }

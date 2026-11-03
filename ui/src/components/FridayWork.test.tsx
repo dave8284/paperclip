@@ -36,6 +36,7 @@ it("shows only related employees in a project map but includes available staff i
   try {
     const render = async (projectId?: string) => act(async () => root.render(<QueryClientProvider client={client}><FridayWork companyId="company" agents={[]} view={{ panel: "work", mode: "graph", projectId }} navigate={vi.fn()} onAsk={vi.fn()} /></QueryClientProvider>));
     await render("project");
+    expect(host.textContent).not.toContain("Discuss with");
     expect(host.querySelectorAll('g[data-kind="agent"]')).toHaveLength(1);
     expect(host.querySelector('g[data-kind="agent"]')?.textContent).toContain("Project lead");
     await render();

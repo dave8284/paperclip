@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "packageName": "@paperclipai/skills-catalog",
   "packageVersion": "0.3.1",
-  "generatedAt": "2026-10-27T10:33:01.576Z",
+  "generatedAt": "2026-11-03T10:45:37.462Z",
   "skills": [
     {
       "id": "paperclipai:bundled:docs:doc-maintenance",
@@ -45,7 +45,7 @@
       "category": "paperclip-operations",
       "slug": "agentos-context-review",
       "name": "agentos-context-review",
-      "description": "Keep Agent OS delegation scoped and review substantial plans with fresh Elephant–Goldfish reviewers. Use for cross-team handoffs, design uncertainty or evidence-backed capability lessons; ordinary clear tasks do not need a review ceremony.",
+      "description": "Keep AgentOS delegation scoped and review substantial plans with fresh Elephant–Goldfish reviewers. Use for cross-team handoffs, design uncertainty or evidence-backed capability lessons; ordinary clear tasks do not need a review ceremony.",
       "path": "catalog/bundled/paperclip-operations/agentos-context-review",
       "entrypoint": "SKILL.md",
       "trustLevel": "markdown_only",
@@ -70,20 +70,26 @@
         {
           "path": "SKILL.md",
           "kind": "skill",
-          "sizeBytes": 4363,
-          "sha256": "2b50e3d47eb5ec79982a94aa87cc49e06290c6bc889740b29aa9d82df5247b6f"
+          "sizeBytes": 4679,
+          "sha256": "5c6f687bb7af94e3292f664945b280d113d0754d6dd9a1f23e0db9762b090fb1"
         },
         {
           "path": "references/evidence-and-learning.md",
           "kind": "reference",
-          "sizeBytes": 3801,
-          "sha256": "851cea253e84b56f49ce0850ded1393fdc90658e988d7e46273b17820acda9f9"
+          "sizeBytes": 4180,
+          "sha256": "1ac8e177d94ce7242814f8d8ed5fc20e0417080bad6d62b46d905ca497312600"
+        },
+        {
+          "path": "references/qualification.md",
+          "kind": "reference",
+          "sizeBytes": 5564,
+          "sha256": "81fab23962ed40ca6801ef7c2aabde3bd5353e2a292aa788830352c266ce44a2"
         },
         {
           "path": "references/review-dispatch.md",
           "kind": "reference",
-          "sizeBytes": 3851,
-          "sha256": "9662bce41dd1b40d41aba4598a6df2a4d76b13c81ed9aa660e6550cb78e09b99"
+          "sizeBytes": 4234,
+          "sha256": "fddfcceb9f3e0901b08b47e32e72b675c3ac232f875f5667268f324a95c2f0b1"
         },
         {
           "path": "references/scope-and-handoffs.md",
@@ -94,8 +100,8 @@
         {
           "path": "references/source.md",
           "kind": "reference",
-          "sizeBytes": 1487,
-          "sha256": "721c5c59cec1edc017bbbdf28172e954df2dd904dc533f60c6d8ca658e690769"
+          "sizeBytes": 2346,
+          "sha256": "63302190ba98c42022fa5cd29c8c6206a624be602df0897850781fce2defa07b"
         },
         {
           "path": "references/upstream/agents/comprehension.md",
@@ -152,7 +158,7 @@
           "sha256": "0a01013bd363a8d744f8372b65495892360d7339e4e35c767003ae38f48e6799"
         }
       ],
-      "contentHash": "sha256:0561606bffadf47b5cff5c45c217a0f77c394255b77941b572064abf9b7e3b03"
+      "contentHash": "sha256:b6653beff8986eabf0a443745700cdc79ee7df0beef128743ae7c25402ae3cc8"
     },
     {
       "id": "paperclipai:bundled:paperclip-operations:issue-triage",
@@ -161,7 +167,7 @@
       "category": "paperclip-operations",
       "slug": "issue-triage",
       "name": "issue-triage",
-      "description": "Triage Paperclip inbox issues that are stale, blocked, in-review, or assigned-but-not-progressing, and decide a single next action per issue (resume, reassign, unblock, escalate, or close).",
+      "description": "Triage AgentOS inbox issues that are stale, blocked, in-review, or assigned-but-not-progressing, and decide a single next action per issue (resume, reassign, unblock, escalate, or close).",
       "path": "catalog/bundled/paperclip-operations/issue-triage",
       "entrypoint": "SKILL.md",
       "trustLevel": "markdown_only",
@@ -183,11 +189,11 @@
         {
           "path": "SKILL.md",
           "kind": "skill",
-          "sizeBytes": 4042,
-          "sha256": "df5bdc8bf5e017b7ba5f70a4b5323fad51d0c323278f386580f26cf43ad09160"
+          "sizeBytes": 4040,
+          "sha256": "b627b72db4a9f9d716067a1148996eed674e2bbaa891e6421d9e111959d324ad"
         }
       ],
-      "contentHash": "sha256:88dc13560371fb364963782cb4f6eeb4090fcde92ee3774479428ed6b90e11c1"
+      "contentHash": "sha256:ca66e3ada1543ce722b72e577e1746c5ff61a0c6b31a11c5d28c141f94aa5ac9"
     },
     {
       "id": "paperclipai:bundled:paperclip-operations:reflection-coach",
@@ -218,11 +224,11 @@
         {
           "path": "SKILL.md",
           "kind": "skill",
-          "sizeBytes": 12028,
-          "sha256": "083d5fa8dc43c3ce7747e89c1afb6f6f42d0603a31808bffc5f8e56735f2d865"
+          "sizeBytes": 12026,
+          "sha256": "4b079af8f6fdc13f186dc2b0afca7d242b699d1fd49460e6e551c2e07e1bcd78"
         }
       ],
-      "contentHash": "sha256:f2592d81f616628a3eba92636616424f2eed82ec22bb504240a58f6be115e407"
+      "contentHash": "sha256:4be8432d04db71a68ed1d7fb5573354f8adbfd4014836140d3addde289e59e59"
     },
     {
       "id": "paperclipai:bundled:paperclip-operations:status-card-query",
@@ -231,7 +237,7 @@
       "category": "paperclip-operations",
       "slug": "status-card-query",
       "name": "status-card-query",
-      "description": "Create and maintain agent-authored Paperclip status cards, or compile a prose interest prompt into bounded CompanySearchQuery objects and write the first summary from the assigned Summarizer run.",
+      "description": "Create and maintain agent-authored AgentOS status cards, or compile a prose interest prompt into bounded CompanySearchQuery objects and write the first summary from the assigned Summarizer run.",
       "path": "catalog/bundled/paperclip-operations/status-card-query",
       "entrypoint": "SKILL.md",
       "trustLevel": "markdown_only",
@@ -253,11 +259,11 @@
         {
           "path": "SKILL.md",
           "kind": "skill",
-          "sizeBytes": 6368,
-          "sha256": "0c6140f51d503cbadc98723ce54c0def48e7e31ea159b0935b8ad6369291498a"
+          "sizeBytes": 6364,
+          "sha256": "3357071a44ddf12481b7e25c83fd1a0f112292f403c32854b886777b8a41dcd2"
         }
       ],
-      "contentHash": "sha256:2b6e53bf8491f027afdbd6961ad84f677cfd385a0a6a73616ea84111ca8886ed"
+      "contentHash": "sha256:0c023ff4393eee0739e4582f52600796cb10487712225adf5988cba0fcdc3b32"
     },
     {
       "id": "paperclipai:bundled:paperclip-operations:summarize-status",
@@ -266,7 +272,7 @@
       "category": "paperclip-operations",
       "slug": "summarize-status",
       "name": "summarize-status",
-      "description": "Write a short, colloquial summary for a Paperclip summary slot: open with the 1–3 specific, concrete actions the reader needs to take right now to unblock the work, then a brief plain-language status, streaming progress as it works.",
+      "description": "Write a short, colloquial summary for an AgentOS summary slot: open with the 1–3 specific, concrete actions the reader needs to take right now to unblock the work, then a brief plain-language status, streaming progress as it works.",
       "path": "catalog/bundled/paperclip-operations/summarize-status",
       "entrypoint": "SKILL.md",
       "trustLevel": "markdown_only",
@@ -288,11 +294,11 @@
         {
           "path": "SKILL.md",
           "kind": "skill",
-          "sizeBytes": 8877,
-          "sha256": "4cb3d177f5d16e3cc2052d2f80e7fb245ab95e79c1e947abdc84cd4ee3d8c61e"
+          "sizeBytes": 8871,
+          "sha256": "1556c952025eb3f35337e18db90d42658889ebccf98e2aea47262980c62fb8d5"
         }
       ],
-      "contentHash": "sha256:3e49ee2b8d83d1371fb0f59197bb96c46b64f722540405f46d4a5a756fbe1b89"
+      "contentHash": "sha256:90abf211ed38eb6375b90c5d88c247bfc2cfb5643e3a95b20de398daedb2e302"
     },
     {
       "id": "paperclipai:bundled:paperclip-operations:task-planning",
@@ -301,7 +307,7 @@
       "category": "paperclip-operations",
       "slug": "task-planning",
       "name": "task-planning",
-      "description": "Write or revise a useful Paperclip plan with a clear outcome and verification. Use when a plan is requested or uncertainty needs resolving before execution.",
+      "description": "Write or revise a useful AgentOS plan with a clear outcome and verification. Use when a plan is requested or uncertainty needs resolving before execution.",
       "path": "catalog/bundled/paperclip-operations/task-planning",
       "entrypoint": "SKILL.md",
       "trustLevel": "markdown_only",
@@ -323,11 +329,11 @@
         {
           "path": "SKILL.md",
           "kind": "skill",
-          "sizeBytes": 1517,
-          "sha256": "48d6501d6ef481d5b19d0e0cd1507436d1cee1acf155e5038e1f0b2f0230d9e1"
+          "sizeBytes": 1515,
+          "sha256": "8aa2775d9ebad4f28abb207541adbbc8fb3217a72ba36e3bd907719b739cdd11"
         }
       ],
-      "contentHash": "sha256:a1724bde58be85c445590aeaa2f5f2f1de2bee24fe62f07fa3b579c6e4b28e6d"
+      "contentHash": "sha256:958b67427794d9bfea04fe5f29d4308b5b3abc5208001c349e47a71bfa904f34"
     },
     {
       "id": "paperclipai:bundled:product:paperclip-capsules",
@@ -336,7 +342,7 @@
       "category": "product",
       "slug": "paperclip-capsules",
       "name": "paperclip-capsules",
-      "description": "Generate, implement, or review Paperclip capsule visuals. Use for capsule art, agent capsules, heartbeat status capsules, identicons, capsule banks, or brand-usage validation.",
+      "description": "Archived upstream capsule artwork reference. AgentOS uses particle orbs; do not apply this legacy capsule brand to AgentOS displays.",
       "path": "catalog/bundled/product/paperclip-capsules",
       "entrypoint": "SKILL.md",
       "trustLevel": "markdown_only",
@@ -361,8 +367,8 @@
         {
           "path": "SKILL.md",
           "kind": "skill",
-          "sizeBytes": 5831,
-          "sha256": "dd659ccb46e105336eb00fbe689b1d5531347fc69493c3156390d40ee413c93e"
+          "sizeBytes": 6144,
+          "sha256": "e09a3a8f245d0b08d3ffc334b3c503cbb9c10915bde54e773fe87120ec49e68d"
         },
         {
           "path": "references/generator-workflows.md",
@@ -389,7 +395,7 @@
           "sha256": "be1f2eccf96b4d2deefe45b3bc1dd0a3597278472c2ffedadc43c57161e9103d"
         }
       ],
-      "contentHash": "sha256:a2b26cf6895affeeb70c85567a061094450a59bd3c4fdcf28ee65858599ac12c"
+      "contentHash": "sha256:7168c971841147d70d397c888011ba9cdde8613a13999cca15d91228d831303b"
     },
     {
       "id": "paperclipai:bundled:product:wireframe",
@@ -595,11 +601,11 @@
         {
           "path": "SKILL.md",
           "kind": "skill",
-          "sizeBytes": 6945,
-          "sha256": "d745cca96350518fabae14f5c407d779e1df2c5d091b5b4a5c55bb888b569e5f"
+          "sizeBytes": 6935,
+          "sha256": "9f47596f544e161c0b61a9fa58139afd9c08124db9dc5e92d013033e503010ac"
         }
       ],
-      "contentHash": "sha256:efe8ea89b552df95222609867c9c75f1b40e16f457d34e7e4a124f54daa33efa"
+      "contentHash": "sha256:afae6ba899f58780944e7e84cc96ab568f196d589dbba36137c376f31ed2f9ef"
     },
     {
       "id": "paperclipai:optional:content:simplified-english",
@@ -644,7 +650,7 @@
       "category": "finance",
       "slug": "ramp",
       "name": "ramp",
-      "description": "Fetch and follow Ramp's published agent playbooks inside Paperclip, with mandatory approval gates for spend, incorporation, cards, account setup, and other financial actions.",
+      "description": "Fetch and follow Ramp's published agent playbooks inside AgentOS, with mandatory approval gates for spend, incorporation, cards, account setup, and other financial actions.",
       "path": "catalog/optional/finance/ramp",
       "entrypoint": "SKILL.md",
       "trustLevel": "markdown_only",
@@ -668,11 +674,11 @@
         {
           "path": "SKILL.md",
           "kind": "skill",
-          "sizeBytes": 7016,
-          "sha256": "698cd69ebf2f2481ed83c8e9477b56ae78288cc4c751d7d35f649ff2483802a3"
+          "sizeBytes": 6985,
+          "sha256": "f7e973fd7d77abca1c37edc4a4e9d8691375269861898667bbab13db564fb97b"
         }
       ],
-      "contentHash": "sha256:276d85e98a4732f278204e26438aa95fde158dd2d15c1e427c4c7c7d492e769d"
+      "contentHash": "sha256:66c122591eb5b7302d508b0953f6f1347646757ccaec9611cf5ec22f3a6e65c6"
     },
     {
       "id": "paperclipai:optional:product:design-critique",
@@ -1237,7 +1243,7 @@
       "category": "software-development",
       "slug": "prepare-mcp-integration",
       "name": "prepare-mcp-integration",
-      "description": "Prepare MCP/vendor integrations through cited research, a content PR, exact-revision human approval, and one governed Paperclip connector PR per approved connection. Use for new integration research and delivery; not for ad hoc connector coding that bypasses the playbooks.",
+      "description": "Prepare MCP/vendor integrations through cited research, a content PR, exact-revision human approval, and one governed AgentOS connector PR per approved connection. Use for new integration research and delivery; not for ad hoc connector coding that bypasses the playbooks.",
       "path": "catalog/optional/software-development/prepare-mcp-integration",
       "entrypoint": "SKILL.md",
       "trustLevel": "markdown_only",
@@ -1265,17 +1271,17 @@
         {
           "path": "SKILL.md",
           "kind": "skill",
-          "sizeBytes": 12409,
-          "sha256": "5278d288a0cbfe10fdda4ef3d99cf61e6ed068f4b6c1282406b0e001c9f45253"
+          "sizeBytes": 12380,
+          "sha256": "d6b7ae395b68eb8ac294eb0364427101709c76eaee257a2b9644701d6645144a"
         },
         {
           "path": "examples/notion-mcp-research-gate.md",
           "kind": "markdown",
-          "sizeBytes": 1900,
-          "sha256": "944b13ac67c06c65643eb236e856f1479106749861535648d29334f84cf1b50b"
+          "sizeBytes": 1894,
+          "sha256": "283d9f4e658c230ab953eedb3d2f27d3805c92921de79757e6887ea64c9119d7"
         }
       ],
-      "contentHash": "sha256:84f2a28d7d004393719684f2b435e5ee01ddc58591e0dfeb73d72c7605db7f49"
+      "contentHash": "sha256:1e616734979941bddb5d3496882c5cc24709b4855d7c8c1798c702fa671b83a9"
     }
   ]
 }

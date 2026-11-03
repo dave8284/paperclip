@@ -3,12 +3,13 @@ import express from "express";
 import request from "supertest";
 import { and, eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { agents, agentApiKeys, companies, companyMemberships, principalPermissionGrants, activityLog, agentosAssignments, agentosEmployees, createDb } from "@paperclipai/db";
+import { agents, agentApiKeys, authUsers, companies, companyMemberships, companyOperatingProfiles, principalPermissionGrants, activityLog, agentosAssignments, agentosEmployees, createDb } from "@paperclipai/db";
 import { startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
 import { errorHandler } from "../middleware/index.js";
 import { agentosWorkforceRoutes } from "../routes/agentos-workforce.js";
 import { deleteCompany } from "../services/company-deletion.js";
 import { deleteAgentDependencies } from "../services/agent-deletion.js";
+import { accessService } from "../services/access.js";
 
 describe("Agent OS shared workforce", () => {
   let database: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>;
@@ -38,6 +39,158 @@ describe("Agent OS shared workforce", () => {
     for (const assignment of assignments) await request(api).post(`${base}/assignments`).send(assignment).expect(201);
     return { one, two, first, second, owner, actor, api, root, base, portfolioInput, employeeInput, assignments };
   }
+  async function delegatedSeed(coordinator = false) {
+    const f = await seed(), now = new Date();
+    await db.insert(authUsers).values({ id: f.owner, name: "Portfolio owner", email: `${f.owner}@example.test`, createdAt: now, updatedAt: now });
+    const [manager] = await db.insert(agents).values({ companyId: f.two.id, name: coordinator ? "Friday" : "CEO", role: coordinator ? "general" : "ceo" }).returning();
+    await db.insert(companyMemberships).values({ companyId: f.two.id, principalType: "agent", principalId: manager.id, membershipRole: "member", status: "active" });
+    for (const principal of [{ principalType: "agent" as const, principalId: manager.id }, { principalType: "user" as const, principalId: f.owner }]) {
+      await db.insert(principalPermissionGrants).values((["applications:manage", "agents:create", "agents:configure"] as const).map(permissionKey => ({ companyId: f.two.id, ...principal, permissionKey })));
+    }
+    if (coordinator) await db.insert(companyOperatingProfiles).values({ companyId: f.two.id, fridayAgentId: manager.id });
+    const delegate: Express.Request["actor"] = { type: "agent", source: "agent_jwt", companyId: f.two.id, agentId: manager.id,
+      onBehalfOfUserId: f.owner, onBehalfOfMemberships: [{ companyId: f.two.id, membershipRole: "owner", status: "active" }] };
+    const [target] = await db.insert(agents).values({ companyId: f.two.id, name: "Approved specialist" }).returning();
+    const employee = { id: randomUUID(), name: "New shared specialist" };
+    await request(f.api).post(`${f.base}/employees`).send(employee).expect(201);
+    return { ...f, manager, delegate, delegated: app(delegate), target, employee, companyPath: `/api/companies/${f.two.id}/workforce`,
+      binding: { id: randomUUID(), employeeId: employee.id, agentId: target.id } };
+  }
+  it("lets a delegated CEO read and bind only its company's approved workforce without portfolio authority", async () => {
+    const f = await delegatedSeed();
+    const view = await request(f.delegated).get(f.companyPath).expect(200);
+    expect(view.body.assignments.map((row: { assignment: { agentId: string } }) => row.assignment.agentId)).toEqual([f.second.id]);
+    expect(JSON.stringify(view.body)).not.toContain(f.one.id);
+    expect(JSON.stringify(view.body)).not.toContain("never-in-the-portfolio");
+    for (let attempt = 0; attempt < 2; attempt++) await request(f.delegated).post(`${f.companyPath}/assignments`).send(f.binding).expect(201);
+    const audit = await db.select().from(activityLog).where(and(eq(activityLog.entityId, f.binding.id), eq(activityLog.action, "agentos.assignment_created")));
+    expect(audit).toHaveLength(1); expect(audit[0].actorId).toBe(f.manager.id);
+    expect(audit[0].companyId).toBe(f.two.id);
+    await request(f.delegated).get(f.base).expect(403);
+    await request(f.delegated).post(`${f.base}/assignments/${f.assignments[1].id}/retire`).send({ expectedRevision: 1, reason: "Not delegated" }).expect(403);
+    await request(f.delegated).get(`/api/companies/${f.one.id}/workforce`).expect(403);
+    expect((await request(f.api).get(f.base).expect(200)).body.assignments.find((row: { id: string }) => row.id === f.assignments[0].id).status).toBe("active");
+  });
+  it("requires the current coordinator binding or CEO role, not an agent name", async () => {
+    const f = await delegatedSeed(true);
+    await request(f.delegated).get(f.companyPath).expect(200);
+    await db.update(companyOperatingProfiles).set({ fridayAgentId: null }).where(eq(companyOperatingProfiles.companyId, f.two.id));
+    await request(f.delegated).get(f.companyPath).expect(403);
+    await request(f.delegated).post(`${f.companyPath}/assignments`).send(f.binding).expect(403);
+  });
+  it("rechecks responsible-owner approval, membership, active manager and restricted key boundaries", async () => {
+    const f = await delegatedSeed();
+    await request(app({ ...f.delegate, onBehalfOfUserId: null })).get(f.companyPath).expect(403);
+    await request(app({ ...f.delegate, onBehalfOfUserId: randomUUID() })).get(f.companyPath).expect(403);
+    await request(app({ ...f.delegate, keyScope: { kind: "skill_test", issueId: randomUUID() } })).get(f.companyPath).expect(403);
+    await db.update(agents).set({ status: "paused" }).where(eq(agents.id, f.manager.id));
+    await request(f.delegated).get(f.companyPath).expect(403);
+    await db.update(agents).set({ status: "idle" }).where(eq(agents.id, f.manager.id));
+    await db.update(authUsers).set({ approvalStatus: "suspended" }).where(eq(authUsers.id, f.owner));
+    await request(f.delegated).get(f.companyPath).expect(403);
+    await db.update(authUsers).set({ approvalStatus: "approved" }).where(eq(authUsers.id, f.owner));
+    await db.update(companyMemberships).set({ status: "inactive" }).where(and(eq(companyMemberships.principalId, f.owner), eq(companyMemberships.companyId, f.one.id)));
+    await request(f.delegated).get(f.companyPath).expect(404);
+    await db.update(companyMemberships).set({ status: "active" }).where(and(eq(companyMemberships.principalId, f.owner), eq(companyMemberships.companyId, f.one.id)));
+    // The actor deliberately retains the prior membership snapshot.
+    await db.update(companyMemberships).set({ status: "inactive" }).where(and(eq(companyMemberships.principalId, f.owner), eq(companyMemberships.companyId, f.two.id)));
+    await request(f.delegated).post(`${f.companyPath}/assignments`).send(f.binding).expect(403);
+    expect(await db.select().from(agentosAssignments).where(eq(agentosAssignments.id, f.binding.id))).toHaveLength(0);
+  });
+  it("requires native staffing/configuration grants and rejects foreign or unapproved targets", async () => {
+    const f = await delegatedSeed();
+    await request(f.delegated).post(`${f.companyPath}/assignments`).send({ ...f.binding, companyId: f.one.id }).expect(400);
+    await request(f.delegated).post(`${f.companyPath}/assignments`).send({ ...f.binding, agentId: f.first.id }).expect(404);
+    await db.update(agents).set({ status: "pending_approval" }).where(eq(agents.id, f.target.id));
+    await request(f.delegated).post(`${f.companyPath}/assignments`).send(f.binding).expect(409);
+    await db.update(agents).set({ status: "idle" }).where(eq(agents.id, f.target.id));
+    await db.delete(principalPermissionGrants).where(and(eq(principalPermissionGrants.principalId, f.manager.id), eq(principalPermissionGrants.permissionKey, "agents:configure")));
+    await request(f.delegated).post(`${f.companyPath}/assignments`).send(f.binding).expect(404);
+    await db.delete(principalPermissionGrants).where(and(eq(principalPermissionGrants.principalId, f.manager.id), eq(principalPermissionGrants.permissionKey, "applications:manage")));
+    await request(f.delegated).get(f.companyPath).expect(403);
+  });
+  it("honors target-scoped configure grants for both the delegate and responsible owner", async () => {
+    const f = await delegatedSeed(), access = accessService(db);
+    for (const principal of [{ type: "agent" as const, id: f.manager.id }, { type: "user" as const, id: f.owner }]) {
+      await access.setPrincipalPermission(f.two.id, principal.type, principal.id, "agents:configure", true, f.owner, { agentIds: [f.target.id] });
+    }
+    await request(f.delegated).post(`${f.companyPath}/assignments`).send(f.binding).expect(201);
+    // An operator's direct request uses the same exact target scope.
+    await request(f.api).post(`${f.companyPath}/assignments`).send(f.binding).expect(201);
+    const [excluded] = await db.insert(agents).values({ companyId: f.two.id, name: "Outside scoped configure grant" }).returning();
+    await request(f.delegated).post(`${f.companyPath}/assignments`).send({ ...f.binding, id: randomUUID(), agentId: excluded.id }).expect(404);
+    await access.setPrincipalPermission(f.two.id, "agent", f.manager.id, "agents:configure", true, f.owner);
+    // The caller is now broad, but cannot exceed its responsible owner's scope.
+    await request(f.delegated).post(`${f.companyPath}/assignments`).send({ ...f.binding, id: randomUUID(), agentId: excluded.id }).expect(404);
+    await access.setPrincipalPermission(f.two.id, "user", f.owner, "agents:configure", true, f.owner, { agentIds: [excluded.id] });
+    await request(f.delegated).post(`${f.companyPath}/assignments`).send(f.binding).expect(404);
+  });
+  it("rejects authority revoked while binding waits on the target agent", async () => {
+    const f = await delegatedSeed();
+    let release!: () => void, locked!: (pid: number) => void;
+    const releaseLock = new Promise<void>(resolve => { release = resolve; });
+    const targetLocked = new Promise<number>(resolve => { locked = resolve; });
+    const holder = db.transaction(async tx => {
+      await tx.select({ id: agents.id }).from(agents).where(eq(agents.id, f.target.id)).for("update");
+      const [row] = await tx.execute<{ pid: number }>(sql`select pg_backend_pid() as pid`);
+      locked(row.pid);
+      await releaseLock;
+    });
+    const holderPid = await targetLocked;
+    const binding = request(f.delegated).post(`${f.companyPath}/assignments`).send(f.binding).then(response => response);
+    try {
+      await expect.poll(async () => {
+        const [row] = await db.execute<{ waiting: boolean }>(sql`select exists(select 1 from pg_stat_activity waiter
+          where waiter.datname=current_database() and ${holderPid}=any(pg_blocking_pids(waiter.pid))) as waiting`);
+        return row.waiting;
+      }, { timeout: 5000, interval: 25 }).toBe(true);
+      await accessService(db).setPrincipalPermission(f.two.id, "agent", f.manager.id, "applications:manage", false, f.owner);
+      release(); await holder;
+      expect((await binding).status).toBe(403);
+      expect(await db.select().from(agentosAssignments).where(eq(agentosAssignments.id, f.binding.id))).toHaveLength(0);
+      expect(await db.select().from(activityLog).where(eq(activityLog.entityId, f.binding.id))).toHaveLength(0);
+    } finally { release(); await holder; await binding; }
+  });
+  it("holds native authority through the binding and durable audit commit", async () => {
+    const f = await delegatedSeed();
+    // Hold the actual SQL audit boundary after authorization and assignment
+    // insertion, then observe native grant revocation waiting on the binder.
+    await db.execute(sql`create function agentos_test_binding_barrier() returns trigger language plpgsql as $$ begin if NEW.action = 'agentos.assignment_created' then perform pg_advisory_xact_lock(830811031); end if; return NEW; end $$`);
+    await db.execute(sql`create trigger agentos_test_binding_barrier before insert on activity_log for each row execute function agentos_test_binding_barrier()`);
+    let release!: () => void, locked!: (pid: number) => void;
+    const releaseLock = new Promise<void>(resolve => { release = resolve; });
+    const barrierLocked = new Promise<number>(resolve => { locked = resolve; });
+    const holder = db.transaction(async tx => {
+      await tx.execute(sql`select pg_advisory_xact_lock(830811031)`);
+      const [row] = await tx.execute<{ pid: number }>(sql`select pg_backend_pid() as pid`);
+      locked(row.pid); await releaseLock;
+    });
+    const holderPid = await barrierLocked;
+    const binding = request(f.delegated).post(`${f.companyPath}/assignments`).send(f.binding).then(response => response);
+    let revocation: Promise<void> | undefined;
+    try {
+      let binderPid: number | undefined;
+      await expect.poll(async () => {
+        const [row] = await db.execute<{ pid: number }>(sql`select waiter.pid from pg_stat_activity waiter
+          where waiter.datname=current_database() and ${holderPid}=any(pg_blocking_pids(waiter.pid))`);
+        binderPid = row?.pid; return !!binderPid;
+      }, { timeout: 5000, interval: 25 }).toBe(true);
+      revocation = accessService(db).setPrincipalPermission(f.two.id, "agent", f.manager.id, "applications:manage", false, f.owner);
+      await expect.poll(async () => {
+        const [row] = await db.execute<{ waiting: boolean }>(sql`select exists(select 1 from pg_stat_activity waiter
+          where waiter.datname=current_database() and ${binderPid!}=any(pg_blocking_pids(waiter.pid))) as waiting`);
+        return row.waiting;
+      }, { timeout: 5000, interval: 25 }).toBe(true);
+      release(); await holder;
+      expect((await binding).status).toBe(201); await revocation;
+      await request(f.delegated).get(f.companyPath).expect(403);
+      expect(await db.select().from(activityLog).where(and(eq(activityLog.entityId, f.binding.id), eq(activityLog.action, "agentos.assignment_created")))).toHaveLength(1);
+    } finally {
+      release(); await holder; await binding; await revocation;
+      await db.execute(sql`drop trigger agentos_test_binding_barrier on activity_log`);
+      await db.execute(sql`drop function agentos_test_binding_barrier()`);
+    }
+  });
   it("shares identity across companies, with narrow company runtime data and idempotent creation", async () => {
     const f = await seed();
     const result = await request(f.api).get(f.base).expect(200);

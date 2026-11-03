@@ -8,6 +8,7 @@ import { and, count, eq, gte, inArray, isNull, lt, notInArray, sql } from "drizz
 import type { Db } from "@paperclipai/db";
 import {
   companies,
+  agentosPortfolios,
   companyLogos,
   assets,
   agents,
@@ -16,7 +17,7 @@ import {
   heartbeatRuns,
   costEvents,
 } from "@paperclipai/db";
-import { notFound, unprocessable } from "../errors.js";
+import { forbidden, notFound, unprocessable } from "../errors.js";
 import { isCloudManagedInstance } from "./cloud-instance.js";
 import { notifyCloudOfPrimaryCompanyLifecycleChange } from "./cloud-lifecycle-sync.js";
 import {
@@ -28,7 +29,7 @@ import {
   rekeyCompanyIssueIdentifiers,
 } from "./issue-prefix.js";
 import { environmentService } from "./environments.js";
-import { logActivity, type ActivityPublication } from "./activity-log.js";
+import { logActivity, persistActivity, type ActivityPublication } from "./activity-log.js";
 import { builtInAgentService } from "./built-in-agents.js";
 
 
@@ -107,6 +108,7 @@ export function companyService(db: Db, _budgetHooks: BudgetServiceHooks = {}) {
   const companySelection = {
     id: companies.id,
     name: companies.name,
+    purpose: companies.purpose,
     description: companies.description,
     status: companies.status,
     issuePrefix: companies.issuePrefix,
@@ -299,13 +301,19 @@ export function companyService(db: Db, _budgetHooks: BudgetServiceHooks = {}) {
     ) => {
       const budgetPublications: ActivityPublication[] = [];
       const result = await db.transaction(async (tx) => {
-        if (data.status !== undefined || data.budgetMonthlyCents !== undefined) {
+        if (data.status !== undefined || data.budgetMonthlyCents !== undefined || data.purpose !== undefined) {
           await tx.select({ id: companies.id }).from(companies).where(eq(companies.id, id)).for("no key update");
         }
         const existing = await getCompanyQuery(tx)
           .where(eq(companies.id, id))
           .then((rows) => rows[0] ?? null);
         if (!existing) return null;
+
+        if (data.purpose !== undefined) {
+          if (actor.actorType !== "user") throw forbidden("Only an authorized operator can classify the platform context");
+          const [home] = await tx.select({ id: agentosPortfolios.id }).from(agentosPortfolios).where(eq(agentosPortfolios.homeCompanyId, id)).limit(1);
+          if (!home) throw unprocessable("Only a portfolio home context can be classified as platform administration");
+        }
 
         const { logoAssetId, ...companyPatch } = data;
         const willReactivate = existing.status !== "active" && companyPatch.status === "active";
@@ -343,6 +351,10 @@ export function companyService(db: Db, _budgetHooks: BudgetServiceHooks = {}) {
           .returning()
           .then((rows) => rows[0] ?? null);
         if (!updated) return null;
+        if (data.purpose !== undefined && data.purpose !== existing.purpose) {
+          const { publication } = await persistActivity(tx as unknown as Db, { ...actor, companyId: id, action: "company.purpose_changed", entityType: "company", entityId: id, details: { previousPurpose: existing.purpose, purpose: data.purpose } });
+          budgetPublications.push(publication);
+        }
 
         let issuePrefixRederived: {
           previousIssuePrefix: string;

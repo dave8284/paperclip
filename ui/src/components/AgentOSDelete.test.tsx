@@ -8,7 +8,7 @@ const api = vi.hoisted(() => ({ company: vi.fn(), project: vi.fn(), task: vi.fn(
 vi.mock("@/api/companies", () => ({ companiesApi: { remove: api.company, archive: api.archiveCompany } }));
 vi.mock("@/api/projects", () => ({ projectsApi: { remove: api.project, update: api.archiveProject } }));
 vi.mock("@/api/issues", () => ({ issuesApi: { remove: api.task } }));
-describe("Agent OS record deletion", () => {
+describe("AgentOS record deletion", () => {
   let root: Root, host: HTMLDivElement, client: QueryClient;
   const removed = vi.fn();
   beforeEach(() => { vi.clearAllMocks(); api.company.mockResolvedValue({ ok: true }); api.project.mockResolvedValue({ id: "record" }); api.task.mockResolvedValue({ id: "record" }); api.archiveCompany.mockResolvedValue({}); api.archiveProject.mockResolvedValue({}); host = document.createElement("div"); document.body.append(host); root = createRoot(host); client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } }); });

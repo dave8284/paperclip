@@ -31,7 +31,7 @@ export function AgentOSLanding({ preview = false }: { preview?: boolean }) {
         </div>
         <div className="flex flex-col items-center justify-center gap-4"><FridayOrb state="idle" label="Friday, your portfolio coordinator" /><p className="text-sm text-muted-foreground">One place to bring everything together.</p></div>
       </section>
-      <section aria-label="Explore Agent OS" className="grid gap-6 border-t border-border py-12 md:grid-cols-3">
+      <section aria-label="Explore AgentOS" className="grid gap-6 border-t border-border py-12 md:grid-cols-3">
         {[
           { Icon: Layers3, title: "Every company, in context", text: "Move from portfolio to company, project and task, with decisions and routines in the right place." },
           { Icon: Network, title: "People and work connected", text: "Build a reusable workforce. Follow assignments, skills, artefacts and activity as work moves forward." },
@@ -39,6 +39,6 @@ export function AgentOSLanding({ preview = false }: { preview?: boolean }) {
         ].map(({ Icon, title, text }) => <article key={title} className="space-y-3 rounded-2xl border border-border p-6"><Icon className="size-5 text-muted-foreground" /><h2 className="font-medium">{title}</h2><p className="text-sm leading-relaxed text-muted-foreground">{text}</p></article>)}
       </section>
     </main>
-    <footer className="mx-auto flex max-w-6xl flex-wrap justify-between gap-3 border-t border-border px-6 py-6 text-sm text-muted-foreground"><span>Agent OS · Your portfolio, in motion</span><Link to="/auth">Enter your workspace</Link></footer>
+    <footer className="mx-auto flex max-w-6xl flex-wrap justify-between gap-3 border-t border-border px-6 py-6 text-sm text-muted-foreground"><span>AgentOS · Your portfolio, in motion</span><Link to="/auth">Enter your workspace</Link></footer>
   </div>;
 }

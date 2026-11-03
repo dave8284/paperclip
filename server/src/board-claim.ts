@@ -1,11 +1,13 @@
 import { randomBytes } from "node:crypto";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
-import { companies, companyMemberships, instanceUserRoles, agentosPortfolios, authUsers, agentosAdminEvents } from "@paperclipai/db";
+import { companies, companyMemberships, instanceUserRoles, agentosPortfolios, authUsers, agentosAdminEvents, issues } from "@paperclipai/db";
 import type { DeploymentMode } from "@paperclipai/shared";
 import { ensureHumanRoleDefaultGrants } from "./services/principal-access-compatibility.js";
 import { persistActivity, publishActivity, type ActivityPublication } from "./services/activity-log.js";
 import { logger } from "./middleware/logger.js";
+import { routineService } from "./services/routines.js";
+import { conflict } from "./errors.js";
 
 const LOCAL_BOARD_USER_ID = "local-board";
 const CLAIM_TTL_MS = 1000 * 60 * 60 * 24;
@@ -22,6 +24,19 @@ type ClaimChallenge = {
 };
 
 let activeChallenge: ClaimChallenge | null = null;
+
+function isConversationOwnershipConflict(error: unknown) {
+  const seen = new Set<unknown>();
+  let current = error;
+  while (typeof current === "object" && current !== null && !seen.has(current)) {
+    seen.add(current);
+    const candidate = current as { code?: string; constraint?: string; constraint_name?: string; cause?: unknown };
+    if (candidate.code === "23505" &&
+        (candidate.constraint ?? candidate.constraint_name) === "issues_conversation_identity_idx") return true;
+    current = candidate.cause;
+  }
+  return false;
+}
 
 function createChallenge(now = new Date()): ClaimChallenge {
   return {
@@ -92,7 +107,6 @@ export async function claimBoardOwnership(
   const status = getChallengeStatus(opts.token, opts.code);
   if (status !== "available") return { status };
 
-  const claimedCompanyIds: string[] = [];
   const publications: ActivityPublication[] = [];
   const didClaim = await db.transaction(async (tx) => {
     await tx.execute(sql`lock table ${instanceUserRoles} in share row exclusive mode`);
@@ -118,7 +132,6 @@ export async function claimBoardOwnership(
 
     const allCompanies = await tx.select({ id: companies.id }).from(companies);
     for (const company of allCompanies) {
-      claimedCompanyIds.push(company.id);
       const existing = await tx
         .select({ id: companyMemberships.id, status: companyMemberships.status, membershipRole: companyMemberships.membershipRole })
         .from(companyMemberships)
@@ -139,15 +152,43 @@ export async function claimBoardOwnership(
           status: "active",
           membershipRole: "owner",
         });
-        continue;
-      }
-
-      if (existing.status !== "active" || existing.membershipRole !== "owner") {
+      } else if (existing.status !== "active" || existing.membershipRole !== "owner") {
         await tx
           .update(companyMemberships)
           .set({ status: "active", membershipRole: "owner", updatedAt: new Date() })
           .where(eq(companyMemberships.id, existing.id));
       }
+    }
+    // Transfer only explicit operational responsibility. Null defaults still
+    // resolve through active membership; retaining an active local-board owner
+    // would let that fallback select the retired bootstrap identity.
+    await tx.update(companyMemberships).set({ status: "archived", updatedAt: new Date() }).where(and(
+      eq(companyMemberships.principalType, "user"),
+      eq(companyMemberships.principalId, LOCAL_BOARD_USER_ID),
+      eq(companyMemberships.status, "active"),
+    ));
+    await tx.update(companies).set({ defaultResponsibleUserId: opts.userId, updatedAt: new Date() })
+      .where(eq(companies.defaultResponsibleUserId, LOCAL_BOARD_USER_ID));
+    // Conversation identity is also an access boundary. Keep the existing
+    // thread, session and history, including hidden chats. The native unique
+    // index serializes competing claimant-chat creation; never merge histories.
+    try {
+      await tx.update(issues).set({ conversationUserId: opts.userId })
+        .where(eq(issues.conversationUserId, LOCAL_BOARD_USER_ID));
+    } catch (error) {
+      if (isConversationOwnershipConflict(error)) {
+        throw conflict("Board ownership was not transferred because this account already has a chat with an agent from the local board. Both conversations have been preserved.");
+      }
+      throw error;
+    }
+    await tx.update(issues).set({ responsibleUserId: opts.userId, updatedAt: new Date() }).where(and(
+      eq(issues.responsibleUserId, LOCAL_BOARD_USER_ID),
+      inArray(issues.status, ["backlog", "todo", "in_progress", "in_review", "blocked"]),
+      isNull(issues.hiddenAt),
+    ));
+    const routineSvc = routineService(db);
+    for (const company of allCompanies) {
+      await routineSvc.claimLocalBoardResponsibility(tx as unknown as Db, company.id, opts.userId);
     }
     // The existing local-to-authenticated ownership ceremony also transfers
     // local portfolios. Never take a portfolio owned by another real user.
@@ -162,6 +203,16 @@ export async function claimBoardOwnership(
       });
       publications.push(result.publication);
     }
+    // A failed grant insert must roll back the entire ownership ceremony, not
+    // leave a committed claim whose new owner cannot administer the companies.
+    for (const company of allCompanies) {
+      await ensureHumanRoleDefaultGrants(tx as unknown as Db, {
+        companyId: company.id,
+        principalId: opts.userId,
+        membershipRole: "owner",
+        grantedByUserId: opts.userId,
+      });
+    }
     return true;
   });
   if (!didClaim) return { status: "invalid" };
@@ -169,15 +220,6 @@ export async function claimBoardOwnership(
   for (const publication of publications) {
     try { publishActivity(publication); }
     catch (error) { logger.warn({ err: error }, "Board ownership committed; live activity publication failed"); }
-  }
-
-  for (const companyId of claimedCompanyIds) {
-    await ensureHumanRoleDefaultGrants(db, {
-      companyId,
-      principalId: opts.userId,
-      membershipRole: "owner",
-      grantedByUserId: opts.userId,
-    });
   }
 
   if (activeChallenge && activeChallenge.token === opts.token) {

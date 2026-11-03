@@ -16,7 +16,7 @@ Create an experiment brief with audience, hypothesis, channel, assets, success m
 
 Completion evidence: source-backed experiment, approved assets, publication references when executed, measured results or a precise analytics gap. Evaluation: accuracy, qualified outcomes, cost per outcome and useful learning.
 
-Use the native Paperclip runtime procedures for checkout, handoffs, approvals and result reporting. Work only within the task's application context and configured permissions. Attach inspectable outputs to the owning task. Report concrete limitations, never invented activity.
+Use the native AgentOS runtime procedures for checkout, handoffs, approvals and result reporting. Work only within the task's application context and configured permissions. Attach inspectable outputs to the owning task. Report concrete limitations, never invented activity.
 
 
 ## Cross-project awareness and coordination

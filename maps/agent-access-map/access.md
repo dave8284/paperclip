@@ -40,6 +40,23 @@ own policy and access review.
 Gaps: An agent identity is not a board login or board claim; explicit delegation is a
 product-policy decision.
 
+Bootstrap ownership correction (2026-11-04): the native human claim transaction
+transfers only explicit `local-board` operational responsibility (company defaults,
+visible unfinished tasks and current routines), appends routine revisions, archives
+active bootstrap user memberships and seeds claimant owner grants atomically with
+the existing role/portfolio transfer. Other owners, prior revisions/runs, creators
+and audit history are retained. Agent API key responsibility is retained; this
+ceremony does not reissue a credential or grant it the claimant's identity.
+Local-board conversation ownership transfers without changing thread IDs, session
+generation, messages or files. The native conversation uniqueness constraint also
+covers hidden threads: an existing claimant chat for the same company/agent aborts
+the entire claim with HTTP 409 and preserves both histories.
+Evidence is source-only in [claim](../../server/src/board-claim.ts),
+[routine service](../../server/src/services/routines.ts) and
+[regression cases](../../server/src/__tests__/board-claim.test.ts).
+Verification is blocked by the previously observed sandbox PostgreSQL listener
+denial (`listen EPERM`); the new regression cases have not run.
+
 ## `invitations`
 
 Capability ID: `access/invitations`.

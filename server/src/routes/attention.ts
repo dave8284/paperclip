@@ -26,6 +26,7 @@ export function attentionRoutes(db: Db) {
     }
 
     const includeDismissed = req.query.includeDismissed === "true";
+    const category = req.query.category === undefined ? undefined : z.enum(["proposals", "work"]).parse(req.query.category);
     const projectId = req.query.projectId === undefined ? undefined : z.string().uuid().parse(req.query.projectId);
     const archived = req.query.archived === "true";
     const all = req.query.all === "true";
@@ -41,6 +42,7 @@ export function attentionRoutes(db: Db) {
     const limit = limitValue === undefined ? undefined : Number(limitValue);
     if (limit !== undefined && !Number.isInteger(limit)) throw badRequest("limit must be an integer");
     const feed = await svc.list(companyId, {
+      category,
       projectId,
       userId: req.actor.userId,
       includeDismissed,

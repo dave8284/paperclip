@@ -2110,6 +2110,28 @@ export function routineService(
     get: getRoutineById,
     getTrigger: getTriggerById,
 
+    // Native board bootstrap is the only caller. The caller owns the claim
+    // transaction and its authority checks; ordinary updates keep their owner.
+    // Append through the native revision path so past runs and snapshots retain
+    // their original responsibility while future dispatch uses the new owner.
+    claimLocalBoardResponsibility: async (executor: Db, companyId: string, claimantUserId: string) => {
+      const claimed = await executor.update(routines).set({
+        responsibleUserId: claimantUserId,
+        updatedByAgentId: null,
+        updatedByUserId: claimantUserId,
+        updatedAt: new Date(),
+      }).where(and(
+        eq(routines.companyId, companyId),
+        eq(routines.responsibleUserId, "local-board"),
+      )).returning();
+      for (const routine of claimed) {
+        await appendRoutineRevision(executor, routine, { userId: claimantUserId }, {
+          changeSummary: "Local board responsibility transferred to the authenticated owner",
+        });
+      }
+      return claimed.map((routine) => routine.id);
+    },
+
     list: async (
       companyId: string,
       filters?: { projectId?: string | null },

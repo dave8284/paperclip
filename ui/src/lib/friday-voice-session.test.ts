@@ -27,8 +27,17 @@ describe("Friday voice session", () => {
     expect(session.snapshot().listening).toBe(true);
     session.bind({ ...binding(), reply: { id: "reply", body: "Here are your projects." } }); expect(synthesis.speak).toHaveBeenCalledOnce();
   });
-  it("does not send while interim speech continues and preserves an explicitly paused turn", async () => {
-    session.toggle(); Recognition.latest.result("Show"); await vi.advanceTimersByTimeAsync(800); Recognition.latest.result("my company", false); await vi.advanceTimersByTimeAsync(1500); expect(send).not.toHaveBeenCalled(); session.toggle(); expect(draft).toHaveBeenCalledWith("Show"); expect(session.snapshot().enabled).toBe(false);
+  it("resets the natural pause boundary for every fresh word and sends stable interim speech once", async () => {
+    session.toggle(); Recognition.latest.result("Show"); await vi.advanceTimersByTimeAsync(800); Recognition.latest.result("my company", false); await vi.advanceTimersByTimeAsync(800); expect(send).not.toHaveBeenCalled(); Recognition.latest.result("my company decisions", false); await vi.advanceTimersByTimeAsync(999); expect(send).not.toHaveBeenCalled(); await vi.advanceTimersByTimeAsync(1); expect(send).toHaveBeenCalledExactlyOnceWith("Show my company decisions"); expect(session.snapshot().enabled).toBe(true);
+  });
+  it("preserves the unfinished interim turn when the user explicitly mutes", () => {
+    session.toggle(); Recognition.latest.result("Keep these unfinished words", false); session.toggle(); expect(draft).toHaveBeenCalledExactlyOnceWith("Keep these unfinished words"); expect(send).not.toHaveBeenCalled(); expect(session.snapshot().enabled).toBe(false);
+  });
+  it("does not let repeated identical interim results postpone a completed sentence forever", async () => {
+    session.toggle(); Recognition.latest.result("Show my decisions", false);
+    await vi.advanceTimersByTimeAsync(800); Recognition.latest.result("Show my decisions", false);
+    await vi.advanceTimersByTimeAsync(200);
+    expect(send).toHaveBeenCalledExactlyOnceWith("Show my decisions");
   });
   it("keeps microphone and captured text across route remounts for the same conversation", async () => {
     session.toggle(); const active = Recognition.latest; active.result("Show my decisions"); session.unbind("company:friday"); session.bind(binding()); expect(Recognition.latest).toBe(active); await vi.advanceTimersByTimeAsync(1000); expect(send).toHaveBeenCalledOnce();
@@ -100,5 +109,19 @@ describe("Friday voice session", () => {
     session.bind({ ...binding(), key: "other:employee" });
     utterance.onend(); await playback;
     expect(session.snapshot().speaking).toBe(false); expect(session.snapshot().enabled).toBe(false); expect(session.snapshot().listening).toBe(false);
+  });
+  it("speaks one explicitly requested discussion reply without enabling the mic or changing preferences", async () => {
+    session.autoSpeak = false;
+    expect(session.requestSpokenReply("company:friday")).toBe(true);
+    session.bind({ ...binding(), reply: { id: "discussion", body: "The decision is whether to publish the campaign." } });
+    expect(synthesis.speak).toHaveBeenCalledOnce(); expect(session.snapshot().enabled).toBe(false); expect(Recognition.starts).toBe(0); expect(session.autoSpeak).toBe(false);
+    synthesis.speak.mock.calls[0][0].onend(); await Promise.resolve();
+    session.bind({ ...binding(), reply: { id: "later", body: "Another update." } });
+    expect(synthesis.speak).toHaveBeenCalledOnce();
+  });
+  it("shows an unsent native draft error without duplicating the draft or muting capture", async () => {
+    const error = Object.assign(new Error("Draft needs review"), { draftPreserved: true });
+    session.bind({ ...binding(), send: vi.fn().mockRejectedValue(error) }); session.toggle(); Recognition.latest.result("Show the decision", false); await vi.advanceTimersByTimeAsync(1000);
+    expect(session.snapshot()).toMatchObject({ error: "Draft needs review", enabled: true, listening: true }); expect(draft).not.toHaveBeenCalled();
   });
 });

@@ -55,13 +55,13 @@ export const PAPERCLIP_RUNNER_PERMISSION_CAPABILITIES = {
     // only through the root-denied, workspace-scoped, network-disabled, and
     // environment-allowlisted profile assembled by codex-security-config.ts.
     description:
-      "Codex runs automatically inside a root-denied, workspace-scoped, network-disabled Paperclip environment.",
+      "Codex runs automatically inside a root-denied, workspace-scoped, network-disabled AgentOS environment.",
     options: [
       {
         value: "never",
         label: "Automatic (isolated)",
         description:
-          "Run without Codex approval pauses while Paperclip keeps its independent workspace, network, and environment restrictions.",
+          "Run without Codex approval pauses while AgentOS keeps its independent workspace, network, and environment restrictions.",
       },
     ],
   },
@@ -70,7 +70,7 @@ export const PAPERCLIP_RUNNER_PERMISSION_CAPABILITIES = {
     configKey: "opencodePermissionMode",
     defaultMode: "allow",
     description:
-      "Controls OpenCode tool permissions inside the assigned Paperclip environment.",
+      "Controls OpenCode tool permissions inside the assigned AgentOS environment.",
     options: [
       {
         value: "allow",
@@ -94,24 +94,24 @@ export const PAPERCLIP_RUNNER_PERMISSION_CAPABILITIES = {
     defaultMode: "provider-managed",
     options: [],
     description:
-      "Claude Managed runs non-interactively under its qualified provider profile and Paperclip policy.",
+      "Claude Managed runs non-interactively under its qualified provider profile and AgentOS policy.",
   },
   aws_agentcore: {
     configurable: false,
     defaultMode: "provider-managed",
     options: [],
     description:
-      "AWS AgentCore runs non-interactively under its qualified harness profile and Paperclip policy.",
+      "AWS AgentCore runs non-interactively under its qualified harness profile and AgentOS policy.",
   },
-  grok_bot: { configurable: false, defaultMode: "provider-managed", options: [], description: "Grok Bot uses first-party Paperclip tools and retains its native apps. Grok manages its model; spending, live steering, provider transcript streaming and remote interruption are unavailable." },
-  muse: { configurable: false, defaultMode: "provider-managed", options: [], description: "Muse uses the admitted Paperclip tool catalog and its own approved tools. Provider usage is unavailable and remote stop is best effort." },
-  openai_dot: { configurable: false, defaultMode: "provider-managed", options: [], description: "Dot uses the admitted Paperclip tool catalog. OpenAI manages its model and other tools; provider usage and global interruption are unavailable." },
+  grok_bot: { configurable: false, defaultMode: "provider-managed", options: [], description: "Grok Bot uses first-party AgentOS tools and retains its native apps. Grok manages its model; spending, live steering, provider transcript streaming and remote interruption are unavailable." },
+  muse: { configurable: false, defaultMode: "provider-managed", options: [], description: "Muse uses the admitted AgentOS tool catalog and its own approved tools. Provider usage is unavailable and remote stop is best effort." },
+  openai_dot: { configurable: false, defaultMode: "provider-managed", options: [], description: "Dot uses the admitted AgentOS tool catalog. OpenAI manages its model and other tools; provider usage and global interruption are unavailable." },
   acpx: {
     configurable: true,
     configKey: "acpxPermissionMode",
     defaultMode: "approve-all",
     description:
-      "Controls ACPX agent operations inside the assigned Paperclip environment.",
+      "Controls ACPX agent operations inside the assigned AgentOS environment.",
     options: [
       {
         value: "approve-all",
@@ -120,15 +120,15 @@ export const PAPERCLIP_RUNNER_PERMISSION_CAPABILITIES = {
       },
       {
         value: "approve-paperclip",
-        label: "Automatic Paperclip actions",
+        label: "Automatic AgentOS actions",
         description:
-          "Automatically run assigned Paperclip planning and task tools, including reassignment. Company permissions and approval requirements still apply. Other operations require permission.",
+          "Automatically run assigned AgentOS planning and task tools, including reassignment. Company permissions and approval requirements still apply. Other operations require permission.",
       },
       {
         value: "approve-reads",
-        label: "Allow Paperclip reads",
+        label: "Allow AgentOS reads",
         description:
-          "Automatically allow assigned Paperclip read tools. Other operations request a supported permission decision. Company permissions and execution boundaries still apply.",
+          "Automatically allow assigned AgentOS read tools. Other operations request a supported permission decision. Company permissions and execution boundaries still apply.",
       },
       {
         value: "deny-all",

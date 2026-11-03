@@ -4,20 +4,27 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#ffffff" />
-    <meta name="apple-mobile-web-app-title" content="Agent OS" />
-    <title>Agent OS</title>
+    <meta name="apple-mobile-web-app-title" content="AgentOS" />
+    <meta name="description" content="Your companies, digital workforce and decisions. Coordinate work with Friday in AgentOS." />
+    <meta property="og:title" content="AgentOS" />
+    <meta property="og:description" content="Your companies, digital workforce and decisions. One conversation with Friday." />
+    <meta property="og:type" content="website" />
+    <meta property="og:image" content="/android-chrome-512x512.png?v=friday-1" />
+    <meta name="twitter:card" content="summary" />
+    <title>AgentOS</title>
     <!-- PAPERCLIP_RUNTIME_BRANDING_START -->
     <!-- PAPERCLIP_RUNTIME_BRANDING_END -->
     <!-- PAPERCLIP_FAVICON_START -->
-    <link rel="icon" href="/agentos-mark.svg" type="image/svg+xml" />
+    <link rel="icon" href="/agentos-mark.svg?v=friday-1" type="image/svg+xml" />
     <!-- PAPERCLIP_FAVICON_END -->
-    <link rel="manifest" href="/site.webmanifest" crossorigin="use-credentials" />
+    <link rel="manifest" href="/site.webmanifest?v=friday-1" crossorigin="use-credentials" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=friday-1" sizes="180x180" />
     <script>
       (() => {
         const darkThemeColor = "#18181b";
         const lightThemeColor = "#ffffff";
         try {
-          const theme = "light"; // Agent OS uses the approved white canvas.
+          const theme = "light"; // AgentOS uses the approved white canvas.
           const isDark = theme === "dark";
           document.documentElement.classList.toggle("dark", isDark);
           document.documentElement.style.colorScheme = isDark ? "dark" : "light";
@@ -39,7 +46,7 @@
     <section id="paperclip-startup" role="status" aria-live="polite" hidden>
       <div class="mx-auto flex min-h-screen max-w-2xl flex-col justify-center space-y-4 px-4 py-10">
         <div>
-          <h1 id="paperclip-startup-title" class="text-lg font-semibold">Agent OS couldn’t start</h1>
+          <h1 id="paperclip-startup-title" class="text-lg font-semibold">AgentOS couldn’t start</h1>
           <p id="paperclip-startup-message" class="mt-1 text-sm text-muted-foreground">
             Part of the app failed to load. Check your connection and reload this page to try again.
           </p>
@@ -72,7 +79,7 @@
         };
         const onFailure = () => {
           if (finished()) return cleanup();
-          title.textContent = "Agent OS couldn’t start";
+          title.textContent = "AgentOS couldn’t start";
           message.textContent = "Part of the app failed to load. Check your connection and reload this page to try again.";
           notice.hidden = false;
         };
@@ -87,7 +94,7 @@
         const timer = setTimeout(() => {
           if (finished()) return cleanup();
           if (!notice.hidden) return;
-          title.textContent = "Paperclip is taking longer to load";
+          title.textContent = "AgentOS is taking longer to load";
           message.textContent = "You can keep waiting, or reload this page to try again.";
           notice.hidden = false;
         }, 30_000);

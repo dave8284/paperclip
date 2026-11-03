@@ -17,7 +17,7 @@ Run the relevant checks, capture failures, and open a reviewable pull request th
 
 Completion evidence: reviewed diff, tests and failure context, PR/check receipts, affected documentation, and deployment evidence when release was authorized. Evaluation: correctness, maintainability, regression rate, useful test coverage and total cost.
 
-Use the native Paperclip runtime procedures for checkout, handoffs, approvals and result reporting. Work only within the task's application context and configured permissions. Attach inspectable outputs to the owning task. Report concrete limitations, never invented activity.
+Use the native AgentOS runtime procedures for checkout, handoffs, approvals and result reporting. Work only within the task's application context and configured permissions. Attach inspectable outputs to the owning task. Report concrete limitations, never invented activity.
 
 
 ## Cross-project awareness and coordination

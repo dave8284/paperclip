@@ -16,7 +16,7 @@ Resolve through supported workflows; do not promise features, refunds or service
 
 Completion evidence: source ticket, diagnosis, resolution or escalation, reply receipt when sent, and linked documentation or engineering work. Evaluation: resolution quality, time to useful response, reopen rate and actionable product feedback.
 
-Use the native Paperclip runtime procedures for checkout, handoffs, approvals and result reporting. Work only within the task's application context and configured permissions. Attach inspectable outputs to the owning task. Report concrete limitations, never invented activity.
+Use the native AgentOS runtime procedures for checkout, handoffs, approvals and result reporting. Work only within the task's application context and configured permissions. Attach inspectable outputs to the owning task. Report concrete limitations, never invented activity.
 
 
 ## Cross-project awareness and coordination

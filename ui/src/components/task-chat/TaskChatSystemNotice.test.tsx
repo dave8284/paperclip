@@ -24,7 +24,7 @@ describe("TaskChatSystemNotice (PAP-443)", () => {
   });
 
   const recoveryBody =
-    "Paperclip stopped before dispatching the adapter because required secret/env bindings are missing. " +
+    "AgentOS stopped before dispatching the adapter because required secret/env bindings are missing. " +
     "Latest retry failure: `configuration_incomplete`. Moving it to `blocked` with a source-scoped recovery action.";
 
   function renderNotice(
@@ -185,7 +185,7 @@ describe("TaskChatSystemNotice (PAP-443)", () => {
     const onTryAgain = vi.fn();
     renderNotice(
       {
-        text: "Paperclip retried continuation, but it still has no live execution path.",
+        text: "AgentOS retried continuation, but it still has no live execution path.",
         presentation: {
           kind: "system_notice",
           tone: "danger",
@@ -215,7 +215,7 @@ describe("TaskChatSystemNotice (PAP-443)", () => {
   it.each([false, true])("preserves retry on a saved Automatic recovery blocked notice (pending: %s)", async (pending) => {
     const onTryAgain = vi.fn();
     renderNotice({
-      text: "Paperclip automatically retried continuation for this assigned `in_progress` issue and the retry made progress, but it still has no live execution path. Moving it to `blocked` so it is visible for intervention.",
+      text: "AgentOS automatically retried continuation for this assigned `in_progress` issue and the retry made progress, but it still has no live execution path. Moving it to `blocked` so it is visible for intervention.",
       presentation: { kind: "system_notice", title: "Automatic recovery blocked", tone: "danger", detailsDefaultOpen: false },
       metadata: { version: 1, sourceRunId: "run-1", sections: [{ title: "Recovery", rows: [
         { type: "key_value", label: "Recovery action", value: "recovery-action-1" },
@@ -237,7 +237,7 @@ describe("TaskChatSystemNotice (PAP-443)", () => {
   it("moves Try again into the expanded notice footer", () => {
     renderNotice(
       {
-        text: "Paperclip retried continuation, but it still has no live execution path.",
+        text: "AgentOS retried continuation, but it still has no live execution path.",
         presentation: {
           kind: "system_notice",
           tone: "danger",
@@ -262,7 +262,7 @@ describe("TaskChatSystemNotice (PAP-443)", () => {
   });
 
   it.each([
-    { text: "Paperclip retried continuation, but it still has no live execution path.",
+    { text: "AgentOS retried continuation, but it still has no live execution path.",
       presentation: { kind: "system_notice" as const, title: "Child task blocked", tone: "warning" as const, detailsDefaultOpen: false } },
     { text: "Child task has no live execution path. Parent must review its result." },
   ])("does not attach a parent recovery retry to an unrelated notice: $text", (item) => {
@@ -273,7 +273,7 @@ describe("TaskChatSystemNotice (PAP-443)", () => {
   it("shows the pending state and omits Try again from unrelated notices", () => {
     renderNotice(
       {
-        text: "Paperclip retried continuation, but it still has no live execution path.",
+        text: "AgentOS retried continuation, but it still has no live execution path.",
         presentation: {
           kind: "system_notice",
           tone: "danger",

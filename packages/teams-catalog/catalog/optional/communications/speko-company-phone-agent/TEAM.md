@@ -21,6 +21,6 @@ license: MIT
 
 # Speko Company Phone Agent
 
-An optional single-agent template for the company's voice connection. Install it when a dedicated receptionist is useful, or select any existing Paperclip agent instead. Installing this template does not configure Speko, purchase a number, place a call, or change existing task assignments.
+An optional single-agent template for the company's voice connection. Install it when a dedicated receptionist is useful, or select any existing AgentOS agent instead. Installing this template does not configure Speko, purchase a number, place a call, or change existing task assignments.
 
-Speko handles live audio and telephony. This Paperclip agent performs authorized work with the runtime and tools chosen during installation. Work arrives on a bound task, and progress and results return through that task's approved publications.
+Speko handles live audio and telephony. This AgentOS agent performs authorized work with the runtime and tools chosen during installation. Work arrives on a bound task, and progress and results return through that task's approved publications.

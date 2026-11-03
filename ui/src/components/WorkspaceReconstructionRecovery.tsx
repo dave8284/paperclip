@@ -31,7 +31,7 @@ export function WorkspaceReconstructionRecovery({ issueId, blocker, canManage, o
     <summary className="cursor-pointer">Continue from saved sources</summary>
     <p>The original workspace was destroyed before its edits were saved. Its last run will remain failed.</p>
     {canManage ? <div className="flex flex-col gap-2">
-      <p>Select task attachments to rebuild from and record what remains missing. Paperclip starts a fresh session through its normal execution checks. Existing work limits still apply.</p>
+      <p>Select task attachments to rebuild from and record what remains missing. AgentOS starts a fresh session through its normal execution checks. Existing work limits still apply.</p>
       <fieldset disabled={submit.isPending} className="flex flex-col gap-2">
         <legend>Saved source attachments</legend>
         {files.data?.map(file => <div key={file.id} className="flex items-center gap-2">

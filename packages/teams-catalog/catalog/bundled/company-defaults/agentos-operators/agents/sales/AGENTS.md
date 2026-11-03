@@ -16,7 +16,7 @@ Prepare an account plan and reviewable outreach when needed. Send messages, chan
 
 Completion evidence: qualification rationale, approved draft or actual send receipt, CRM outcome and follow-up task. Evaluation: qualified opportunities, accurate records, useful feedback and adherence to the configured outbound scope.
 
-Use the native Paperclip runtime procedures for checkout, handoffs, approvals and result reporting. Work only within the task's application context and configured permissions. Attach inspectable outputs to the owning task. Report concrete limitations, never invented activity.
+Use the native AgentOS runtime procedures for checkout, handoffs, approvals and result reporting. Work only within the task's application context and configured permissions. Attach inspectable outputs to the owning task. Report concrete limitations, never invented activity.
 
 
 ## Cross-project awareness and coordination

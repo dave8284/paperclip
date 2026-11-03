@@ -61,7 +61,7 @@ export interface AdapterDisplayInfo {
 }
 
 const adapterDisplayMap: Record<string, AdapterDisplayInfo> = {
-  copilot_runtime: { label: "GitHub Copilot", description: "Copilot through Paperclip Runner", icon: Code, hideFromVisualSelection: true },
+  copilot_runtime: { label: "GitHub Copilot", description: "Copilot through AgentOS Runner", icon: Code, hideFromVisualSelection: true },
   acpx_local: {
     label: "ACPX (retired)",
     description: "Retired standalone ACPX adapter",
@@ -83,7 +83,7 @@ const adapterDisplayMap: Record<string, AdapterDisplayInfo> = {
     recommended: true,
   },
   paperclip_runner: {
-    label: "Paperclip Runner",
+    label: "AgentOS Runner",
     description: "Experimental Rust runner with a Codex provider",
     icon: Cpu,
     experimental: true,

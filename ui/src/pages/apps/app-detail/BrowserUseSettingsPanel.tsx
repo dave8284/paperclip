@@ -57,11 +57,11 @@ function CredentialSettings({
           min="0"
           step="0.01"
           value={limit}
-          placeholder="Use the remaining Paperclip budget"
+          placeholder="Use the remaining AgentOS budget"
           onChange={(e) => setLimit(e.target.value)}
         />
         <p className="text-sm text-muted-foreground">
-          The agent can choose a lower limit. Paperclip also applies any
+          The agent can choose a lower limit. AgentOS also applies any
           remaining hard budget limit.
         </p>
       </div>

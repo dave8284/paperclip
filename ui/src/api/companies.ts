@@ -27,6 +27,8 @@ import { api, detachInflightGet, type RequestOptions } from "./client";
 // directory also includes companies visible solely through instance admin.
 const COMPANIES_LIST_PATH = "/companies?scope=accessible";
 const COMPANIES_DIRECTORY_PATH = "/companies";
+const INTERNAL_CONTEXTS_PATH = `${COMPANIES_LIST_PATH}&includeInternal=true`;
+const INTERNAL_DIRECTORY_PATH = `${COMPANIES_DIRECTORY_PATH}?includeInternal=true`;
 
 export type CompanyStats = Record<string, { agentCount: number; issueCount: number }>;
 
@@ -80,15 +82,15 @@ export interface CompanyImportJobStatus {
 }
 
 export const companiesApi = {
-  list: () => api.get<Company[]>(COMPANIES_LIST_PATH),
-  directory: () => api.get<Company[]>(COMPANIES_DIRECTORY_PATH),
-  detachInflightDirectory: () => detachInflightGet(COMPANIES_DIRECTORY_PATH),
+  list: (options?: { includeInternal?: boolean }) => api.get<Company[]>(options?.includeInternal ? INTERNAL_CONTEXTS_PATH : COMPANIES_LIST_PATH),
+  directory: (options?: { includeInternal?: boolean }) => api.get<Company[]>(options?.includeInternal ? INTERNAL_DIRECTORY_PATH : COMPANIES_DIRECTORY_PATH),
+  detachInflightDirectory: () => { detachInflightGet(COMPANIES_DIRECTORY_PATH); detachInflightGet(INTERNAL_DIRECTORY_PATH); },
   /**
    * Call before re-reading the list for a different account: an in-flight
    * `/companies` GET issued under the previous session would otherwise be
    * coalesced into, and answer with that account's companies.
    */
-  detachInflightList: () => detachInflightGet(COMPANIES_LIST_PATH),
+  detachInflightList: () => { detachInflightGet(COMPANIES_LIST_PATH); detachInflightGet(INTERNAL_CONTEXTS_PATH); },
   get: (companyId: string) => api.get<Company>(`/companies/${companyId}`),
   stats: () => api.get<CompanyStats>("/companies/stats"),
   create: (data: {
@@ -103,6 +105,7 @@ export const companiesApi = {
       Pick<
         Company,
         | "name"
+        | "purpose"
         | "description"
         | "status"
         | "budgetMonthlyCents"

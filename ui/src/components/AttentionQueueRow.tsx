@@ -1,5 +1,5 @@
 import { memo, useState, type KeyboardEvent, type ReactNode } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlarmClock,
   CalendarClock,
@@ -50,6 +50,7 @@ import {
 import { AttentionInteractionResolver } from "./AttentionInteractionResolver";
 import { DecisionResolver } from "./DecisionResolver";
 import { DecisionPresentation } from "./DecisionPresentation";
+import { ApprovalPayloadRenderer, BoardApprovalPayload } from "./ApprovalPayload";
 import { StalledReviewActions } from "./StalledReviewActions";
 import { readIssueReviewPolicyMetadata } from "../lib/review-policy";
 
@@ -848,9 +849,12 @@ function ResolverFooter({ toggle, children }: { toggle: ReactNode; children: Rea
 function ApprovalResolver({ item, companyId, toggle, agentOS = false }: { item: AttentionItem; companyId: string; toggle: ReactNode; agentOS?: boolean }) {
   const queryClient = useQueryClient();
   const [note, setNote] = useState("");
+  const detail = useQuery({ queryKey: queryKeys.approvals.detail(item.subject.id), queryFn: () => approvalsApi.get(item.subject.id), enabled: agentOS });
+  const proposal = !detail.error && detail.data?.companyId === companyId ? detail.data : undefined;
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: queryKeys.attention(companyId) });
     queryClient.invalidateQueries({ queryKey: queryKeys.approvals.list(companyId) });
+    queryClient.invalidateQueries({ queryKey: queryKeys.approvals.detail(item.subject.id) });
   };
   const approve = useMutation({
     mutationFn: () => approvalsApi.approve(item.subject.id, note.trim() || undefined),
@@ -864,12 +868,23 @@ function ApprovalResolver({ item, companyId, toggle, agentOS = false }: { item: 
     mutationFn: () => approvalsApi.requestRevision(item.subject.id, note.trim() || undefined),
     onSuccess: invalidate,
   });
-  const pending = approve.isPending || reject.isPending || revise.isPending;
+  const pending = approve.isPending || reject.isPending || revise.isPending || (agentOS && (!proposal || proposal.status !== "pending"));
 
   // Verb order matches the collapsed row exactly (revise → reject → approve),
   // so expanding never moves the button the operator was already aiming at.
   return (
     <>
+      {agentOS && <section className="space-y-2" aria-label="Proposed course of action">
+        <h4 className="text-sm font-semibold">Proposed course of action</h4>
+        {detail.isPending && <p role="status" className="text-sm text-muted-foreground">Reading the current proposal…</p>}
+        {detail.error && <p role="alert" className="text-sm text-destructive">{detail.error.message}</p>}
+        {!detail.isPending && !detail.error && !proposal && <p role="alert" className="text-sm text-destructive">This proposal is not available in this company.</p>}
+        {proposal && <>
+          <ApprovalPayloadRenderer type={proposal.type} payload={proposal.payload} />
+          {proposal.type !== "request_board_approval" && <BoardApprovalPayload payload={{ summary: proposal.payload.summary, recommendedAction: proposal.payload.recommendedAction, nextActionOnApproval: proposal.payload.nextActionOnApproval, risks: proposal.payload.risks }} hideTitle />}
+          {proposal.status !== "pending" && <p role="status" className="text-sm text-muted-foreground">This proposal is {proposal.status.replaceAll("_", " ")}; it cannot be approved from this card.</p>}
+        </>}
+      </section>}
       <Textarea
         value={note}
         onChange={(e) => setNote(e.target.value)}

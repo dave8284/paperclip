@@ -17,7 +17,7 @@ export function GitHubConnectionRecoveryNotice({ endpoint }: { endpoint: ChatEnd
       <div className="min-w-0 space-y-3">
         <div className="space-y-1">
           <h2 className="text-base font-semibold">{endpoint.status === "revoked" ? "GitHub bot is disconnected" : "GitHub connection needs repair"}</h2>
-          <p className="text-sm">Reconnect this bot to restore GitHub reviews and @mentions. Start with the App already saved in Paperclip.</p>
+          <p className="text-sm">Reconnect this bot to restore GitHub reviews and @mentions. Start with the App already saved in AgentOS.</p>
         </div>
         <Button asChild><Link to={`/apps/chat/connect?provider=github&resume=${endpoint.id}&reconnect=1`}>Reconnect GitHub</Link></Button>
         {(endpoint.lastError || endpoint.healthMessage) && <details className="text-sm">
@@ -68,7 +68,7 @@ export function GitHubAppRecovery({ endpoint, reconnect, onConnect, onExit }: {
   }
   return <div className="space-y-6">
     {reconnect && <div className="space-y-3">
-      <p className="text-sm">Restore <strong>{appName}</strong> using its saved credentials. Paperclip will check the App and its installation, then repair event delivery.</p>
+      <p className="text-sm">Restore <strong>{appName}</strong> using its saved credentials. AgentOS will check the App and its installation, then repair event delivery.</p>
       <p className="text-sm text-muted-foreground">Your agent, repository choices, review settings, and task history stay attached to this connection. You don’t need to create another GitHub App.</p>
     </div>}
     {error && <div role="alert" className="space-y-2 rounded-lg border border-destructive/40 bg-destructive/5 p-4 text-sm">

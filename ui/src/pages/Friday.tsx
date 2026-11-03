@@ -23,21 +23,23 @@ import { workforceApi, workforceKeys } from "../api/workforce";
 import { useAccountIdentity } from "../api/companies-query";
 
 export function Friday() {
-  const { selectedCompanyId, companies, loading } = useCompany();
+  const { selectedCompanyId, companies, allCompanies, loading } = useCompany();
+  const contexts = allCompanies ?? companies;
   const { userId } = useAccountIdentity();
-  const portfolios = useQuery({ queryKey: workforceKeys.list(userId), queryFn: ({ signal }) => workforceApi.list(signal), enabled: !!selectedCompanyId, retry: false });
-  const homeCompanyId = portfolios.data?.[0]?.homeCompanyId ?? selectedCompanyId;
+  const portfolios = useQuery({ queryKey: workforceKeys.list(userId), queryFn: ({ signal }) => workforceApi.list(signal), enabled: contexts.length > 0, retry: false });
+  const homeCompanyId = portfolios.data?.[0]?.homeCompanyId ?? contexts.find(company => company.purpose === "platform")?.id ?? selectedCompanyId;
   const { setTheme } = useTheme();
   useEffect(() => { setTheme("light"); }, [setTheme]);
-  if (selectedCompanyId && portfolios.isPending) return <p className="agentos-page" role="status">Opening Friday…</p>;
+  if (contexts.length > 0 && portfolios.isPending) return <p className="agentos-page" role="status">Opening Friday…</p>;
   if (portfolios.error) return <p className="agentos-page text-destructive" role="alert">{portfolios.error.message}</p>;
-  if (homeCompanyId && !companies.some(company => company.id === homeCompanyId)) return <p className="agentos-page" role="alert">Friday’s home company is not available to this account.</p>;
+  if (homeCompanyId && !contexts.some(company => company.id === homeCompanyId)) return <p className="agentos-page" role="alert">Friday’s platform context is not available to this account.</p>;
   return homeCompanyId ? <FridayCompany key={homeCompanyId} companyId={homeCompanyId} initialDisplayCompanyId={selectedCompanyId ?? homeCompanyId} />
     : <div className="agentos-page"><h1>{loading ? "Opening your workspace…" : "A place for your next idea."}</h1><p className="mt-4 text-muted-foreground">Create your first company to bring your team and work together.</p><Button asChild className="mt-6"><Link to="/onboarding">Create a company</Link></Button></div>;
 }
 
 function FridayCompany({ companyId, initialDisplayCompanyId }: { companyId: string; initialDisplayCompanyId: string }) {
-  const { companies } = useCompany();
+  const { companies, allCompanies } = useCompany();
+  const contexts = allCompanies ?? companies;
   const { userId } = useAccountIdentity();
   const registration = useQuery({ queryKey: registrationKey(userId), queryFn: administrationApi.registration, retry: false });
   const profile = useQuery({ queryKey: operatingProfileKey(companyId), queryFn: () => operatingProfileApi.get(companyId) });
@@ -51,8 +53,13 @@ function FridayCompany({ companyId, initialDisplayCompanyId }: { companyId: stri
   const navigate = useNavigate();
   const selectionKey = `agentos:selected-company:${userId ?? "local"}:${companyId}`;
   const [rememberedCompany, setRememberedCompany] = useState(() => { try { return initialDisplayCompanyId !== companyId ? initialDisplayCompanyId : sessionStorage.getItem(selectionKey) ?? companyId; } catch { return companyId; } });
-  const selectedId = companies.some(company => company.id === rememberedCompany) ? rememberedCompany : companyId;
-  const view = scopeFridayNavigation(readFridayNavigation(location.search), selectedId);
+  const selectedId = companies.some(company => company.id === rememberedCompany) ? rememberedCompany : companies[0]?.id;
+  const requestedView = readFridayNavigation(location.search);
+  const scopedView = selectedId ? scopeFridayNavigation(requestedView, selectedId) : { ...requestedView, scope: requestedView.companyId ? "company" as const : "portfolio" as const };
+  const internalScope = contexts.some(company => company.id === scopedView.companyId && company.purpose === "platform");
+  const portfolioView: FridayNavigation = { ...scopedView, scope: "portfolio", companyId: undefined, projectId: undefined, departmentId: undefined, applicationId: undefined };
+  const view = internalScope && !["settings", "team", "chat", "workforce", "library", "canvas"].includes(scopedView.panel ?? "") ? portfolioView : scopedView;
+  const navigationView = internalScope ? portfolioView : view;
   useEffect(() => {
     if (!view.companyId || !companies.some(company => company.id === view.companyId)) return;
     setRememberedCompany(view.companyId);
@@ -67,7 +74,7 @@ function FridayCompany({ companyId, initialDisplayCompanyId }: { companyId: stri
   const fridayId = profile.data?.fridayAgentId;
   const targetId = panel === "chat" && view.agentId ? view.agentId : view.speakerId ?? fridayId;
   const targetCompanyId = panel === "chat" ? view.companyId ?? companyId : view.speakerCompanyId ?? companyId;
-  const targetRoster = useQuery({ queryKey: queryKeys.agents.list(targetCompanyId), queryFn: () => agentsApi.list(targetCompanyId), enabled: targetCompanyId !== companyId && companies.some(company => company.id === targetCompanyId) });
+  const targetRoster = useQuery({ queryKey: queryKeys.agents.list(targetCompanyId), queryFn: () => agentsApi.list(targetCompanyId), enabled: targetCompanyId !== companyId && contexts.some(company => company.id === targetCompanyId) });
   const target = (targetCompanyId === companyId ? agents.data : targetRoster.data)?.find(agent => agent.id === targetId);
   const assistantName = target?.name ?? "Friday";
   const showView = (next: FridayNavigation) => go(fridayConversationView(next, targetId !== fridayId ? targetId ?? undefined : undefined, targetId !== fridayId ? targetCompanyId : undefined));
@@ -76,19 +83,19 @@ function FridayCompany({ companyId, initialDisplayCompanyId }: { companyId: stri
   const toggleConversation = () => { setTranscript(!transcript); setTyping(!transcript); };
   const closeConversation = () => { setTranscript(false); setTyping(false); };
   const connected = !models.error && !!models.data?.connections.some(connection => connection.method === "subscription" && connection.status === "connected");
-  const renderWorkspace = (data: AgentConversationFocusData) => <FridayWorkspace companyId={companyId} data={data} panel={panel} setPanel={setPanel} compact={transcript} connected={connected} view={view} navigate={showView} agents={agents.isSuccess ? agents.data : []} companies={companies} assistantName={assistantName} onConversation={toggleConversation} onType={openConversation} />;
-  const targetCompany = companies.find(company => company.id === targetCompanyId);
+  const renderWorkspace = (data: AgentConversationFocusData) => <FridayWorkspace companyId={companyId} contextCompany={contexts.find(company => company.id === companyId)} data={data} panel={panel} setPanel={setPanel} compact={transcript} connected={connected} view={view} navigate={showView} agents={agents.isSuccess ? agents.data : []} companies={companies} assistantName={assistantName} onConversation={toggleConversation} onType={openConversation} />;
+  const targetCompany = contexts.find(company => company.id === targetCompanyId);
   const canChat = !!targetCompany && !!targetId && chat.enabled && !profile.error && !!target;
   const fallback: AgentConversationFocusData = { issueId: null, reply: undefined, attachments: [], workProducts: [], runStatus: "idle", awaitingInput: false, unavailable: false, loading: profile.isPending, voiceDisabled: true, onTranscript: text => { setOfflineDraft(text); openConversation(); } };
   return <div className="agentos-app" data-home={!panel}>
-    {companies.map(company => <AgentOSCompanyUpdates key={company.id} companyId={company.id} />)}
-    <AgentOSHeader view={view} navigate={go} admin={registration.data?.isInstanceAdmin} companies={companies} />
+    {contexts.map(company => <AgentOSCompanyUpdates key={company.id} companyId={company.id} />)}
+    <AgentOSHeader view={navigationView} navigate={go} admin={registration.data?.isInstanceAdmin} companies={companies} />
     {contextError && <p role="alert" className="agentos-service-notice text-destructive">{contextError}</p>}
     {error && <p role="alert" className="agentos-service-notice text-destructive">{error.message}</p>}
     {!profile.isPending && !canChat && panel !== "settings" && <div className="agentos-service-notice"><span>{!fridayId ? "Friday’s coordinator profile is not configured yet." : !chat.enabled ? "Enable conversations to talk to Friday." : "Friday’s conversation is connecting."}</span><button type="button" onClick={() => go({ panel: "settings", companyId })}>Open settings</button></div>}
-    <div className="agentos-workspace-shell">{panel && <AgentOSSidebar companies={companies} view={view} navigate={go} />}
+    <div className="agentos-workspace-shell">{panel && <AgentOSSidebar companies={companies} view={navigationView} navigate={go} />}
       <div className="agentos-main-canvas" data-conversation-open={transcript || typing}>
-        {view.companyId && !companies.some(company => company.id === view.companyId) ? <div className="agentos-page" role="alert"><h1>Company unavailable</h1><p>This company is not in your accessible portfolio.</p><Button onClick={() => go({ panel: "companies" })}>Back to companies</Button></div>
+        {view.companyId && !companies.some(company => company.id === view.companyId) && !(panel === "settings" && contexts.some(company => company.id === view.companyId)) ? <div className="agentos-page" role="alert"><h1>Company unavailable</h1><p>This company is not in your accessible portfolio.</p><Button onClick={() => go({ panel: "companies" })}>Back to companies</Button></div>
           : canChat ? <AgentOSCompanyScope company={targetCompany!}><AgentChat key={targetId} agentRef={targetId} focusView={{ beforeSend: async issueId => { setContextError(""); try { await syncFridayDisplayContext(issueId, view); } catch (error) { setContextError("Friday could not read the current display. Your message is still a draft. Please try again."); throw error; } }, canvas: true, docked: !!panel, assistantName, showTranscript: transcript, composerCollapsed: !typing, onExpandComposer: openConversation, onCollapseComposer: closeConversation, onClose: closeConversation, render: renderWorkspace }} /></AgentOSCompanyScope>
             : <div className="agentos-friday-thread" data-friday-docked={!!panel}><div className="agentos-focus-content">{renderWorkspace(fallback)}</div>{(typing || transcript) && <section className="agentos-conversation-panel" data-docked={!!panel} aria-label="Conversation with Friday"><header><h2>You & Friday</h2><Button variant="ghost" size="icon-sm" aria-label="Minimise conversation" onClick={closeConversation}><X /></Button></header><div className="space-y-4 p-5"><p className="text-sm text-muted-foreground">Your draft stays here while you connect Friday. It has not been sent.</p><textarea className="w-full rounded-xl border bg-background p-3" aria-label="Draft for Friday" value={offlineDraft} onChange={event => setOfflineDraft(event.target.value)} /><Button variant="outline" onClick={() => go({ panel: "settings", companyId })}>Connect Friday</Button></div></section>}</div>}
       </div>

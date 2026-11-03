@@ -79,7 +79,7 @@ describe('GitHub skill source import', () => {
 
   it('groups the same repository and ref across projects and shows import progress until it is installed', async () => {
     context.sourceId = '';
-    const repository = { projectId: 'one', projectName: 'Paperclip', projectVisibility: 'open' as const,
+    const repository = { projectId: 'one', projectName: 'AgentOS', projectVisibility: 'open' as const,
       workspaceId: 'workspace-one', repositoryUrl: 'https://github.com/acme/skills', trackingRef: 'HEAD',
       bindingId: null, sourceId: null, status: 'available' as const, lastError: null };
     vi.mocked(skillSourcesApi.projectRepositories).mockResolvedValue([repository, { ...repository, projectId: 'two', projectName: 'Sentry', workspaceId: 'workspace-two' }]);
@@ -88,7 +88,7 @@ describe('GitHub skill source import', () => {
       .mockResolvedValue({ bindingId: 'binding-two' });
     await mount();
     expect(document.querySelectorAll('[aria-label="Project repositories"] section')).toHaveLength(1);
-    expect(document.body.textContent).toContain('Paperclip, Sentry');
+    expect(document.body.textContent).toContain('AgentOS, Sentry');
     await act(async () => button('Import skills').click()); await flush();
     expect(document.querySelector('[aria-busy="true"]')).not.toBeNull();
     expect(document.querySelector('[role="status"]')?.textContent).toContain('Starting import');
@@ -135,7 +135,7 @@ describe('GitHub skill source import', () => {
 
   it('keeps an existing source compact while project import is pending', async () => {
     context.sourceId = '';
-    vi.mocked(skillSourcesApi.list).mockResolvedValue([{ ...sourceFixture(), trackingRef: 'HEAD', projects: [{ id: 'paperclip', name: 'Paperclip', visibility: 'open', active: true }] }]);
+    vi.mocked(skillSourcesApi.list).mockResolvedValue([{ ...sourceFixture(), trackingRef: 'HEAD', projects: [{ id: 'paperclip', name: 'AgentOS', visibility: 'open', active: true }] }]);
     vi.mocked(skillSourcesApi.projectRepositories).mockResolvedValue([{ projectId: 'sentry', projectName: 'Sentry', projectVisibility: 'open',
       workspaceId: 'second-workspace', repositoryUrl: sourceFixture().repositoryUrl, trackingRef: 'HEAD', bindingId: 'binding', sourceId: null, status: 'pending', lastError: null }]);
     await mount();
@@ -144,14 +144,14 @@ describe('GitHub skill source import', () => {
     expect(document.querySelector('[aria-label="Skills from Sentry"]')).toBeNull();
     expect(document.body.textContent).not.toContain('Other projects with this repo');
     expect(document.body.textContent).not.toContain('Sentry');
-    expect(document.body.textContent).not.toContain('Paperclip');
+    expect(document.body.textContent).not.toContain('AgentOS');
     expect(document.querySelector('section a[href="/skills"]')).toBeNull();
     expect(document.querySelector('[role="status"]')?.textContent).toContain('Importing skills');
   });
 
   it('allows remaining project imports while another matching workspace is pending', async () => {
     context.sourceId = '';
-    const repository = { projectId: 'one', projectName: 'Paperclip', projectVisibility: 'open' as const, workspaceId: 'already-pending',
+    const repository = { projectId: 'one', projectName: 'AgentOS', projectVisibility: 'open' as const, workspaceId: 'already-pending',
       repositoryUrl: 'https://github.com/acme/skills', trackingRef: 'HEAD', bindingId: 'binding', sourceId: null, status: 'pending' as const, lastError: null };
     vi.mocked(skillSourcesApi.projectRepositories).mockResolvedValue([repository,
       { ...repository, projectId: 'two', projectName: 'Sentry', workspaceId: 'available-workspace', status: 'available', bindingId: null }]);

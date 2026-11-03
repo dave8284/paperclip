@@ -13,6 +13,8 @@ import { ToastViewport } from "./ToastViewport";
 import { ToastProvider } from "../context/ToastContext";
 import { AttentionQueueRow } from "./AttentionQueueRow";
 
+vi.mock("./MarkdownBody", () => ({ MarkdownBody: ({ children }: { children: string }) => <div>{children}</div> }));
+
 vi.mock("@/lib/router", () => ({
   Link: ({ children, to, ...props }: AnchorHTMLAttributes<HTMLAnchorElement> & { to: string }) => (
     <a href={to} {...props}>{children}</a>
@@ -21,6 +23,7 @@ vi.mock("@/lib/router", () => ({
 
 vi.mock("../api/approvals", () => ({
   approvalsApi: {
+    get: vi.fn(async () => ({ id: "approval-1", companyId: "c1", status: "pending", type: "hire_agent", payload: { name: "Research Analyst", recommendedAction: "Hire for the launch research", nextActionOnApproval: "Create the employee with the approved role" } })),
     approve: vi.fn(),
     reject: vi.fn(),
     requestRevision: vi.fn(),
@@ -134,7 +137,7 @@ function buildItem(overrides: Partial<AttentionItem> = {}): AttentionItem {
 const noop = () => {};
 
 describe("AttentionQueueRow", () => {
-  it("keeps Agent OS Approve and Disapprove available without expanding and uses native mutations", async () => {
+  it("keeps AgentOS Approve and Disapprove available without expanding and uses native mutations", async () => {
     const toggle = vi.fn();
     vi.mocked(approvalsApi.approve).mockResolvedValue({} as never);
     vi.mocked(approvalsApi.reject).mockResolvedValue({} as never);
@@ -143,6 +146,9 @@ describe("AttentionQueueRow", () => {
     const disapprove = [...el.querySelectorAll("button")].find(button => button.textContent === "Disapprove")!;
     expect(approve).toBeTruthy(); expect(disapprove).toBeTruthy();
     expect(el.querySelector('a[href="/PAP/approvals/approval-1"]')).toBeNull();
+    await vi.waitFor(() => expect(approve.disabled).toBe(false));
+    expect(el.textContent).toContain("Hire for the launch research");
+    expect(el.textContent).toContain("Create the employee with the approved role");
     act(() => approve.click());
     await vi.waitFor(() => expect(approvalsApi.approve).toHaveBeenCalledWith("approval-1", undefined));
     await vi.waitFor(() => expect(disapprove.disabled).toBe(false));
@@ -151,10 +157,12 @@ describe("AttentionQueueRow", () => {
     expect(toggle).not.toHaveBeenCalled();
   });
 
-  it("shows native approval failures in Agent OS instead of claiming success", async () => {
+  it("shows native approval failures in AgentOS instead of claiming success", async () => {
     vi.mocked(approvalsApi.approve).mockRejectedValue(new Error("This approval changed. Refresh before deciding."));
     const el = render(<AttentionQueueRow presentation="agentos" item={buildItem()} companyId="c1" expanded={false} onToggleExpand={noop} onDismiss={noop} />);
-    act(() => [...el.querySelectorAll("button")].find(button => button.textContent === "Approve")!.click());
+    const approve = [...el.querySelectorAll("button")].find(button => button.textContent === "Approve")!;
+    await vi.waitFor(() => expect(approve.disabled).toBe(false));
+    act(() => approve.click());
     await vi.waitFor(() => expect(el.querySelector('[role="alert"]')?.textContent).toContain("This approval changed"));
   });
 
@@ -162,6 +170,15 @@ describe("AttentionQueueRow", () => {
     const el = render(<AttentionQueueRow presentation="agentos" inlineDetail={null} item={buildItem({ sourceKind: "failed_run", inlineResolvable: false })} companyId="c1" expanded={false} onToggleExpand={noop} onDismiss={noop} />);
     const labels = [...el.querySelectorAll("button")].map(button => button.textContent);
     expect(labels).not.toContain("Approve"); expect(labels).not.toContain("Disapprove");
+  });
+
+  it("keeps approval actions disabled when its proposal cannot be read", async () => {
+    vi.mocked(approvalsApi.get).mockRejectedValueOnce(new Error("Proposal access revoked"));
+    const el = render(<AttentionQueueRow presentation="agentos" item={buildItem()} companyId="c1" expanded={false} onToggleExpand={noop} onDismiss={noop} />);
+    await vi.waitFor(() => expect(el.textContent).toContain("Proposal access revoked"));
+    const approve = [...el.querySelectorAll("button")].find(button => button.textContent === "Approve")!;
+    expect(approve.disabled).toBe(true); act(() => approve.click());
+    expect(approvalsApi.approve).not.toHaveBeenCalled();
   });
 
   it("renders an inline approval resolver when expanded", () => {

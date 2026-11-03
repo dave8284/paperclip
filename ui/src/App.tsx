@@ -488,14 +488,15 @@ function TaskViewRedirect({ view }: { view: TaskViewKey }) {
 
 function LegacySkillStudioRedirect() {
   const location = useLocation();
-  const { companies, selectedCompany, loading } = useCompany();
+  const { companies, allCompanies, selectedCompany, loading } = useCompany();
+  const routeCompanies = allCompanies ?? companies;
   const { companyPrefix, skillId } = useParams<{ companyPrefix?: string; skillId?: string }>();
 
   if (loading) return null;
 
   const targetCompany =
     (companyPrefix
-      ? companies.find((company) => company.issuePrefix.toUpperCase() === companyPrefix.toUpperCase())
+      ? routeCompanies.find((company) => company.issuePrefix.toUpperCase() === companyPrefix.toUpperCase())
       : null) ??
     selectedCompany ??
     companies[0] ??
@@ -515,7 +516,8 @@ function LegacySkillStudioRedirect() {
 
 function LegacySettingsRedirect() {
   const location = useLocation();
-  const { companies, selectedCompany, loading } = useCompany();
+  const { companies, allCompanies, selectedCompany, loading } = useCompany();
+  const routeCompanies = allCompanies ?? companies;
   const { companyPrefix } = useParams<{ companyPrefix?: string }>();
   const { hidden: hiddenSettings } = useHiddenSettings();
 
@@ -525,7 +527,7 @@ function LegacySettingsRedirect() {
 
   const targetCompany =
     (companyPrefix
-      ? companies.find((company) => company.issuePrefix.toUpperCase() === companyPrefix.toUpperCase())
+      ? routeCompanies.find((company) => company.issuePrefix.toUpperCase() === companyPrefix.toUpperCase())
       : null) ??
     selectedCompany ??
     companies[0] ??
@@ -623,7 +625,7 @@ export function OnboardingRoutePage() {
             <p className="text-sm text-muted-foreground">
               {t("app.cloudCreateUnavailable", {
                 defaultValue:
-                  "Organizations are created in Paperclip Cloud. This instance can't reach it right now — try again from your Cloud portfolio.",
+                  "Organizations are created in the connection service. This instance can't reach it right now — try again from your Cloud portfolio.",
               })}
             </p>
           ) : (
@@ -655,14 +657,15 @@ export function OnboardingRoutePage() {
 }
 
 function CompanyRootRedirect() {
-  const { companies, selectedCompany, loading } = useCompany();
+  const { companies, allCompanies, selectedCompany, loading } = useCompany();
+  const routeCompanies = allCompanies ?? companies;
   const location = useLocation();
 
   if (loading) {
     return <AgentOSLoading />;
   }
 
-  const targetCompany = selectedCompany ?? companies[0] ?? null;
+  const targetCompany = selectedCompany ?? companies[0] ?? routeCompanies[0] ?? null;
   if (!targetCompany) {
     if (
       shouldRedirectCompanylessRouteToOnboarding({
@@ -701,13 +704,14 @@ function AuditCompatibilityRedirect({
 
 function UnprefixedBoardRedirect() {
   const location = useLocation();
-  const { companies, selectedCompany, loading } = useCompany();
+  const { companies, allCompanies, selectedCompany, loading } = useCompany();
+  const routeCompanies = allCompanies ?? companies;
 
   if (loading) {
     return <AgentOSLoading />;
   }
 
-  const targetCompany = selectedCompany ?? companies[0] ?? null;
+  const targetCompany = selectedCompany ?? companies[0] ?? routeCompanies[0] ?? null;
   if (!targetCompany) {
     if (
       shouldRedirectCompanylessRouteToOnboarding({
@@ -752,7 +756,7 @@ function NoCompaniesStartPage() {
             <p className="text-sm text-muted-foreground">
               {t("app.cloudCreateUnavailable", {
                 defaultValue:
-                  "Organizations are created in Paperclip Cloud. This instance can't reach it right now — try again from your Cloud portfolio.",
+                  "Organizations are created in the connection service. This instance can't reach it right now — try again from your Cloud portfolio.",
               })}
             </p>
           ) : (

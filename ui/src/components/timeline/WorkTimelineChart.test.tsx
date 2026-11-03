@@ -178,15 +178,15 @@ describe("WorkTimelineChart", () => {
     expect(lastCall?.toMs).toBeCloseTo(new Date("2026-07-02T01:00:00.000Z").getTime(), -3);
   });
 
-  it("renders cached persona images in the actor gutter", () => {
+  it("renders orb portraits in the actor gutter", () => {
     renderChart(timelineSample());
 
     const gutter = container.querySelector<SVGSVGElement>("[data-testid='work-timeline-actor-gutter']");
 
     const portraits = gutter?.querySelectorAll('image[data-testid="timeline-agent-icon"]');
     expect(portraits?.length).toBe(2);
-    expect(portraits?.[0].getAttribute("href")).toContain("/api/agent-avatars/cap-v1/");
-    expect(portraits?.[1].getAttribute("href")).toContain("/api/agent-avatars/cap-v1/");
+    expect(portraits?.[0].getAttribute("href")).toMatch(/^\/agentos-orbs\/.+\.svg$/);
+    expect(portraits?.[1].getAttribute("href")).toMatch(/^\/agentos-orbs\/.+\.svg$/);
     expect(gutter?.textContent).not.toContain("CC");
   });
 

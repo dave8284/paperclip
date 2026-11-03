@@ -128,7 +128,7 @@ afterEach(() => {
 });
 
 describe("DecisionCard", () => {
-  it("labels Agent OS effects as approvals and disapproval uses the native no-effect dismissal", async () => {
+  it("labels AgentOS effects as approvals and disapproval uses the native no-effect dismissal", async () => {
     const decide = vi.fn(), dismiss = vi.fn();
     const el = render({ actionLabels: "approval", onDecide: decide, onDismiss: dismiss });
     clickButtonWithText(el, "Approve · Comment and snooze");
@@ -137,7 +137,7 @@ describe("DecisionCard", () => {
     expect(dismiss).toHaveBeenCalledWith();
   });
 
-  it("retains strict stale-target blocking under Agent OS approval labels", () => {
+  it("retains strict stale-target blocking under AgentOS approval labels", () => {
     const decide = vi.fn();
     const decision = mkDecision({ options: [{ id: "close", label: "Close work", effects: [{ type: "update_issue_status", targetIssueId: "issue-target", status: "done", staleness: "strict" }] }] });
     const el = render({ decision, actionLabels: "approval", targetChanged: { "issue-target": true }, onDecide: decide });

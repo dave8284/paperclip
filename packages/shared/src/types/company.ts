@@ -17,6 +17,9 @@ export type InteractionResolverGovernance = Partial<
 export interface Company {
   id: string;
   name: string;
+  /** Platform context holds Friday, credentials and administration; it is not
+   * a venture. Older clients without this field represent business companies. */
+  purpose?: "business" | "platform";
   description: string | null;
   status: CompanyStatus;
   pauseReason: PauseReason | null;

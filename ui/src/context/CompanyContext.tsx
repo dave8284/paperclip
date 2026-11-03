@@ -23,6 +23,9 @@ type CompanySelectionOptions = { source?: CompanySelectionSource };
 
 interface CompanyContextValue {
   companies: Company[];
+  /** Accessible contexts for explicit routes, Friday and administration. Never
+   * use this collection as the business portfolio or a company selector. */
+  allCompanies: Company[];
   selectedCompanyId: string | null;
   selectedCompany: Company | null;
   selectionSource: CompanySelectionSource;
@@ -125,7 +128,8 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
       // leaves the customer with no companies until they find Try again.
       retry: 1,
     });
-  const companies = companiesResult.companies;
+  const allCompanies = companiesResult.allCompanies ?? companiesResult.companies;
+  const companies = useMemo(() => allCompanies.filter(company => company.purpose !== "platform"), [allCompanies]);
   const companyListUnauthorized = companiesResult.unauthorized;
   const sidebarCompanies = useMemo(
     () => companies.filter((company) => company.status !== "archived"),
@@ -162,9 +166,9 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
     // `retry: false` makes a single network blip stick. Treat it as undecided
     // rather than as "no companies", which would clear the stored selection.
     if (error) return;
-    if (companies.length === 0) {
+    if (allCompanies.length === 0) {
       if (shouldClearStoredCompanySelection({
-        companies,
+        companies: allCompanies,
         isLoading: false,
         unauthorized: companyListUnauthorized,
         errored: error !== null,
@@ -178,7 +182,7 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
     }
 
     const next = resolveBootstrapCompanySelection({
-      companies,
+      companies: allCompanies,
       sidebarCompanies,
       selectedCompanyId,
       storedCompanyId: localStorage.getItem(STORAGE_KEY),
@@ -188,6 +192,7 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
     setSelectionSource("bootstrap");
     localStorage.setItem(STORAGE_KEY, next);
   }, [
+    allCompanies,
     companies,
     companyListUnauthorized,
     error,
@@ -225,7 +230,7 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
   // query is the only thing that knows whether the last attempt succeeded, and a
   // second copy of that answer drifts — it did, reporting a failure over a later
   // empty list that was simply the truth.
-  const companyListUnavailable = companies.length === 0 && Boolean(error);
+  const companyListUnavailable = allCompanies.length === 0 && Boolean(error);
 
   const createMutation = useMutation({
     mutationFn: (data: {
@@ -252,13 +257,14 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
   );
 
   const selectedCompany = useMemo(
-    () => companies.find((company) => company.id === selectedCompanyId) ?? null,
-    [companies, selectedCompanyId],
+    () => allCompanies.find((company) => company.id === selectedCompanyId) ?? null,
+    [allCompanies, selectedCompanyId],
   );
 
   const value = useMemo(
     () => ({
       companies,
+      allCompanies,
       selectedCompanyId,
       selectedCompany,
       selectionSource,
@@ -272,6 +278,7 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
     }),
     [
       companies,
+      allCompanies,
       selectedCompanyId,
       selectedCompany,
       selectionSource,
@@ -300,7 +307,7 @@ export function useCompany() {
  * portfolio's selected company or grant access to another company. */
 export function CompanyViewProvider({ companyId, children }: { companyId: string; children: ReactNode }) {
   const parent = useCompany();
-  const company = parent.companies.find(item => item.id === companyId) ?? null;
+  const company = (parent.allCompanies ?? parent.companies).find(item => item.id === companyId) ?? null;
   const value = useMemo(() => ({ ...parent, selectedCompanyId: company?.id ?? null, selectedCompany: company }), [parent, company]);
   return <CompanyContext.Provider value={value}>{children}</CompanyContext.Provider>;
 }

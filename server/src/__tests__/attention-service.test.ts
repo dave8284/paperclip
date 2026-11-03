@@ -2018,6 +2018,34 @@ describeEmbeddedPostgres("attention service", () => {
     expect(empty.totalCount).toBe(0); expect(empty.items).toEqual([]);
   });
 
+  it("filters proposals and work before scoped counts and pagination without exposing private sources", async () => {
+    const { companyId } = await seedCompany("CAT");
+    const [project] = await db.insert(projects).values({ companyId, name: "Campaign" }).returning();
+    const taskId = await insertIssue({ companyId, projectId: project.id, identifier: "CAT-1", title: "Campaign research", status: "in_progress" });
+    const privateId = await insertIssue({ companyId, projectId: project.id, identifier: "CAT-2", title: "Private staffing", status: "in_progress", visibility: "private", responsibleUserId: "private-owner" });
+    const approvalIds = [randomUUID(), randomUUID(), randomUUID(), randomUUID()];
+    await db.insert(approvals).values(approvalIds.map((id, index) => ({ id, companyId, type: index === 2 ? "request_board_approval" : "hire_agent", status: "pending", payload: { title: index === 3 ? "Private proposal" : `Proposal ${index}` } })));
+    await db.insert(issueApprovals).values(approvalIds.map((approvalId, index) => ({ companyId, approvalId, issueId: index === 3 ? privateId : taskId })));
+    const actor = { type: "board" as const, source: "session" as const, userId: "reader", companyIds: [companyId] };
+    const options = { userId: actor.userId, actor, projectId: project.id, category: "proposals" as const, limit: 1 };
+    const svc = attentionService(db);
+    const first = await svc.list(companyId, options);
+    expect(first.totalCount).toBe(2); expect(first.items).toHaveLength(1); expect(first.nextCursor).toBeTruthy();
+    const second = await svc.list(companyId, { ...options, cursor: first.nextCursor! });
+    expect(second.totalCount).toBe(2); expect(second.items).toHaveLength(1); expect(second.nextCursor).toBeNull();
+    expect(new Set([...first.items, ...second.items].map(item => item.subject.id))).toEqual(new Set(approvalIds.slice(0, 2)));
+    expect(JSON.stringify(first)).not.toContain("Private proposal");
+    const work = await svc.list(companyId, { ...options, category: "work", limit: 10 });
+    expect(work.items.map(item => item.subject.id)).toEqual([approvalIds[2]]);
+    expect(work.totalCount).toBe(1);
+    for (const category of ["proposals", "work"] as const) {
+      const empty = await svc.list(companyId, { ...options, category, projectId: randomUUID() });
+      expect(empty.items).toEqual([]); expect(empty.totalCount).toBe(0); expect(empty.nextCursor).toBeNull();
+    }
+    const unfiltered = await svc.list(companyId, { ...options, category: undefined, limit: 10 });
+    expect(unfiltered.totalCount).toBe(3);
+  });
+
   it("serves the route for board users and rejects agent callers", async () => {
     const { companyId } = await seedCompany("ATR");
 
@@ -2050,6 +2078,8 @@ describeEmbeddedPostgres("attention service", () => {
 
     await request(app(board)).get(`/api/companies/${companyId}/attention`).expect(200);
     await request(app(board)).get(`/api/companies/${companyId}/attention?projectId=invalid`).expect(400);
+    await request(app(board)).get(`/api/companies/${companyId}/attention?category=invalid`).expect(400);
+    await request(app(board)).get(`/api/companies/${companyId}/attention?category=proposals`).expect(200);
     const completeFeed = await request(app(board))
       .get(`/api/companies/${companyId}/attention?includeDismissed=true&all=true`)
       .expect(200);
@@ -2061,6 +2091,7 @@ describeEmbeddedPostgres("attention service", () => {
       .get(`/api/companies/${companyId}/attention?sort=oldest`)
       .expect(400, { error: "sort must be 'activity' or 'decide'" });
     await request(app(agent)).get(`/api/companies/${companyId}/attention`).expect(403);
+    await request(app(agent)).get(`/api/companies/${companyId}/attention?category=proposals`).expect(403);
   });
 
   it("omits private issue review items for a non-member board user", async () => {

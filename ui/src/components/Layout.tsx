@@ -99,12 +99,14 @@ export function Layout({ sidebarSections }: { sidebarSections?: ReactNode }) {
   const pushToast = useOptionalToastActions()?.pushToast ?? null;
   const {
     companies,
+    allCompanies,
     loading: companiesLoading,
     selectedCompany,
     selectedCompanyId,
     selectionSource,
     setSelectedCompanyId,
   } = useCompany();
+  const routeCompanies = allCompanies ?? companies;
   const {
     companyPrefix,
     pluginRoutePath: matchedPluginRoutePath,
@@ -149,10 +151,10 @@ export function Layout({ sidebarSections }: { sidebarSections?: ReactNode }) {
   const matchedCompany = useMemo(() => {
     if (!companyPrefix) return null;
     const requestedPrefix = companyPrefix.toUpperCase();
-    return companies.find((company) => company.issuePrefix.toUpperCase() === requestedPrefix) ?? null;
-  }, [companies, companyPrefix]);
+    return routeCompanies.find((company) => company.issuePrefix.toUpperCase() === requestedPrefix) ?? null;
+  }, [routeCompanies, companyPrefix]);
   const hasUnknownCompanyPrefix =
-    Boolean(companyPrefix) && !companiesLoading && companies.length > 0 && !matchedCompany;
+    Boolean(companyPrefix) && !companiesLoading && routeCompanies.length > 0 && !matchedCompany;
   const pluginRoutePath = useMemo(
     () => matchedPluginRoutePath?.toLowerCase() ?? getCompanyRouteSegment(location.pathname, companyPrefix),
     [companyPrefix, location.pathname, matchedPluginRoutePath],
@@ -275,18 +277,19 @@ export function Layout({ sidebarSections }: { sidebarSections?: ReactNode }) {
     // Cloud provisions the single company for a stack, and POST /companies is a
     // 403 floor there — auto-opening the wizard could only dead-end.
     if (health?.cloud) return;
-    if (companies.length === 0) {
+    if (routeCompanies.length === 0) {
       onboardingTriggered.current = true;
       openOnboarding();
     }
-  }, [companies, companiesLoading, openOnboarding, health?.cloud, health?.deploymentMode]);
+  }, [routeCompanies, companiesLoading, openOnboarding, health?.cloud, health?.deploymentMode]);
 
   useEffect(() => {
-    if (!companyPrefix || companiesLoading || companies.length === 0) return;
+    if (!companyPrefix || companiesLoading || routeCompanies.length === 0) return;
 
     if (!matchedCompany) {
-      const fallback = (selectedCompanyId ? companies.find((company) => company.id === selectedCompanyId) : null)
+      const fallback = (selectedCompanyId ? routeCompanies.find((company) => company.id === selectedCompanyId) : null)
         ?? companies[0]
+        ?? routeCompanies[0]
         ?? null;
       if (fallback && selectedCompanyId !== fallback.id) {
         setSelectedCompanyId(fallback.id, { source: "route_sync" });
@@ -333,6 +336,7 @@ export function Layout({ sidebarSections }: { sidebarSections?: ReactNode }) {
   }, [
     companyPrefix,
     companies,
+    routeCompanies,
     companiesLoading,
     matchedCompany,
     location.pathname,
@@ -580,9 +584,10 @@ export function Layout({ sidebarSections }: { sidebarSections?: ReactNode }) {
       <a href="#main-content" className="sr-only focus:not-sr-only">Skip to main content</a>
       <DevRestartBanner devServer={health?.devServer} />
       <main id="main-content" ref={mainContentRef} tabIndex={-1} className="agentos-root-scroll">
+        <ToastViewport presentation="inline" />
         {hasUnknownCompanyPrefix ? <NotFoundPage scope="invalid_company_prefix" requestedPrefix={companyPrefix ?? selectedCompany?.issuePrefix} /> : <RouteErrorBoundary>{isFridayRoute ? <Outlet /> : <AgentOSNativeFrame context={secondarySidebar} properties={<PropertiesPanel taskDetailLayout={false} />}><Outlet /></AgentOSNativeFrame>}</RouteErrorBoundary>}
       </main>
-      <BoardDialogs /><KeyboardShortcutsCheatsheet open={shortcutsOpen} onOpenChange={setShortcutsOpen} /><ToastViewport />
+      <BoardDialogs /><KeyboardShortcutsCheatsheet open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
       <PluginAppShellOverlays localTrusted={health?.deploymentMode === "local_trusted"} />
     </div>
   </ChatSetupSidebarProvider>;

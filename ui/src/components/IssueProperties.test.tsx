@@ -1047,7 +1047,7 @@ describe("IssueProperties", () => {
       expect(container.textContent).not.toContain("Responsible");
       expect(container.textContent).not.toContain("Kicked off by");
       expect(container.textContent).not.toContain("Created by");
-      expect(container.querySelector('[title="CodexCoder"] [data-slot="agent-avatar"] img')?.getAttribute("src")).toContain("/api/agent-avatars/cap-v1/");
+      expect(container.querySelector('[title="CodexCoder"] [data-slot="agent-avatar"] img')?.getAttribute("src")).toContain("/agentos-orbs/");
     });
 
     act(() => root.unmount());
@@ -1098,7 +1098,7 @@ describe("IssueProperties", () => {
       expect(container.textContent).toContain("Unassigned");
       expect(container.textContent).not.toContain("Responsible");
       expect(container.textContent).not.toContain("Kicked off by");
-      expect(container.querySelector('[title="CodexCoder"] [data-slot="agent-avatar"] img')?.getAttribute("src")).toContain("/api/agent-avatars/cap-v1/");
+      expect(container.querySelector('[title="CodexCoder"] [data-slot="agent-avatar"] img')?.getAttribute("src")).toContain("/agentos-orbs/");
     });
 
     act(() => root.unmount());

@@ -28,6 +28,12 @@ Each review report separates configuration from evidence:
 - `shared_context_review`: ordinary review with retained context, disclosed.
 - `independent_review_unavailable`: unsupported/unknown isolation, access or capacity.
 
+Alongside this summary, record the independent dimensions from
+[qualification](qualification.md): parent-turn probe, host-instruction/memory
+probe, actual source reads, read-only enforcement and native task/run lineage.
+Use `passed`, `failed`, `unverified` or `not_run` per dimension, with evidence and
+limits. A parent-turn probe alone must not produce the `isolated` summary.
+
 Only label `isolated` when evidence establishes the actual behavior. Keep runtime
 limitations, tool calls, surfaced plans, review findings, verification results and
 concise rationales visible. Private model internals are not observable events and

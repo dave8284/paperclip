@@ -41,16 +41,21 @@ describe("company departments", () => {
     const rows = await service.list(companyId, { type: "board", source: "session", userId: "viewer", companyIds: [companyId] });
     expect(rows.find(row => row.id === department.id)?.projectIds).not.toContain(privateId);
   });
-  it("assigns only active company employees, preserves heads on legacy edits and records changes", async () => {
+  it("assigns current company employees without resuming a paused head, preserves legacy edits and records changes", async () => {
     const service = departmentService(db);
-    const [lead, retired, foreign] = await db.insert(agents).values([
+    const [lead, retired, foreign, paused] = await db.insert(agents).values([
       { companyId, name: "Engineering head" },
       { companyId, name: "Retired head", status: "terminated" },
       { companyId: otherId, name: "Other company head" },
+      { companyId, name: "Paused head", status: "paused", lifecycleState: "paused" },
     ]).returning();
     for (const invalid of [retired, foreign]) {
-      await expect(service.save(companyId, actor, who, { name: "Rejected head", description: "", leadAgentId: invalid.id })).rejects.toThrow("active employee in this company");
+      await expect(service.save(companyId, actor, who, { name: "Rejected head", description: "", leadAgentId: invalid.id })).rejects.toThrow("current employee in this company");
     }
+    const planned = await service.save(companyId, actor, who, { name: "Prepared department", description: "Execution is paused", leadAgentId: paused.id });
+    expect(planned.leadAgentId).toBe(paused.id);
+    expect((await db.select().from(agents).where(eq(agents.id, paused.id)))[0].status).toBe("paused");
+    expect((await db.select().from(agents).where(eq(agents.id, paused.id)))[0].lifecycleState).toBe("paused");
     const department = await service.save(companyId, actor, who, { name: "Led department", description: "", leadAgentId: lead.id });
     await expect(deleteAgentDependencies(db, companyId, lead.id)).rejects.toThrow("Reassign or clear");
     expect((await db.select().from(agents).where(eq(agents.id, lead.id)))[0].lifecycleState).toBe("ready");

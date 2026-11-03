@@ -103,11 +103,20 @@ function AnimatedToast({
   );
 }
 
-export function ToastViewport() {
+export function ToastViewport({ presentation = "popup" }: { presentation?: "popup" | "inline" }) {
   const toasts = useToastState();
   const { dismissToast } = useToastActions();
 
   if (toasts.length === 0) return null;
+
+  if (presentation === "inline") {
+    const notices = toasts.filter(toast => toast.tone === "error" || toast.tone === "warn");
+    if (!notices.length) return null;
+    return <section className="space-y-2 px-4 py-2" aria-label="Workspace status">{notices.map(toast => <div key={toast.id} className="flex items-start justify-between gap-3 text-sm" role={toast.tone === "error" ? "alert" : "status"}>
+      <div><strong>{toast.title}</strong>{toast.body && <p className="text-muted-foreground">{toast.body}</p>}{toast.action?.onClick ? <button type="button" className="underline" onClick={() => { toast.action?.onClick?.(); dismissToast(toast.id); }}>{toast.action.label}</button> : toast.action?.href ? <Link className="underline" to={toast.action.href} onClick={() => dismissToast(toast.id)}>{toast.action.label}</Link> : null}</div>
+      <button type="button" className="text-muted-foreground" aria-label="Dismiss status" onClick={() => dismissToast(toast.id)}><X className="size-4" /></button>
+    </div>)}</section>;
+  }
 
   return (
     <aside

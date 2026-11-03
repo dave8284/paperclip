@@ -22,6 +22,6 @@ it("shows the uploaded image in small and animated-character surfaces, then retu
     expect(container.querySelectorAll("img")).toHaveLength(2);
     expect(container.querySelector("canvas")).toBeNull();
     await act(async () => root.render(<AgentAvatar appearance={base} />));
-    expect(container.querySelector("img")?.getAttribute("src")).toContain("/api/agent-avatars/cap-v1/deep-tide/");
+    expect(container.querySelector("img")?.getAttribute("src")).toBe("/agentos-orbs/deep-tide.svg");
   } finally { await act(async () => root.unmount()); }
 });

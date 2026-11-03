@@ -17,6 +17,7 @@ import {
   readNativeReviewAssignmentContext,
 } from "../native-runtime/native-review-participant.js";
 import { buildNativeReviewRequest } from "../native-runtime/native-review-prompt.js";
+import { buildNativeReviewContextReceipt, restoreNativeReviewContextReceipt } from "../native-runtime/native-review-context-receipt.js";
 import type { CaseExecutionContext } from "../case-context.js";
 import type { buildExecutionContinuation } from "../execution-continuation.js";
 import type { agentInstructionWorkingCopyService } from "../agent-instruction-working-copies.js";
@@ -930,6 +931,20 @@ export async function selectHeartbeatRuntime(db: Db, input: HeartbeatRuntimeSele
         throw new Error("native_runtime_mode_conflict");
       }
       const lockedProfile = parseObject(lockedRun.runnerProfileJson);
+      const retainedReviewReceipt = lockedProfile.nativeExecutionInput && lockedProfile.nativeReviewContextReceipt
+        ? await restoreNativeReviewContextReceipt(tx as unknown as Db, {
+            run: lockedRun, execution: parseNativeExecutionInput(lockedProfile.nativeExecutionInput),
+          })
+        : null;
+      const nativeReviewContextReceipt = retainedReviewReceipt ?? (nativeReview
+        ? buildNativeReviewContextReceipt({
+            run: lockedRun,
+            execution: lockedProfile.nativeExecutionInput
+              ? parseNativeExecutionInput(lockedProfile.nativeExecutionInput)
+              : nativeExecution!,
+            review: nativeReview,
+          })
+        : null);
       const persistedNativeSessionId =
         await measureRunPhase("runtime_selection.bootstrap", () => prepareNativeSessionBootstrapPersistence(tx, {
           run: lockedRun,
@@ -968,6 +983,9 @@ export async function selectHeartbeatRuntime(db: Db, input: HeartbeatRuntimeSele
               : {}),
             nativeExecutionInput:
               lockedProfile.nativeExecutionInput ?? nativeExecution,
+            // Retain validated historical DB evidence, never a supplied profile receipt.
+            // Preparation is not proof that the provider received or read it.
+            nativeReviewContextReceipt,
             nativeToolContractFingerprint:
               nativeToolContractFingerprintForTarget(
                 executionTarget?.kind ?? "local",

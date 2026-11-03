@@ -21,10 +21,11 @@ const AgentChat = lazy(() => import("@/pages/AgentChat").then(module => ({ defau
 /** The same durable Friday conversation remains reachable on native record and
  * settings pages; opening the dock never starts a run. */
 export function FridayDock() {
-  const { companies, selectedCompanyId } = useCompany();
+  const { companies, allCompanies, selectedCompanyId } = useCompany();
+  const contexts = allCompanies ?? companies;
   const { userId } = useAccountIdentity();
   const portfolios = useQuery({ queryKey: workforceKeys.list(userId), queryFn: ({ signal }) => workforceApi.list(signal), retry: false });
-  const company = companies.find(item => item.id === portfolios.data?.[0]?.homeCompanyId) ?? companies.find(item => item.id === selectedCompanyId);
+  const company = contexts.find(item => item.id === portfolios.data?.[0]?.homeCompanyId) ?? contexts.find(item => item.purpose === "platform") ?? contexts.find(item => item.id === selectedCompanyId);
   const profile = useQuery({ queryKey: operatingProfileKey(company?.id ?? null), queryFn: () => operatingProfileApi.get(company!.id), enabled: !!company });
   const models = useQuery({ queryKey: ["ai-connections", company?.id], queryFn: () => aiConnectionsApi.list(company!.id), enabled: !!company });
   const chat = useAgentChatEnabled();

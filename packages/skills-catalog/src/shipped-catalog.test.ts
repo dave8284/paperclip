@@ -202,7 +202,7 @@ describe("shipped skills catalog", () => {
     const rampSkill = readFileSync(new URL("../catalog/optional/finance/ramp/SKILL.md", import.meta.url), "utf8");
 
     expect(rampSkill).toContain("mixes Official and Community playbooks");
-    expect(rampSkill).toContain("do not execute them inside Paperclip unless a Paperclip approval explicitly names the playbook");
+    expect(rampSkill).toContain("do not execute them inside AgentOS unless an AgentOS approval explicitly names the playbook");
     expect(rampSkill).toContain("third-party browser automation, MCP server, CLI, or connector");
   });
 

@@ -126,7 +126,7 @@ describe("New agent setup", () => {
     expect(secrets.create).toHaveBeenCalledTimes(1);
   });
 
-  it("retains an unfinished legacy harness when the current target defaults to Paperclip Runner", async () => {
+  it("retains an unfinished legacy harness when the current target defaults to AgentOS Runner", async () => {
     await render("codex_local");
     const setupId = api.create.mock.calls[0][1].setupId;
     await act(async () => root.render(null));
@@ -379,7 +379,7 @@ describe("New agent setup", () => {
       adapter.type === "codex_local" ? { ...adapter, supportedRunners: ["paperclip", "legacy"], defaultRunner: context?.environmentId === "linux-ssh" ? "paperclip" : "legacy" } : adapter));
     await render("codex_local");
     await act(async () => (container.querySelector("summary") as HTMLElement).click());
-    expect(container.querySelector('[aria-label="Runner"]')?.textContent).toBe("Paperclip Runner (default)");
+    expect(container.querySelector('[aria-label="Runner"]')?.textContent).toBe("AgentOS Runner (default)");
     expect(adapterApi.list).toHaveBeenCalledWith({ companyId: "company-1", environmentId: "linux-ssh" });
     await connect("OpenAI");
     expect(api.testEnvironment.mock.calls[0][2].environmentId).toBe("linux-ssh");
@@ -423,7 +423,7 @@ describe("New agent setup", () => {
     state.adapters = (state.adapters as any[]).map(adapter => adapter.type === "codex_local" ? { ...adapter, supportedRunners: ["paperclip", "legacy"], defaultRunner: "paperclip" } : adapter);
     await render("codex_local");
     await act(async () => (container.querySelector("summary") as HTMLElement).click());
-    expect(container.querySelector('[aria-label="Runner"]')?.textContent).toBe("Paperclip Runner (default)");
+    expect(container.querySelector('[aria-label="Runner"]')?.textContent).toBe("AgentOS Runner (default)");
     await connect("OpenAI");
     await click("Finish setup");
     expect(api.hire.mock.calls[0][1].adapterType).toBe("codex_local");
@@ -443,7 +443,7 @@ describe("New agent setup", () => {
     expect(api.testEnvironment.mock.calls[0][2].runner).toBe("legacy");
     await act(async () => (container.querySelector("summary") as HTMLElement).click());
     await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Runner"]')!.click());
-    await act(async () => [...document.querySelectorAll<HTMLButtonElement>('[role="option"]')].find(option => option.textContent === "Paperclip Runner (default)")!.click());
+    await act(async () => [...document.querySelectorAll<HTMLButtonElement>('[role="option"]')].find(option => option.textContent === "AgentOS Runner (default)")!.click());
     await click("Finish setup");
     expect(api.testEnvironment).toHaveBeenLastCalledWith("company-1", "codex_local", expect.objectContaining({ runner: "paperclip" }));
     expect(api.hire.mock.calls[0][1]).toMatchObject({ adapterType: "codex_local", runner: "paperclip" });
@@ -618,7 +618,7 @@ describe("New agent setup", () => {
     await render("paperclip_runner", "claude");
     expect(container.textContent).not.toContain("This adapter is unavailable");
     expect(container.textContent).toContain("Claude Code");
-    expect(container.textContent).toContain("Paperclip Runner");
+    expect(container.textContent).toContain("AgentOS Runner");
     expect(container.textContent).toContain("Connect a model");
     expect(api.hire).not.toHaveBeenCalled();
   });
@@ -640,7 +640,7 @@ describe("New agent setup", () => {
       cloud: { managed: true },
     });
     envApi.list.mockResolvedValue([
-      { id: "sandbox-1", name: "Paperclip Cloud", driver: "sandbox", config: { provider: "daytona" } },
+      { id: "sandbox-1", name: "The connection service", driver: "sandbox", config: { provider: "daytona" } },
     ]);
     envApi.capabilities.mockResolvedValue({
       sandboxProviders: { daytona: { supportsLoginPty: true } },
@@ -1047,7 +1047,7 @@ describe("New agent setup", () => {
     const model = "openrouter/anthropic/claude-sonnet-4.6";
     await fill("Model", model);
     const select = container.querySelector<HTMLButtonElement>('[aria-label="Runner"]')!;
-    expect(select.textContent).toContain("Paperclip Runner");
+    expect(select.textContent).toContain("AgentOS Runner");
     if (runner === "legacy") {
       await act(async () => select.click());
       await act(async () => document.querySelector<HTMLButtonElement>('[role="option"][data-value="legacy"]')!.click());

@@ -455,7 +455,7 @@ function buildPlanDecisionResponseText(
 
 const FEEDBACK_TERMS_URL =
   import.meta.env.VITE_FEEDBACK_TERMS_URL?.trim() ||
-  "https://paperclip.ing/tos";
+  null;
 const ISSUE_COMMENT_AUTOLOAD_LIMIT = ISSUE_COMMENT_PAGE_SIZE * 3;
 const JUMP_TO_LATEST_MAX_COMMENT_PAGES = 10;
 function treeControlPreviewErrorCopy(error: unknown): string {
@@ -2452,7 +2452,7 @@ const IssueDetailChatTab = memo(function IssueDetailChatTab({
         if (code === "queued_comment_already_dispatching") {
           pushToast({
             title: "Message is already being sent",
-            body: "The continuation started before the discard was confirmed, so Paperclip could not unsend it.",
+            body: "The continuation started before the discard was confirmed, so AgentOS could not unsend it.",
             tone: "error",
             ttlMs: 15_000,
             dedupeKey: `queued-comment-already-dispatching:${issueId}:${commentId}`,
@@ -2665,8 +2665,8 @@ const IssueDetailChatTab = memo(function IssueDetailChatTab({
                   }
                 : undefined
             }
-            stopRunLabel={grokWork ? "Stop Paperclip work" : "Pause work"}
-            stoppingRunLabel={grokWork ? "Stopping Paperclip work…" : "Pausing..."}
+            stopRunLabel={grokWork ? "Stop AgentOS work" : "Pause work"}
+            stoppingRunLabel={grokWork ? "Stopping AgentOS work…" : "Pausing..."}
             stopRunVariant={grokWork ? "stop" : "pause"}
             runFinalizationActions={runFinalizationActions}
             onAcceptInteraction={onAcceptInteraction}
@@ -2698,7 +2698,7 @@ const IssueDetailChatTab = memo(function IssueDetailChatTab({
               tryAgainNoLiveExecutionPathPending
             }
             footer={grokWork || stopGrokWork.error || classicQueuedDeliveryError ? <>
-              {grokWork && <p className="text-xs text-muted-foreground">Runs in Grok Bot · Usage not reported. Stop Paperclip work revokes this session’s authority; remote execution may continue. Open the Grok Bot desktop app to inspect it.</p>}
+              {grokWork && <p className="text-xs text-muted-foreground">Runs in Grok Bot · Usage not reported. Stop AgentOS work revokes this session’s authority; remote execution may continue. Open the Grok Bot desktop app to inspect it.</p>}
               {stopGrokWork.error && <p role="alert" className="text-sm text-destructive">{stopGrokWork.error.message}</p>}
               {classicQueuedDeliveryError && <p role="status" className="text-sm text-destructive">{classicQueuedDeliveryError}</p>}
               {footer}
@@ -8285,13 +8285,12 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
                       attachments: attachments ?? [],
                       workProducts: workProducts ?? [],
                       onTranscript: text => {
-                        conversation.focusView?.onExpandComposer?.();
                         commentComposerRef.current?.restoreDraft(text);
                       },
                       onVoiceMessage: async text => {
                         const composer = commentComposerRef.current;
                         if (!composer?.sendVoice) throw new Error("Conversation is still loading. Your voice message has not been sent.");
-                        if (!await composer.sendVoice(text)) conversation.focusView?.onExpandComposer?.();
+                        if (!await composer.sendVoice(text)) throw Object.assign(new Error("Your message is saved as a draft and has not been sent. Open Friday's conversation to review the existing draft or pending action."), { draftPreserved: true });
                       },
                       voiceDisabled: !!activePauseHold || !instanceExperimentalSettings?.enableAgentChat,
                     }),

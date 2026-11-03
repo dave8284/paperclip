@@ -21,6 +21,7 @@ it("keeps Departments above Projects, Settings below Saved displays and the hier
     expect(workspace.indexOf("Departments")).toBeLessThan(workspace.indexOf("Projects"));
     const footer = [...host.querySelectorAll('nav[aria-label="People, history and settings"] button')].map(button => button.textContent);
     expect(footer.slice(-2)).toEqual(["Saved displays", "Settings"]);
+    expect([...host.querySelectorAll("button")].find(button => button.textContent === "Saved displays")?.querySelector("svg.lucide-monitor")).not.toBeNull();
     expect(host.textContent).not.toContain("Departments & projects");
     expect(host.textContent).not.toContain("Delete company");
     expect(host.textContent).toContain("one department");

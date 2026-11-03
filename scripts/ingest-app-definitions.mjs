@@ -11,6 +11,23 @@ const corpus =
     "../../paperclip-content/research/connections/vercel/templates",
   );
 const out = path.join(root, "packages/shared/src/app-definitions");
+// Project this fork's display name without rewriting provider identities,
+// protocol keys, command examples, URLs, or cited source labels.
+const displayCopyFields = new Set([
+  "description", "guidanceMd", "helperMd", "label", "whenToUse", "warnings", "steps",
+]);
+const brandDisplayCopy = (text) => text.replace(
+  /(```[\s\S]*?```|`[^`]*`|\[[^\]]*\]\([^)]+\)|https?:\/\/[^\s]+)|\bPaperclip\b/g,
+  (match, protectedSpan) => protectedSpan ? match : "AgentOS",
+);
+function brandAppDisplayCopy(value, key = "") {
+  if (typeof value === "string") return displayCopyFields.has(key) ? brandDisplayCopy(value) : value;
+  if (Array.isArray(value)) return value.map(item => brandAppDisplayCopy(item, key));
+  if (value && typeof value === "object") {
+    for (const [field, item] of Object.entries(value)) value[field] = brandAppDisplayCopy(item, field);
+  }
+  return value;
+}
 const brandingManifest = JSON.parse(
   fs.readFileSync(
     path.join(root, "ui/public/brands/apps/manifest.json"),
@@ -333,7 +350,7 @@ const apps = [
         },
       ],
       ["organization", "repository"],
-      "Generate the webhook secret in Paperclip, then create one private GitHub App with active SSL-verified webhooks, Issues and Pull requests read/write permission, and the selectable issue_comment and pull_request_review_comment events. GitHub sends installation and installation_repositories automatically. Install the App only on repositories where people may mention the agent.",
+      "Generate the webhook secret in Paperclip, then create one private GitHub App with active SSL-verified webhooks and Issues and Pull requests read/write permission. Subscribe to issue_comment and pull_request_review_comment for comment mentions; add issues and pull_request for description mentions, and pull_request_review for review-summary mentions. The wizard selects all five. GitHub sends installation and installation_repositories automatically. Install the App only on repositories where people may mention the agent.",
       {
         register: "https://github.com/settings/apps/new",
         docs: "https://docs.github.com/en/apps/creating-github-apps/registering-a-github-app/registering-a-github-app",
@@ -2178,6 +2195,7 @@ const reviewReport = {
   }),
 };
 for (const app of apps) {
+  brandAppDisplayCopy(app);
   validateApp(app);
   if (parsedCaptures[app.slug] && parsedCaptures[app.slug].length === 0)
     throw new Error(`${app.slug}: capture has no states`);

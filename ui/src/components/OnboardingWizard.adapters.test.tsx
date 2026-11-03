@@ -235,7 +235,7 @@ describe("OnboardingWizard adapter selection", () => {
     });
   });
 
-  it("normalizes a saved Paperclip Runner draft before adapter discovery resolves", async () => {
+  it("normalizes a saved AgentOS Runner draft before adapter discovery resolves", async () => {
     mockAdapterRegistry.loaded = false;
     mockAdapterRegistry.list = [{ type: "codex_local" }];
     window.localStorage.setItem(

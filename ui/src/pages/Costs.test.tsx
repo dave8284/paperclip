@@ -106,7 +106,7 @@ describe("Shared Costs surfaces", () => {
     await act(async () => { await vi.waitFor(() => expect(container.textContent).toContain("Researcher's Muse activity has no reported usage or cost")); });
     expect(scopedAgentMock).toHaveBeenCalledWith("muse-agent", "company-1");
     expect(container.textContent).toContain("Totals below show recorded organization charges only");
-    expect(container.textContent).toContain("Paperclip cannot enforce a Muse spend ceiling");
+    expect(container.textContent).toContain("AgentOS cannot enforce a Muse spend ceiling");
     queryClient.clear();
   });
 

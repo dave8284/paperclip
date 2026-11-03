@@ -384,6 +384,7 @@ export function DecisionCard({
       {/* Body */}
       {decision.body?.trim() && (
         <div className="mt-3 text-sm leading-6 text-foreground/90">
+          {actionLabels === "approval" && <h4 className="mb-2 text-sm font-semibold">Recommendation and context</h4>}
           <MarkdownBody>{decision.body}</MarkdownBody>
         </div>
       )}
@@ -439,6 +440,7 @@ export function DecisionCard({
       {/* Options (open only) */}
       {open && (
         <div className="mt-3 space-y-2">
+          {actionLabels === "approval" && <h4 className="text-sm font-semibold">Proposed course of action</h4>}
           {decision.options.map((option) => {
             const destructive = isDestructiveOption(option);
             const blockedStale = option.effects.some(

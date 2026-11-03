@@ -255,7 +255,8 @@ describe("InstanceGeneralSettings operator-hidden sections", () => {
     expect(container.textContent).not.toContain("Censor username in logs");
     expect(container.textContent).not.toContain("Deployment and auth");
     expect(container.textContent).toContain("Backup retention");
-    expect(container.textContent).toContain("AI feedback sharing");
+    expect(container.textContent).not.toContain("AI feedback sharing");
+    expect(container.textContent).not.toContain("Always allow");
     expect(container.textContent).toContain("Sign out");
   });
 

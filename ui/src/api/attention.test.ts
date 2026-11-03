@@ -42,4 +42,11 @@ describe("attentionApi.list", () => {
 
     expect(mockApi.get).toHaveBeenCalledWith("/companies/company-1/attention");
   });
+
+  it("requests native proposal or work categories before paging a project", async () => {
+    await attentionApi.list("company-1", { category: "proposals", projectId: "project-1", limit: 1 });
+    expect(mockApi.get).toHaveBeenLastCalledWith("/companies/company-1/attention?category=proposals&projectId=project-1&limit=1");
+    await attentionApi.list("company-1", { category: "work" });
+    expect(mockApi.get).toHaveBeenLastCalledWith("/companies/company-1/attention?category=work");
+  });
 });

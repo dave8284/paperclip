@@ -27,8 +27,19 @@ Agent access: [companion](../agent-access-map/access.md).
 Open `/auth`; first-owner bootstrap uses `/board-claim/:token` when configured.
 
 When converting a local Agent OS instance to authenticated ownership, the native
-claim ceremony also transfers local-board-owned portfolios to the claimant and
-audits that transfer. Portfolios owned by another real user are unchanged.
+claim ceremony transfers local-board-owned portfolios, explicit company defaults,
+visible unfinished task responsibility and current routine responsibility to the
+claimant. Routines receive a new revision; prior revisions, runs, creators and
+audit records retain their original identity. Active local-board memberships are
+archived so a company without an explicit default cannot fall back to that retired
+identity. Another real user's ownership is preserved. These changes, approval,
+membership, portfolio audit and owner default grants commit together or roll back.
+Existing agent API keys keep their original responsible identity and require
+deliberate reissue before they act for the new owner.
+Existing local-board chats transfer to the claimant with the same thread IDs,
+session boundaries, comments and attachments, including hidden threads. If the
+claimant already has a chat with the same agent, the claim fails with a conflict
+and preserves both threads and all prior ownership; it does not merge chats.
 
 ### `invite-members`
 
@@ -48,6 +59,14 @@ Preconditions: follow the [baseline](./README.md#before-driving-a-journey). For 
 ### `login`
 
 Automated: [auth UI](../../ui/src/pages/Auth.test.tsx) and [session routes](../../server/src/__tests__/auth-session-route.test.ts) cover their respective layers.
+
+The [claim regression cases](../../server/src/__tests__/board-claim.test.ts) cover
+operational ownership, null-default membership fallback, other-owner/history/key
+preservation, chat continuity/collision rollback and SQL-fault rollback of routine
+revision or owner grant writes.
+The 2026-11-04 additions are source-reviewed, not runtime-qualified: this sandbox
+cannot start the isolated PostgreSQL listener (`listen EPERM`); the known failing
+setup was not repeated for these cases.
 
 Manual: Sign in, reload a company deep link, sign out, and revisit it. Confirm the browser requests authentication rather than showing cached company data. Test an invalid claim separately on disposable state.
 

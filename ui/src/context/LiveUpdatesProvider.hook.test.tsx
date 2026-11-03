@@ -8,15 +8,16 @@ import type { LiveEvent } from "@paperclipai/shared";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { queryKeys } from "../lib/queryKeys";
 
-const { pushToast, companySelection } = vi.hoisted(() => ({
+const { pushToast, companySelection, location } = vi.hoisted(() => ({
   pushToast: vi.fn(() => "toast-id"),
   companySelection: { id: "company-1" },
+  location: { pathname: "/PAP/issues/PAP-204", search: "?shell=classic" },
 }));
 vi.mock("./CompanyContext", () => ({
   useCompany: () => ({ selectedCompanyId: companySelection.id, selectedCompany: { id: companySelection.id } }),
 }));
 vi.mock("./ToastContext", () => ({ useToastActions: () => ({ pushToast }) }));
-vi.mock("../lib/router", () => ({ useLocation: () => ({ pathname: "/PAP/issues/PAP-204" }) }));
+vi.mock("../lib/router", () => ({ useLocation: () => location }));
 vi.mock("../api/auth", () => ({
   authApi: { getSession: async () => ({ user: { id: "viewer" }, session: { id: "session", userId: "viewer" } }) },
 }));
@@ -184,6 +185,16 @@ describe("LiveUpdatesProvider socket run notification scope", () => {
       data: JSON.stringify({ id: Date.now(), companyId: "company-1", type: "heartbeat.run.status", createdAt, payload, toastEligible }),
     })));
   }
+
+  it("keeps AgentOS live run notifications quiet while updating work status", async () => {
+    location.search = "";
+    try {
+      queryClient.setQueryData(queryKeys.runDetail("unrelated-run"), { id: "unrelated-run", status: "running" });
+      await receiveStatus({ runId: "unrelated-run", agentId: "other-agent", status: "failed" });
+      expect(pushToast).not.toHaveBeenCalled();
+      expect(queryClient.getQueryData(queryKeys.runDetail("unrelated-run"))).toMatchObject({ status: "failed" });
+    } finally { location.search = "?shell=classic"; }
+  });
 
   it.each([false, undefined])("keeps ineligible runs quiet (%s) while updating their cache", async (eligibility) => {
     queryClient.setQueryData(queryKeys.runDetail("other-run"), { id: "other-run", status: "running" });

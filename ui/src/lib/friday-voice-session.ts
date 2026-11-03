@@ -45,6 +45,8 @@ export class FridayVoiceSession {
   private recognition: VoiceRecognition | null = null;
   private silence?: ReturnType<typeof setTimeout>;
   private captured = "";
+  private partial = "";
+  private requestedReply = false;
   private detachTimer?: ReturnType<typeof setTimeout>;
   private playbackCancel?: () => void;
   private playbackText = "";
@@ -75,17 +77,17 @@ export class FridayVoiceSession {
     if (value.reply && !value.disabled && !value.busy && !value.question && !this.seen.has(value.reply.id)) {
       this.seen.add(value.reply.id);
       const fresh = !value.reply.createdAt || new Date(value.reply.createdAt).getTime() >= this.since;
-      if (this.autoSpeak && fresh && !document.hidden) void this.speak(value.reply.body);
+      if ((this.autoSpeak || this.requestedReply) && fresh && !document.hidden) { this.requestedReply = false; void this.speak(value.reply.body); }
     }
     if (value.disabled) { this.pauseCapture(); if (this.state.speaking) this.stopSpeaking(false); }
     else { this.presentQuestion(); this.resume(); }
   }
   private presentQuestion() {
     const question = this.binding?.question;
-    if (!question || !this.state.enabled || document.hidden || this.binding?.disabled) return;
+    if (!question || (!this.state.enabled && !this.requestedReply) || document.hidden || this.binding?.disabled) return;
     if (!this.seen.has(question.id)) {
       this.seen.add(question.id);
-      if (this.autoSpeak) void this.speak(question.body);
+      if (this.autoSpeak || this.requestedReply) { this.requestedReply = false; void this.speak(question.body); }
     }
   }
   unbind(key: string) { if (this.binding?.key === key) { this.detachTimer = setTimeout(() => { this.disable(); if (this.binding?.key === key) this.binding = null; }, 1500); } }
@@ -104,8 +106,9 @@ export class FridayVoiceSession {
     clearTimeout(this.silence);
     const active = this.recognition; this.recognition = null;
     if (active) { active.onstart = active.onend = active.onerror = active.onresult = null; active.abort(); }
-    if (this.captured.trim()) this.binding?.draft(this.captured.trim());
-    this.captured = "";
+    const unfinished = [this.captured, this.partial].filter(Boolean).join(" ").trim();
+    if (unfinished) this.binding?.draft(unfinished);
+    this.captured = ""; this.partial = "";
     this.captureGeneration++;
     this.processor?.disconnect(); this.processor = null;
     this.stream?.getTracks().forEach(track => track.stop()); this.stream = null;
@@ -119,7 +122,16 @@ export class FridayVoiceSession {
     if (this.state.local) void this.listenLocal(); else this.listenBrowser();
   }
   toggle = () => { if (this.state.enabled) this.disable(); else { this.since = Date.now(); this.patch({ enabled: true, error: "" }); if (this.state.local) void this.prepareLocal(); this.presentQuestion(); this.resume(); } };
-  disable = () => { clearTimeout(this.detachTimer); this.patch({ enabled: false, sending: false, interim: "" }); this.pauseCapture(); this.stopSpeaking(false); };
+  disable = () => { clearTimeout(this.detachTimer); this.requestedReply = false; this.patch({ enabled: false, sending: false, interim: "" }); this.pauseCapture(); this.stopSpeaking(false); };
+  /** A Discuss click requests one spoken response without enabling capture or
+   * changing the user's persistent voice preference. */
+  requestSpokenReply = (key: string) => {
+    if (this.identity !== key || !this.binding || this.binding.disabled) return false;
+    this.requestedReply = true; this.since = Date.now();
+    window.speechSynthesis?.resume?.();
+    return true;
+  };
+  cancelRequestedReply = () => { this.requestedReply = false; };
   visibility = () => { if (document.hidden) { this.pauseCapture(); this.stopSpeaking(false); } else { if (this.state.local) void this.prepareLocal(); this.presentQuestion(); this.resume(); } };
   private async deliver(text: string) {
     const target = this.binding;
@@ -128,7 +140,7 @@ export class FridayVoiceSession {
     if (!target.send) { target.draft(text); this.resume(); return; }
     this.patch({ sending: true, interim: text });
     try { await target.send(text); }
-    catch (error) { if (this.identity !== target.key) return; target.draft(text); this.patch({ enabled: false, error: error instanceof Error ? error.message : "Message could not be sent. Your text is preserved as a draft." }); }
+    catch (error) { if (this.identity !== target.key) return; if (!(error instanceof Error && "draftPreserved" in error && error.draftPreserved)) target.draft(text); this.patch({ error: error instanceof Error ? error.message : "Message could not be sent. Your text is preserved as a draft." }); }
     finally { if (this.identity === target.key) { this.patch({ sending: false, interim: "" }); this.resume(); } }
   }
   private listenBrowser() {
@@ -136,12 +148,13 @@ export class FridayVoiceSession {
     if (!Constructor || !this.binding) return;
     const active = new Constructor(); this.recognition = active;
     let failed = false, turnReference = "";
-    this.captured = ""; this.patch({ starting: true });
+    this.captured = ""; this.partial = ""; this.patch({ starting: true });
     active.lang = navigator.language || "en-US"; active.continuous = true; active.interimResults = true;
     active.onstart = () => { if (this.recognition === active) this.patch({ starting: false, listening: true }); };
     active.onresult = event => {
       if (this.recognition !== active) return;
-      clearTimeout(this.silence); let partial = "";
+      const previousInterim = this.state.interim;
+      let partial = "";
       for (let i = event.resultIndex; i < event.results.length; i++) {
         const result = event.results[i];
         const text = result[0].transcript.trim();
@@ -153,22 +166,26 @@ export class FridayVoiceSession {
           if (this.binding?.send) this.captured = [this.captured, text].filter(Boolean).join(" "); else if (text) this.binding?.draft(text);
         } else partial += result[0].transcript;
       }
-      this.patch({ interim: [this.captured, partial].filter(Boolean).join(" ") });
-      // Reset on every partial result. Do not truncate speech still in progress.
-      if (this.captured && !partial) this.silence = setTimeout(() => { if (this.recognition === active) active.stop(); }, 1000);
+      this.partial = partial.trim();
+      const interim = [this.captured, this.partial].filter(Boolean).join(" ");
+      this.patch({ interim, hearingSpeech: !!interim });
+      // Some browsers keep a completed utterance interim until stop() is called.
+      // Every fresh word resets this boundary; final-only gating can wait forever.
+      if (interim && this.binding?.send && (interim !== previousInterim || !this.silence)) {
+        clearTimeout(this.silence);
+        this.silence = setTimeout(() => { if (this.recognition === active) active.stop(); }, 1000);
+      }
     };
     active.onerror = event => {
       if (event.error === "no-speech") return;
       failed = true;
-      if (this.captured) this.binding?.draft(this.captured);
-      this.captured = "";
       this.patch({ enabled: false, error: event.error === "not-allowed" || event.error === "service-not-allowed" ? "Microphone permission was denied. Allow it in your browser settings, or type." : `Voice input stopped (${event.error}). Your draft is still available.` });
       this.pauseCapture();
     };
     active.onend = () => {
       if (this.recognition !== active) return;
-      this.recognition = null; clearTimeout(this.silence);
-      const text = this.captured.trim(); this.captured = ""; this.patch({ listening: false, hearingSpeech: false, starting: false, interim: "" });
+      this.recognition = null; clearTimeout(this.silence); this.silence = undefined;
+      const text = [this.captured, this.partial].filter(Boolean).join(" ").trim(); this.captured = ""; this.partial = ""; this.patch({ listening: false, hearingSpeech: false, starting: false, interim: "" });
       if (!failed && text && !playbackEcho(text, turnReference)) void this.deliver(text); else this.resume();
     };
     try { active.start(); } catch { this.patch({ enabled: false, error: "The browser could not start voice input. Try again or type." }); this.pauseCapture(); }
@@ -184,36 +201,41 @@ export class FridayVoiceSession {
       if (generation !== this.captureGeneration) { stream.getTracks().forEach(track => track.stop()); void context.close().catch(() => {}); return; }
       const source = context.createMediaStreamSource(stream), processor = context.createScriptProcessor(2048, 1, 1);
       this.processor = processor; source.connect(processor); processor.connect(context.destination);
-      let chunks: Float32Array[] = [], pre: Float32Array[] = [], speechMs = 0, silenceMs = 0, totalMs = 0;
-      let previewPending = false, previewAt = 0, previewText = "", turnReference = "";
+      let chunks: Float32Array[] = [], pre: Float32Array[] = [], speechMs = 0, silenceMs = 0, totalMs = 0, speechPeak = 0;
+      let previewPending = false, previewAt = 0, previewText = "", turnReference = "", previewRequest: Promise<void> | null = null;
       processor.onaudioprocess = event => {
         if (generation !== this.captureGeneration) return;
         const samples = event.inputBuffer.getChannelData(0), ms = samples.length / context.sampleRate * 1000;
         let sum = 0; for (const sample of samples) sum += sample * sample;
-        const voiced = Math.sqrt(sum / samples.length) >= 0.012;
+        const rms = Math.sqrt(sum / samples.length);
+        // Follow this utterance's level so a fan/room floor above the old fixed
+        // threshold does not hold an otherwise completed sentence open forever.
+        const voiced = rms >= Math.max(0.012, Math.min(0.025, speechPeak * 0.5));
+        if (voiced) speechPeak = Math.max(speechPeak, rms);
         if (voiced) { if (!chunks.length) { chunks.push(...pre); turnReference = this.playbackReference(); } speechMs += ms; silenceMs = 0; }
         else silenceMs += ms;
         if (speechMs) { chunks.push(samples.slice()); totalMs += ms; }
         pre = [...pre.slice(-2), samples.slice()];
-        if (speechMs >= 250 && !this.state.speaking && !this.state.hearingSpeech) this.patch({ hearingSpeech: true });
+        // Energy drives endpoint detection, but recognised words confirm a user
+        // turn. A steady fan must not silently suppress Friday's next reply.
         if (speechMs >= 250 && (silenceMs >= 750 || totalMs >= 45000)) {
           const audio = pcmWave(chunks, context.sampleRate), target = this.binding, reference = turnReference;
           chunks = []; speechMs = 0; this.pauseCapture(); this.patch({ sending: true, interim: previewText || "Finishing your words…" });
           if (!target?.companyId) { this.patch({ sending: false, interim: "" }); return; }
           const turnGeneration = this.captureGeneration;
-          void (async () => { await this.preparation; if (!this.state.enabled || this.identity !== target.key || this.captureGeneration !== turnGeneration) return { text: "" }; return api.post<{ text: string }>(`/companies/${target.companyId}/friday/voice`, { op: "transcribe", audio }); })().then(result => {
+          void (async () => { await this.preparation; await previewRequest; if (!this.state.enabled || this.identity !== target.key || this.captureGeneration !== turnGeneration) return { text: "" }; return api.post<{ text: string }>(`/companies/${target.companyId}/friday/voice`, { op: "transcribe", audio }); })().then(result => {
             if (this.identity !== target.key || this.captureGeneration !== turnGeneration) return;
             this.patch({ sending: false, interim: "" });
-            if (this.state.enabled && !playbackEcho(result.text, reference)) { if (this.state.speaking) this.stopSpeaking(false); return this.deliver(result.text); }
-          }).catch(() => { if (this.identity === target.key && this.captureGeneration === turnGeneration) this.patch({ sending: false, enabled: false, error: "Local transcription failed. Tap the mic to retry, or type." }); }).finally(() => this.resume());
-        } else if (speechMs > 0 && speechMs < 250 && silenceMs >= 750) { chunks = []; speechMs = 0; totalMs = 0; previewAt = 0; turnReference = ""; }
+            if (this.state.enabled && result.text.trim() && !playbackEcho(result.text, reference)) { if (this.state.speaking) this.stopSpeaking(false); return this.deliver(result.text); }
+          }).catch(() => { if (this.identity === target.key && this.captureGeneration === turnGeneration) { if (previewText) target.draft(previewText); this.patch({ sending: false, error: "Local transcription could not finish this turn. Any recognised words are saved as a draft. You can retry or type." }); } }).finally(() => this.resume());
+        } else if (speechMs > 0 && speechMs < 250 && silenceMs >= 750) { chunks = []; speechMs = 0; totalMs = 0; previewAt = 0; speechPeak = 0; turnReference = ""; }
         else if (voiced && speechMs >= 350 && totalMs - previewAt >= 450 && !previewPending && this.localReady && this.binding?.companyId) {
           const target = this.binding;
           // Transcribe at most the latest 12 seconds for a responsive preview.
           // Only the final full turn below can enter the native conversation.
           const tail = chunks.slice(-Math.ceil(context.sampleRate * 12 / 2048));
           previewAt = totalMs; previewPending = true;
-          void api.post<{ text: string }>(`/companies/${target.companyId}/friday/voice`, { op: "transcribe", audio: pcmWave(tail, context.sampleRate) }).then(result => {
+          previewRequest = api.post<{ text: string }>(`/companies/${target.companyId}/friday/voice`, { op: "transcribe", audio: pcmWave(tail, context.sampleRate) }).then(result => {
             if (this.captureGeneration === generation && this.identity === target.key && this.state.enabled && result.text.trim() && !playbackEcho(result.text, turnReference)) {
               if (this.state.speaking) this.stopSpeaking(false);
               previewText = result.text.trim(); this.patch({ interim: previewText, hearingSpeech: true });

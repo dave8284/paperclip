@@ -3,6 +3,19 @@ import { companiesApi } from "./companies";
 
 afterEach(() => vi.unstubAllGlobals());
 
+it("detaches raw internal-context requests when accounts change", async () => {
+  let finishOld!: (response: Response) => void;
+  const old = new Promise<Response>(resolve => { finishOld = resolve; });
+  const fetchMock = vi.fn().mockReturnValueOnce(old).mockResolvedValueOnce(Response.json([{ id: "new-platform", purpose: "platform" }]));
+  vi.stubGlobal("fetch", fetchMock);
+  const previous = companiesApi.list({ includeInternal: true });
+  companiesApi.detachInflightList();
+  try {
+    await expect(companiesApi.list({ includeInternal: true })).resolves.toEqual([{ id: "new-platform", purpose: "platform" }]);
+    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual(["/api/companies?scope=accessible&includeInternal=true", "/api/companies?scope=accessible&includeInternal=true"]);
+  } finally { finishOld(Response.json([])); await previous; }
+});
+
 it("keeps directory requests separate from navigation and previous accounts", async () => {
   let resolveOldDirectory!: (response: Response) => void;
   const oldDirectory = new Promise<Response>((resolve) => { resolveOldDirectory = resolve; });

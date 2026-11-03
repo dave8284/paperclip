@@ -13,8 +13,9 @@ import { AgentOSDelete } from "./AgentOSDelete";
 import { Button } from "./ui/button";
 import { FridayWorkGraph } from "./FridayWorkGraph";
 import { ApplicationTaskInspector } from "./ApplicationTaskInspector";
+import { FridayWorkBlockers } from "./FridayWorkBlockers";
 
-export function FridayWork({ companyId, agents, view, navigate, onAsk, assistantName = "Friday" }: { companyId: string; agents: Agent[]; view: FridayNavigation; navigate: (view: FridayNavigation) => void; onAsk: (text: string) => void; assistantName?: string }) {
+export function FridayWork({ companyId, agents, view, navigate }: { companyId: string; agents: Agent[]; view: FridayNavigation; navigate: (view: FridayNavigation) => void; onAsk: (text: string) => void; assistantName?: string }) {
   const roster = useQuery({ queryKey: queryKeys.agents.list(companyId), queryFn: () => agentsApi.list(companyId) });
   agents = roster.isSuccess ? roster.data : agents.filter(agent => agent.companyId === companyId);
   const [offset, setOffset] = useState(0);
@@ -46,9 +47,10 @@ export function FridayWork({ companyId, agents, view, navigate, onAsk, assistant
     {chosen ? <ApplicationTaskInspector key={chosen.id} task={chosen} /> : detail.isPending ? <p role="status">Loading task and its recorded outcomes…</p> : !detail.error && <p role="alert">This task is not available in this workspace.</p>}
   </section>;
   return <div className="agentos-work-view">
-    <div className="agentos-work-toolbar"><select className="rounded-lg border bg-background px-3 py-2 text-sm" aria-label="Work status" value={status} onChange={event => { setStatus(event.target.value as typeof status); setOffset(0); }}><option value="all">Active and completed</option><option value="active">Active work</option><option value="completed">Completed work</option></select><Button variant="ghost" size="sm" onClick={() => onAsk(`Summarize current work, blockers and completed outcomes for company ${companyId}. Scope: ${JSON.stringify({ projectId: view.projectId, applicationId: view.applicationId, agentId: view.agentId })}. Cite the underlying tasks.`)}>Discuss with {assistantName}</Button></div>
+    <div className="agentos-work-toolbar"><select className="rounded-lg border bg-background px-3 py-2 text-sm" aria-label="Work status" value={status} onChange={event => { setStatus(event.target.value as typeof status); setOffset(0); }}><option value="all">Active and completed</option><option value="active">Active work</option><option value="completed">Completed work</option></select></div>
     {[work.error, runs.error, detail.error, roster.error].filter(Boolean).map((error, index) => <p role="alert" key={index} className="text-sm text-destructive">{error!.message}</p>)}
     {work.isPending && <p className="text-sm text-muted-foreground">Reading projects and their work…</p>}
+    {(mode === "combined" || mode === "activity") && !view.applicationId && !view.agentId && <FridayWorkBlockers companyId={companyId} projectId={view.projectId} onTask={selectTask} />}
     {data && <>
       <div className="agentos-work-metrics" aria-label="Work totals">{[["In motion", data.counts.in_progress ?? 0], ["To do", (data.counts.todo ?? 0) + (data.counts.backlog ?? 0)], ["Needs attention", (data.counts.blocked ?? 0) + (data.counts.in_review ?? 0)], ["Completed", data.counts.done ?? 0]].map(([label, value]) => <div key={label}><strong>{value}</strong><span>{label}</span></div>)}</div>
       {mode === "combined" && !view.projectId && <section><div className="agentos-section-heading"><h2>Projects</h2><span className="text-sm text-muted-foreground">{data.projectCount} in this company</span></div><div className="agentos-project-grid">{data.projects.map(project => <AgentOSProjectCard key={project.id} companyId={companyId} project={project} lead={agents.find(agent => agent.id === project.leadAgentId)?.name} onOpen={() => navigate({ ...view, projectId: project.id, taskId: undefined, mode: "combined" })} />)}</div></section>}

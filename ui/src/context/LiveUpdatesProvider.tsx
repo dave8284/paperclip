@@ -1978,6 +1978,10 @@ export function LiveUpdatesProvider({ children }: { children: ReactNode }) {
     observedRunOutcomes: new Set(),
   });
   const pathnameRef = useRef(location.pathname);
+  // AgentOS exposes live status in the workspace, never unsolicited agent/run
+  // notifications. Keep the classic compatibility shell's existing behavior.
+  const allowLiveToastsRef = useRef(false);
+  allowLiveToastsRef.current = new URLSearchParams(location.search).get("shell") === "classic";
   const { data: session, status: sessionStatus } = useQuery({
     queryKey: queryKeys.auth.session,
     queryFn: () => authApi.getSession(),
@@ -2134,7 +2138,7 @@ export function LiveUpdatesProvider({ children }: { children: ReactNode }) {
             liveCompanyId,
             pathnameRef.current,
             parsed,
-            pushToast,
+            allowLiveToastsRef.current ? pushToast : () => null,
             gateRef.current,
             {
               userId: currentActorRef.current.userId,

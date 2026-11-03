@@ -1,8 +1,8 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { agents, companies, completionContracts, createDb, EMBEDDED_POSTGRES_TEST_TIMEOUT_MS, heartbeatRuns, issues, nativeRunFinalizations, type Db } from "@paperclipai/db";
+import { agents, companies, completionContracts, createDb, EMBEDDED_POSTGRES_TEST_TIMEOUT_MS, heartbeatRuns, issues, issueThreadInteractions, nativeRunFinalizations, nativeRunResults, statusDecisions, workAssessments, type Db } from "@paperclipai/db";
 import { eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { getEmbeddedPostgresTestSupport, startEmbeddedPostgresTestDatabase } from "../../__tests__/helpers/embedded-postgres.js";
@@ -74,8 +74,112 @@ describe.skipIf(!support.supported)("heartbeat runtime selection boundary", () =
   const coordinators = (id: string) => db.select().from(nativeRunFinalizations).where(eq(nativeRunFinalizations.runId, id));
   const sandbox = { kind: "remote" as const, transport: "sandbox" as const, remoteCwd: "/workspace", reusableLeaseConfigured: false };
 
+  async function reviewFixture() {
+    const base = await fixture();
+    const { input, issue, agent, run } = base;
+    const companyId = agent.companyId, issueId = issue.id;
+    const [worker] = await db.insert(agents).values({ companyId, name: "Source worker", status: "idle", adapterType: "paperclip_runner" }).returning();
+    const [contract] = await db.insert(completionContracts).values({ companyId, issueId, revision: 1,
+      schemaVersion: "paperclip.completion-contract.v1", policyVersion: "fixture", risk: "standard", completionAuthority: "server_arbiter", incompleteCriteriaPolicy: "preserve_non_terminal",
+      contractJson: { revision: "fixture", objective: "Submit work for review", criteria: [{ id: "objective", requirement: "Submit work for review" }] }, canonicalSha256: "0".repeat(64), createdByActorType: "system", createdByActorId: "fixture",
+    }).returning();
+    const [sourceRun] = await db.insert(heartbeatRuns).values({ companyId, agentId: worker.id, nativeIssueId: issueId, runtimeMode: "native", status: "succeeded", completionContractId: contract.id, completionContractSha256: contract.canonicalSha256 }).returning();
+    const [result] = await db.insert(nativeRunResults).values({ companyId, issueId, runId: sourceRun.id, completionContractId: contract.id, serverFingerprint: randomUUID(), schemaStatus: "accepted", resultJson: {}, canonicalSha256: "0".repeat(64) }).returning();
+    const [assessment] = await db.insert(workAssessments).values({ companyId, issueId, runId: sourceRun.id, contractId: contract.id, resultId: result.id, triggerKind: "native_result", triggerActorCompanyId: companyId, priorIssueStatus: "in_progress", priorStatusVersion: 0, policyVersion: "fixture", assessmentJson: {}, inputDigest: randomUUID() }).returning();
+    const [reviewIssue] = await db.update(issues).set({ status: "in_review", assigneeAgentId: worker.id }).where(eq(issues.id, issueId)).returning();
+    const [decision] = await db.insert(statusDecisions).values({ companyId, issueId, runId: sourceRun.id, assessmentId: assessment.id, decisionVersion: 1, policyVersion: "fixture", fromStatus: "in_progress", toStatus: "in_review", reasonCode: "explicit_review", decisionJson: { projectedStatusVersion: reviewIssue.statusVersion }, decisionDigest: randomUUID(), applicationState: "applied" }).returning();
+    await db.update(issues).set({ lastStatusDecisionId: decision.id }).where(eq(issues.id, issueId));
+    const [interaction] = await db.insert(issueThreadInteractions).values({ companyId, issueId, kind: "request_confirmation", sourceRunId: sourceRun.id, addresseeAgentId: agent.id, createdByAgentId: worker.id,
+      payload: { version: 1, prompt: "Review the submitted work.", target: { type: "custom", key: "native_completion_review", revisionId: decision.id } },
+    }).returning();
+    const context = { issueId, nativeReviewInteractionId: interaction.id, nativeReviewDecisionId: decision.id, forceFreshSession: true, nativeReviewContextReceipt: { forged: true } };
+    await db.update(heartbeatRuns).set({ contextSnapshot: context }).where(eq(heartbeatRuns.id, run.id));
+    input.run = await read(run.id);
+    input.task.issueRef = reviewIssue;
+    input.task.context = { ...input.task.context, ...context };
+    if (input.nativeRuntimeResolution.kind === "native") Object.assign(input.nativeRuntimeResolution.profile, { nativeReviewContextReceipt: { forged: true } });
+    return { ...base, sourceRun, interaction, decision };
+  }
+
+  it("persists a server-derived review context receipt and native outcome references with the admitted input", async () => {
+    const { input, run, interaction, sourceRun, decision } = await reviewFixture();
+    const selected = await selectHeartbeatRuntime(db, input);
+    if (!selected.selected || !selected.nativeExecution) throw new Error("Expected review selection");
+    const saved = await read(run.id);
+    const receipt = saved.runnerProfileJson?.nativeReviewContextReceipt;
+    expect(receipt).toMatchObject({
+      schema: "agentos.native-review-context-receipt.v1", stage: "server_prepared", reviewerRunId: run.id,
+      references: { sourceRunId: sourceRun.id, sourceDecisionId: decision.id, reviewInteractionId: interaction.id, findingsRunId: run.id, resolutionInteractionId: interaction.id },
+      preparedInput: { taskPromptSha256: createHash("sha256").update(selected.nativeExecution.task.prompt).digest("hex"), normalizedSessionId: selected.nativeExecution.session.normalizedSessionId },
+      qualification: { providerDelivery: "not_observed", parentConversationIsolation: "unverified", hostInstructionAndMemoryIsolation: "unverified", sourceReadCoverage: "unverified", readOnlyEnforcement: "unverified" },
+    });
+    expect(receipt).not.toHaveProperty("forged");
+    expect(JSON.stringify(receipt)).not.toContain("Review the submitted work.");
+    expect(selected.getNativeFreshSessionHandoff).toBeUndefined();
+    input.run = saved;
+    input.session.persistedNativeExecutionInput = selected.nativeExecution;
+    input.session.persistedRunnerProfile = saved.runnerProfileJson ?? {};
+    input.task.context.paperclipTaskMarkdown = "A later author summary must not replace prepared evidence";
+    expect((await selectHeartbeatRuntime(db, input)).selected).toBe(true);
+    expect((await read(run.id)).runnerProfileJson?.nativeReviewContextReceipt).toEqual(receipt);
+  });
+
+  it("does not persist a review receipt when cancellation wins preparation", async () => {
+    const { input, run } = await reviewFixture();
+    input.beforeNativeRuntimeSelection = async () => {
+      await db.update(heartbeatRuns).set({ status: "cancelled" }).where(eq(heartbeatRuns.id, run.id));
+    };
+    expect(await selectHeartbeatRuntime(db, input)).toEqual({ selected: false });
+    expect((await read(run.id)).runnerProfileJson).toBeNull();
+    expect(await coordinators(run.id)).toHaveLength(0);
+  });
+
+  it.each(["absent", "drifted-under-lock"])("retains the admitted historical review receipt when current context is %s", async (scenario) => {
+    const { input, run } = await reviewFixture();
+    const selected = await selectHeartbeatRuntime(db, input);
+    if (!selected.selected || !selected.nativeExecution) throw new Error("Expected review selection");
+    const saved = await read(run.id);
+    const receipt = saved.runnerProfileJson?.nativeReviewContextReceipt;
+    expect(receipt).not.toBeNull();
+    input.run = saved;
+    input.session.persistedNativeExecutionInput = selected.nativeExecution;
+    input.session.persistedRunnerProfile = saved.runnerProfileJson ?? {};
+    if (scenario === "absent") {
+      await db.update(heartbeatRuns).set({ contextSnapshot: {} }).where(eq(heartbeatRuns.id, run.id));
+      input.run = await read(run.id);
+      input.task.context = {};
+    } else {
+      input.beforeNativeRuntimeSelection = async () => {
+        await db.update(heartbeatRuns).set({ contextSnapshot: { nativeReviewInteractionId: randomUUID(), nativeReviewDecisionId: randomUUID() } }).where(eq(heartbeatRuns.id, run.id));
+      };
+    }
+    expect((await selectHeartbeatRuntime(db, input)).selected).toBe(true);
+    const recovered = await read(run.id);
+    expect(recovered.runnerProfileJson?.nativeExecutionInput).toEqual(saved.runnerProfileJson?.nativeExecutionInput);
+    expect(recovered.runnerProfileJson?.nativeReviewContextReceipt).toEqual(receipt);
+  });
+
+  it("does not retain corrupted receipt metadata on recovery without current review context", async () => {
+    const { input, run } = await reviewFixture();
+    const selected = await selectHeartbeatRuntime(db, input);
+    if (!selected.selected || !selected.nativeExecution) throw new Error("Expected review selection");
+    const saved = await read(run.id);
+    const receipt = saved.runnerProfileJson?.nativeReviewContextReceipt as Record<string, unknown>;
+    await db.update(heartbeatRuns).set({ contextSnapshot: {}, runnerProfileJson: {
+      ...saved.runnerProfileJson, nativeReviewContextReceipt: { ...receipt, qualification: { hostInstructionAndMemoryIsolation: "passed" } },
+    } }).where(eq(heartbeatRuns.id, run.id));
+    input.run = await read(run.id);
+    input.task.context = {};
+    input.session.persistedNativeExecutionInput = selected.nativeExecution;
+    input.session.persistedRunnerProfile = input.run.runnerProfileJson ?? {};
+    expect((await selectHeartbeatRuntime(db, input)).selected).toBe(true);
+    expect((await read(run.id)).runnerProfileJson?.nativeReviewContextReceipt).toBeNull();
+  });
+
   it("persists the native input, completion contract, and coordinator before transferring cleanup ownership", async () => {
     const { input, run } = await fixture();
+    input.task.context.nativeReviewContextReceipt = { forged: true };
+    if (input.nativeRuntimeResolution.kind === "native") Object.assign(input.nativeRuntimeResolution.profile, { nativeReviewContextReceipt: { forged: true } });
     input.workspace.onCheckpoint = vi.fn(async () => {});
     input.workspace.onPhase = async (_name, work) => work();
     vi.mocked(prepareNativeWorkspaceSync).mockImplementationOnce(async args => {
@@ -92,7 +196,7 @@ describe.skipIf(!support.supported)("heartbeat runtime selection boundary", () =
     if (!selected.selected) throw new Error("Expected selection");
     const saved = await read(run.id);
     expect(saved).toMatchObject({ runtimeMode: "native", driverKind: "codex_app_server", nativePhase: "observed", nativeSessionId: expect.any(String), runnerInstanceId: selected.nativeRunnerInstanceId,
-      runnerProfileJson: { nativeExecutionInput: selected.nativeExecution, recoveryEventInventoryVersion: 1, nativePreparationFencingVersion: 1 } });
+      runnerProfileJson: { nativeExecutionInput: selected.nativeExecution, recoveryEventInventoryVersion: 1, nativePreparationFencingVersion: 1, nativeReviewContextReceipt: null } });
     expect(await db.select().from(completionContracts)).toHaveLength(1);
     expect(selected.getNativeFreshSessionHandoff).toBe(input.session.getFreshSessionHandoff);
     expect(input.onNativeOwnershipHeld).not.toHaveBeenCalled();

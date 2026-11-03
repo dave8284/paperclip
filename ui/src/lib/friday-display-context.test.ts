@@ -8,8 +8,13 @@ it("sends selected decision context without presenting it as permission or appro
   setFridayDisplaySelection("company", "attention", { decisionId: "decision" });
   await syncFridayDisplayContext("chat", { panel: "attention", companyId: "company", speakerId: "Friday", speakerCompanyId: "home" });
   const saved = api.upsertDocument.mock.calls[0][2];
-  expect(JSON.parse(saved.body)).toEqual({ version: 1, display: { panel: "attention", companyId: "company" }, selection: { decisionId: "decision" } });
+  expect(JSON.parse(saved.body)).toEqual({ version: 1, display: { panel: "attention", companyId: "company" }, selection: { decisionId: "decision", companyId: "company" } });
   expect(saved).toMatchObject({ baseRevisionId: null, changeSummary: expect.stringContaining("not an approval") });
+});
+it("includes the selected company and exact source when discussing a portfolio decision", async () => {
+  setFridayDisplaySelection("business", "attention", { decisionId: "decision", sourceKind: "approval", sourceId: "approval-id", projectId: "launch", taskId: "task" });
+  await syncFridayDisplayContext("friday-home-chat", { panel: "attention", scope: "portfolio" });
+  expect(JSON.parse(api.upsertDocument.mock.calls[0][2].body).selection).toEqual({ companyId: "business", decisionId: "decision", sourceKind: "approval", sourceId: "approval-id", projectId: "launch", taskId: "task" });
 });
 it("does not carry a company's selection into another company or view", async () => {
   setFridayDisplaySelection("other", "attention", { decisionId: "private" });

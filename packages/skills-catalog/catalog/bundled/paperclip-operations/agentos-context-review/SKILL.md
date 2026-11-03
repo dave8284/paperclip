@@ -1,6 +1,6 @@
 ---
 name: agentos-context-review
-description: Keep Agent OS delegation scoped and review substantial plans with fresh Elephant–Goldfish reviewers. Use for cross-team handoffs, design uncertainty or evidence-backed capability lessons; ordinary clear tasks do not need a review ceremony.
+description: Keep AgentOS delegation scoped and review substantial plans with fresh Elephant–Goldfish reviewers. Use for cross-team handoffs, design uncertainty or evidence-backed capability lessons; ordinary clear tasks do not need a review ceremony.
 key: paperclipai/bundled/paperclip-operations/agentos-context-review
 recommendedForRoles:
   - general
@@ -16,11 +16,11 @@ tags:
   - learning
 ---
 
-# Agent OS context and independent review
+# AgentOS context and independent review
 
 Keep one context-rich owner accountable for a plan, then use fresh reviewers to
 test whether the plan explains itself. This adapts Google's Elephant–Goldfish
-Model (EGM) to native Agent OS tasks, documents and audit records. It is a review
+Model (EGM) to native AgentOS tasks, documents and audit records. It is a review
 method, not a memory database, model trainer or new authorization layer.
 
 ## Choose the appropriate depth
@@ -48,6 +48,9 @@ staffing and instruction-change approvals remain in their native controls.
    established, mark `independent_review_unavailable`, record why, and ask the
    accountable lead for another harness or review route. A disclosed ordinary
    review may continue within scope, but must never be relabelled Goldfish.
+   Follow [qualification and evidence](references/qualification.md): test parent
+   conversation exclusion separately from host instruction/memory injection.
+   `fork_turns: none` alone does not exclude project or user instruction files.
 4. **Review with evidence.** Use [review dispatch](references/review-dispatch.md)
    to select the smallest useful set of packaged EGM reviewer prompts and
    standards. Give each reviewer the immutable plan revision, acceptance criteria,
@@ -59,6 +62,7 @@ staffing and instruction-change approvals remain in their native controls.
    material correction once with a fresh packet; unresolved blockers return to
    the responsible lead or Friday as a concrete decision. Stop at the task's
    existing time/budget limits. Tests and release checks still verify execution.
+   Record failed/timed-out reviewers as `not_run`, not as zero-findings success.
 6. **Preserve the learning.** Save outputs and bounded rationale using
    [native evidence records](references/evidence-and-learning.md). Propose a
    sanitized reusable lesson only after observed evidence supports it. The

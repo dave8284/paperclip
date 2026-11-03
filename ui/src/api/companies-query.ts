@@ -5,7 +5,7 @@ import { companiesApi } from "./companies";
 import { ApiError } from "./client";
 import { queryKeys } from "../lib/queryKeys";
 
-export type CompanyListResult = { companies: Company[]; unauthorized: boolean };
+export type CompanyListResult = { companies: Company[]; allCompanies?: Company[]; unauthorized: boolean };
 
 // Single source of truth for the company-list query. Every consumer reads the
 // same cache entry, so they must agree on the shape — returning a bare
@@ -28,7 +28,9 @@ export function companyListQueryOptions(userId: string | null) {
       // differ by construction, which is exactly when sharing is wrong.
       companiesApi.detachInflightList();
       try {
-        return { companies: await companiesApi.list(), unauthorized: false };
+        const accessible = await companiesApi.list({ includeInternal: true });
+        const companies = accessible.filter(company => company.purpose !== "platform");
+        return { companies, ...(companies.length !== accessible.length ? { allCompanies: accessible } : {}), unauthorized: false };
       } catch (err) {
         if (err instanceof ApiError && (err.status === 401 || err.status === 403)) {
           return { companies: [], unauthorized: true };
@@ -46,7 +48,7 @@ export function companyDirectoryQueryOptions(userId: string | null) {
     queryKey: queryKeys.companies.directory(userId),
     queryFn: async () => {
       companiesApi.detachInflightDirectory();
-      return companiesApi.directory();
+      return companiesApi.directory({ includeInternal: true });
     },
     retry: false,
   } as const;

@@ -29,7 +29,13 @@ export function departmentService(db: Db) {
         const leadAgentId = input.leadAgentId === undefined ? previous?.leadAgentId ?? null : input.leadAgentId;
         if (leadAgentId && leadAgentId !== previous?.leadAgentId) {
           const [lead] = await tx.select().from(agents).where(and(eq(agents.id, leadAgentId), eq(agents.companyId, companyId))).for("share");
-          if (!lead || !["active", "idle", "running", "error"].includes(lead.status) || lead.lifecycleState !== "ready") throw badRequest("Department head must be an active employee in this company.");
+          // Pausing execution does not retire an employee or remove ownership.
+          // This lets an operator prepare a team without waking its agents.
+          const currentEmployee = lead && (
+            lead.lifecycleState === "ready"
+            || (lead.status === "paused" && lead.lifecycleState === "paused")
+          );
+          if (!currentEmployee || !["active", "idle", "running", "error", "paused"].includes(lead.status)) throw badRequest("Department head must be a current employee in this company.");
         }
         const [row] = id ? await tx.update(departments).set({ name: input.name, description: input.description, leadAgentId, revision: (input.expectedRevision ?? 0) + 1 })
           .where(and(eq(departments.id, id), eq(departments.companyId, companyId), eq(departments.revision, input.expectedRevision ?? 0))).returning()

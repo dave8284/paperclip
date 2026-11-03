@@ -45,7 +45,7 @@ const archivedCompany = { id: "archived-company" };
 function makeCompany(id: string): Company {
   return {
     id,
-    name: "Paperclip",
+    name: "AgentOS",
     description: null,
     status: "active",
     pauseReason: null,
@@ -216,6 +216,19 @@ describe("CompanyProvider", () => {
     queryClient.clear();
     container.remove();
     vi.clearAllMocks();
+  });
+
+  it("preserves Friday's internal home and route identity with no business companies", async () => {
+    const internal = { ...makeCompany("platform-home"), purpose: "platform" as const, issuePrefix: "AGE" };
+    localStorage.setItem("paperclip.selectedCompanyId", internal.id);
+    queryClient.setQueryData(queryKeys.auth.session, null);
+    mockCompaniesApi.list.mockResolvedValue([internal]);
+    await act(async () => root.render(<QueryClientProvider client={queryClient}><CompanyProvider><Probe onSelectedCompanyId={() => {}} /></CompanyProvider></QueryClientProvider>));
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 10)); });
+    expect(captured?.companies).toEqual([]);
+    expect(captured?.allCompanies).toEqual([internal]);
+    expect(captured?.selectedCompany?.issuePrefix).toBe("AGE");
+    expect(localStorage.getItem("paperclip.selectedCompanyId")).toBe(internal.id);
   });
 
   it("keeps the stored company when the company request fails", async () => {

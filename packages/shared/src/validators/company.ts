@@ -34,6 +34,7 @@ export const updateCompanySchema = objectWithoutDefaults(
   createCompanySchema
     .partial()
     .extend({
+      purpose: z.enum(["business", "platform"]).optional(),
       status: z.enum(COMPANY_STATUSES).optional(),
       spentMonthlyCents: z.number().int().nonnegative().optional(),
       requireBoardApprovalForNewAgents: z.boolean().optional(),

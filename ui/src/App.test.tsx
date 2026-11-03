@@ -128,7 +128,7 @@ describe("CloudAccessGate", () => {
   it("does not mistake a session service failure for a signed-out user", async () => {
     mockAuthApi.getSession.mockRejectedValue(new Error("Session service unavailable"));
     const root = renderGate(container);
-    await waitForText(container, "Unable to load Agent OS");
+    await waitForText(container, "Unable to load AgentOS");
     expect(container.querySelector("button")?.textContent).toBe("Try again");
     expect(container.textContent).not.toContain("Outlet content");
     expect(container.textContent).not.toContain("Navigate:/auth");
@@ -193,7 +193,7 @@ describe("CloudAccessGate", () => {
     mockHealthApi.get.mockResolvedValue({ deploymentMode: "authenticated", deploymentExposure: "public", bootstrapStatus: "bootstrap_pending" });
     mockAuthApi.getSession.mockResolvedValue({ user: { id: "invitee" } });
     const root = renderGate(container, true);
-    await waitForText(container, "Agent OS is waiting for its first administrator");
+    await waitForText(container, "AgentOS is waiting for its first administrator");
     expect(container.textContent).not.toContain("Outlet content");
     unmountRoot(root);
   });
@@ -202,7 +202,7 @@ describe("CloudAccessGate", () => {
     mockAuthApi.getSession.mockResolvedValue({ user: { id: "invitee" } });
     mockAccessApi.getCurrentBoardAccess.mockRejectedValueOnce(new Error("Access check unavailable"));
     const root = renderGate(container, true);
-    await waitForText(container, "Unable to load Agent OS");
+    await waitForText(container, "Unable to load AgentOS");
     expect(container.querySelector("button")?.textContent).toBe("Try again");
     expect(container.textContent).not.toContain("Outlet content");
     unmountRoot(root);
@@ -242,9 +242,9 @@ describe("CloudAccessGate", () => {
     mockAuthApi.getSession.mockResolvedValue(null);
 
     const root = renderGate(container);
-    await waitForText(container, "Finish setting up Agent OS");
+    await waitForText(container, "Finish setting up AgentOS");
 
-    expect(container.textContent).toContain("Finish setting up Agent OS");
+    expect(container.textContent).toContain("Finish setting up AgentOS");
     expect(container.textContent).toContain("Sign in / Create account");
     expect(container.textContent).toContain("npx paperclipai auth bootstrap-ceo");
     expect(mockAccessApi.getCurrentBoardAccess).not.toHaveBeenCalled();
@@ -303,9 +303,9 @@ describe("CloudAccessGate", () => {
     });
 
     const root = renderGate(container);
-    await waitForText(container, "Agent OS is waiting for its first administrator");
+    await waitForText(container, "AgentOS is waiting for its first administrator");
 
-    expect(container.textContent).toContain("Agent OS is waiting for its first administrator");
+    expect(container.textContent).toContain("AgentOS is waiting for its first administrator");
     expect(container.textContent).toContain("invite-only mode");
     expect(container.textContent).not.toContain("Claim this instance");
     expect(container.textContent).not.toContain("Sign in / Create account");

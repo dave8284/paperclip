@@ -172,7 +172,7 @@ function dynamicToolEntries(
   ts: string,
 ): TranscriptEntry[] {
   const id = itemId(event, item);
-  const name = text(item.tool, text(item.name, "Paperclip tool"));
+  const name = text(item.tool, text(item.name, "AgentOS tool"));
   if (phase === "started") {
     return [{ kind: "tool_call", ts, name, toolUseId: id, input: item.arguments ?? item.input ?? {} }];
   }
@@ -644,7 +644,7 @@ function runTerminalEntry(payload: JsonRecord, ts: string): Extract<TranscriptEn
 function semanticToolEntries(eventType: string, payload: JsonRecord, ts: string): TranscriptEntry[] {
   const semantic = record(payload.semantic_tool ?? payload.semanticTool);
   const callId = text(semantic.callId, "semantic-tool");
-  const operationId = text(semantic.operationId, "Paperclip operation");
+  const operationId = text(semantic.operationId, "AgentOS operation");
   const content = record(semantic.content);
   const references = (Array.isArray(content.references) ? content.references : []).map(record);
   const input = {
@@ -745,9 +745,9 @@ function parsePrpEvent(
   }
   if (eventType === "session.started" || eventType === "session.resumed") {
     const context = record(payload.context);
-    const model = text(context.model, text(record(payload.model).name, "Paperclip runner"));
+    const model = text(context.model, text(record(payload.model).name, "AgentOS runner"));
     const sessionId = text(payload.providerSessionId, text(payload.driverSessionId, text(event.normalizedSessionId)));
-    return [{ kind: "system", ts, text: `Paperclip session ${eventType === "session.resumed" ? "resumed" : "started"} · ${model}${sessionId ? ` · ${sessionId}` : ""}` }];
+    return [{ kind: "system", ts, text: `AgentOS session ${eventType === "session.resumed" ? "resumed" : "started"} · ${model}${sessionId ? ` · ${sessionId}` : ""}` }];
   }
   if (eventType === "turn.started") return [{ kind: "system", ts, text: "Turn started" }];
   if (eventType === "turn.completed") return [{ kind: "system", ts, text: "Turn completed" }];
@@ -819,7 +819,7 @@ export function parsePaperclipRunnerStdoutLine(line: string, ts: string): Transc
 
 export const paperclipRunnerUIAdapter: UIAdapterModule = {
   type: "paperclip_runner",
-  label: "Paperclip Runner",
+  label: "AgentOS Runner",
   parseStdoutLine: parsePaperclipRunnerStdoutLine,
   createStdoutParser: () => {
     let state = createParserState();

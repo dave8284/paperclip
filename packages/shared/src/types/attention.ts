@@ -83,6 +83,8 @@ export interface AttentionTriageAttribution {
 export type AttentionSortMode = "activity" | "decide";
 
 export interface AttentionFeedQuery {
+  /** Opt-in AgentOS surfaces; filters apply before counts and pagination. */
+  category?: "proposals" | "work";
   /** Filter the authorized feed before ranking, counts and pagination. */
   projectId?: string;
   includeDismissed?: boolean;

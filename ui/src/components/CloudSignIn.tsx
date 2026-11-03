@@ -20,15 +20,15 @@ export function CloudSignIn({ cloud, returnTo }: { cloud: CloudInstanceHealthSta
 
   return (
     <div className="mx-auto max-w-xl space-y-4 p-6">
-      <h1 className="text-xl font-semibold">Sign in to Paperclip Cloud</h1>
+      <h1 className="text-xl font-semibold">Sign in to the connection service</h1>
       <p role="alert" className="text-sm text-muted-foreground">
         {entryUrl
-          ? "We couldn't restore your session. Continue to Paperclip Cloud to try again."
+          ? "We couldn't restore your session. Continue to the connection service to try again."
           : "Cloud sign-in is unavailable for this workspace. Please contact your administrator."}
       </p>
       {entryUrl && (
         <Button asChild>
-          <a href={entryUrl} onClick={clearCloudSignInAttempt}>Continue to Paperclip Cloud</a>
+          <a href={entryUrl} onClick={clearCloudSignInAttempt}>Continue to the connection service</a>
         </Button>
       )}
     </div>

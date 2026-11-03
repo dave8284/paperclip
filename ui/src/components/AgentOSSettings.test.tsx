@@ -13,6 +13,19 @@ vi.mock("@/lib/router", () => ({ Link: ({ to, children }: { to: string; children
 vi.mock("./AgentOSConnectors", () => ({ AgentOSConnectors: ({ companyId }: { companyId: string }) => <p>Connections for {companyId}</p> }));
 vi.mock("./AgentOSVoiceSettings", () => ({ AgentOSVoiceSettings: () => <p>Voice preferences</p> }));
 vi.mock("./AgentOSDelete", () => ({ AgentOSDelete: ({ id, name }: { id: string; name: string }) => <button data-company={id}>Delete {name}</button> }));
+it("keeps the internal platform manageable without offering it as a deletable company", async () => {
+  get.mockResolvedValueOnce({ id: "internal", purpose: "platform", name: "Platform Operations", description: "Friday", requireBoardApprovalForNewAgents: true });
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } }), host = document.createElement("div"); document.body.append(host);
+  const root = createRoot(host);
+  try {
+    await act(async () => root.render(<QueryClientProvider client={client}><AgentOSSettings companyId="internal" /></QueryClientProvider>));
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 10)); });
+    expect(host.textContent).toContain("Platform information");
+    expect(host.textContent).toContain("shared connections");
+    expect(host.querySelector("button[data-company]")).toBeNull();
+    expect(host.textContent).not.toContain("Archive or delete company");
+  } finally { await act(async () => root.unmount()); client.clear(); host.remove(); }
+});
 it("holds company profile, hiring approval and deletion in Company settings while keeping voice and connectors separate", async () => {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } }), host = document.createElement("div"); document.body.append(host);
   const root = createRoot(host);
