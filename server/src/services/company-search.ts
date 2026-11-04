@@ -36,6 +36,7 @@ import {
   type CompanySearchSort,
   type CompanySearchUpdatedWithinOption,
 } from "@paperclipai/shared";
+import { routineSearchBranch } from "./company-search-routines.js";
 import { companyArtifactsService } from "./company-artifacts.js";
 import { companySearchExtractService } from "./company-search-extract.js";
 import { visibleIssueCondition } from "./issue-visibility.js";
@@ -187,7 +188,7 @@ function matchTerms(normalizedQuery: string, tokens: string[]) {
 }
 
 function emptySearchCounts(): Record<CompanySearchCountType, number> {
-  return { issue: 0, comment: 0, document: 0, artifact: 0, agent: 0, project: 0 };
+  return { issue: 0, comment: 0, document: 0, artifact: 0, agent: 0, project: 0, routine: 0 };
 }
 
 function emptyFilterOptionCounts(): CompanySearchFilterOptionCounts {
@@ -389,6 +390,10 @@ function scopeIncludesAgents(scope: CompanySearchScope) {
 
 function scopeIncludesArtifacts(scope: CompanySearchScope) {
   return scope === "all" || scope === "artifacts";
+}
+
+function scopeIncludesRoutines(scope: CompanySearchScope) {
+  return scope === "all" || scope === "routines";
 }
 
 function scopeIncludesProjects(scope: CompanySearchScope) {
@@ -913,6 +918,7 @@ export function companySearchService(db: Db) {
         const artifactIssueConditions = [
           eq(issues.companyId, companyId),
           visibleIssueCondition(),
+          options?.issueReadCondition ?? sql<boolean>`true`,
           ...artifactIssueFilters,
         ];
         const documentArtifactConditions = [
@@ -998,11 +1004,12 @@ export function companySearchService(db: Db) {
         const result = await companyArtifactsService(db).list(companyId, {
           q: normalizedQuery.slice(0, COMPANY_ARTIFACTS_MAX_QUERY_LENGTH),
           limit: Math.min(fetchLimit, COMPANY_ARTIFACTS_MAX_LIMIT),
-        }, { issueConditions: issueFilters });
+        }, { issueConditions: [...issueFilters, options?.issueReadCondition ?? sql<boolean>`true`], projectReadCondition });
         return result.artifacts;
       }
 
-      const [company, issueSearchData, artifactRows, agentRows, projectRows, artifactCount, agentCount, projectCount] = await Promise.all([
+      const routineSearch = routineSearchBranch(db, { companyId, query, normalizedQuery, tokens, containsPattern, tokenPatternArray, fetchLimit, ...options });
+      const [company, issueSearchData, artifactRows, agentRows, projectRows, artifactCount, agentCount, projectCount, routineRows, routineCount, routineFacets] = await Promise.all([
         db
           .select({ issuePrefix: companies.issuePrefix })
           .from(companies)
@@ -1015,9 +1022,19 @@ export function companySearchService(db: Db) {
         scopeIncludesArtifacts(scope) ? countArtifacts(query) : Promise.resolve(0),
         scopeIncludesAgents(scope) ? countAgents(query) : Promise.resolve(0),
         scopeIncludesProjects(scope) ? countProjects(query) : Promise.resolve(0),
+        scopeIncludesRoutines(scope) ? routineSearch.rows() : Promise.resolve([]),
+        scopeIncludesRoutines(scope) ? routineSearch.count() : Promise.resolve(0),
+        scopeIncludesRoutines(scope) ? routineSearch.facets() : Promise.resolve(emptyFilterOptionCounts()),
       ]);
       const prefix = routePrefix(company?.issuePrefix);
       const { rows: issueRows, aggregates } = issueSearchData;
+      const filterOptionCounts = scope === "routines" ? routineFacets : aggregates.filterOptionCounts;
+      if (scope === "all") {
+        for (const key of ["priority", "assigneeAgentId", "projectId", "updatedWithin"] as const) {
+          const target = filterOptionCounts[key] as Record<string, number>;
+          for (const [value, count] of Object.entries(routineFacets[key])) target[value] = (target[value] ?? 0) + count;
+        }
+      }
 
       const countsByType = emptySearchCounts();
       countsByType.issue = aggregates.typeCounts.issue;
@@ -1026,11 +1043,13 @@ export function companySearchService(db: Db) {
       countsByType.artifact = artifactCount;
       countsByType.agent = agentCount;
       countsByType.project = projectCount;
+      countsByType.routine = routineCount;
 
       const currentTotalCount = (scopeIncludesIssues(scope) ? aggregates.totals.current : 0)
         + artifactCount
         + agentCount
-        + projectCount;
+        + projectCount
+        + routineCount;
 
       const results: SearchResultWithSort[] = [
         ...issueRows.map((row) => {
@@ -1084,15 +1103,24 @@ export function companySearchService(db: Db) {
             sortPriorityRank: ISSUE_PRIORITIES.length,
           };
         }),
+        ...routineRows.map(row => {
+          const snippet = createSnippet("description", "Routine", row.description ?? row.title, matchTerms(normalizedQuery, tokens));
+          return { id: row.id, type: "routine" as const, score: Number(row.score), title: row.title,
+            href: `/${prefix}/routines/${encodeURIComponent(row.id)}`, matchedFields: ["routine"],
+            sourceLabel: "Routine", snippet: snippet?.text ?? null, snippets: snippet ? [snippet] : [],
+            routine: { status: row.status, projectId: row.projectId, assigneeAgentId: row.assigneeAgentId },
+            updatedAt: iso(row.updatedAt), previewImageUrl: null, sortCreatedAt: iso(row.createdAt), sortPriorityRank: priorityRank(row.priority) };
+        }),
       ].sort(compareSearchResults(sort));
 
       async function countTotalNonIssue(filters: CompanySearchQuery) {
-        const [artifactTotal, agentTotal, projectTotal] = await Promise.all([
+        const [artifactTotal, agentTotal, projectTotal, routineTotal] = await Promise.all([
           scopeIncludesArtifacts(scope) ? countArtifacts(filters) : Promise.resolve(0),
           scopeIncludesAgents(scope) ? countAgents(filters) : Promise.resolve(0),
           scopeIncludesProjects(scope) ? countProjects(filters) : Promise.resolve(0),
+          scopeIncludesRoutines(scope) ? routineSearch.count(filters) : Promise.resolve(0),
         ]);
-        return artifactTotal + agentTotal + projectTotal;
+        return artifactTotal + agentTotal + projectTotal + routineTotal;
       }
 
       const filtersActive = activeIssueFilters(query);
@@ -1132,7 +1160,7 @@ export function companySearchService(db: Db) {
         offset,
         results: paged,
         countsByType,
-        filterOptionCounts: aggregates.filterOptionCounts,
+        filterOptionCounts,
         zeroResults,
         hasMore: results.length > offset + limit,
       };

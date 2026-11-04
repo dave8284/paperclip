@@ -67,6 +67,7 @@ import {
 } from "../services/index.js";
 import { isCloudManagedInstance } from "../services/cloud-instance.js";
 import { getHiddenSettings } from "../services/settings-visibility.js";
+import { issueReadSqlCondition, projectReadSqlCondition } from "../services/authorization.js";
 import type { StorageService } from "../storage/types.js";
 import { assertBoard, assertCompanyAccess, assertInstanceAdmin, getActorInfo, hasCompanyAccess } from "./authz.js";
 import { COMPANY_IMPORT_ROUTE_PATH } from "./company-import-paths.js";
@@ -427,9 +428,15 @@ export function companyRoutes(db: Db, storage?: StorageService, options?: Compan
   router.get("/:companyId/artifacts", async (req, res) => {
     const companyId = req.params.companyId as string;
     assertCompanyAccess(req, companyId);
+    const decision = await access.decide({ actor: req.actor, action: "company_scope:read", resource: { type: "company", companyId } });
+    if (!decision.allowed) throw forbidden("Company artifacts are outside this actor's authorization boundary");
     const query = companyArtifactsQuerySchema.parse(req.query);
+    const [issueReadCondition, projectReadCondition] = await Promise.all([
+      issueReadSqlCondition(db, req.actor), projectReadSqlCondition(db, req.actor),
+    ]);
     res.json(await artifacts.list(companyId, query, {
       userId: query.starred && req.actor.type === "board" ? req.actor.userId : undefined,
+      issueConditions: [issueReadCondition], projectReadCondition,
     }));
   });
 

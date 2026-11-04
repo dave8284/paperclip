@@ -195,7 +195,7 @@ function pageByCursor<T extends { id: string; updatedAt: string }>(
   return { page, nextCursor };
 }
 
-async function loadIssueGroupingRows(db: Db, companyId: string, seedIssueIds: Iterable<string>) {
+async function loadIssueGroupingRows(db: Db, companyId: string, seedIssueIds: Iterable<string>, readConditions: SQL[]) {
   const rowsById = new Map<string, IssueGroupingRow>();
   let pending = [...new Set(seedIssueIds)];
 
@@ -209,7 +209,7 @@ async function loadIssueGroupingRows(db: Db, companyId: string, seedIssueIds: It
         updatedAt: issues.updatedAt,
       })
       .from(issues)
-      .where(and(eq(issues.companyId, companyId), inArray(issues.id, pending)));
+      .where(and(eq(issues.companyId, companyId), inArray(issues.id, pending), ...readConditions));
 
     const nextPending = new Set<string>();
     for (const row of rows) {
@@ -321,7 +321,7 @@ export function companyArtifactsService(db: Db, storage?: StorageService) {
     list: async (
       companyId: string,
       rawQuery: Partial<CompanyArtifactsQuery> = {},
-      options: { issueConditions?: SQL[]; userId?: string } = {},
+      options: { issueConditions?: SQL[]; projectReadCondition?: SQL<boolean>; userId?: string } = {},
     ): Promise<CompanyArtifactsResponse> => {
       const query = companyArtifactsQuerySchema.parse(rawQuery);
       const cursor = decodeCursor(query.cursor);
@@ -430,6 +430,7 @@ export function companyArtifactsService(db: Db, storage?: StorageService) {
             and(
               eq(issues.projectId, projects.id),
               eq(projects.companyId, issues.companyId),
+              options.projectReadCondition,
             ),
           )
           .leftJoin(
@@ -547,6 +548,7 @@ export function companyArtifactsService(db: Db, storage?: StorageService) {
             and(
               eq(issues.projectId, projects.id),
               eq(projects.companyId, issueWorkProducts.companyId),
+              options.projectReadCondition,
             ),
           )
           .leftJoin(
@@ -679,6 +681,7 @@ export function companyArtifactsService(db: Db, storage?: StorageService) {
             and(
               eq(issues.projectId, projects.id),
               eq(projects.companyId, issues.companyId),
+              options.projectReadCondition,
             ),
           )
           .leftJoin(
@@ -742,7 +745,9 @@ export function companyArtifactsService(db: Db, storage?: StorageService) {
 
       const issueSeedIds = new Set(artifacts.map((artifact) => artifact.issue.id));
       if (query.groupIssueId) issueSeedIds.add(query.groupIssueId);
-      const issueRows = await loadIssueGroupingRows(db, companyId, issueSeedIds);
+      // Selected empty groups and ancestor titles need the same visibility as
+      // artifact-bearing tasks; a readable child does not reveal a private parent.
+      const issueRows = await loadIssueGroupingRows(db, companyId, issueSeedIds, issueConditions);
       const groups = buildArtifactGroups({
         artifacts: sorted,
         companyPrefix: company.issuePrefix,

@@ -7,5 +7,5 @@
   "exports": { ".": { "types": "./src/index.d.ts", "import": "./src/index.mjs" } },
   "files": ["src", "README.md"],
   "engines": { "node": ">=22.16.0" },
-  "scripts": { "start": "node src/server.mjs", "test": "node --test src/*.test.mjs", "build": "node --check src/index.mjs && node --check src/comparisons.mjs && node --check src/server.mjs", "typecheck": "node --check src/index.mjs && node --check src/comparisons.mjs" }
+  "scripts": { "start": "node src/server.mjs", "test": "node --test src/*.test.mjs", "build": "node --check src/index.mjs && node --check src/comparisons.mjs && node --check src/http-auth.mjs && node --check src/http-handler.mjs && node --check src/server.mjs", "typecheck": "node --check src/index.mjs && node --check src/comparisons.mjs && node --check src/http-auth.mjs && node --check src/http-handler.mjs && node --check src/server.mjs" }
 }

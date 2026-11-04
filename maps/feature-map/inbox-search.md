@@ -32,7 +32,12 @@ Open `/decisions`, then a queue at `/decisions/queues/:key` and its source item.
 
 ### `search`
 
-Open `/search` or the navigation search entry.
+Open `/search` or the navigation search entry. Search across tasks, comments,
+documents, artifacts, employees, projects and routines; the Routines tab opens
+matching native routine definitions. Routine search accepts project, employee
+assignee, priority and updated-time filters. Task statuses, human assignees and
+task labels do not match routine definitions. An empty routine query does not
+list the whole company.
 
 ### `toasts`
 
@@ -75,9 +80,27 @@ Manual: Open a pending decision, follow its source, resolve it through the suppo
 
 ### `search`
 
-Automated: [search page](../../ui/src/pages/Search.test.tsx) and [company search service](../../server/src/__tests__/company-search-service.test.ts) cover UI and server search separately.
+Automated: [search page](../../ui/src/pages/Search.test.tsx) covers routine links,
+counts, failed refreshes and company transitions; failed or changed scopes hide
+cached results and snippets. [SQL construction regressions](../../server/src/__tests__/company-search-sql.test.ts)
+check that routine rows, counts and facets retain attached-project and parent-task
+privacy, and artifact project metadata is filtered in the left join while an
+explicitly shared task's artifact remains discoverable. These run without a
+network listener. [Company search service regressions](../../server/src/__tests__/company-search-service.test.ts)
+cover persisted artifact privacy/counts/loosen suggestions, shared-task project
+redaction, routine scope isolation, facets, filtering and ranking before the
+bounded page. These DB additions remain unrun on the 2026-11-04 host because
+PostgreSQL/socket setup is blocked by EPERM; generated SQL is not persisted
+privacy proof.
 
-Manual: Search a unique task title and content phrase, open the result, and compare the actual record. Test filters, no results, and a second company. Verify stale results do not expose inaccessible data.
+Manual: Search a unique task title and content phrase, open the result, and compare
+the actual record. Repeat for a routine title/description, including a paused
+routine, project/employee filters and its native detail link. Test a private
+project, private parent task, explicitly shared task artifact, no results and a
+second company. Verify counts and pages omit denied records, private project
+names stay hidden on shared artifacts, and revoked access or a company switch
+clears previous results. Live browser and actual agent access remain separate
+verification.
 
 ### `toasts`
 

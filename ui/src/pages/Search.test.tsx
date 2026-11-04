@@ -163,6 +163,7 @@ describe("Search page", () => {
   beforeEach(() => {
     container = document.createElement("div");
     document.body.appendChild(container);
+    companyState.selectedCompanyId = "company-1";
     breadcrumbState.setBreadcrumbs.mockReset();
     dialogState.openNewIssue.mockReset();
     navigateMock.mockReset();
@@ -476,6 +477,69 @@ describe("Search page", () => {
     flushSync(() => {
       root.unmount();
     });
+  });
+
+  it("searches routines, counts them and links to their native detail", async () => {
+    searchApiMock.search.mockResolvedValue({ query: "weekly", normalizedQuery: "weekly", scope: "routines", limit: 20, offset: 0,
+      sort: "relevance", countsByType: { issue: 0, comment: 0, document: 0, artifact: 0, agent: 0, project: 0, routine: 1 },
+      filterOptionCounts: { status: {}, priority: {}, assigneeAgentId: {}, assigneeUserId: {}, projectId: {}, labelId: {}, updatedWithin: {} },
+      zeroResults: null, hasMore: false, results: [{ id: "routine-1", type: "routine", score: 1900, title: "Weekly review", href: "/PAP/routines/routine-1",
+        matchedFields: ["routine"], sourceLabel: "Routine", snippet: "Review the current work", snippets: [], updatedAt: null,
+        routine: { status: "paused", projectId: null, assigneeAgentId: null }, previewImageUrl: null }] });
+    const { root } = renderSearch("/search?q=weekly&scope=routines", container);
+    await waitForAssertion(() => {
+      expect(searchApiMock.search).toHaveBeenCalledWith("company-1", expect.objectContaining({ q: "weekly", scope: "routines" }));
+      expect(container.querySelector('a[data-result-type="routine"]')?.getAttribute("href")).toBe("/PAP/routines/routine-1");
+      expect(container.textContent).toContain("Weekly review");
+      expect(container.textContent).toContain("1 result");
+    });
+    flushSync(() => root.unmount());
+  });
+
+  it("hides cached results and counts after a refresh loses search access", async () => {
+    searchApiMock.search.mockResolvedValue({ query: "weekly", normalizedQuery: "weekly", scope: "routines", limit: 20, offset: 0,
+      sort: "relevance", countsByType: { issue: 0, comment: 0, document: 0, artifact: 0, agent: 0, project: 0, routine: 1 },
+      filterOptionCounts: { status: {}, priority: {}, assigneeAgentId: {}, assigneeUserId: {}, projectId: {}, labelId: {}, updatedWithin: {} },
+      zeroResults: null, hasMore: false, results: [{ id: "routine-1", type: "routine", score: 1900, title: "Private weekly review", href: "/PAP/routines/routine-1",
+        matchedFields: ["routine"], sourceLabel: "Routine", snippet: "Protected evidence", snippets: [], updatedAt: null, previewImageUrl: null }] });
+    const { root, queryClient } = renderSearch("/search?q=weekly&scope=routines", container);
+    await waitForAssertion(() => expect(container.textContent).toContain("Private weekly review"));
+    searchApiMock.search.mockRejectedValue(new Error("Search access revoked"));
+    await queryClient.invalidateQueries();
+    await waitForAssertion(() => {
+      expect(container.textContent).toContain("Couldn’t run that search");
+      expect(container.textContent).not.toContain("Private weekly review");
+      expect(container.textContent).not.toContain("Protected evidence");
+      expect(container.querySelector('a[data-result-type="routine"]')).toBeNull();
+    });
+    flushSync(() => root.unmount());
+  });
+
+  it("clears previous-company results while the new company query is pending", async () => {
+    searchApiMock.search.mockResolvedValueOnce({ query: "weekly", normalizedQuery: "weekly", scope: "routines", limit: 20, offset: 0,
+      sort: "relevance", countsByType: { issue: 0, comment: 0, document: 0, artifact: 0, agent: 0, project: 0, routine: 1 },
+      filterOptionCounts: { status: {}, priority: {}, assigneeAgentId: {}, assigneeUserId: {}, projectId: {}, labelId: {}, updatedWithin: {} },
+      zeroResults: null, hasMore: false, results: [{ id: "routine-1", type: "routine", score: 1900, title: "First company confidential review", href: "/PAP/routines/routine-1",
+        matchedFields: ["routine"], sourceLabel: "Routine", snippet: "First company evidence", snippets: [], updatedAt: null, previewImageUrl: null }] });
+    const { root, queryClient } = renderSearch("/search?q=weekly&scope=routines", container);
+    await waitForAssertion(() => expect(container.textContent).toContain("First company confidential review"));
+    searchApiMock.search.mockReturnValue(new Promise(() => {}));
+    companyState.selectedCompanyId = "company-2";
+    flushSync(() => root.render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/search?q=weekly&scope=routines"]}>
+          <Routes><Route path="/search" element={<Search />} /></Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    ));
+    await waitForAssertion(() => {
+      expect(searchApiMock.search).toHaveBeenCalledWith("company-2", expect.objectContaining({ q: "weekly", scope: "routines" }));
+      expect(container.querySelector('[data-testid="search-loading"]')).not.toBeNull();
+      expect(container.textContent).not.toContain("First company confidential review");
+      expect(container.textContent).not.toContain("First company evidence");
+      expect(container.querySelector('a[data-result-type="routine"]')).toBeNull();
+    });
+    flushSync(() => root.unmount());
   });
 
   it("renders the explicit error state with retry and fallback actions", async () => {

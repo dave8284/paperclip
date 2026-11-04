@@ -7,11 +7,13 @@ import {
   agents,
   assets,
   companies,
+  companyMemberships,
   createDb,
   documentMemberships,
   documents,
   heartbeatRuns,
   issueAttachments,
+  issueAccessGrants,
   issueComments,
   issueDocuments,
   issues,
@@ -346,11 +348,12 @@ describeEmbeddedPostgres("companyArtifactsService", () => {
       updatedAt: new Date("2026-01-02T12:00:00.000Z"),
     });
 
-    return { companyId, otherCompanyId, projectId, issueId, secondIssueId, otherIssueId, otherRunId };
+    return { companyId, otherCompanyId, projectId, issueId, secondIssueId, otherIssueId, runId, otherRunId };
   }
 
   it("returns only the caller's starred documents, including plan and human-authored documents, with cursor order", async () => {
     const { companyId } = await seedArtifacts();
+    await db.insert(companyMemberships).values({ companyId, principalType: "user", principalId: "user-1", membershipRole: "viewer", status: "active" });
     await db.insert(documentMemberships).values([
       {
         companyId,
@@ -406,7 +409,7 @@ describeEmbeddedPostgres("companyArtifactsService", () => {
   });
 
   it("returns an empty starred view for agent callers", async () => {
-    const { companyId, otherRunId } = await seedArtifacts();
+    const { companyId, runId } = await seedArtifacts();
     await db.insert(documentMemberships).values({
       companyId,
       documentId: "20202020-2020-4020-8020-202020202020",
@@ -418,7 +421,7 @@ describeEmbeddedPostgres("companyArtifactsService", () => {
         type: "agent",
         agentId: "33333333-3333-4333-8333-333333333333",
         companyId,
-        runId: otherRunId,
+        runId,
         source: "agent_key",
       };
       next();
@@ -430,6 +433,43 @@ describeEmbeddedPostgres("companyArtifactsService", () => {
 
     expect(response.status).toBe(200);
     expect(response.body).toEqual({ artifacts: [], nextCursor: null });
+  });
+
+  it("applies native task privacy and project redaction to artifact routes and grouped ancestry", async () => {
+    const previousMode = process.env.PAPERCLIP_ISSUE_PRIVACY_MODE;
+    process.env.PAPERCLIP_ISSUE_PRIVACY_MODE = "enforce";
+    try {
+      const { companyId, projectId, issueId, secondIssueId } = await seedArtifacts();
+      const userId = "artifact-reader";
+      await db.insert(companyMemberships).values({ companyId, principalType: "user", principalId: userId, membershipRole: "member", status: "active" });
+      await db.update(projects).set({ visibility: "private", name: "Confidential project" }).where(eq(projects.id, projectId));
+      await db.update(issues).set({ visibility: "private", privacyRootIssueId: issueId }).where(eq(issues.id, issueId));
+      const app = express();
+      app.use((req, _res, next) => {
+        req.actor = { type: "board", source: "session", userId, companyIds: [companyId], ignoreInstanceAdmin: true };
+        next();
+      });
+      app.use("/api/companies", companyRoutes(db, createStorageService())); app.use(errorHandler);
+      const path = `/api/companies/${companyId}/artifacts`;
+      const denied = await request(app).get(path).expect(200);
+      expect(denied.body.artifacts.every((artifact: { issue: { id: string } }) => artifact.issue.id !== issueId)).toBe(true);
+      const empty = await request(app).get(`${path}?groupBy=task&groupIssueId=${issueId}`).expect(200);
+      expect(empty.body).toEqual({ artifacts: [], selectedGroup: null, nextCursor: null });
+      await db.insert(issueAccessGrants).values({ issueId, subjectType: "user", subjectId: userId, source: "explicit" });
+      const shared = await request(app).get(path).expect(200);
+      const readable = shared.body.artifacts.filter((artifact: { issue: { id: string } }) => artifact.issue.id === issueId);
+      expect(readable).toHaveLength(3);
+      expect(readable.every((artifact: { project: unknown }) => artifact.project === null)).toBe(true);
+      expect(JSON.stringify(shared.body)).not.toContain("Confidential project");
+      await db.update(issues).set({ visibility: "private", privacyRootIssueId: secondIssueId, title: "Confidential parent" }).where(eq(issues.id, secondIssueId));
+      await db.update(issues).set({ parentId: secondIssueId }).where(eq(issues.id, issueId));
+      const grouped = await request(app).get(`${path}?groupBy=parent_task`).expect(200);
+      expect(grouped.body.groups.map((group: { issue: { id: string } }) => group.issue.id)).toEqual([issueId]);
+      expect(JSON.stringify(grouped.body)).not.toContain("Confidential parent");
+    } finally {
+      if (previousMode === undefined) delete process.env.PAPERCLIP_ISSUE_PRIVACY_MODE;
+      else process.env.PAPERCLIP_ISSUE_PRIVACY_MODE = previousMode;
+    }
   });
 
   it("projects agent-created documents, direct attachments, and work products while excluding noisy sources", async () => {

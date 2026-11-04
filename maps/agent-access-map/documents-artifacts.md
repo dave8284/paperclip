@@ -140,16 +140,29 @@ API: `present` — representative operation IDs:
 
 Agent access: `available` — REST / native call_api.
 
-Policy: Task/resource visibility, mutation/checkout ownership, revision/lock guards and
-permitted deliverable context.
+Policy: Company access and native `company_scope:read` admission are required.
+Task and project SQL predicates retain the actual actor and responsible/authorizing
+user intersection. A task grant can retain its artifacts while inaccessible
+project id/name are redacted. Group selection and ancestor traversal apply the
+same task visibility, including empty groups; readable children do not disclose
+private parent titles. Starred results use the current board user's identity.
 
-Evidence: `source-only` — [implementation](../../server/src/routes/issues.ts#L10299) at
-the reviewed commit above.
+Evidence: `source-only` — 2026-11-04 changes reviewed against base commit
+`16997c75b`; [route admission](../../server/src/routes/companies.ts),
+[artifact and grouping service](../../server/src/services/company-artifacts.ts),
+and [native authorization](../../server/src/services/authorization.ts).
 
-Verification: `not-run` — exercise a listed permitted operation with actual agent
-credentials/run context; inspect its result and applicable persistence/attribution.
-Assert the relevant denied actor, owner, company or mode from Policy. Review the
-remaining operations before qualifying the whole capability.
+Verification: `not-run` — live agent/database access remains unverified. Four
+[route contract tests](../../server/src/__tests__/company-artifacts-route-contract.test.ts)
+pass with controlled dependencies, and three
+[SQL construction tests](../../server/src/__tests__/company-search-sql.test.ts)
+pass without a listener. These cover admission, actual-actor predicate forwarding,
+project redaction and selected-group filtering, not persisted access. Added
+[database regressions](../../server/src/__tests__/company-artifacts-service.test.ts)
+remain unrun under the host's PostgreSQL/socket restriction. With actual
+agent/run credentials, verify permitted outputs, private task/company denial,
+task-sharing project redaction, and hidden empty/ancestor groups.
 
-Gaps: Library search/filter uses the artifact API; no new tool needed merely to mirror
-the UI.
+Gaps: Library search/filter uses the artifact API; no new tool is needed merely
+to mirror the UI. Live agent execution and persisted privacy acceptance remain
+open; source and controlled-dependency checks do not qualify them.

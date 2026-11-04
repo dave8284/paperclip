@@ -10341,7 +10341,7 @@ registry.registerPath({
 });
 
 for (const route of [
-  ["get", "/api/companies/{companyId}/search", "Search company data"],
+  ["get", "/api/companies/{companyId}/search", "Search authorized company tasks, comments, documents, artifacts, agents, projects and routines. q searches text; scope selects all/issues/comments/documents/artifacts/agents/projects/routines. Project and parent-task visibility precede routine counts and pagination; task visibility also governs artifacts. Use projectId, assigneeAgentId, priority or updatedWithin to narrow routines; task status, task labels and human-assignee filters do not apply to routines."],
   [
     "get",
     "/api/companies/{companyId}/search/extract",

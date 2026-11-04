@@ -1,16 +1,42 @@
 # Model Intelligence
 
-Independent local model-profile router, storage and authenticated HTTP API. Node 22.16+; no paid model calls or provider credentials. Can be packaged with `npm pack` and run separately with `MODEL_INTELLIGENCE_TOKEN` (32+ characters), `MODEL_INTELLIGENCE_DB` and `npm start`.
+Independent local model-profile router, storage and authenticated HTTP API. Node 22.16+; no paid model calls or provider credentials. Can be packaged with `npm pack` and run separately with HTTP credentials (below), `MODEL_INTELLIGENCE_DB` and `npm start`. The listener stays on `127.0.0.1`; this package does not deploy a hosted service.
 
 The host supplies only authorized, available subscription candidates. Selection remains pinned for an existing task. Unqualified and complex work retain the configured baseline. For routine work, the existing observational router uses at least five reviewed outcomes, a Wilson-score heuristic, bounded iterations and at least 15% lower observed median latency. These observations do not establish a controlled improvement or general production reliability. API prices are not subscription cost evidence. Human/check evaluations retain their source and evidence reference; the package does not independently verify the caller's claims. Process exit alone never counts as quality. Prompt/context fingerprints allow analysis without storing private content.
 
-Embedded API: `createModelIntelligence(path)` → `select`, `evaluate`, `policy`, `analytics`, `close`. HTTP equivalents: POST `/v1/select`, `/v1/evaluations`, `/v1/policy`; GET `/v1/analytics?namespace=...`. Require `Authorization: Bearer ...`. HTTP token is an operator credential for this single-instance service; multi-tenant hosting needs an identity gateway with namespace authorization. Agent OS enforces native company access at its integration boundary.
+Embedded API: `createModelIntelligence(path)` → `select`, `evaluate`, `policy`, `analytics`, `close`. HTTP equivalents: POST `/v1/select`, `/v1/evaluations`, `/v1/policy`; GET `/v1/analytics?namespace=...`. Require `Authorization: Bearer ...`. The legacy HTTP token is an all-namespace operator credential. Optional host credentials bind each token to exact namespaces; every endpoint enforces that boundary before reading or writing storage. Agent OS enforces native company access at its embedded integration boundary.
 
 Receipt and evaluation IDs are idempotent; mismatched reuse fails. Rollback blocks a profile for future selections and refuses silent substitution of an active pin. SQLite owns durable receipts, evaluations and policy history. The service neither changes agent instructions nor executes tasks. The caller must revalidate admission, account capacity and permissions immediately before execution.
 
-## Controlled comparison evidence (embedded API only)
+## Standalone HTTP credentials and namespace authority
 
-The same embedded instance also provides `registerDataset`, `registerComparison`, `recordComparisonOutcome` and `comparisonReport`; their contracts are exported in `src/index.d.ts`. These methods have no HTTP routes or automatic routing activation. They use separate SQLite tables and do not insert legacy `evaluate` records.
+Configure at least one credential mode before starting the process:
+
+- `MODEL_INTELLIGENCE_TOKEN`: preserves the existing all-namespace operator credential, including aggregate analytics when `namespace` is omitted. Keep it within the service operator's trusted environment.
+- `MODEL_INTELLIGENCE_HOST_CREDENTIALS`: a JSON array of `{ "id": "agentos-host", "token": "<random secret>", "namespaces": ["company-id"] }` entries. This mode works without an operator token. Credentials authorize all existing and comparison methods within their listed namespaces; they are trusted host credentials, not browser/end-user sessions.
+
+Tokens must be 32–512 printable, non-whitespace ASCII characters; generate them from cryptographically random bytes. Host IDs and tokens must be unique, including against the operator token. Host lists are limited to 100 entries, 100 distinct namespaces per host, and 1,000 total namespace grants; environment JSON is capped at 512 KiB. Empty scopes and `*` are rejected. Namespace strings retain exact case and whitespace semantics: there is no wildcard expansion, prefix matching or normalization. Malformed configuration fails startup with a generic error, before storage/listener creation, without including credentials or JSON fragments. Matching compares fixed-size SHA-256 credential digests with `timingSafeEqual` across all configured entries.
+
+Every scoped request must explicitly name one allowed namespace. Missing namespaces produce 400, foreign namespaces produce 403, and invalid/missing credentials produce 401. Reads use query parameters; writes use the top-level JSON `namespace`. Repeated query parameters, duplicate top-level JSON fields (including escaped aliases), and query parameters on writes are rejected before store access. GET bodies are not accepted. These rules prevent a query/body conflict from silently choosing a namespace. Responses disable caching. Request bodies are bounded at 64 KiB, or 128 KiB for the up-to-100-case dataset registration endpoint.
+
+| Method and path | Namespace and operation |
+| --- | --- |
+| POST `/v1/select` | JSON namespace; existing selection receipt |
+| POST `/v1/evaluations` | JSON namespace; existing observational evaluation |
+| POST `/v1/policy` | JSON namespace; existing profile block/restore policy |
+| GET `/v1/analytics?namespace=...` | Query namespace; omission permits aggregate reads only for the operator credential |
+| POST `/v1/datasets` | JSON namespace; `registerDataset` |
+| POST `/v1/comparisons` | JSON namespace; `registerComparison` |
+| POST `/v1/comparison-outcomes` | JSON namespace; `recordComparisonOutcome` |
+| GET `/v1/comparisons/report?namespace=...&comparisonId=...` | Explicit query namespace and comparison ID; `comparisonReport` |
+
+Changing or revoking credentials requires a process restart; there is no background credential polling or hot reload. Already-admitted requests may finish during graceful shutdown. A replacement configuration can retain existing namespace data while denying removed credentials. Never send these host/operator tokens to browsers or put them in source control. This boundary authenticates host access to stored namespaces; it does not independently authenticate evaluation provenance or certify a hosted multitenant product. Hosted TLS, rate limits, tenant lifecycle/retention and live transport/restart qualification remain separate work.
+
+The actual async request handler is exercised in process using streams and real SQLite, without opening sockets. Its focused tests cover operator compatibility, host-only mode, all endpoint boundaries, duplicate/ambiguous namespaces, policy/evidence isolation, credential replacement, malformed configuration, body bounds and split UTF-8. The existing listener test remains available but was not rerun in the restricted development environment. In-process results do not certify network behavior.
+
+## Controlled comparison evidence
+
+The same embedded instance also provides `registerDataset`, `registerComparison`, `recordComparisonOutcome` and `comparisonReport`; their contracts are exported in `src/index.d.ts`. The namespace-gated HTTP routes above call those same methods. They have no automatic routing activation, use separate SQLite tables and do not insert legacy `evaluate` records.
 
 1. Register an immutable, namespaced dataset version with task-family/version, routine or complex risk class, observed/synthetic provenance and 1–100 cases. Each case declares a training/holdout split, SHA-256 input and acceptance-check digests, and a host-controlled source reference. Store raw inputs and check artifacts in the host's protected storage.
 2. Freeze a comparison before selecting its runs: baseline/candidate subscription profiles, model version and effort, harness/prompt/context fingerprints, one changed dimension (`model`, `prompt` or `context`), and explicit thresholds. Model comparisons retain the provider and harness; prompt/context comparisons retain the model profile. Renaming a profile alone is not a measured model change.
@@ -27,6 +53,6 @@ See [the implementation checkpoint](../../doc/plans/2026-11-04-agentos-model-com
 
 ## Agent OS host
 
-Set `AGENTOS_MODEL_INTELLIGENCE_DB` to an absolute private SQLite file path in the server environment. Agent OS creates its parent directory and embeds this package without a network round trip. Leave it unset to retain existing configured-model behavior without learning. The standalone HTTP process is optional; do not expose its operator token to browser code.
+Set `AGENTOS_MODEL_INTELLIGENCE_DB` to an absolute private SQLite file path in the server environment. Agent OS creates its parent directory and embeds this package without a network round trip. Leave it unset to retain existing configured-model behavior without learning. The standalone HTTP process is optional; do not expose its operator or host tokens to browser code. Embedded callers remain responsible for native company authorization; HTTP namespace credentials do not alter Agent OS permissions.
 
 The native run saves the selection request before calling the product, revalidates retained candidates on retries, and carries the request and receipt through lifecycle checkpoints. Additional observed models do not change a queued request. New retry runs receive new receipts while retaining their task pin. Native subscription entitlement, permissions, capacity and execution remain authoritative.

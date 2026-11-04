@@ -63,7 +63,14 @@ Test an inaccessible user/company and explicit missing workspace-only resources.
 
 Automated: [artifact page](../../ui/src/pages/Artifacts.test.tsx) covers grouping, search requests, and pagination using mocks.
 
-Manual: Find the task’s output through search and grouping, open its stack, page through results, and reload a direct stack link. Confirm the same file/content appears as from the task.
+The native library route now applies company discovery and task/project read
+authorization. [Route contracts](../../server/src/__tests__/company-artifacts-route-contract.test.ts)
+and [SQL construction checks](../../server/src/__tests__/company-search-sql.test.ts)
+passed on 2026-11-04 using controlled dependencies and generated SQL. Added
+[persisted regressions](../../server/src/__tests__/company-artifacts-service.test.ts)
+remain unrun because this host cannot start the required PostgreSQL/socket fixture.
+
+Manual: Find the task’s output through search and grouping, open its stack, page through results, and reload a direct stack link. Confirm the same file/content appears as from the task. Deny private task outputs and empty groups; a shared child must not reveal a private parent's title. Explicit task access without project membership should retain the artifact while omitting the private project id/name. Repeat with the actual agent and responsible user, including revoked access.
 
 ## Gotchas
 

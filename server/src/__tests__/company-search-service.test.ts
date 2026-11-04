@@ -1,9 +1,10 @@
 import { randomUUID } from "node:crypto";
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import {
   agents,
   companies,
+  companyMemberships,
   createDb,
   documents,
   issueComments,
@@ -14,6 +15,7 @@ import {
   labels,
   projectAccessMembers,
   projects,
+  routines,
 } from "@paperclipai/db";
 import { companySearchQuerySchema, COMPANY_SEARCH_MAX_QUERY_LENGTH } from "@paperclipai/shared";
 import {
@@ -87,6 +89,7 @@ describeEmbeddedPostgres("companySearchService", () => {
   }, 20_000);
 
   afterEach(async () => {
+    await db.delete(routines);
     await db.delete(issueDocuments);
     await db.delete(documents);
     await db.delete(issueComments);
@@ -318,7 +321,7 @@ describeEmbeddedPostgres("companySearchService", () => {
       }),
     });
     expect(result.results[0]?.snippet).toMatch(/comet tail/i);
-    expect(result.countsByType).toEqual({ issue: 0, comment: 0, document: 0, artifact: 1, agent: 0, project: 0 });
+    expect(result.countsByType).toEqual({ issue: 0, comment: 0, document: 0, artifact: 1, agent: 0, project: 0, routine: 0 });
   });
 
   it("does not pass high-offset search fetch windows through to artifact query validation", async () => {
@@ -678,7 +681,7 @@ describeEmbeddedPostgres("companySearchService", () => {
     const result = await svc.search(companyId, companySearchQuerySchema.parse({ q: "needle", limit: "2", offset: "2" }));
 
     expect(result.results.map((row) => row.id)).toEqual([agentIds[2], projectIds[0]]);
-    expect(result.countsByType).toEqual({ issue: 0, comment: 0, document: 0, artifact: 0, agent: 3, project: 3 });
+    expect(result.countsByType).toEqual({ issue: 0, comment: 0, document: 0, artifact: 0, agent: 3, project: 3, routine: 0 });
     expect(result.hasMore).toBe(true);
   });
 
@@ -818,6 +821,158 @@ describeEmbeddedPostgres("companySearchService", () => {
       expect(ids, `query=${query}`).toContain(expectedId);
       expect(ids, `query=${query} should not match unrelated issue`).not.toContain(rejected);
     }
+  });
+
+  it("filters private artifacts before snippets, counts, pages and loosen suggestions", async () => {
+    const previousMode = process.env.PAPERCLIP_ISSUE_PRIVACY_MODE;
+    process.env.PAPERCLIP_ISSUE_PRIVACY_MODE = "enforce";
+    try {
+      const companyId = await createCompany(), ownerId = randomUUID(), outsiderId = randomUUID();
+      const author = await createAgent(companyId);
+      const openId = await createIssue(companyId, { title: "Open evidence", status: "todo" });
+      const privateId = randomUUID();
+      await createIssue(companyId, { id: privateId, title: "Private evidence", status: "todo", visibility: "private", privacyRootIssueId: privateId, responsibleUserId: ownerId });
+      for (const [issueId, title] of [[openId, "Visible signal"], [privateId, "Confidential signal"]]) {
+        const [doc] = await db.insert(documents).values({ companyId, title, latestBody: "signal report", latestRevisionNumber: 1, createdByAgentId: author }).returning();
+        await db.insert(issueDocuments).values({ companyId, issueId, documentId: doc.id, key: "report" });
+      }
+      const condition = await issueReadSqlCondition(db, { type: "board", source: "session", userId: outsiderId });
+      const query = companySearchQuerySchema.parse({ q: "signal", scope: "artifacts", limit: "1" });
+      const visible = await svc.search(companyId, query, { issueReadCondition: condition });
+      expect(visible.results.map(row => row.title)).toEqual(["Visible signal"]);
+      expect(visible.countsByType.artifact).toBe(1);
+      expect(visible.hasMore).toBe(false);
+      expect(JSON.stringify(visible)).not.toContain("Confidential");
+      const absent = await svc.search(companyId, { ...query, status: ["done"] }, { issueReadCondition: condition });
+      expect(absent.zeroResults?.unfilteredTotal).toBe(1);
+      expect(absent.zeroResults?.loosenSuggestions.find(row => row.filter === "status")?.resultCount).toBe(1);
+      const owner = await svc.search(companyId, { ...query, limit: 20 }, { issueReadCondition: await issueReadSqlCondition(db, { type: "board", source: "session", userId: ownerId }) });
+      expect(owner.countsByType.artifact).toBe(2);
+    } finally {
+      if (previousMode === undefined) delete process.env.PAPERCLIP_ISSUE_PRIVACY_MODE;
+      else process.env.PAPERCLIP_ISSUE_PRIVACY_MODE = previousMode;
+    }
+  });
+
+  it("keeps explicitly shared task artifacts while redacting an unreadable project", async () => {
+    const previousMode = process.env.PAPERCLIP_ISSUE_PRIVACY_MODE;
+    process.env.PAPERCLIP_ISSUE_PRIVACY_MODE = "enforce";
+    try {
+      const companyId = await createCompany(), readerId = randomUUID(), author = await createAgent(companyId);
+      const projectId = await createProject(companyId, { name: "Confidential project name", visibility: "private" });
+      const issueId = randomUUID();
+      await createIssue(companyId, { id: issueId, projectId, title: "Shared task", visibility: "private", privacyRootIssueId: issueId });
+      await db.insert(issueAccessGrants).values({ issueId, subjectType: "user", subjectId: readerId, source: "explicit" });
+      const [doc] = await db.insert(documents).values({ companyId, title: "Shared signal", latestBody: "signal report", latestRevisionNumber: 1, createdByAgentId: author }).returning();
+      await db.insert(issueDocuments).values({ companyId, issueId, documentId: doc.id, key: "report" });
+      const actor = { type: "board" as const, source: "session" as const, userId: readerId };
+      const result = await svc.search(companyId, companySearchQuerySchema.parse({ q: "signal", scope: "artifacts" }), {
+        issueReadCondition: await issueReadSqlCondition(db, actor), projectReadCondition: await projectReadSqlCondition(db, actor),
+      });
+      expect(result.results).toHaveLength(1);
+      expect(result.countsByType.artifact).toBe(1);
+      expect(result.results[0].artifact).toMatchObject({ projectId: null, projectName: null, issueId });
+      expect(JSON.stringify(result)).not.toContain("Confidential project name");
+    } finally {
+      if (previousMode === undefined) delete process.env.PAPERCLIP_ISSUE_PRIVACY_MODE;
+      else process.env.PAPERCLIP_ISSUE_PRIVACY_MODE = previousMode;
+    }
+  });
+
+  it("searches routines with project and parent-task privacy before counts and pagination", async () => {
+    const previousMode = process.env.PAPERCLIP_ISSUE_PRIVACY_MODE;
+    process.env.PAPERCLIP_ISSUE_PRIVACY_MODE = "enforce";
+    try {
+      const companyId = await createCompany(), otherCompanyId = await createCompany(), ownerId = randomUUID(), outsiderId = randomUUID();
+      const privateProject = await createProject(companyId, { name: "Private", visibility: "private", privacyOwnerUserId: ownerId });
+      await db.insert(projectAccessMembers).values({ companyId, projectId: privateProject, subjectType: "user", subjectId: ownerId });
+      const privateParent = randomUUID();
+      await createIssue(companyId, { id: privateParent, title: "Private parent", visibility: "private", privacyRootIssueId: privateParent, responsibleUserId: ownerId });
+      const hiddenParent = await createIssue(companyId, { hiddenAt: new Date() });
+      const [first, second] = await db.insert(routines).values([
+        { companyId, title: "signal daily", description: "Public routine" },
+        { companyId, title: "signal weekly", status: "paused" },
+        { companyId, title: "signal private project", projectId: privateProject },
+        { companyId, title: "signal private parent", parentIssueId: privateParent },
+        { companyId, title: "signal hidden parent", parentIssueId: hiddenParent },
+        { companyId: otherCompanyId, title: "signal foreign company" },
+        { companyId, title: "signal foreign linkage", projectId: await createProject(otherCompanyId) },
+      ]).returning();
+      const options = { issueReadCondition: await issueReadSqlCondition(db, { type: "board", source: "session", userId: outsiderId }),
+        projectReadCondition: await projectReadSqlCondition(db, { type: "board", source: "session", userId: outsiderId }) };
+      const query = companySearchQuerySchema.parse({ q: "signal", scope: "routines", limit: 1 });
+      const page = await svc.search(companyId, query, options);
+      const next = await svc.search(companyId, { ...query, offset: 1 }, options);
+      expect([...page.results, ...next.results].map(row => row.id).sort()).toEqual([first.id, second.id].sort());
+      expect(page.countsByType.routine).toBe(2);
+      expect(page.hasMore).toBe(true); expect(next.hasMore).toBe(false);
+      expect(JSON.stringify(page)).not.toContain("private");
+      expect(JSON.stringify(page)).not.toContain("secrets");
+      const owner = await svc.search(companyId, { ...query, limit: 20 }, {
+        issueReadCondition: await issueReadSqlCondition(db, { type: "board", source: "session", userId: ownerId }),
+        projectReadCondition: await projectReadSqlCondition(db, { type: "board", source: "session", userId: ownerId }),
+      });
+      expect(owner.countsByType.routine).toBe(4);
+      expect(owner.results.every(row => row.type === "routine")).toBe(true);
+    } finally {
+      if (previousMode === undefined) delete process.env.PAPERCLIP_ISSUE_PRIVACY_MODE;
+      else process.env.PAPERCLIP_ISSUE_PRIVACY_MODE = previousMode;
+    }
+  });
+
+  it("requires both agent and responsible-user grants for routine parents and projects", async () => {
+    const previousMode = process.env.PAPERCLIP_ISSUE_PRIVACY_MODE;
+    process.env.PAPERCLIP_ISSUE_PRIVACY_MODE = "enforce";
+    try {
+      const companyId = await createCompany(), userId = randomUUID(), agentId = await createAgent(companyId);
+      const projectId = await createProject(companyId, { visibility: "private" }), parentIssueId = randomUUID();
+      await createIssue(companyId, { id: parentIssueId, visibility: "private", privacyRootIssueId: parentIssueId });
+      await db.insert(companyMemberships).values({ companyId, principalType: "user", principalId: userId, status: "active", membershipRole: "operator" });
+      await db.insert(projectAccessMembers).values({ companyId, projectId, subjectType: "agent", subjectId: agentId });
+      await db.insert(issueAccessGrants).values({ issueId: parentIssueId, subjectType: "agent", subjectId: agentId, source: "explicit" });
+      await db.insert(routines).values({ companyId, title: "Restricted signal", projectId, parentIssueId, assigneeAgentId: agentId });
+      const actor = { type: "agent" as const, source: "agent_jwt" as const, companyId, agentId, onBehalfOfUserId: userId };
+      const options = { issueReadCondition: await issueReadSqlCondition(db, actor), projectReadCondition: await projectReadSqlCondition(db, actor) };
+      const query = companySearchQuerySchema.parse({ q: "signal", scope: "routines" });
+      async function expectCount(count: number) {
+        const result = await svc.search(companyId, query, options);
+        expect(result.countsByType.routine).toBe(count);
+        expect(result.results).toHaveLength(count);
+        expect(result.filterOptionCounts.projectId[projectId] ?? 0).toBe(count);
+      }
+      await expectCount(0);
+      await db.insert(projectAccessMembers).values({ companyId, projectId, subjectType: "user", subjectId: userId });
+      await expectCount(0);
+      const [grant] = await db.insert(issueAccessGrants).values({ issueId: parentIssueId, subjectType: "user", subjectId: userId, source: "explicit" }).returning();
+      await expectCount(1);
+      await db.update(issueAccessGrants).set({ revokedAt: new Date() }).where(eq(issueAccessGrants.id, grant.id));
+      await expectCount(0);
+    } finally {
+      if (previousMode === undefined) delete process.env.PAPERCLIP_ISSUE_PRIVACY_MODE;
+      else process.env.PAPERCLIP_ISSUE_PRIVACY_MODE = previousMode;
+    }
+  });
+
+  it("supports routine project/agent filters and ranks before the bounded branch window", async () => {
+    const companyId = await createCompany(), projectId = await createProject(companyId), assigneeAgentId = await createAgent(companyId);
+    const [exact] = await db.insert(routines).values({ companyId, projectId, assigneeAgentId, title: "needle", updatedAt: new Date("2020-01-01"), priority: "high" }).returning();
+    await db.insert(routines).values(Array.from({ length: 8 }, (_, i) => ({ companyId, title: `Recent ${i}`, description: "mentions needle" })));
+    const query = companySearchQuerySchema.parse({ q: "needle", scope: "routines", limit: 1 });
+    const ranked = await svc.search(companyId, query);
+    expect(ranked.results[0].id).toBe(exact.id);
+    expect(ranked.countsByType.routine).toBe(9);
+    expect(ranked.filterOptionCounts.priority).toMatchObject({ high: 1, medium: 8 });
+    expect(ranked.filterOptionCounts.projectId[projectId]).toBe(1);
+    expect(ranked.filterOptionCounts.assigneeAgentId[assigneeAgentId]).toBe(1);
+    expect(ranked.filterOptionCounts.status).toEqual({});
+    const scoped = await svc.search(companyId, { ...query, projectId, assigneeAgentId, priority: ["high"] });
+    expect(scoped.results.map(row => row.id)).toEqual([exact.id]);
+    expect(scoped.hasMore).toBe(false);
+    const taskFiltered = await svc.search(companyId, { ...query, status: ["done"] });
+    expect(taskFiltered.results).toEqual([]);
+    expect(taskFiltered.zeroResults?.loosenSuggestions.find(row => row.filter === "status")?.resultCount).toBe(9);
+    const empty = await svc.search(companyId, companySearchQuerySchema.parse({ scope: "routines" }));
+    expect(empty.results).toEqual([]);
   });
 
   it("pushes private issue filtering into list, count, and company search queries", async () => {

@@ -127,21 +127,46 @@ API: `present` — representative operation IDs:
 - `GET /api/companies/{companyId}/issues`.
 
 Agent access: `available` — Native search_tasks for tasks; REST / native call_api for
-broader search.
+broader search. The existing company search now includes `scope=routines` and
+routine results in `scope=all`; result links identify the native routine record.
+This does not add an API proxy or broaden the actor's admission.
 
-Policy: Own agent context; responsible-user inbox policy and explicit opt-in/grants for
-cross-user archive; decision policy separately.
+Policy: Company access and `company_scope:read` admission precede search. Existing
+native issue/project SQL uses the actual actor and its responsible/authorizing
+user intersection. Routine discovery is company-scoped and additionally requires
+readability of an attached project and parent task before ranking, counts, facets
+or pagination; hidden parents and foreign-company links are excluded. Artifact
+snippets, counts and loosen suggestions require the linked task's native read
+condition. Explicit task sharing can retain artifact access without project
+membership: denied project id/name are omitted from the artifact projection.
+Routine retrieval returns title/description and basic metadata, not triggers,
+environments, secrets or run history. Project, agent, priority and updated-time
+filters apply; task status, human-assignee and task-label filters match no routine.
+An empty text query does not enumerate routines. Existing query/page bounds and
+rate limits remain authoritative.
 
-Evidence: `source-only` — [implementation](../../server/src/routes/agents.ts#L3952) at
-the reviewed commit above.
+Evidence: `source-only` — 2026-11-04 search extension reviewed against base commit
+`16997c75b`; [route admission](../../server/src/routes/issues.ts),
+[search composition](../../server/src/services/company-search.ts),
+[routine branch](../../server/src/services/company-search-routines.ts),
+[artifact projection](../../server/src/services/company-artifacts.ts), and
+[native authorization](../../server/src/services/authorization.ts).
 
-Verification: `not-run` — exercise a listed permitted operation with actual agent
-credentials/run context; inspect its result and applicable persistence/attribution.
-Assert the relevant denied actor, owner, company or mode from Policy. Review the
-remaining operations before qualifying the whole capability.
+Verification: `not-run` — live agent access remains unverified. Focused UI/parser checks passed 40 tests and the no-listener
+[SQL construction checks](../../server/src/__tests__/company-search-sql.test.ts)
+passed 3 tests on 2026-11-04. They verify routine rendering/stale-result handling
+and guard composition, not persisted access. Added
+[database regressions](../../server/src/__tests__/company-search-service.test.ts)
+remain `not-run`: this host's PostgreSQL/socket setup is blocked by EPERM. With
+actual agent/run credentials, assert permitted routine and artifact discovery,
+private project/parent and other-company denial, both actor/responsible-user
+grants, unchanged counts/pages/loosen suggestions, and task-sharing project
+redaction. Live agent verification remains `not-run`.
 
-Gaps: General company search and dedicated task search are different result sets; use
-the appropriate one.
+Gaps: General company search and dedicated task search are different result sets;
+use the appropriate one. Native run/tool discovery and persisted privacy cases
+still require execution in a permitted environment. This extension does not
+qualify unrestricted conversation or external document search.
 
 
 ## `toasts`
