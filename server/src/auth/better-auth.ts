@@ -12,6 +12,7 @@ import {
 } from "@paperclipai/db";
 import type { Config } from "../config.js";
 import { googleSignInConfiguration, initialRegistrationStatus, passwordAuthenticationEnabled } from "./agentos-registration.js";
+import { configuredGoogleOwnerHooks } from "./configured-google-owner.js";
 import { resolvePaperclipInstanceId } from "../home-paths.js";
 import {
   workspaceLoginHandoffPlugin,
@@ -258,6 +259,7 @@ export function createBetterAuthInstance(db: Db, config: Config, trustedOrigins:
     publicUrl,
   });
   const passwordEnabled = passwordAuthenticationEnabled();
+  const ownerHooks = configuredGoogleOwnerHooks(db);
 
   const authConfig = {
     baseURL: baseUrl,
@@ -267,11 +269,13 @@ export function createBetterAuthInstance(db: Db, config: Config, trustedOrigins:
       ...googleSignInConfiguration()!, disableSignUp: config.authDisableSignUp,
     } } : {},
     user: {
+      validateUserInfo: ownerHooks.validateUserInfo,
       additionalFields: {
         approvalStatus: { type: "string" as const, defaultValue: "pending", input: false },
       },
     },
     databaseHooks: {
+      session: { create: { before: ownerHooks.beforeSession } },
       user: { create: { before: async (user: { email: string; emailVerified: boolean }) => ({
         data: { ...user, approvalStatus: await initialRegistrationStatus(db, user.email, user.emailVerified) },
       }) } },

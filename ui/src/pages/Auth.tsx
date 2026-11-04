@@ -16,26 +16,30 @@ import { useTheme } from "@/context/ThemeContext";
 import { administrationApi } from "@/api/administration";
 import { navigateTopLevel } from "@/lib/browserNavigation";
 
-type AuthMode = "sign_in" | "sign_up";
-
 export function AuthPage() {
   const { setTheme } = useTheme();
   useEffect(() => setTheme("light"), [setTheme]);
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const [mode, setMode] = useState<AuthMode>(() => searchParams.get("mode") === "sign_up" ? "sign_up" : "sign_in");
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const joining = searchParams.get("mode") === "sign_up";
   const [error, setError] = useState<string | null>(null);
   const errorId = "auth-error";
   const options = useQuery({ queryKey: ["public-auth-options"], queryFn: administrationApi.authOptions, retry: false, refetchOnMount: "always" });
-  const passwordEnabled = options.data?.passwordSignInEnabled === true && !options.error;
-  const signUpEnabled = passwordEnabled && options.data?.passwordSignUpEnabled === true;
-  const formMode: AuthMode = mode === "sign_up" && signUpEnabled ? "sign_up" : "sign_in";
-  const google = useMutation({ mutationFn: () => authApi.signInGoogle(nextPath), onSuccess: navigateTopLevel,
-    onError: (failure: Error) => setError(failure.message) });
+  const google = useMutation({
+    mutationFn: () => authApi.signInGoogle(nextPath),
+    onSuccess: async (url) => {
+      setError(null);
+      // OAuth can switch accounts. Clear identity-sensitive cached reads before
+      // leaving, including any request for the previous company list in flight.
+      queryClient.removeQueries({ queryKey: ["registration"] });
+      queryClient.removeQueries({ queryKey: ["administration"] });
+      await queryClient.resetQueries({ queryKey: queryKeys.access.currentBoardAccess });
+      await queryClient.resetQueries({ queryKey: queryKeys.companies.all });
+      navigateTopLevel(url);
+    },
+    onError: (failure: Error) => setError(failure.message),
+  });
 
   const nextPath = useMemo(
     () => tenantSignInReturnPath(searchParams.get("next") || getRememberedInvitePath() || "/"),
@@ -58,44 +62,6 @@ export function AuthPage() {
       navigate(nextPath, { replace: true });
     }
   }, [session, navigate, nextPath]);
-
-  const mutation = useMutation({
-    mutationFn: async () => {
-      if (!passwordEnabled || options.isFetching) throw new Error("Password sign-in is unavailable.");
-      if (formMode === "sign_in") {
-        await authApi.signInEmail({ email: email.trim(), password });
-        return;
-      }
-      await authApi.signUpEmail({
-        name: name.trim(),
-        email: email.trim(),
-        password,
-      });
-    },
-    onSuccess: async () => {
-      setError(null);
-      queryClient.removeQueries({ queryKey: ["registration"] });
-      queryClient.removeQueries({ queryKey: ["administration"] });
-      await queryClient.resetQueries({ queryKey: queryKeys.access.currentBoardAccess });
-      await queryClient.invalidateQueries({ queryKey: queryKeys.auth.session });
-      await queryClient.invalidateQueries({ queryKey: queryKeys.health });
-      // Reset rather than invalidate: the `["companies"]` entry is shared app-wide and
-      // is not account-scoped, so invalidating leaves the previous account's list
-      // readable (and any fetch for that session in flight) until the refetch lands.
-      // Sign-in can change accounts, so drop the list outright.
-      await queryClient.resetQueries({ queryKey: queryKeys.companies.all });
-      navigate(nextPath, { replace: true });
-    },
-    onError: (err) => {
-      setError(err instanceof Error ? err.message : "Authentication failed");
-    },
-  });
-
-  const canSubmit =
-    passwordEnabled &&
-    email.trim().length > 0 &&
-    password.trim().length > 0 &&
-    (formMode === "sign_in" || (name.trim().length > 0 && password.trim().length >= 8));
 
   if (healthQuery.isLoading || isSessionLoading || session) {
     return (
@@ -140,126 +106,33 @@ export function AuthPage() {
 
   return (
     <div className="agentos-public fixed inset-0 flex bg-background">
-      {/* Left half — form */}
+      {/* Google entry */}
       <div className="w-full md:w-1/2 flex flex-col overflow-y-auto">
         <div className="w-full max-w-md mx-auto my-auto px-8 py-12">
           <div className="mb-8">
             <AgentOSBrand to="/welcome" />
           </div>
 
-          <h1 className="text-xl font-semibold">
-            {formMode === "sign_in" ? "Sign in to AgentOS" : "Create your AgentOS account"}
-          </h1>
+          <h1 className="text-xl font-semibold">{joining ? "Join the AgentOS waiting list" : "Sign in to AgentOS"}</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            {!passwordEnabled && options.data.googleEnabled
-              ? "Continue with Google to access your workspace."
-              : formMode === "sign_in"
-                ? "Welcome back. Sign in to your workspace."
-                : "Register now. An administrator will review your account before granting workspace access."}
+            {joining ? "Continue with Google to register your interest." : "Continue with Google to access your workspace."}
           </p>
-          {!passwordEnabled && options.data.googleEnabled && options.data.approvalRequired && (
+          {options.data.googleEnabled && options.data.approvalRequired && (
             <p className="mt-2 text-sm text-muted-foreground">New accounts require administrator approval.</p>
           )}
-          {options.data.googleEnabled && <Button className="mt-6 w-full" variant="outline" disabled={google.isPending} onClick={() => { setError(null); google.mutate(); }}>{google.isPending ? "Connecting…" : "Continue with Google"}</Button>}
-          {!passwordEnabled && !options.data.googleEnabled && (
+          {options.data.googleEnabled ? (
+            <Button className="mt-6 w-full" variant="outline" disabled={google.isPending}
+              aria-describedby={error ? errorId : undefined}
+              onClick={() => { setError(null); google.mutate(); }}>
+              {google.isPending ? "Connecting…" : "Continue with Google"}
+            </Button>
+          ) : (
             <p role="alert" className="mt-6 text-sm text-destructive">Sign-in is unavailable. Contact the instance administrator.</p>
           )}
           {error && (
             <p id={errorId} role="alert" className="mt-4 text-xs text-destructive">{error}</p>
           )}
 
-          {passwordEnabled && <form
-            className="mt-6 space-y-4"
-            method="post"
-            action={formMode === "sign_up" ? "/api/auth/sign-up/email" : "/api/auth/sign-in/email"}
-            onSubmit={(event) => {
-              event.preventDefault();
-              if (mutation.isPending) return;
-              if (!canSubmit) {
-                setError("Please fill in all required fields.");
-                return;
-              }
-              mutation.mutate();
-            }}
-          >
-            {formMode === "sign_up" && (
-              <div>
-                <label htmlFor="name" className="text-xs text-muted-foreground mb-1 block">Name</label>
-                <input
-                  id="name"
-                  name="name"
-                  className="w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-ring placeholder:text-muted-foreground/50"
-                  value={name}
-                  onChange={(event) => setName(event.target.value)}
-                  autoComplete="name"
-                  required
-                  aria-required="true"
-                  aria-invalid={error ? true : undefined}
-                  aria-describedby={error ? errorId : undefined}
-                  autoFocus
-                />
-              </div>
-            )}
-            <div>
-              <label htmlFor="email" className="text-xs text-muted-foreground mb-1 block">Email</label>
-              <input
-                id="email"
-                name="email"
-                className="w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-ring placeholder:text-muted-foreground/50"
-                type="email"
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-                autoComplete="username"
-                required
-                aria-required="true"
-                aria-invalid={error ? true : undefined}
-                aria-describedby={error ? errorId : undefined}
-                autoFocus={formMode === "sign_in"}
-              />
-            </div>
-            <div>
-              <label htmlFor="password" className="text-xs text-muted-foreground mb-1 block">Password</label>
-              <input
-                id="password"
-                name="password"
-                className="w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-ring placeholder:text-muted-foreground/50"
-                type="password"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                autoComplete={formMode === "sign_in" ? "current-password" : "new-password"}
-                required
-                aria-required="true"
-                aria-invalid={error ? true : undefined}
-                aria-describedby={error ? errorId : undefined}
-              />
-            </div>
-            <Button
-              type="submit"
-              disabled={mutation.isPending}
-              aria-disabled={!canSubmit || mutation.isPending}
-              className={`w-full ${!canSubmit && !mutation.isPending ? "opacity-50" : ""}`}
-            >
-              {mutation.isPending
-                ? "Working…"
-                : formMode === "sign_in"
-                  ? "Sign In"
-                  : "Create Account"}
-            </Button>
-          </form>}
-
-          {signUpEnabled && <div className="mt-5 text-sm text-muted-foreground">
-            {formMode === "sign_in" ? "Need an account?" : "Already have an account?"}{" "}
-            <button
-              type="button"
-              className="font-medium text-foreground underline underline-offset-2"
-              onClick={() => {
-                setError(null);
-                setMode(formMode === "sign_in" ? "sign_up" : "sign_in");
-              }}
-            >
-              {formMode === "sign_in" ? "Create one" : "Sign in"}
-            </button>
-          </div>}
         </div>
       </div>
 

@@ -11,6 +11,9 @@
   --friday-pointer-roll: 1.2;
   --friday-pointer-pulse: 0.18;
   --friday-pointer-twist: 1.4;
+  --friday-pointer-hover-scale: 1.18;
+  --friday-pointer-hover-duration-ms: 900;
+  --friday-pointer-hover-cycles: 2;
   --onboarding-motion-step: 280ms;
   --onboarding-motion-capsule: 1000ms;
   --onboarding-motion-preview: 450ms;
@@ -35,5 +38,5 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  :root { --friday-pointer-settle-ms: 0; }
+  :root { --friday-pointer-settle-ms: 0; --friday-pointer-hover-scale: 1; --friday-pointer-hover-duration-ms: 0; }
 }

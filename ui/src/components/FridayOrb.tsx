@@ -53,7 +53,7 @@ export function FridayOrb({ state, label, onActivate, disabled = false, compact 
   }, [pointerReactive]);
   useEffect(() => { redraw.current?.(); }, [state]);
   if (decorative) return <span className="friday-orb" data-state={state} data-compact={compact} data-pointer-reactive={pointerReactive} aria-hidden="true"><canvas ref={canvas} /><span className="friday-orb-fallback" /></span>;
-  return <button type="button" className="friday-orb" data-state={state} data-compact={compact} onClick={onActivate} disabled={disabled || !onActivate} aria-label={label} title={label}>
+  return <button type="button" className="friday-orb" data-state={state} data-compact={compact} data-pointer-reactive={pointerReactive} onClick={onActivate} disabled={disabled || !onActivate} aria-label={label} title={label}>
     <canvas ref={canvas} aria-hidden="true" />
     <span className="friday-orb-fallback" aria-hidden="true" />
   </button>;

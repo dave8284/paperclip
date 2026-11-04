@@ -681,6 +681,28 @@ existing password-enabled deployments retain their behavior. Google registration
 still respects `PAPERCLIP_AUTH_DISABLE_SIGN_UP` and the native account approval
 and owner-claim flows.
 
+An operator may set `PAPERCLIP_AUTH_GOOGLE_OWNER_EMAIL` to one specific owner
+email before a normal restart. The next verified Google sign-in for that exact
+email approves a pending account and grants instance administrator access. The
+policy checks Google's issuer and subject against the persisted provider account;
+an email/password identity or unverified email cannot trigger it. An existing
+pending Google account is reconciled on its next Google sign-in; an existing
+session is not automatically refreshed or promoted.
+
+When the only administrator is the bootstrap `local-board` identity, provisioning
+uses the native ownership transfer to preserve company grants, portfolio ownership,
+conversations and history. Approval, role changes and audit records commit together.
+If an older native claim already promoted this owner, the next verified Google
+sign-in can complete its remaining local-board data transfer. This requires the
+original native self-claim audit, current approved administrator status, and
+current active owner membership in each affected company. It does not restore
+revoked memberships or permissions, claim another user's records, or merge
+colliding conversations; a collision rolls the completion back for review.
+Later suspension/rejection or removal of a provisioned owner's administrator role
+is not undone by another login. Other users retain the normal approval process.
+This is operator configuration, not a public allowlist or an alternate restart path.
+Do not log provider tokens or profile claims while diagnosing owner provisioning.
+
 Register the app's exact callback in that client's **Authorized redirect URIs**.
 For the local origin `http://localhost:3100`, it is
 `http://localhost:3100/api/auth/callback/google`. Google requires the request URI

@@ -109,7 +109,7 @@ describe("AuthPage", () => {
     signInEmailMock.mockResolvedValue(undefined);
     signUpEmailMock.mockResolvedValue(undefined);
     signInGoogleMock.mockReset().mockResolvedValue("https://accounts.example.test/oauth-fixture");
-    authOptionsMock.mockReset().mockResolvedValue({ googleEnabled: false, passwordSignInEnabled: true, passwordSignUpEnabled: true, approvalRequired: true });
+    authOptionsMock.mockReset().mockResolvedValue({ googleEnabled: true, passwordSignInEnabled: true, passwordSignUpEnabled: true, approvalRequired: true });
     window.localStorage.clear();
   });
 
@@ -189,6 +189,7 @@ describe("AuthPage", () => {
     const { root } = await mount(path);
     expect(container.textContent).toContain("Continue with Google");
     expect(container.textContent).toContain("New accounts require administrator approval.");
+    expect(container.querySelector("h1")?.textContent).toBe(path.includes("sign_up") ? "Join the AgentOS waiting list" : "Sign in to AgentOS");
     expect(container.textContent).toContain("Turn ideas into coordinated action.");
     expect(container.textContent).not.toContain("Registration is closed");
     expect(container.textContent).not.toContain("Create one");
@@ -215,7 +216,8 @@ describe("AuthPage", () => {
     expect(container.querySelector("form")).toBeNull();
     const retry = Array.from(container.querySelectorAll("button")).find(button => button.textContent === "Try again")!;
     await act(() => retry.click());
-    await vi.waitFor(() => expect(container.querySelector('input[name="password"]')).not.toBeNull());
+    await vi.waitFor(() => expect(container.textContent).toContain("Continue with Google"));
+    expect(container.querySelector("input")).toBeNull();
     expect(authOptionsMock).toHaveBeenCalledTimes(2);
     await act(() => root.unmount());
   });
@@ -278,160 +280,47 @@ describe("AuthPage", () => {
     await act(() => root.unmount());
   });
 
-  it("keeps Google and existing password sign-in when email registration is closed", async () => {
-    authOptionsMock.mockResolvedValue({ googleEnabled: true, passwordSignInEnabled: true, passwordSignUpEnabled: false, approvalRequired: true });
+  it.each([
+    { passwordSignInEnabled: true, passwordSignUpEnabled: true },
+    { passwordSignInEnabled: true, passwordSignUpEnabled: false },
+    { passwordSignUpEnabled: true },
+  ])("ignores legacy password options and keeps Google-only entry: %j", async passwordOptions => {
+    authOptionsMock.mockResolvedValue({ googleEnabled: true, ...passwordOptions, approvalRequired: true });
     const { root } = await mount("/auth?mode=sign_up");
     expect(container.textContent).toContain("Continue with Google");
-    expect(container.querySelector("form")?.getAttribute("action")).toBe("/api/auth/sign-in/email");
-    expect(container.querySelector('input[name="name"]')).toBeNull();
+    expect(container.querySelector("form")).toBeNull();
+    expect(container.querySelector("input")).toBeNull();
     expect(container.textContent).not.toContain("Create one");
+    expect(signInEmailMock).not.toHaveBeenCalled();
+    expect(signUpEmailMock).not.toHaveBeenCalled();
     await act(() => root.unmount());
   });
 
-  it("exposes password-manager metadata and a11y attributes on the sign-in form", async () => {
+  it("does not expose legacy password entry when Google is unavailable", async () => {
+    authOptionsMock.mockResolvedValue({ googleEnabled: false, passwordSignInEnabled: true, passwordSignUpEnabled: true, approvalRequired: true });
     const { root } = await mount();
-
-    const emailInput = container.querySelector('input[name="email"]') as HTMLInputElement;
-    const passwordInput = container.querySelector('input[name="password"]') as HTMLInputElement;
-
-    expect(emailInput).not.toBeNull();
-    expect(passwordInput).not.toBeNull();
-
-    // 1Password / password-manager recognition: identifier field is "username".
-    expect(emailInput.getAttribute("autocomplete")).toBe("username");
-    expect(emailInput.getAttribute("type")).toBe("email");
-    expect(passwordInput.getAttribute("autocomplete")).toBe("current-password");
-
-    // Stable ids/names for both inputs.
-    expect(emailInput.id).toBe("email");
-    expect(passwordInput.id).toBe("password");
-
-    // Required + programmatic required state.
-    expect(emailInput.required).toBe(true);
-    expect(emailInput.getAttribute("aria-required")).toBe("true");
-    expect(passwordInput.required).toBe(true);
-    expect(passwordInput.getAttribute("aria-required")).toBe("true");
-
-    // Programmatic labels.
-    expect(container.querySelector('label[for="email"]')).not.toBeNull();
-    expect(container.querySelector('label[for="password"]')).not.toBeNull();
-
-    await act(async () => {
-      root.unmount();
-    });
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain("Sign-in is unavailable");
+    expect(container.querySelector("form")).toBeNull();
+    expect(container.querySelector("input")).toBeNull();
+    await act(() => root.unmount());
   });
 
-  it("uses new-password autocomplete in sign-up mode", async () => {
-    const { root } = await mount();
-
-    const createOne = Array.from(container.querySelectorAll("button")).find(
-      (button) => button.textContent === "Create one",
-    );
-    expect(createOne).not.toBeNull();
-
-    await act(async () => {
-      createOne?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
-    await flushReact();
-
-    const nameInput = container.querySelector('input[name="name"]') as HTMLInputElement;
-    const passwordInput = container.querySelector('input[name="password"]') as HTMLInputElement;
-    expect(nameInput).not.toBeNull();
-    expect(nameInput.getAttribute("autocomplete")).toBe("name");
-    expect(nameInput.required).toBe(true);
-    expect(passwordInput.getAttribute("autocomplete")).toBe("new-password");
-
-    await act(async () => {
-      root.unmount();
-    });
-  });
-
-  it("renders auth errors in an assertive alert region referenced by the inputs", async () => {
-    const { root } = await mount();
-
-    const inputValueSetter = Object.getOwnPropertyDescriptor(
-      HTMLInputElement.prototype,
-      "value",
-    )?.set;
-    const emailInput = container.querySelector('input[name="email"]') as HTMLInputElement;
-    const passwordInput = container.querySelector('input[name="password"]') as HTMLInputElement;
-
-    await act(async () => {
-      inputValueSetter!.call(emailInput, "jane@example.com");
-      emailInput.dispatchEvent(new Event("input", { bubbles: true }));
-      inputValueSetter!.call(passwordInput, "wrongpass");
-      passwordInput.dispatchEvent(new Event("input", { bubbles: true }));
-    });
-
-    signInEmailMock.mockRejectedValueOnce(new Error("Invalid email or password"));
-
-    const form = container.querySelector("form") as HTMLFormElement;
-    await act(async () => {
-      form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
-    });
-    await flushReact();
-    await flushReact();
-
-    const alert = container.querySelector('[role="alert"]') as HTMLElement;
-    expect(alert).not.toBeNull();
-    expect(alert.hasAttribute("aria-live")).toBe(false);
-    expect(alert.textContent).toContain("Invalid email or password");
-
-    const errorId = alert.id;
-    expect(errorId.length).toBeGreaterThan(0);
-    expect(emailInput.getAttribute("aria-describedby")).toBe(errorId);
-    expect(emailInput.getAttribute("aria-invalid")).toBe("true");
-    expect(passwordInput.getAttribute("aria-describedby")).toBe(errorId);
-    expect(passwordInput.getAttribute("aria-invalid")).toBe("true");
-
-    await act(async () => {
-      root.unmount();
-    });
-  });
-
-  it("invalidates anonymous health metadata after sign-in", async () => {
+  it("drops previous-account access and companies before the Google redirect", async () => {
     const { root, queryClient } = await mount();
     queryClient.setQueryData(["registration", "previous-user"], { status: "approved" });
     queryClient.setQueryData(["administration", "previous-user", "overview"], { private: "previous account" });
+    queryClient.setQueryData(queryKeys.access.currentBoardAccess, { companyIds: ["private-previous-company"] });
     queryClient.setQueryData(queryKeys.companies.all, [{ id: "private-previous-company" }]);
-    queryClient.setQueryData(queryKeys.health, {
-      status: "ok",
-      deploymentMode: "authenticated",
+    navigateTopLevelMock.mockImplementationOnce(() => {
+      expect(queryClient.getQueryData(["registration", "previous-user"])).toBeUndefined();
+      expect(queryClient.getQueryData(["administration", "previous-user", "overview"])).toBeUndefined();
+      expect(queryClient.getQueryData(queryKeys.access.currentBoardAccess)).toBeUndefined();
+      expect(queryClient.getQueryData(queryKeys.companies.all)).toBeUndefined();
     });
-
-    const inputValueSetter = Object.getOwnPropertyDescriptor(
-      HTMLInputElement.prototype,
-      "value",
-    )?.set;
-    const emailInput = container.querySelector('input[name="email"]') as HTMLInputElement;
-    const passwordInput = container.querySelector('input[name="password"]') as HTMLInputElement;
-
-    await act(async () => {
-      inputValueSetter!.call(emailInput, "jane@example.com");
-      emailInput.dispatchEvent(new Event("input", { bubbles: true }));
-      inputValueSetter!.call(passwordInput, "supersecret");
-      passwordInput.dispatchEvent(new Event("input", { bubbles: true }));
-    });
-
-    const form = container.querySelector("form") as HTMLFormElement;
-    await act(async () => {
-      form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
-    });
-    await flushReact();
-    await flushReact();
-
-    expect(signInEmailMock).toHaveBeenCalledWith({
-      email: "jane@example.com",
-      password: "supersecret",
-    });
-    expect(healthMock).toHaveBeenCalledTimes(2);
-    expect(queryClient.getQueryData(["registration", "previous-user"])).toBeUndefined();
-    expect(queryClient.getQueryData(["administration", "previous-user", "overview"])).toBeUndefined();
-    expect(queryClient.getQueryData(queryKeys.companies.all)).toBeUndefined();
-
-    await act(async () => {
-      root.unmount();
-    });
+    const google = Array.from(container.querySelectorAll("button")).find(button => button.textContent === "Continue with Google")!;
+    await act(() => google.click());
+    await vi.waitFor(() => expect(navigateTopLevelMock).toHaveBeenCalledWith("https://accounts.example.test/oauth-fixture"));
+    await act(() => root.unmount());
   });
 });
 

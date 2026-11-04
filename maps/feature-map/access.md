@@ -26,10 +26,12 @@ Agent access: [companion](../agent-access-map/access.md).
 
 Open `/auth`; first-owner bootstrap uses `/board-claim/:token` when configured.
 
-The AgentOS public landing introduces Friday, local Whisper voice, company work,
-digital employees and decisions with the tagline “Turn ideas into coordinated
-action.” Its hero orb responds to pointer position and movement across the page
-with tilt, spin and a brief pulse, then settles without an idle frame loop.
+The AgentOS public landing uses Wispr Flow as a layout reference, not a product
+feature claim. It introduces Friday, company work, digital employees and decisions
+with the tagline “Turn ideas into coordinated action.” Its centred hero and
+Google signup links lead to the waiting list. The hero orb responds to pointer
+position and movement with tilt and spin, plus an explicit hover pulse that grows
+and shrinks even when the pointer stays still, then settles without an idle frame loop.
 Reduced-motion, coarse/touch input, hidden-page and offscreen guards keep this
 decoration separate from the workspace orb's observed voice/run states. The
 landing does not open the microphone or start agent work. Sign-in, sign-up and
@@ -42,11 +44,27 @@ are unavailable, and normal Chromium startup was sandbox-blocked. No old or
 fabricated screenshots are presented as the current application. Physical voice
 input/output remains a separate qualification.
 
-Google-only instances show **Continue with Google** without password fields or
-email registration controls. Loading or failed method discovery does not show
-cached password options. New Google accounts still need native approval unless
-an existing explicit invitation/owner ceremony supplies it. The deployment
-setting and exact OAuth callback are documented in [development setup](../../doc/DEVELOPING.md).
+AgentOS shows **Continue with Google** without password fields or email
+registration controls, including with older password-enabled backend options.
+Loading or failed method discovery does not show cached methods. Signup mode
+introduces the waiting list. A pending account sees a thank-you and a finite
+confetti burst, skipped for reduced motion. **Refresh approval status** refetches
+native registration and shows explicit pending feedback or redirects to the
+workspace when approved; it does not approve the account. Errors and rejected or
+suspended identities do not celebrate. Fresh identity/status checks gate redirects.
+The deployment setting and exact OAuth callback are documented in
+[development setup](../../doc/DEVELOPING.md).
+
+An operator-configured Google owner can be automatically approved and made an
+instance administrator after fresh verified Google sign-in. Exact email,
+canonical issuer/subject and the persisted account must match; ordinary new
+accounts remain pending. Approval, native ownership transfer and audit are
+transactional. A previous native claimant can complete legacy local-board chat
+and operational ownership only within currently active owner memberships. Later
+revoked company access, suspension/rejection and demotion are not restored.
+The local operator setting is prepared but the running backend still needs its
+normal authenticated restart and fresh Google sign-in. Offline hook/service tests
+do not qualify real Google verification, PostgreSQL persistence or concurrency.
 
 When converting a local Agent OS instance to authenticated ownership, the native
 claim ceremony transfers local-board-owned portfolios, explicit company defaults,

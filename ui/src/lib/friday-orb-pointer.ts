@@ -3,6 +3,7 @@ import type { FridayOrbPose } from "./friday-orb";
 /** Landing decoration only. Pointer input starts a bounded animation; idle,
  * offscreen, touch and reduced-motion presentations never keep a frame loop. */
 export function observeFridayOrbPointer(element: HTMLCanvasElement, paint: (pose?: FridayOrbPose) => void) {
+  const surface = element.parentElement ?? element;
   const reduced = window.matchMedia("(prefers-reduced-motion: reduce)");
   const fine = window.matchMedia("(hover: hover) and (pointer: fine)");
   let visible = true;
@@ -11,12 +12,39 @@ export function observeFridayOrbPointer(element: HTMLCanvasElement, paint: (pose
   let previous: { x: number; y: number } | undefined;
   let pose: FridayOrbPose | undefined;
   let duration = 0;
+  let hoverPulse: Animation | undefined;
   const allowed = () => !document.hidden && visible && !reduced.matches && fine.matches;
+  const acceptsPointer = (event: PointerEvent) => !event.pointerType || event.pointerType === "mouse" || event.pointerType === "pen";
+  const pulse = () => {
+    if (hoverPulse || !allowed() || typeof surface.animate !== "function") return;
+    const style = getComputedStyle(element);
+    const scale = Number.parseFloat(style.getPropertyValue("--friday-pointer-hover-scale"));
+    const duration = Number.parseFloat(style.getPropertyValue("--friday-pointer-hover-duration-ms"));
+    const iterations = Number.parseFloat(style.getPropertyValue("--friday-pointer-hover-cycles"));
+    const easing = style.getPropertyValue("--motion-ease-standard").trim();
+    if (![scale, duration, iterations].every(Number.isFinite) || !(scale > 1 && duration > 0 && iterations > 0) || !easing) return;
+    // Native finite animation returns to neutral even when the pointer stays
+    // centered. It creates no JS timer or idle frame loop.
+    hoverPulse = surface.animate([
+      { transform: "scale(1)" },
+      { transform: `scale(${scale})` },
+      { transform: "scale(1)" },
+    ], { duration, iterations, easing });
+    hoverPulse.onfinish = () => { hoverPulse = undefined; };
+  };
+  const leave = () => {
+    surface.removeAttribute("data-pointer-hovered");
+    if (hoverPulse) { hoverPulse.onfinish = null; hoverPulse.cancel(); hoverPulse = undefined; }
+  };
+  const enter = (event: PointerEvent) => {
+    if (allowed() && acceptsPointer(event)) { surface.setAttribute("data-pointer-hovered", "true"); pulse(); }
+  };
   const stop = () => {
     cancelAnimationFrame(frame);
     frame = 0;
     previous = undefined;
     pose = undefined;
+    leave();
     paint();
   };
   const animate = (now: number) => {
@@ -35,7 +63,8 @@ export function observeFridayOrbPointer(element: HTMLCanvasElement, paint: (pose
     else pose = undefined;
   };
   const move = (event: PointerEvent) => {
-    if (!allowed() || (event.pointerType && event.pointerType !== "mouse" && event.pointerType !== "pen")) return;
+    if (!allowed() || !acceptsPointer(event)) return;
+    if (surface.hasAttribute("data-pointer-hovered")) pulse();
     const bounds = element.getBoundingClientRect();
     if (!bounds.width || !bounds.height) return;
     const style = getComputedStyle(element);
@@ -63,6 +92,8 @@ export function observeFridayOrbPointer(element: HTMLCanvasElement, paint: (pose
     if (!visible) stop();
   });
   observer?.observe(element);
+  surface.addEventListener("pointerenter", enter);
+  surface.addEventListener("pointerleave", stop);
   window.addEventListener("pointermove", move, { passive: true });
   document.addEventListener("visibilitychange", stop);
   document.documentElement.addEventListener("pointerleave", stop);
@@ -72,7 +103,10 @@ export function observeFridayOrbPointer(element: HTMLCanvasElement, paint: (pose
     redraw: () => paint(pose),
     dispose: () => {
       cancelAnimationFrame(frame);
+      leave();
       observer?.disconnect();
+      surface.removeEventListener("pointerenter", enter);
+      surface.removeEventListener("pointerleave", stop);
       window.removeEventListener("pointermove", move);
       document.removeEventListener("visibilitychange", stop);
       document.documentElement.removeEventListener("pointerleave", stop);

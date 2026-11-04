@@ -16,11 +16,11 @@ describe("AgentOS public landing", () => {
   beforeEach(() => { fixture.status = "anonymous"; host = document.createElement("div"); root = createRoot(host); });
   afterEach(async () => { await act(async () => root.unmount()); });
   async function render(preview = false) { await act(async () => root.render(<AgentOSLanding preview={preview} />)); }
-  it("explains voice and work features, keeps account links, and makes the hero decorative and reactive", async () => {
+  it("introduces Friday and the work, keeps waitlist links, and makes the hero decorative and reactive", async () => {
     await render();
     expect(host.querySelector("h1")?.textContent).toBe("Turn ideas into coordinated action.");
-    expect(host.textContent).toContain("Whisper-powered voice flow");
-    expect(host.textContent).toContain("With local voice enabled");
+    expect(host.textContent).not.toMatch(/Whisper|speech into text|local voice enabled/);
+    expect(host.querySelectorAll('a[href="/auth?mode=sign_up"]')[0]?.textContent).toContain("Join the waiting list");
     expect(host.querySelector('[data-pointer-reactive="true"][data-decorative="true"]')).not.toBeNull();
     expect(host.querySelectorAll('a[href="/auth?mode=sign_up"]')).toHaveLength(3);
     for (const anchor of host.querySelectorAll<HTMLAnchorElement>('a[href^="#"]')) expect(host.querySelector(anchor.getAttribute("href")!)).not.toBeNull();

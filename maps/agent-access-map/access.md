@@ -52,9 +52,11 @@ remain unqualified.
 Google-only deployment policy (2026-11-04):
 `PAPERCLIP_AUTH_PASSWORD_ENABLED=false` disables password login/registration and
 password reset/change/verification paths in native Better Auth. Public options
-report separate password sign-in/sign-up flags; the UI waits for fresh options
-before displaying methods. Google sign-in retains native approval, signup policy,
-session handling and the owner-claim ceremony. It adds no agent authority and
+report separate password sign-in/sign-up flags; AgentOS's UI exposes only Google,
+even when old options still advertise password authentication. It waits for fresh
+options before enabling Google entry. Waitlist celebration and explicit approval
+refresh add no approval endpoint or background polling. Google sign-in retains
+native approval, signup policy, session handling and the owner-claim ceremony. It adds no agent authority and
 does not delete existing accounts or credentials. See
 [configuration](../../server/src/auth/better-auth.ts),
 [public options](../../server/src/routes/agentos-administration.ts), and
@@ -62,6 +64,21 @@ does not delete existing accounts or credentials. See
 Thirty-two auth configuration/handler checks and 36 UI/API checks pass locally;
 Google's real redirect/consent/session journey remains unverified. The local
 Google OAuth client must register the exact callback before that journey works.
+
+Configured owner policy (2026-11-04): the operator-only
+`PAPERCLIP_AUTH_GOOGLE_OWNER_EMAIL` selects one verified Google identity. A fresh
+Better Auth-verified issuer/subject/email is bound to its persisted user/account
+before approval, instance-admin assignment and native ownership transfer commit
+with the audit. This adds no agent endpoint or email-only promotion path.
+An existing self native-claim audit allows the still-approved admin to complete
+legacy local-board conversation/responsibility transfer only in locked current
+owner memberships. Busy membership rows fail before mutation, chat collisions
+roll back, and a completion audit prevents replay. Company membership/grant
+revocations, later suspension/rejection and demotion remain authoritative.
+See [auth binding](../../server/src/auth/configured-google-owner.ts) and
+[transaction](../../server/src/services/configured-google-owner.ts). Real Google
+acceptance and PostgreSQL locks/persistence remain unqualified; local lifecycle
+and controlled SQL tests are not live evidence.
 
 Bootstrap ownership correction (2026-11-04): the native human claim transaction
 transfers only explicit `local-board` operational responsibility (company defaults,
