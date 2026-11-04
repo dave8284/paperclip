@@ -89,9 +89,19 @@ The standalone archive is retained privately at `.runtime/development-builds/mod
 
 Evidence logs are retained in `/private/tmp`: `agentos-password-auth-policy-20261104.log`, `agentos-google-only-auth-ui-20261104-r2.log`, `agentos-landing-tests-final-20261104.log`, `agentos-google-only-server-tsc-20261104.log`, `agentos-landing-auth-ui-tsc-final-20261104.log`, `agentos-landing-auth-ui-build-20261104.log`, and `agentos-landing-auth-map-storybook-tests-20261104.log`.
 
+Follow-up: the owner confirmed the Google redirect setting was saved. A fresh
+native social-sign-in request retained the expected callback and, when followed,
+returned HTTP 200 with Google's “Sign in to continue to AgentOS” page rather than
+`redirect_uri_mismatch`. This verifies the pre-login redirect request, not consent
+or a completed session. The owner claim still reports available/requiresSignIn;
+public options still reflect the old password-enabled backend and the supervisor
+still reports pending source activation. The remaining native path is Google
+sign-in → Claim ownership → Open board → Restart now. No authentication bypass,
+manual supervisor marker or process signal was used.
+
 ## Remaining work after this implementation checkpoint
 
-1. **Account activation and administration:** correct the Google client's authorized callback, complete the owner's Google sign-in/claim, activate the reviewed Google-only backend through its normal authenticated restart, inspect retained conversations/company access, then verify sign-out/in, registration approval, company assignment, suspension and deletion. The supplied credentials are already configured.
+1. **Account activation and administration:** complete the owner's Google sign-in/claim now that the redirect request reaches Google successfully; activate the reviewed Google-only backend through its normal authenticated restart, inspect retained conversations/company access, then verify sign-out/in, registration approval, company assignment, suspension and deletion. The supplied credentials are already configured.
 2. **A real operating and EGM proof:** execute Friday → lead → specialist → independent reviewer → accepted output, inspect actual actions/evidence, prove reviewer isolation and restart/recovery, and evaluate a reusable lesson. The Northstar example and installed prompts do not establish this.
 3. **Workforce authority and upgrades:** qualify company-local retirement; finish explicit portfolio-wide delegation and cross-company employee awareness; implement evaluated shared-capability publication, per-company adoption/refusal, version pins and rollback. Shared identity must not expose private company work.
 4. **Subscription capacity:** implement seat-wide admission and fair scheduling across companies/employees/models, bounded waiting/recovery and interactive responsiveness using qualified subscription execution. Source audit confirms current concurrency is per agent, `ai_connection_busy` means credential synchronization, and pool waits respond to reported usage. These do not reserve a shared seat. Subscription identity is deliberately company-scoped; a private capacity identity and atomic native reservation/release contract must preserve that privacy, current authority and uncertain provider settlement. More employees must not multiply the seat quota or enable paid fallback.
