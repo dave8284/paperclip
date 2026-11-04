@@ -583,13 +583,15 @@ or message content. The event establishes the accounting baseline; it is not a
 new billable usage receipt or a user-facing provider warning. Other provider
 identity checks remain in force.
 
-## AI subscription contention
+## AI credential synchronization
 
-A fresh task execution cannot enter this wait. A run that already entered this
-wait writes an informational `lifecycle` event to the local run log. Its
+A pre-provider credential mutation/rotation wait writes an informational
+`lifecycle` event to the local run log. Its
 payload contains only `retryScheduled`, a boolean that reports
 whether the scheduler created a retry.
-The message distinguishes an automatic retry from work that is no longer eligible.
+The message identifies credential synchronization and distinguishes an automatic
+retry from work that is no longer eligible. It does not claim subscription-seat
+capacity or an active provider execution.
 This pre-provider wait records `ai_connection_busy` on the cancelled run and does
 not consume the provider-failure retry allowance. The event contains no credentials
 and creates no Telemetry or OpenTelemetry export.

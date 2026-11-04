@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
-import { agents, companies, companyOperatingProfiles, costEvents, createDb, heartbeatRuns, issues, activityLog, projects, agentInstructionHeads, agentInstructionRevisions } from "@paperclipai/db";
+import { agents, companies, companyOperatingProfiles, costEvents, createDb, heartbeatRuns, issues, activityLog, projects, agentInstructionHeads, agentInstructionRevisions, aiSubscriptions } from "@paperclipai/db";
 import { startEmbeddedPostgresTestDatabase } from "@paperclipai/db/test-embedded-postgres";
 import { evaluateModelRun, modelIntelligenceProduct, selectCompanyModelProfile } from "../services/model-intelligence.js";
 import { activityService } from "../services/activity.js";
@@ -13,6 +13,7 @@ let database: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>;
 let db: ReturnType<typeof createDb>, directory: string;
 const previousPath = process.env.AGENTOS_MODEL_INTELLIGENCE_DB;
 const companyId = randomUUID(), otherCompanyId = randomUUID(), agentId = randomUUID(), issueId = randomUUID(), projectId = randomUUID();
+const subscriptionId = randomUUID();
 const binding = { mode: "responsible_user" as const, method: "subscription" as const, provider: "openai" as const };
 const config = { model: "gpt-6-astra" };
 const who = { actorType: "user" as const, actorId: "local-board", agentId: null, runId: null };
@@ -22,6 +23,7 @@ beforeAll(async () => {
   process.env.AGENTOS_MODEL_INTELLIGENCE_DB = join(directory, "learning.sqlite");
   database = await startEmbeddedPostgresTestDatabase("agentos-model-admission-"); db = createDb(database.connectionString);
   await db.insert(companies).values([{ id: companyId, name: "Company", issuePrefix: "MLI" }, { id: otherCompanyId, name: "Other", issuePrefix: "MLJ" }]);
+  await db.insert(aiSubscriptions).values({ id: subscriptionId, companyId, provider: "openai", accountKey: "fixture-account", name: "Fixture subscription" });
   [agent] = await db.insert(agents).values({ id: agentId, companyId, name: "Engineer", adapterType: "codex_local", adapterConfig: config }).returning();
   const revisionId = randomUUID();
   await db.insert(agentInstructionRevisions).values({ id: revisionId, companyId, agentId, entryFile: "AGENTS.md", contentBase64: "VGVzdA==", contentHash: "fixture", byteLength: 4, source: "api" });
@@ -32,7 +34,7 @@ beforeAll(async () => {
 }, 90000);
 afterAll(async () => { modelIntelligenceProduct()?.close(); if (previousPath) process.env.AGENTOS_MODEL_INTELLIGENCE_DB = previousPath; else delete process.env.AGENTOS_MODEL_INTELLIGENCE_DB; await database?.cleanup(); if (directory) await rm(directory, { recursive: true, force: true }); });
 async function newRun() {
-  const [run] = await db.insert(heartbeatRuns).values({ companyId, agentId, issueId, invocationSource: "on_demand", status: "succeeded", startedAt: new Date(Date.now() - 2000), finishedAt: new Date() }).returning();
+  const [run] = await db.insert(heartbeatRuns).values({ companyId, agentId, issueId, invocationSource: "on_demand", status: "succeeded", startedAt: new Date(Date.now() - 2000), finishedAt: new Date(), contextSnapshot: { aiConnection: { provider: "openai", method: "subscription", subscriptionId } } }).returning();
   return run;
 }
 it("records the configured subscription baseline before execution and requires actual model receipts for feedback", async () => {
@@ -54,7 +56,7 @@ it("records the configured subscription baseline before execution and requires a
   expect(next.receipt?.id).toBe(nextRun.id);
   expect(next.receipt?.candidate).toEqual(selected.receipt?.candidate);
   await expect(evaluateModelRun(db, companyId, run.id, { passed: true, evidenceRef: "review:fixture" }, who)).rejects.toThrow("Actual model receipts");
-  await db.insert(costEvents).values({ companyId, agentId, heartbeatRunId: run.id, model: config.model, provider: "openai", billingType: "subscription_included", costCents: 0, occurredAt: new Date() });
+  await db.insert(costEvents).values({ companyId, agentId, heartbeatRunId: run.id, subscriptionId, model: config.model, provider: "openai", billingType: "subscription_included", costCents: 0, occurredAt: new Date() });
   const evaluation = await evaluateModelRun(db, companyId, run.id, { passed: true, evidenceRef: "review:fixture" }, who);
   expect(evaluation).toMatchObject({ iterations: 1, latencyMs: 2000, source: "human" });
   expect(modelIntelligenceProduct()!.analytics(companyId).counts.evaluations).toBe(1);

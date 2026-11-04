@@ -326,11 +326,16 @@ Refreshes are merged only into the originating active grant, with a
 revocation check. Temporary homes are removed on normal completion or
 failure.
 
-A fresh task execution cannot enter subscription contention. The freshest-write
-rule above resolves the conflict instead. A run that already entered this wait
-keeps a durable scheduled retry, checked every 60–120 seconds. The task shows
-“Waiting for AI subscription”. It does not request a reconnect, and it does not
-consume its provider-failure retry allowance.
+Credential mutation or rotation can briefly delay preparation without starting
+provider work. That `ai_connection_busy` wait retains a durable scheduled retry,
+checked every 60–120 seconds, and displays “Waiting for AI credentials”. This is
+credential synchronization, not evidence that the subscription seat is occupied.
+The separate `ai_connection_pool_wait` path displays “Waiting for an AI account”
+and retains the scheduled account-availability check. Neither wait requests
+provider recovery or consumes the provider-failure retry allowance. Current
+retry accounting and its historical fallback stay visible in execution reads.
+These waits do not reserve seat capacity, enforce cross-company fairness or
+establish a reserved interactive allowance.
 Each attempt rechecks task eligibility, ownership, budget, and current credential
 access. Revocation and other configuration failures still require user action.
 Authorized comment wakes that started as non-assignee runs can resume without

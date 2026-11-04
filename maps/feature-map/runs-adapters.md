@@ -179,6 +179,16 @@ a separate acceptance requirement.
 
 Automated: [live run routes](../../server/src/__tests__/agent-live-run-routes.test.ts) and [run event sequencing](../../server/src/__tests__/heartbeat-run-event-sequencing.test.ts) cover run data contracts.
 
+[Execution projection](../../server/src/services/execution-projection.test.ts)
+and [retry accounting](../../server/src/services/execution-recovery-attempt.test.ts)
+cover distinct resource waits: “Waiting for AI credentials” means credential
+synchronization, while “Waiting for an AI account” means a pool availability wait.
+Both preserve the retry deadline and prior failure count without asking the agent
+to recover a provider. These local checks do not qualify seat-wide capacity,
+cross-company fairness, provider resets or interactive reservations. During a live
+run, compare the displayed wait against its persisted retry reason and deadline;
+reaching that deadline alone does not prove the provider accepted new work.
+
 Manual: Start a disposable task, open its running transcript, and follow it to a terminal outcome. Reload and compare task/run IDs, status, output, and cost. Verify a failed run remains distinguishable from a completed run with useful output.
 
 For Legacy OpenCode on a disposable Linux sandbox, run a Bash tool that reads

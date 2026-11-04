@@ -1468,7 +1468,7 @@ export function createHeartbeatRetries(db: Db, dependencies: HeartbeatRetryDepen
         scheduled = retry.outcome === "scheduled";
         await appendRunEvent(cancelledRun, {
           eventType: "lifecycle", stream: "system", level: "info",
-          message: scheduled ? "Waiting for the shared AI subscription. This task will retry automatically." : "The AI subscription is busy; this task can no longer retry automatically.",
+          message: scheduled ? "Waiting for AI credential synchronization. This task will retry automatically." : "AI credential synchronization is pending; this task is no longer eligible for an automatic retry.",
           payload: { retryScheduled: scheduled },
         });
       }

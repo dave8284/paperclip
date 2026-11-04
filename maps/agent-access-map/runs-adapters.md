@@ -194,6 +194,16 @@ Capability ID: `runs-adapters/runs`.
 
 Review: `baseline`.
 
+Resource-wait projection (2026-11-04) changes presentation only: `ai_connection_busy`
+is credential synchronization; `ai_connection_pool_wait` is pool account
+availability. The read projection retains server retry accounting and the actual
+scheduled deadline, without presenting these checks as failed provider attempts
+or granting recovery authority. [Projection](../../server/src/services/execution-projection.test.ts)
+and [accounting](../../server/src/services/execution-recovery-attempt.test.ts)
+checks are local semantic/SQL-construction evidence, not live agent qualification.
+No shared-seat reservation, cross-company scheduling or provider entitlement is
+implied. Existing read policy and native retry admission remain authoritative.
+
 Scoped source-only timing evidence: workspace preparation spans carry only the
 existing hashed run ID. Controller startup phase spans carry no custom attributes.
 Native controller setup and settlement phases use that same run hash, including

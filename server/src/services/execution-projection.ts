@@ -35,6 +35,7 @@ const executionRunColumns = {
   status: heartbeatRuns.status,
   contextSnapshot: sql<Record<string, unknown>>`jsonb_build_object(
     'issueId', ${heartbeatRuns.contextSnapshot}->'issueId',
+    'executionRetryAccounting', ${heartbeatRuns.contextSnapshot}->'executionRetryAccounting',
     'failureRetriesBeforeAiConnectionWait', ${heartbeatRuns.contextSnapshot}->'failureRetriesBeforeAiConnectionWait',
     'failureRetriesBeforeWorkspaceWait', ${heartbeatRuns.contextSnapshot}->'failureRetriesBeforeWorkspaceWait')`,
 };
@@ -293,8 +294,12 @@ export function projectExecution(
     return set("finishing", "Finishing");
   if (successorRunId) return set("completed", "Continued in another run");
   if (run.status === "scheduled_retry" && run.scheduledRetryReason === "ai_connection_busy") {
-    projection.nextAction = "Waiting for the AI subscription's current execution to finish; the scheduled check will revalidate access.";
-    return set("retry_scheduled", "Waiting for AI subscription");
+    projection.nextAction = "Waiting for AI credential synchronization; the scheduled check will revalidate access before retrying.";
+    return set("retry_scheduled", "Waiting for AI credentials");
+  }
+  if (run.status === "scheduled_retry" && run.scheduledRetryReason === "ai_connection_pool_wait") {
+    projection.nextAction = "Waiting for an eligible pool account; the scheduled check will reassess reported usage and permissions.";
+    return set("retry_scheduled", "Waiting for an AI account");
   }
   if (run.status === "scheduled_retry" && run.scheduledRetryReason === "workspace_busy") {
     projection.nextAction = "Waiting for the live workspace holder to finish; the scheduled check will revalidate ownership.";

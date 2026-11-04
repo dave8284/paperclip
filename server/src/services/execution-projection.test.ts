@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { projectExecution } from "./execution-projection.js";
+import { drizzle } from "drizzle-orm/pg-proxy";
+import type { Db } from "@paperclipai/db";
+import { executionProjectionsForRuns, projectExecution } from "./execution-projection.js";
 
 type Run = Parameters<typeof projectExecution>[0];
 type Coordinator = NonNullable<Parameters<typeof projectExecution>[1]>;
@@ -52,10 +54,38 @@ describe("execution truth projection", () => {
       evidence: { executionReconciliation: { providerStopped: true }, continuationRunId: "successor" } }, now))
       .toMatchObject({ phase: "completed", successorRunId: "successor", cause: null });
   });
-  it("shows subscription contention as a resource wait without failed provider attempts", () => {
+  it("shows credential synchronization as a resource wait without failed provider attempts", () => {
     expect(projectExecution(run({ runtimeMode: "legacy", status: "scheduled_retry", scheduledRetryReason: "ai_connection_busy",
       scheduledRetryAttempt: 12, contextSnapshot: { failureRetriesBeforeAiConnectionWait: 0 } }), undefined, [], undefined, now))
-      .toMatchObject({ label: "Waiting for AI subscription", phase: "retry_scheduled", attempt: 1, recoveryOwner: null });
+      .toMatchObject({ label: "Waiting for AI credentials", phase: "retry_scheduled", attempt: 1, recoveryOwner: null });
+  });
+  it.each([
+    { reason: "ai_connection_busy", label: "Waiting for AI credentials", action: "credential synchronization" },
+    { reason: "ai_connection_pool_wait", label: "Waiting for an AI account", action: "reported usage and permissions" },
+  ])("preserves the deadline and prior failures for $reason without requesting provider recovery", ({ reason, label, action }) => {
+    for (const delta of [-60_000, 60_000]) {
+      const retryAt = new Date(now.getTime() + delta);
+      const waiting = run({ runtimeMode: "legacy", status: "scheduled_retry", scheduledRetryReason: reason,
+        scheduledRetryAt: retryAt, scheduledRetryAttempt: 20, contextSnapshot: {
+          failureRetriesBeforeAiConnectionWait: 0,
+          executionRetryAccounting: { version: 1, failureRetries: 2, maxTurnContinuations: 1 },
+        } });
+      const projection = projectExecution(waiting, undefined, [], undefined, now);
+      expect(projection).toMatchObject({ label, phase: "retry_scheduled", attempt: 3,
+        retryAt: retryAt.toISOString(), recoveryOwner: null, permittedActions: ["inspect_run"] });
+      expect(projection.nextAction).toContain(action);
+      expect(waiting.scheduledRetryAttempt).toBe(20);
+    }
+  });
+  it("retains server retry accounting in the scoped database projection", async () => {
+    const queries: Array<{ text: string; params: unknown[] }> = [];
+    const db = drizzle(async (text, params) => { queries.push({ text, params }); return { rows: [] }; }) as unknown as Db;
+    await executionProjectionsForRuns(db, "company-1", ["run-1"], now);
+    const runQuery = queries.find(query => query.text.includes('from "heartbeat_runs"'))!;
+    expect(runQuery.text).toContain("'executionRetryAccounting'");
+    expect(runQuery.text).toContain("'failureRetriesBeforeAiConnectionWait'");
+    expect(runQuery.text).toContain("jsonb_build_object");
+    expect(runQuery.params).toEqual(["company-1", "run-1"]);
   });
   it("shows a workspace wait without presenting its deferral count as failed attempts", () => {
     expect(projectExecution(run({ runtimeMode: "legacy", status: "scheduled_retry", scheduledRetryReason: "workspace_busy",
