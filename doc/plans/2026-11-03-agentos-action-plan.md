@@ -117,6 +117,28 @@ Evidence: `/private/tmp/agentos-auth-waitlist-ui-20261104-r2.log`,
 `agentos-google-owner-boundary-final-20261105.log`, and
 `agentos-google-owner-continuity-final-tsc-20261105.log`.
 
+## Restart request and Jev triage design — 2026-11-04
+
+- The owner explicitly requested restart. The native endpoint returned HTTP 403
+  `board_access_required`. Read-only checks found no saved local/instance CLI
+  board credential, no registered dev service and no installed launchd service
+  for this instance. The CLI's ordinary `tsx` wrapper could not start its IPC
+  listener; the native Node loader completed non-listening status reads, while
+  CLI fetches were unavailable. Public curl health remains healthy. No process
+  was stopped, no supervisor marker was manufactured, and no restart is claimed.
+  The existing authenticated owner claim/Restart now flow remains required.
+- **X07:** the owner clarified Jev/System One models and requested an approach,
+  not a paid inference test. The [model-product addendum](2026-10-27-agentos-model-intelligence.md#jev-and-system-one-triage-proposal--2026-11-04)
+  records current official TypeSafe capabilities/limits and the existing native
+  Jev decision-provider foundation. Proposed triage starts with deterministic
+  eligibility and bounded classification/authorized shortlisting; generation
+  remains on qualified profiles, and EGM context/review remains separate.
+  Native registered-feature authority, accounting, company isolation and session
+  pins are retained. The plan adds versioned evidence, calibrated abstention,
+  end-to-end latency/quality evaluation and limited rollback-capable activation.
+  No model call, provider connection, billing change or routing implementation
+  occurred. Fixtures/shadow suggestions cannot establish model quality.
+
 ## Remaining work after this implementation checkpoint
 
 1. **Account activation and administration:** complete the owner's native ownership claim and activate the reviewed Google-only/configured-owner backend through its normal authenticated restart; sign in again with the configured Google account to reconcile any legacy ownership, inspect retained conversations/company access, then verify sign-out/in, registration approval, company assignment, suspension and deletion. The supplied credentials are already configured.
@@ -125,7 +147,7 @@ Evidence: `/private/tmp/agentos-auth-waitlist-ui-20261104-r2.log`,
 4. **Subscription capacity:** implement seat-wide admission and fair scheduling across companies/employees/models, bounded waiting/recovery and interactive responsiveness using qualified subscription execution. Source audit confirms current concurrency is per agent, `ai_connection_busy` means credential synchronization, and pool waits respond to reported usage. These do not reserve a shared seat. Subscription identity is deliberately company-scoped; a private capacity identity and atomic native reservation/release contract must preserve that privacy, current authority and uncertain provider settlement. More employees must not multiply the seat quota or enable paid fallback.
 5. **Knowledge, graphs and recurring work:** qualify the new routine/artifact retrieval and finish broader conversation/knowledge retrieval; qualify the actual resource/action graph, artifact provenance/versions, editable routine relationships and cycle history with real execution.
 6. **Reusable components and platform work:** extend saved live tables into reviewed reusable component promotion, and implement the eventual owner-requested Friday platform-engineering/release path with independent recovery. Current platform construction continues directly in this development session.
-7. **Measured model learning and independent service:** qualify alternative models against the account selected for execution; historical use by the same agent is not current account entitlement. Deliver native observed outcomes into the new comparison ledger; establish representative time-separated holdouts and independently evaluated improvements; prove policy rollout/rollback and useful analytics. Qualify standalone HTTP/upgrade behavior, credential restart/revocation and hosted namespace isolation before offering it as a separate hosted product.
+7. **Measured model learning and independent service:** implement and qualify the proposed Jev/System One triage layer under the existing funding policy; qualify alternative models against the account selected for execution, since historical use by the same agent is not current account entitlement. Deliver native observed outcomes into the new comparison ledger; establish representative time-separated holdouts and independently evaluated improvements; prove policy rollout/rollback and useful analytics. Qualify standalone HTTP/upgrade behavior, credential restart/revocation and hosted namespace isolation before offering it as a separate hosted product.
 8. **Real business/provider workflows:** demonstrate adoption/delivery of existing and new applications, feedback-to-repair operation, marketing loops and evidence-backed performance collection. Qualify actual runtime-agent access to GitHub/Google Cloud/Vercel and selected business tools; settle and implement the intended Supabase operational-storage workflow. Stripe live changes still require explicit approval.
 9. **Release acceptance and remaining interface refinements:** capture and add the requested current app screenshots to the landing page; qualify its pointer animation in a real browser. Complete real browser/mobile/microphone auto-send/interruption, navigation/notification/decision behavior, adaptive suggestions, account and connector controls, simplification/restoration, full regressions, database concurrency/claim/rollback, backup restore, stop/resume and crash recovery. Focused tests and source builds do not close these journeys.
 10. **Explicitly deferred stages:** Higgsfield sign-in and public/cloud deployment remain postponed until the owner resumes them. Eventual cloud operation includes durable workers/storage, monitoring, cost measurement and release/recovery while the laptop is off.

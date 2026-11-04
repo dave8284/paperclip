@@ -240,3 +240,183 @@ This sequence fits alongside the existing Friday-shell integration plan. Connect
 ## Execution assumptions
 
 Start with the existing OpenAI subscription, subscription-only routing, visible qualified execution, and conservative rollout. No further business decision is required to complete this plan. Implementation should stop to discuss a demonstrated account/integration limitation or a required change to the agreed authority or billing model. The missing image can refine the feature-stage presentation when attached; it does not block the architecture.
+
+## Jev and System One triage proposal — 2026-11-04
+
+Status: researched implementation proposal, not enabled routing. The owner clarified
+that “GEP” meant **Jev / System One models** and requested an approach for choosing
+them versus generative/open LLMs alongside Elephant–Goldfish. This addendum
+preserves the subscription-only default and native execution/authority boundaries.
+No provider call, account connection, paid evaluation or runtime change was made.
+
+### Separate the decisions
+
+Keep three properties independent:
+
+1. **Kind of computation:** deterministic code, a bounded probabilistic decision,
+   or generation/reasoning with a qualified LLM.
+2. **Execution profile:** exact model/version, runtime, tools, account entitlement,
+   deployment location and funding. Open weights do not by themselves prove
+   suitability, local execution, permission or zero cost.
+3. **Work/review context:** ordinary execution or a context-rich author plus fresh
+   independent reviewers. EGM governs that context arrangement; it is not a
+   competing model family. [Google EGM](https://github.com/google/elephant-goldfish-model)
+
+Jev returns predefined choices, rubric scores and boolean probabilities. It does
+not supply a replacement conversational or coding agent. Use it at a decision
+inside the workflow; an LLM can still perform the selected work.
+[TypeSafe coding-agent guidance](https://docs.typesafe.ai/introduction/coding-agents)
+
+| AgentOS situation | Proposed first path | Escalation/verification |
+| --- | --- | --- |
+| Count pending approvals, check permissions, compare dates or calculate budget | Native authorized query or deterministic code | Ordinary errors and access controls; no model needed |
+| Categorize a request or rank already-eligible skills/workers | Jev or another qualified decision profile | Explicit unknown/insufficient-state result; preserve the approved baseline on uncertainty |
+| Draft a reply, implement code, investigate an unfamiliar failure, write a design | Qualified generative profile, potentially an open/local LLM | Choose from measured task-specific results; richer reasoning/context when needed |
+| Design or materially change a complex system | Context-rich author and fresh independent EGM review | Mandatory checks and review floors remain in code; Jev cannot waive them |
+
+The first two candidate Jev uses are **task classification** and **authorized
+worker/skill shortlisting**. Later experiments may test passage relevance and
+bounded artifact checks. A shortlist is advice to the native work owner, not an
+assignment, permission grant or evidence that a worker can complete the task.
+
+### Native flow and ownership
+
+```mermaid
+flowchart TD
+  A[Authorized work and scoped evidence] --> B[Rules and eligibility checks]
+  B -->|Exact operation| C[Native code or query]
+  B -->|Judgment useful and inference permitted| D[Atomic typed decision questions]
+  D --> E[Validate answer set and calibrated acceptance policy]
+  E -->|Unknown, contradiction, timeout or failure| F[Existing approved baseline]
+  E -->|Qualified recommendation| G[Native profile selection and revalidation]
+  B -->|Generation or deeper reasoning required| G
+  G --> H[Native execution with recorded stage and session pins]
+  H --> I[Required tests and independent review]
+  I --> J[Accepted outcome, total latency and resource evidence]
+```
+
+The current foundation already includes:
+
+- [`decision-models.ts`](../../server/src/services/decision-models.ts): registered
+  feature handles, actual caller/owner checks, credential grants, budget
+  reservations, invocation history and usage settlement.
+- [`decision-model-provider.ts`](../../server/src/services/decision-model-provider.ts)
+  and the [shared contract](../../packages/shared/src/decision-models.ts): typed
+  decisions through the AI SDK, including an OpenRouter `typesafe/jev-1.13`
+  configuration. SDK retries are already disabled. This source declaration is
+  not proof of current provider access or successful Jev execution.
+- [`model-intelligence.ts`](../../server/src/services/model-intelligence.ts) and
+  [`execution-configuration.ts`](../../server/src/services/heartbeat/execution-configuration.ts):
+  native admission, classification, frozen selection evidence and task pins.
+  Current alternative selection remains within supported subscription harnesses.
+- [`packages/model-intelligence`](../../packages/model-intelligence): independent
+  selection/evaluation and immutable comparison evidence. Its current candidate
+  validator requires subscription profiles; do not disguise a paid decision call
+  or local model as a subscription to reuse it.
+
+Extend these owners rather than creating a new scheduler or parallel generic
+provider client. A registered triage feature calls the existing decision owner
+under the real actor. If pre-admission execution needs authority not represented
+by that contract, add a narrow, reviewed native admission capability; never label
+the caller `system` merely to pass the check. Candidate IDs and source excerpts
+must already be visible in the current company/project/task scope. Recheck grants,
+availability and revisions after a recommendation and before any assignment.
+
+Keep provider protocols and question-type conversion in the decision adapter.
+The host can pass a normalized triage observation to the independent policy
+library; that library receives no provider secrets or native database handles.
+Introduce versioned contracts for decision profiles, generative profiles and
+funding without weakening the existing subscription-only contract. Cross-harness
+comparisons and profile switches require explicit evaluation/session semantics.
+
+### Bounded questions and conservative use
+
+Use separate questions such as task family, which eligible skill fits, whether
+any supplied option fits, and whether information is missing. Independent
+questions may share a compact state; a question must not depend on another
+answer from the same parallel request. Do arithmetic and combine results in
+code. [TypeSafe question composition](https://docs.typesafe.ai/introduction)
+
+An explicit `unknown`/`none_applicable` path prevents forced selection. Validate
+question IDs, supplied options, response types, finite probabilities and internal
+consistency. Missing probability metadata cannot pass an uncertainty gate.
+Malformed, contradictory, out-of-scope, timed-out or incomplete decisions retain
+the approved baseline and record why. Provider unavailability cannot authorize a
+new account, paid fallback or broader context.
+
+Jev's `confidence` describes concentration of its answer distribution; it is not
+independent evidence of accuracy. Calibrate acceptance by question, candidate set
+and model version against actual labeled outcomes. Do not multiply confidence
+and top probability as though they were independent signals. Keep abstention and
+the cost of a wrong route explicit, with stricter limits for consequential work.
+[Confidence semantics](https://docs.typesafe.ai/confidence)
+
+Test literal wording, negation, distracting context, option order and hostile
+instructions inside task content. Keep math/date calculations in code. A
+schema-valid answer can still be wrong; deterministic permission, approval and
+required-review gates remain authoritative regardless of a model score.
+[Documented failure modes](https://docs.typesafe.ai/model-jaggedness)
+
+Reviewers receive the frozen artifact and permitted source packet under the EGM
+contract. Do not include an author's full conversation or present a Jev “safe”
+score as the reviewer's conclusion. Jev may help choose a review checklist, but
+does not establish independent review or replace its findings and tests.
+
+### Receipts, performance and failure handling
+
+Propose a `TriageReceipt` alongside the existing selection receipt: company and
+task/stage binding; input/source and eligible-candidate digests; question-set and
+policy versions; requested/resolved provider model; invocation reference;
+typed observations; final route/abstention reason; elapsed time and actual cost
+status. Raw private context remains in protected native artifacts. Cached
+recommendations are scope- and revision-bound and require native revalidation.
+
+Route at meaningful stage boundaries, preserving running sessions and model pins.
+Skip inference when rules already decide the result. Give triage a measured total
+deadline substantially below the current decision service's generic 30-second
+ceiling, including credential/admission/network/accounting overhead. Keep a
+bounded call budget, cancellation and no hidden SDK retry. Timeout or provider
+failure must not stall otherwise valid work or create a repeated triage loop.
+
+Optimize **time to accepted output**, not first-token time: include triage,
+queueing, tools, repairs, escalation, review and user rework. Track routing
+accuracy, costly false routes, abstention coverage, calibration and p50/p95
+latency against quality floors. Native account admission remains authoritative;
+this proposal does not claim the separately outstanding shared-seat scheduler
+has been implemented.
+
+### Implementation sequence and release gates
+
+1. **Contracts and offline baseline.** Register classification/shortlisting
+   features; add versioned observation/receipt types and deterministic eligibility
+   rules. Use local fixtures to test scope, permissions, stale results, unknown
+   options, contradictions, cancellation and budget denial. No runtime routing
+   change and no paid call. Fixture success is not a model benchmark.
+2. **Provider conformance and bounded evaluation.** Reuse the existing decision
+   adapter and verify its boolean/choice/score mapping against the chosen
+   provider's API. Pin the actual responding model and question revision.
+   TypeSafe currently documents Jev 1.14 while this repository names an
+   OpenRouter 1.13 route; do not substitute IDs or transfer thresholds without
+   proving that route's compatibility. [Versioned models](https://docs.typesafe.ai/models)
+3. **Compare on held-out work.** Compare rules only, existing qualified LLM
+   classification, Jev-assisted routing, and an open/local alternative only after
+   qualifying its runtime. Use independently labeled, authorized examples,
+   time-separated holdouts, difficult/unknown cases and option-order variations.
+   Keep business side effects disabled. Existing routing labels are not ground
+   truth; use acceptance evidence and preserve all failed attempts.
+4. **Shadow, then limited activation.** With an explicitly permitted inference
+   connection and budget, record recommendations while the approved route stays
+   in control. Shadow suggestions alone do not prove alternative execution
+   quality. Enable only low-risk, measured decision classes after the quality and
+   total-latency gates pass; retain an immediate off switch and version rollback.
+5. **Expand from evidence.** Evaluate retrieval and review assistance separately.
+   Requalify changed models, prompts, candidate sets and contexts. Companies may
+   pin or decline a policy; learning never silently changes another company's
+   routing or promotes unreviewed outcomes.
+
+Jev's hosted service uses metered inference. Under the owner's current
+subscription-only instruction, live Jev calls—including shadow experiments—stay
+disabled unless a specific exception and budget are authorized. An open/local
+candidate still needs execution and resource qualification. This proposal does
+not connect an account or change that policy.
+[Provider billing model](https://docs.typesafe.ai/models)
