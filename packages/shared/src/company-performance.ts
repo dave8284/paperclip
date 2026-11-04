@@ -1,5 +1,14 @@
 import { z } from "zod";
 export const performancePeriodSchema = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, "Choose a reporting month (YYYY-MM).");
+export const companyPerformanceQuerySchema = z.object({
+  period: performancePeriodSchema,
+  scope: z.enum(["all", "company", "project", "department"]).default("all"),
+  scopeId: z.string().uuid().optional(),
+}).strict().superRefine((value, ctx) => {
+  const needsId = value.scope === "project" || value.scope === "department";
+  if (needsId !== (value.scopeId !== undefined)) ctx.addIssue({ code: "custom", path: ["scopeId"], message: "Project and department scopes require an ID; company and all scopes do not accept one." });
+});
+export type CompanyPerformanceQuery = z.infer<typeof companyPerformanceQuerySchema>;
 const measure = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).nullable().default(null);
 export const performanceValuesSchema = z.object({ revenueMinor: measure, costMinor: measure, views: measure, engagements: measure, publications: measure }).strict();
 export const createPerformanceReportSchema = z.object({
@@ -20,4 +29,9 @@ export type CreatePerformanceReport = z.infer<typeof createPerformanceReportSche
 export interface CompanyPerformanceReport extends Omit<CreatePerformanceReport, "expectedReportId"> {
   id: string; companyId: string; revision: number; createdAt: string | Date; createdBy: string;
 }
-export interface CompanyPerformanceResponse { reports: CompanyPerformanceReport[]; truncated: boolean }
+export interface CompanyPerformanceResponse {
+  reports: CompanyPerformanceReport[];
+  truncated: boolean;
+  /** Accessible scopes, including projects with no report, resolved by this read. */
+  scopeProjectIds: Array<string | null>;
+}

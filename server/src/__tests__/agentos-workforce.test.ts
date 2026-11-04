@@ -56,6 +56,104 @@ describe("Agent OS shared workforce", () => {
     return { ...f, manager, delegate, delegated: app(delegate), target, employee, companyPath: `/api/companies/${f.two.id}/workforce`,
       binding: { id: randomUUID(), employeeId: employee.id, agentId: target.id } };
   }
+  async function grantRetirement(f: Awaited<ReturnType<typeof delegatedSeed>>, targetAgentId = f.second.id) {
+    for (const principal of [{ type: "agent" as const, id: f.manager.id }, { type: "user" as const, id: f.owner }]) {
+      await accessService(db).setPrincipalPermission(f.two.id, principal.type, principal.id, "workforce:retire", true, f.owner, { agentIds: [targetAgentId] });
+    }
+  }
+  it.each([false, true])("allows explicitly granted company retirement by the CEO/current Friday only (%s)", async coordinator => {
+    const f = await delegatedSeed(coordinator), access = accessService(db);
+    const path = `${f.companyPath}/assignments/${f.assignments[1].id}/retire`;
+    const intent = { expectedRevision: 1, reason: "Company trial completed" };
+    const [employeeBefore] = await db.select().from(agentosEmployees).where(eq(agentosEmployees.id, f.employeeInput.id));
+    await db.insert(agentApiKeys).values([f.first, f.second].map(agent => ({ agentId: agent.id, companyId: agent.companyId, name: "test", keyHash: randomUUID() })));
+    // Hiring/configuration grants and the CEO title never imply retirement.
+    await request(f.delegated).post(path).send(intent).expect(403);
+    await access.setPrincipalPermission(f.two.id, "user", f.owner, "workforce:retire", true, f.owner, { agentIds: [f.second.id] });
+    await request(f.delegated).post(path).send(intent).expect(403);
+    await access.setPrincipalPermission(f.two.id, "agent", f.manager.id, "workforce:retire", true, f.owner, { agentIds: [f.target.id] });
+    await request(f.delegated).post(path).send(intent).expect(403);
+    await grantRetirement(f);
+    const responses = await Promise.all([request(f.delegated).post(path).send(intent), request(f.delegated).post(path).send(intent)]);
+    expect(responses.map(response => response.status)).toEqual([200, 200]);
+    const [retired] = await db.select().from(agentosAssignments).where(eq(agentosAssignments.id, f.assignments[1].id));
+    expect(retired).toMatchObject({ status: "retired", revision: 2, retirementReason: intent.reason });
+    const [localAgent] = await db.select().from(agents).where(eq(agents.id, f.second.id));
+    const [foreignAgent] = await db.select().from(agents).where(eq(agents.id, f.first.id));
+    expect(localAgent.lifecycleState).toBe("terminating"); expect(foreignAgent.lifecycleState).toBe("ready");
+    const keys = await db.select().from(agentApiKeys).where(eq(agentApiKeys.agentId, f.second.id));
+    expect(keys[0].revokedAt).not.toBeNull();
+    expect((await db.select().from(agentApiKeys).where(eq(agentApiKeys.agentId, f.first.id)))[0].revokedAt).toBeNull();
+    expect((await db.select().from(agentosAssignments).where(eq(agentosAssignments.id, f.assignments[0].id)))[0].status).toBe("active");
+    expect((await db.select().from(agentosEmployees).where(eq(agentosEmployees.id, f.employeeInput.id)))[0]).toEqual(employeeBefore);
+    const audit = await db.select().from(activityLog).where(and(eq(activityLog.entityId, retired.id), eq(activityLog.action, "agentos.assignment_retired")));
+    expect(audit).toHaveLength(1); expect(audit[0]).toMatchObject({ actorType: "agent", actorId: f.manager.id, companyId: f.two.id });
+    await request(f.delegated).post(path).send({ ...intent, reason: "Different intent" }).expect(409);
+    await request(f.delegated).post(`${f.companyPath}/assignments`).send({ id: randomUUID(), employeeId: f.employeeInput.id, agentId: f.target.id }).expect(409);
+    // A successful prior request is not authority after a role/binding change.
+    if (coordinator) await db.update(companyOperatingProfiles).set({ fridayAgentId: null }).where(eq(companyOperatingProfiles.companyId, f.two.id));
+    else await db.update(agents).set({ role: "general" }).where(eq(agents.id, f.manager.id));
+    await request(f.delegated).post(path).send(intent).expect(403);
+  });
+  it("enforces the responsible owner's retirement grant even under legacy shadow mode", async () => {
+    const previousMode = process.env.PAPERCLIP_RESPONSIBLE_USER_AUTHZ_MODE;
+    process.env.PAPERCLIP_RESPONSIBLE_USER_AUTHZ_MODE = "shadow";
+    try {
+      const f = await delegatedSeed(), access = accessService(db);
+      const path = `${f.companyPath}/assignments/${f.assignments[1].id}/retire`, intent = { expectedRevision: 1, reason: "Reviewed retirement" };
+      await access.setPrincipalPermission(f.two.id, "agent", f.manager.id, "workforce:retire", true, f.owner, { agentIds: [f.second.id] });
+      await request(f.delegated).post(path).send(intent).expect(403);
+      await access.setPrincipalPermission(f.two.id, "user", f.owner, "workforce:retire", true, f.owner, { agentIds: [f.target.id] });
+      await request(f.delegated).post(path).send(intent).expect(403);
+      expect((await db.select().from(agentosAssignments).where(eq(agentosAssignments.id, f.assignments[1].id)))[0].status).toBe("active");
+      await grantRetirement(f);
+      await request(f.delegated).post(path).send(intent).expect(200);
+    } finally {
+      if (previousMode === undefined) delete process.env.PAPERCLIP_RESPONSIBLE_USER_AUTHZ_MODE;
+      else process.env.PAPERCLIP_RESPONSIBLE_USER_AUTHZ_MODE = previousMode;
+    }
+  });
+  it("also requires current authorizing-user membership and target retirement authority", async () => {
+    const f = await delegatedSeed(), access = accessService(db), authorizer = randomUUID(), now = new Date();
+    await grantRetirement(f);
+    await db.insert(authUsers).values({ id: authorizer, name: "Authorizing user", email: `${authorizer}@example.test`, createdAt: now, updatedAt: now });
+    await db.insert(companyMemberships).values({ companyId: f.two.id, principalId: authorizer, principalType: "user", membershipRole: "member", status: "active" });
+    await db.insert(principalPermissionGrants).values((["applications:manage", "agents:create"] as const).map(permissionKey => ({ companyId: f.two.id, principalId: authorizer, principalType: "user", permissionKey })));
+    const api = app({ ...f.delegate, authorizingUserId: authorizer });
+    const path = `${f.companyPath}/assignments/${f.assignments[1].id}/retire`, intent = { expectedRevision: 1, reason: "Reviewed retirement" };
+    await request(api).post(path).send(intent).expect(403);
+    await access.setPrincipalPermission(f.two.id, "user", authorizer, "workforce:retire", true, f.owner, { agentIds: [f.target.id] });
+    await request(api).post(path).send(intent).expect(403);
+    await access.setPrincipalPermission(f.two.id, "user", authorizer, "workforce:retire", true, f.owner, { agentIds: [f.second.id] });
+    await db.update(companyMemberships).set({ status: "suspended" }).where(and(eq(companyMemberships.companyId, f.two.id), eq(companyMemberships.principalId, authorizer)));
+    await request(api).post(path).send(intent).expect(403);
+    await db.update(companyMemberships).set({ status: "active" }).where(and(eq(companyMemberships.companyId, f.two.id), eq(companyMemberships.principalId, authorizer)));
+    await request(api).post(path).send(intent).expect(200);
+  });
+  it("intersects retirement with target grants, home administration, company boundaries and report reassignment", async () => {
+    const f = await delegatedSeed(), access = accessService(db);
+    const path = `${f.companyPath}/assignments/${f.assignments[1].id}/retire`, intent = { expectedRevision: 1, reason: "Replace assignment" };
+    await grantRetirement(f);
+    await access.setPrincipalPermission(f.two.id, "agent", f.manager.id, "workforce:retire", true, f.owner);
+    await access.setPrincipalPermission(f.two.id, "user", f.owner, "workforce:retire", true, f.owner, { agentIds: [f.target.id] });
+    await request(f.delegated).post(path).send(intent).expect(403);
+    await grantRetirement(f);
+    await access.setPrincipalPermission(f.one.id, "user", f.owner, "users:manage_permissions", false, f.owner);
+    await request(f.delegated).post(path).send(intent).expect(404);
+    await access.setPrincipalPermission(f.one.id, "user", f.owner, "users:manage_permissions", true, f.owner);
+    await request(f.delegated).post(`${f.companyPath}/assignments/${f.assignments[0].id}/retire`).send(intent).expect(404);
+    await request(f.delegated).post(`/api/companies/${f.one.id}/workforce/assignments/${f.assignments[0].id}/retire`).send(intent).expect(403);
+    await request(f.delegated).post(path).send({ ...intent, companyId: f.one.id }).expect(400);
+    await request(app({ ...f.delegate, keyScope: { kind: "skill_test", issueId: randomUUID() } })).post(path).send(intent).expect(403);
+    await request(app({ ...f.delegate, onBehalfOfUserId: null })).post(path).send(intent).expect(403);
+    await db.update(authUsers).set({ approvalStatus: "suspended" }).where(eq(authUsers.id, f.owner));
+    await request(f.delegated).post(path).send(intent).expect(403);
+    await db.update(authUsers).set({ approvalStatus: "approved" }).where(eq(authUsers.id, f.owner));
+    const [report] = await db.insert(agents).values({ companyId: f.two.id, name: "Reassign first", reportsTo: f.second.id }).returning();
+    await request(f.delegated).post(path).send(intent).expect(409);
+    await db.update(agents).set({ reportsTo: f.manager.id }).where(eq(agents.id, report.id));
+    await request(f.delegated).post(path).send(intent).expect(200);
+  });
   it("lets a delegated CEO read and bind only its company's approved workforce without portfolio authority", async () => {
     const f = await delegatedSeed();
     const view = await request(f.delegated).get(f.companyPath).expect(200);
@@ -125,8 +223,14 @@ describe("Agent OS shared workforce", () => {
     await access.setPrincipalPermission(f.two.id, "user", f.owner, "agents:configure", true, f.owner, { agentIds: [excluded.id] });
     await request(f.delegated).post(`${f.companyPath}/assignments`).send(f.binding).expect(404);
   });
-  it("rejects authority revoked while binding waits on the target agent", async () => {
+  it.each([false, true])("rejects authority revoked while a workforce mutation waits on the target agent (retirement=%s)", async retiring => {
     const f = await delegatedSeed();
+    if (retiring) {
+      await request(f.delegated).post(`${f.companyPath}/assignments`).send(f.binding).expect(201);
+      await grantRetirement(f, f.target.id);
+    }
+    const path = retiring ? `${f.companyPath}/assignments/${f.binding.id}/retire` : `${f.companyPath}/assignments`;
+    const intent = retiring ? { expectedRevision: 1, reason: "Retire after review" } : f.binding;
     let release!: () => void, locked!: (pid: number) => void;
     const releaseLock = new Promise<void>(resolve => { release = resolve; });
     const targetLocked = new Promise<number>(resolve => { locked = resolve; });
@@ -137,25 +241,34 @@ describe("Agent OS shared workforce", () => {
       await releaseLock;
     });
     const holderPid = await targetLocked;
-    const binding = request(f.delegated).post(`${f.companyPath}/assignments`).send(f.binding).then(response => response);
+    const binding = request(f.delegated).post(path).send(intent).then(response => response);
     try {
       await expect.poll(async () => {
         const [row] = await db.execute<{ waiting: boolean }>(sql`select exists(select 1 from pg_stat_activity waiter
           where waiter.datname=current_database() and ${holderPid}=any(pg_blocking_pids(waiter.pid))) as waiting`);
         return row.waiting;
       }, { timeout: 5000, interval: 25 }).toBe(true);
-      await accessService(db).setPrincipalPermission(f.two.id, "agent", f.manager.id, "applications:manage", false, f.owner);
+      await accessService(db).setPrincipalPermission(f.two.id, "agent", f.manager.id, retiring ? "workforce:retire" : "applications:manage", false, f.owner);
       release(); await holder;
       expect((await binding).status).toBe(403);
-      expect(await db.select().from(agentosAssignments).where(eq(agentosAssignments.id, f.binding.id))).toHaveLength(0);
-      expect(await db.select().from(activityLog).where(eq(activityLog.entityId, f.binding.id))).toHaveLength(0);
+      const assignments = await db.select().from(agentosAssignments).where(eq(agentosAssignments.id, f.binding.id));
+      if (retiring) expect(assignments).toMatchObject([{ status: "active", revision: 1 }]);
+      else expect(assignments).toHaveLength(0);
+      expect(await db.select().from(activityLog).where(and(eq(activityLog.entityId, f.binding.id),
+        eq(activityLog.action, retiring ? "agentos.assignment_retired" : "agentos.assignment_created")))).toHaveLength(0);
     } finally { release(); await holder; await binding; }
   });
-  it("holds native authority through the binding and durable audit commit", async () => {
+  it.each([false, true])("holds native authority through workforce mutation and durable audit commit (retirement=%s)", async retiring => {
     const f = await delegatedSeed();
+    if (retiring) {
+      await request(f.delegated).post(`${f.companyPath}/assignments`).send(f.binding).expect(201);
+      await grantRetirement(f, f.target.id);
+    }
+    const path = retiring ? `${f.companyPath}/assignments/${f.binding.id}/retire` : `${f.companyPath}/assignments`;
+    const intent = retiring ? { expectedRevision: 1, reason: "Retire after review" } : f.binding;
     // Hold the actual SQL audit boundary after authorization and assignment
     // insertion, then observe native grant revocation waiting on the binder.
-    await db.execute(sql`create function agentos_test_binding_barrier() returns trigger language plpgsql as $$ begin if NEW.action = 'agentos.assignment_created' then perform pg_advisory_xact_lock(830811031); end if; return NEW; end $$`);
+    await db.execute(sql`create function agentos_test_binding_barrier() returns trigger language plpgsql as $$ begin if NEW.action in ('agentos.assignment_created', 'agentos.assignment_retired') then perform pg_advisory_xact_lock(830811031); end if; return NEW; end $$`);
     await db.execute(sql`create trigger agentos_test_binding_barrier before insert on activity_log for each row execute function agentos_test_binding_barrier()`);
     let release!: () => void, locked!: (pid: number) => void;
     const releaseLock = new Promise<void>(resolve => { release = resolve; });
@@ -166,7 +279,7 @@ describe("Agent OS shared workforce", () => {
       locked(row.pid); await releaseLock;
     });
     const holderPid = await barrierLocked;
-    const binding = request(f.delegated).post(`${f.companyPath}/assignments`).send(f.binding).then(response => response);
+    const binding = request(f.delegated).post(path).send(intent).then(response => response);
     let revocation: Promise<void> | undefined;
     try {
       let binderPid: number | undefined;
@@ -175,16 +288,19 @@ describe("Agent OS shared workforce", () => {
           where waiter.datname=current_database() and ${holderPid}=any(pg_blocking_pids(waiter.pid))`);
         binderPid = row?.pid; return !!binderPid;
       }, { timeout: 5000, interval: 25 }).toBe(true);
-      revocation = accessService(db).setPrincipalPermission(f.two.id, "agent", f.manager.id, "applications:manage", false, f.owner);
+      revocation = accessService(db).setPrincipalPermission(f.two.id, retiring ? "user" : "agent", retiring ? f.owner : f.manager.id,
+        retiring ? "workforce:retire" : "applications:manage", false, f.owner);
       await expect.poll(async () => {
         const [row] = await db.execute<{ waiting: boolean }>(sql`select exists(select 1 from pg_stat_activity waiter
           where waiter.datname=current_database() and ${binderPid!}=any(pg_blocking_pids(waiter.pid))) as waiting`);
         return row.waiting;
       }, { timeout: 5000, interval: 25 }).toBe(true);
       release(); await holder;
-      expect((await binding).status).toBe(201); await revocation;
-      await request(f.delegated).get(f.companyPath).expect(403);
-      expect(await db.select().from(activityLog).where(and(eq(activityLog.entityId, f.binding.id), eq(activityLog.action, "agentos.assignment_created")))).toHaveLength(1);
+      expect((await binding).status).toBe(retiring ? 200 : 201); await revocation;
+      if (retiring) await request(f.delegated).post(path).send(intent).expect(403);
+      else await request(f.delegated).get(f.companyPath).expect(403);
+      expect(await db.select().from(activityLog).where(and(eq(activityLog.entityId, f.binding.id),
+        eq(activityLog.action, retiring ? "agentos.assignment_retired" : "agentos.assignment_created")))).toHaveLength(1);
     } finally {
       release(); await holder; await binding; await revocation;
       await db.execute(sql`drop trigger agentos_test_binding_barrier on activity_log`);
@@ -224,17 +340,18 @@ describe("Agent OS shared workforce", () => {
     expect(audit).toHaveLength(1);
     await request(f.api).post(path).send({ expectedRevision: 1, reason: "Changed reason" }).expect(409);
   });
-  it("rolls back retirement, key revocation and lifecycle changes when durable audit fails", async () => {
-    const f = await seed();
-    await db.insert(agentApiKeys).values({ agentId: f.first.id, companyId: f.one.id, name: "test", keyHash: randomUUID() });
+  it.each([false, true])("rolls back retirement, keys and lifecycle on durable audit failure (delegated=%s)", async delegated => {
+    const f = await delegatedSeed();
+    if (delegated) await grantRetirement(f);
+    await db.insert(agentApiKeys).values({ agentId: f.second.id, companyId: f.two.id, name: "test", keyHash: randomUUID() });
     // Fault at the actual database boundary after the lifecycle writes.
     await db.execute(sql`create function agentos_test_audit_failure() returns trigger language plpgsql as $$ begin if NEW.action = 'agentos.assignment_retired' then raise exception 'simulated audit unavailable'; end if; return NEW; end $$`);
     await db.execute(sql`create trigger agentos_test_audit_failure before insert on activity_log for each row execute function agentos_test_audit_failure()`);
     try {
-      await request(f.api).post(`${f.base}/assignments/${f.assignments[0].id}/retire`).send({ expectedRevision: 1, reason: "Trial" }).expect(500);
-      const [agent] = await db.select().from(agents).where(eq(agents.id, f.first.id));
-      const [assignment] = await db.select().from(agentosAssignments).where(eq(agentosAssignments.id, f.assignments[0].id));
-      const [key] = await db.select().from(agentApiKeys).where(eq(agentApiKeys.agentId, f.first.id));
+      await request(delegated ? f.delegated : f.api).post(`${delegated ? f.companyPath : f.base}/assignments/${f.assignments[1].id}/retire`).send({ expectedRevision: 1, reason: "Trial" }).expect(500);
+      const [agent] = await db.select().from(agents).where(eq(agents.id, f.second.id));
+      const [assignment] = await db.select().from(agentosAssignments).where(eq(agentosAssignments.id, f.assignments[1].id));
+      const [key] = await db.select().from(agentApiKeys).where(eq(agentApiKeys.agentId, f.second.id));
       expect(agent.lifecycleState).toBe("ready"); expect(assignment.status).toBe("active"); expect(key.revokedAt).toBeNull();
     } finally {
       await db.execute(sql`drop trigger agentos_test_audit_failure on activity_log`);

@@ -8,7 +8,9 @@ import {
 } from "./experimental-api-paths.js";
 import { Router } from "express";
 import { createAgentosPortfolioSchema, createAgentosEmployeeSchema, createAgentosAssignmentSchema, retireAgentosAssignmentSchema } from "@paperclipai/shared";
+import { companyPerformanceQuerySchema, createPerformanceReportSchema } from "@paperclipai/shared";
 import { createManagedApplicationSchema, updateManagedApplicationSchema, managedApplicationListSchema, managedApplicationWorkQuerySchema, linkManagedApplicationProjectSchema, updateOperatingProfileSchema, fridayWorkQuerySchema } from "@paperclipai/shared";
+import { employeeAwarenessQuerySchema } from "@paperclipai/shared";
 import { subscriptionPriceSchema, mergeSubscriptionsSchema } from "@paperclipai/shared";
 import { z } from "zod";
 import {
@@ -5024,7 +5026,8 @@ registry.registerPath({
 
 for (const operation of [
   { method: "get", path: "/api/companies/{companyId}/workforce", summary: "Read only this company's shared employee bindings (portfolio owner or current coordinator/CEO with native staffing grants and responsible-owner authority)" },
-  { method: "post", path: "/api/companies/{companyId}/workforce/assignments", summary: "Bind an existing shared identity to an approved company agent (native staffing and target configuration authority; no cross-company or retirement delegation)", body: createAgentosAssignmentSchema.omit({ companyId: true }) },
+  { method: "post", path: "/api/companies/{companyId}/workforce/assignments", summary: "Bind an existing shared identity to an approved company agent (native staffing and target configuration authority; no cross-company delegation)", body: createAgentosAssignmentSchema.omit({ companyId: true }) },
+  { method: "post", path: "/api/companies/{companyId}/workforce/assignments/{assignmentId}/retire", summary: "Retire one company assignment through native termination (current CEO/coordinator staffing authority plus explicit target-scoped workforce:retire for caller and responsible owner; revision checked, direct reports must be reassigned)", body: retireAgentosAssignmentSchema },
   { method: "get", path: "/api/agentos/portfolios", summary: "List the operator's accessible AgentOS portfolios (board only)" },
   { method: "post", path: "/api/agentos/portfolios", summary: "Create an owner-scoped portfolio and link its home company (permission administrator, idempotent)", body: createAgentosPortfolioSchema },
   { method: "get", path: "/api/agentos/portfolios/{portfolioId}", summary: "Read shared employees and company assignments, filtering revoked company access (portfolio owner only)" },
@@ -5042,6 +5045,9 @@ for (const operation of [
 
 for (const operation of [
   { method: "get", path: "/api/companies/{companyId}/friday/work", summary: "Read current authorized work: project assignments, paginated tasks and owners, department heads, project leads and bounded reporting chains, messages, artifacts and recorded case handoffs", query: fridayWorkQuerySchema },
+  { method: "get", path: "/api/companies/{companyId}/friday/agents/{agentId}/awareness", summary: "Read a shared employee's current authorized assignments and work evidence. Agent callers may read only their own current-company assignment; board callers may read independently authorized company assignments. Shared identity grants no company or private-work access. Paginate assignments with offset/limit; use each company's friday/work agentId filter for further task/project pages.", query: employeeAwarenessQuerySchema },
+  { method: "get", path: "/api/companies/{companyId}/friday/performance", summary: "Read source-backed report history for an authorized company, project or department scope; includes accessible unreported projects and explicit truncation", query: companyPerformanceQuerySchema },
+  { method: "post", path: "/api/companies/{companyId}/friday/performance", summary: "Record an audited monthly performance revision (applications:manage and project access; expected report ID required)", body: createPerformanceReportSchema },
   { method: "get", path: "/api/companies/{companyId}/managed-applications", summary: "List accessible application portfolio with project and task counts", query: managedApplicationListSchema },
   { method: "post", path: "/api/companies/{companyId}/managed-applications", summary: "Register an application against its home project (operator or applications:manage grant, idempotent)", body: createManagedApplicationSchema },
   { method: "get", path: "/api/companies/{companyId}/managed-applications/galaxy", summary: "Read a bounded portfolio graph with authorized native projects, task dots, complete counts and observation time", query: managedApplicationListSchema },

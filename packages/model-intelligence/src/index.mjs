@@ -2,6 +2,8 @@ import { DatabaseSync } from "node:sqlite";
 import { createHash, randomUUID } from "node:crypto";
 
 import { taskFamilyCatalog } from "./task-families.mjs";
+import { createComparisonStore } from "./comparisons.mjs";
+export { COMPARISON_POLICY_VERSION } from "./comparisons.mjs";
 export { classifyWork } from "./task-families.mjs";
 
 export const POLICY_VERSION = "evidence-v1";
@@ -30,13 +32,14 @@ function validate(input) {
  * executes tasks, infers quality from process exit, or uploads task content. */
 export function createModelIntelligence(path) {
   const db = new DatabaseSync(path);
+  if (db.prepare("PRAGMA user_version").get().user_version > 2) { db.close(); throw new Error("Model Intelligence database schema is newer than this package"); }
   db.exec(`PRAGMA journal_mode=WAL; PRAGMA busy_timeout=20;
     CREATE TABLE IF NOT EXISTS routing_receipts (namespace TEXT NOT NULL, id TEXT NOT NULL, task_key TEXT NOT NULL, task_type TEXT NOT NULL, candidate_id TEXT NOT NULL, request_hash TEXT NOT NULL, receipt TEXT NOT NULL, created_at TEXT NOT NULL, PRIMARY KEY(namespace,id));
     CREATE INDEX IF NOT EXISTS routing_tasks ON routing_receipts(namespace,task_key,created_at);
     CREATE TABLE IF NOT EXISTS evaluations (namespace TEXT NOT NULL, id TEXT NOT NULL, receipt_id TEXT NOT NULL, candidate_id TEXT NOT NULL, task_type TEXT NOT NULL, payload TEXT NOT NULL, created_at TEXT NOT NULL, PRIMARY KEY(namespace,id), UNIQUE(namespace,receipt_id));
     CREATE INDEX IF NOT EXISTS evaluation_profiles ON evaluations(namespace,task_type,candidate_id,created_at);
     CREATE TABLE IF NOT EXISTS policy_events (namespace TEXT NOT NULL, id TEXT NOT NULL, candidate_id TEXT NOT NULL, action TEXT NOT NULL, reason TEXT NOT NULL, created_at TEXT NOT NULL, PRIMARY KEY(namespace,id));
-    PRAGMA user_version=1;`);
+    `);
   function blocked(namespace, id) { const row = db.prepare("SELECT action FROM policy_events WHERE namespace=? AND candidate_id=? ORDER BY created_at DESC,rowid DESC LIMIT 1").get(namespace,id); return row?.action === "block"; }
   function evidence(namespace, taskType, candidateId) {
     const rows = db.prepare("SELECT payload FROM evaluations WHERE namespace=? AND task_type=? AND candidate_id=? ORDER BY created_at DESC,rowid DESC LIMIT 30").all(namespace,taskType,candidateId).map(row => JSON.parse(row.payload));
@@ -44,6 +47,7 @@ export function createModelIntelligence(path) {
     return { evaluations: rows.length, passed, lowerBound: lowerBound(passed,rows.length), medianLatencyMs: median(rows.filter(row => row.passed).map(row => row.latencyMs)), medianIterations: median(rows.map(row => row.iterations)), recentFailures: rows.slice(0,5).filter(row => !row.passed).length };
   }
   return {
+    ...createComparisonStore(db, { blocked, lowerBound, median }),
     select(input) {
       validate(input);
       const requestHash = hash(input);

@@ -2848,6 +2848,7 @@ export * from "./workspace-provider.js";
 export * from "./workflows.js";
 export * from "./managed-applications.js";
 export * from "./friday-workspace.js";
+export * from "./employee-awareness.js";
 export * from "./operating-profile.js";
 export * from "./agentos-workforce.js";
 export * from "./agentos-administration.js";

@@ -71,7 +71,7 @@ export function agentosWorkforceService(db: Db) {
     const [manager] = await connection.select().from(agents).where(and(eq(agents.id, actor.agentId), eq(agents.companyId, companyId)));
     const [profile] = await connection.select().from(companyOperatingProfiles).where(eq(companyOperatingProfiles.companyId, companyId));
     if (!manager || !["active", "idle", "running", "error"].includes(manager.status) || manager.lifecycleState !== "ready"
-      || (manager.role !== "ceo" && profile?.fridayAgentId !== manager.id)) throw forbidden("Only the current company coordinator or CEO can bind its workforce");
+      || (manager.role !== "ceo" && profile?.fridayAgentId !== manager.id)) throw forbidden("Only the current company coordinator or CEO can manage its workforce");
     const effectiveActor: AuthorizationActor = { ...actor, onBehalfOfMemberships: [membership.membership] };
     const access = accessService(connection);
     for (const action of ["applications:manage", "agents:create"] as const) {
@@ -82,11 +82,17 @@ export function agentosWorkforceService(db: Db) {
       .innerJoin(agentosPortfolios, eq(agentosPortfolios.id, agentosPortfolioCompanies.portfolioId))
       .where(and(eq(agentosPortfolioCompanies.companyId, companyId), eq(agentosPortfolios.ownerUserId, responsibleUserId)));
     if (!linked) throw notFound("Company workforce not found");
-    // This is an additional owner ceiling, not an actor substitution for the
-    // mutation. Losing portfolio administration must revoke delegated binding.
-    const owner: AuthorizationActor = { type: "board", source: "session", userId: responsibleUserId,
-      companyIds: [linked.portfolio.homeCompanyId], ignoreInstanceAdmin: true };
-    if (!(await companyAccess(connection, owner, linked.portfolio.homeCompanyId, true))) throw notFound("Company workforce not found");
+    // Check the owner's native principal grant directly. Instance administrator
+    // elevation must not replace current company authority for a delegation.
+    const [homeMembership] = await connection.select().from(companyMemberships).where(and(
+      eq(companyMemberships.companyId, linked.portfolio.homeCompanyId), eq(companyMemberships.principalType, "user"),
+      eq(companyMemberships.principalId, responsibleUserId), eq(companyMemberships.status, "active"),
+    ));
+    const ownerAuthority = await authorizationService(connection).decidePrincipalGrant({
+      companyId: linked.portfolio.homeCompanyId, principalType: "user", principalId: responsibleUserId,
+      action: "users:manage_permissions", permissionKey: "users:manage_permissions",
+    });
+    if (!homeMembership || homeMembership.membershipRole === "viewer" || !ownerAuthority.allowed) throw notFound("Company workforce not found");
     return { portfolio: linked.portfolio, actor: effectiveActor };
   }
 
@@ -179,6 +185,24 @@ export function agentosWorkforceService(db: Db) {
     return result;
   }
 
+  async function retireAssignment(tx: Db, publications: ActivityPublication[], who: Who,
+    companyId: string, portfolioId: string, assignmentId: string, input: RetireAgentosAssignment, expectedAgentId?: string) {
+    const [row] = await tx.select().from(agentosAssignments).where(and(
+      eq(agentosAssignments.id, assignmentId), eq(agentosAssignments.companyId, companyId), eq(agentosAssignments.portfolioId, portfolioId),
+    )).for("update");
+    if (!row) throw notFound("Assignment not found");
+    if (expectedAgentId && row.agentId !== expectedAgentId) throw conflict("Assignment changed. Refresh before retiring it.");
+    if (row.status === "retired" && row.revision === input.expectedRevision + 1 && row.retirementReason === input.reason) return row;
+    if (row.revision !== input.expectedRevision) throw conflict("Assignment changed. Refresh before retiring it.");
+    if (row.status === "retired") throw conflict("This assignment is already retired");
+    const [report] = await tx.select({ id: agents.id }).from(agents).where(and(eq(agents.companyId, row.companyId), eq(agents.reportsTo, row.agentId), ne(agents.status, "terminated"))).limit(1);
+    if (report) throw conflict("Reassign this agent's direct reports before retiring its assignment");
+    await terminateAgentInTransaction(tx, row.companyId, row.agentId);
+    const [retired] = await tx.update(agentosAssignments).set({ status: "retired", retirementReason: input.reason, retiredAt: new Date(), revision: row.revision + 1 }).where(eq(agentosAssignments.id, row.id)).returning();
+    await audit(tx, publications, who, row.companyId, "agentos.assignment_retired", row.id, { employeeId: row.employeeId, agentId: row.agentId, reason: input.reason, previousRevision: row.revision, revision: retired.revision });
+    return retired;
+  }
+
   return {
     async readCompany(actor: AuthorizationActor, companyId: string) {
       const authorized = await companyStaffingAuthority(db, actor, companyId);
@@ -204,6 +228,29 @@ export function agentosWorkforceService(db: Db) {
           if (!decision.allowed) throw notFound("Company agent not found or not configurable");
         }
         return bindAssignment(tx, publications, who, authorized.portfolio.id, { ...input, companyId });
+      }).catch(error => {
+        if ((error?.cause?.code ?? error?.code) === "55P03") throw conflict("Staffing authority is changing. Retry the request.", { retryable: true });
+        throw error;
+      });
+    },
+
+    async retireCompany(actor: AuthorizationActor, who: Who, companyId: string, assignmentId: string, input: RetireAgentosAssignment) {
+      const preliminary = await companyStaffingAuthority(db, actor, companyId);
+      const [known] = await db.select().from(agentosAssignments).where(and(
+        eq(agentosAssignments.id, assignmentId), eq(agentosAssignments.companyId, companyId), eq(agentosAssignments.portfolioId, preliminary.portfolio.id),
+      ));
+      if (!known) throw notFound("Assignment not found");
+      return withAccountingTransaction(db, companyId, async (tx, publications) => {
+        await lockCompanyStaffingAuthority(tx, actor, companyId, preliminary.portfolio.id, known.agentId);
+        const authorized = await companyStaffingAuthority(tx, actor, companyId);
+        if (authorized.portfolio.id !== preliminary.portfolio.id) throw conflict("Company workforce changed. Retry the staffing request.");
+        const access = accessService(tx);
+        for (const action of ["agent:read", "workforce:retire"] as const) {
+          const decision = await access.decide({ actor: authorized.actor, action,
+            resource: { type: "agent", companyId, agentId: known.agentId }, scope: { targetAgentId: known.agentId } });
+          if (!decision.allowed) throw forbidden("Target assignment retirement requires workforce:retire authority for the agent and its responsible owner");
+        }
+        return retireAssignment(tx, publications, who, companyId, authorized.portfolio.id, assignmentId, input, known.agentId);
       }).catch(error => {
         if ((error?.cause?.code ?? error?.code) === "55P03") throw conflict("Staffing authority is changing. Retry the request.", { retryable: true });
         throw error;
@@ -308,16 +355,7 @@ export function agentosWorkforceService(db: Db) {
       return withAccountingTransaction(db, known.companyId, async (tx, publications) => {
         await portfolio(tx, actor, portfolioId, true);
         if (!(await companyAccess(tx, actor, known.companyId, true))) throw notFound("Assignment not found");
-        const [row] = await tx.select().from(agentosAssignments).where(eq(agentosAssignments.id, assignmentId)).for("update");
-        if (row.status === "retired" && row.revision === input.expectedRevision + 1 && row.retirementReason === input.reason) return row;
-        if (row.revision !== input.expectedRevision) throw conflict("Assignment changed. Refresh before retiring it.");
-        if (row.status === "retired") throw conflict("This assignment is already retired");
-        const [report] = await tx.select({ id: agents.id }).from(agents).where(and(eq(agents.companyId, row.companyId), eq(agents.reportsTo, row.agentId), ne(agents.status, "terminated"))).limit(1);
-        if (report) throw conflict("Reassign this agent's direct reports before retiring its assignment");
-        await terminateAgentInTransaction(tx, row.companyId, row.agentId);
-        const [retired] = await tx.update(agentosAssignments).set({ status: "retired", retirementReason: input.reason, retiredAt: new Date(), revision: row.revision + 1 }).where(eq(agentosAssignments.id, row.id)).returning();
-        await audit(tx, publications, who, row.companyId, "agentos.assignment_retired", row.id, { employeeId: row.employeeId, agentId: row.agentId, reason: input.reason, previousRevision: row.revision, revision: retired.revision });
-        return retired;
+        return retireAssignment(tx, publications, who, known.companyId, portfolioId, assignmentId, input);
       });
     },
   };

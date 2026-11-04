@@ -1004,6 +1004,7 @@ export const PERMISSION_KEYS = [
   "agents:create",
   "agents:configure",
   "agents:suggest-changes",
+  "workforce:retire",
   "skills:create",
   "skills:suggest-changes",
   "environments:manage",

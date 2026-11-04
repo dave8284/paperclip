@@ -16,6 +16,7 @@ Agent access: [companion](../agent-access-map/workforce.md).
 
 - `portfolio`: `workforce/portfolio` — create an owner-scoped portfolio and link authorized companies.
 - `assignments`: `workforce/assignments` — register shared employees, bind company agents and retire an assignment with preserved history.
+- `awareness`: `workforce/awareness` — read current shared-employee assignment evidence under the caller's native company and private-work access.
 
 ## How to get to it (user POV)
 
@@ -30,7 +31,10 @@ Reassigning that employee within the same company waits for the previous native 
 The company-scoped staffing API permits a currently configured Friday or company
 CEO to read that company's bindings and bind an already approved native agent.
 It requires native staffing grants and a currently approved responsible portfolio
-owner. The API does not hire a runtime, grant tools or start work. The
+owner. Company assignment retirement additionally requires the explicit native
+`workforce:retire` grant for both the caller and responsible owner, evaluated
+against the selected company agent. It is not included in default agent or human
+grants. The API does not hire a runtime, grant tools or start work. The
 [staffing plan](../../doc/plans/2026-11-03-agentos-workforce.md) recommends three
 departments and seven initial company roles, reusing specialists as heads/leads.
 
@@ -43,13 +47,41 @@ Use [database/HTTP tests](../../server/src/__tests__/agentos-workforce.test.ts) 
 Manual recipe: create two disposable companies, connect one specialist to both, open each native agent profile, retire one assignment and refresh. Verify one remains active, inspect company Activity, then remove the second company's membership and verify its records disappear. Do not use production employees for retirement testing.
 
 Company delegation: GET `/api/companies/{companyId}/workforce` and POST
-`/api/companies/{companyId}/workforce/assignments`. Verify an authorized CEO or
-current coordinator can read/bind only its company, cannot retire or operate the
-global portfolio APIs, and loses access after grant, coordinator, owner approval
+`/api/companies/{companyId}/workforce/assignments`; POST
+`/api/companies/{companyId}/workforce/assignments/{assignmentId}/retire` requires
+`expectedRevision` and `reason`. Verify an authorized CEO or current coordinator
+can read/bind only its company, cannot retire without the explicit target grant or
+operate the global portfolio APIs, and loses access after grant, coordinator, owner approval
 or membership revocation. The new database/HTTP regression cases require a
 permitted local PostgreSQL/socket environment; current execution evidence is
 recorded in the staffing plan rather than inferred from their presence.
 
+## Current employee evidence
+
+### `employee-awareness`
+
+Direct employee chat guidance now directs assignment/project status questions to
+GET `/api/companies/{companyId}/friday/agents/{agentId}/awareness`. It resolves the
+active shared identity and reads current native work, with observation time and
+pagination. Agent runs can read their own current-company assignment only. A
+board request can include other assignments only when its admitted company
+scope, current native company and agent permissions permit them; native task and
+project privacy still applies. Hidden assignments add no names or counts.
+
+At most five assignment work pages are returned, each with up to 25 tasks and the
+existing work endpoint's bounded projects/evidence. Further work pages use that
+company's `/friday/work` endpoint with the assignment's native agent ID. Missing
+access is not proof of idle or absent work; task status is not execution proof.
+There is no model call, background prefetch, new UI or cross-company agent grant.
+
+[Contract tests](../../server/src/services/employee-awareness.test.ts) exercise
+scope preservation, responsible-user propagation, refreshed snapshots, omission
+before pagination, call bounds and changed evidence with controlled dependencies.
+[Native discovery tests](../../server/src/services/native-runtime/runner-api.test.ts)
+exercise the advertised API and read modes. These tests do not certify live chat
+answers or database privacy; the existing [native work tests](../../server/src/__tests__/friday-awareness.test.ts)
+cover those SQL resource boundaries and require a permitted PostgreSQL listener.
+
 ## Known gaps
 
-Cross-company Friday delegation, agent retirement authority, versioned shared capabilities, cross-company employee chat, learning evaluations and the portfolio Decisions/graph projections remain later steps of the approved operating-model plan. Company-scoped read/bind does not establish those broader authorities. This screen connects existing company agents; it does not create model subscriptions or start runs. Refresh and focus refetch retrieve current state; portfolio-wide live subscription is not implemented. Department is an optional assignment label, not an independent permission boundary. The home company is retained for portfolio administration; archive it instead of permanently deleting it.
+Cross-company Friday delegation, versioned shared capabilities, cross-company employee chat, learning evaluations and the portfolio Decisions/graph projections remain later steps of the approved operating-model plan. Company-scoped staffing does not establish those broader authorities. Delegated retirement has source regression coverage, with PostgreSQL execution still blocked by the known sandbox listener denial. This screen connects existing company agents; it does not create model subscriptions or start runs. Refresh and focus refetch retrieve current state; portfolio-wide live subscription is not implemented. Department is an optional assignment label, not an independent permission boundary. The home company is retained for portfolio administration; archive it instead of permanently deleting it.

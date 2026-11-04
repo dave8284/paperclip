@@ -1,12 +1,14 @@
 import { Router, json } from "express";
 import { z } from "zod";
 import type { Db } from "@paperclipai/db";
-import { fridayWorkQuerySchema, createDepartmentSchema, updateDepartmentSchema, assignDepartmentProjectSchema, createPerformanceReportSchema, performancePeriodSchema } from "@paperclipai/shared";
+import { fridayWorkQuerySchema, createDepartmentSchema, updateDepartmentSchema, assignDepartmentProjectSchema, createPerformanceReportSchema, companyPerformanceQuerySchema } from "@paperclipai/shared";
 import { modelCatalog } from "../services/model-intelligence.js";
 import { fridayVoiceStatus, fridayVoiceRequest } from "../services/friday-voice.js";
 import { companyPerformanceService } from "../services/company-performance.js";
 import { departmentService } from "../services/agentos-departments.js";
 import { fridayAwarenessService } from "../services/friday-awareness.js";
+import { employeeAwarenessService } from "../services/employee-awareness.js";
+import { employeeAwarenessQuerySchema } from "@paperclipai/shared";
 import { forbidden } from "../errors.js";
 import { assertCompanyAccess, assertBoard, getActorInfo } from "./authz.js";
 import { authorizationService } from "../services/authorization.js";
@@ -25,6 +27,10 @@ export function fridayRoutes(db: Db) {
     next();
   });
   router.get("/companies/:companyId/friday/work", async (req, res) => res.json(await service.work(req.params.companyId as string, req.actor, fridayWorkQuerySchema.parse(req.query))));
+  router.get("/companies/:companyId/friday/agents/:agentId/awareness", async (req, res) => {
+    res.set("Cache-Control", "no-store").json(await employeeAwarenessService(db).read(req.params.companyId as string,
+      z.string().uuid().parse(req.params.agentId), req.actor, employeeAwarenessQuerySchema.parse(req.query)));
+  });
   router.get("/companies/:companyId/friday/departments", async (req, res) => res.json(await departments.list(req.params.companyId as string, req.actor)));
   router.post("/companies/:companyId/friday/departments", async (req, res) => res.status(201).json(await departments.save(req.params.companyId as string, req.actor, getActorInfo(req), createDepartmentSchema.parse(req.body))));
   router.patch("/companies/:companyId/friday/departments/:id", async (req, res) => res.json(await departments.save(req.params.companyId as string, req.actor, getActorInfo(req), updateDepartmentSchema.parse(req.body), z.string().uuid().parse(req.params.id))));
@@ -33,7 +39,7 @@ export function fridayRoutes(db: Db) {
     res.status(204).end();
   });
   router.put("/companies/:companyId/friday/projects/:projectId/department", async (req, res) => res.json(await departments.assign(req.params.companyId as string, z.string().uuid().parse(req.params.projectId), assignDepartmentProjectSchema.parse(req.body).departmentId, req.actor, getActorInfo(req))));
-  router.get("/companies/:companyId/friday/performance", async (req, res) => res.json(await performance.list(req.params.companyId as string, performancePeriodSchema.parse(req.query.period), req.actor)));
+  router.get("/companies/:companyId/friday/performance", async (req, res) => res.json(await performance.list(req.params.companyId as string, companyPerformanceQuerySchema.parse(req.query), req.actor)));
   router.post("/companies/:companyId/friday/performance", async (req, res) => res.status(201).json(await performance.record(req.params.companyId as string, createPerformanceReportSchema.parse(req.body), req.actor, getActorInfo(req))));
   router.get("/companies/:companyId/friday/models", async (req, res) => {
     assertBoard(req);

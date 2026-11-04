@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { CompanyPerformanceReport } from "@paperclipai/shared";
-import { createPerformanceReportSchema } from "@paperclipai/shared";
+import { createPerformanceReportSchema, companyPerformanceQuerySchema } from "@paperclipai/shared";
 import { latestPerformance, performanceSummary } from "./company-performance";
 const report = (id: string, extras: Partial<CompanyPerformanceReport> = {}): CompanyPerformanceReport => ({ id, companyId: "company", projectId: id, period: "2026-10", revision: 1, currency: "USD", basis: "cash", sourceLabel: "Ledger", evidenceRef: "Verified export in the source artefact", createdAt: "2026-10-27", createdBy: "owner", revenueComplete: true, costsComplete: true, values: { revenueMinor: 10000, costMinor: 4000, views: 300, engagements: 10, publications: 2 }, ...extras });
 describe("performance coverage", () => {
@@ -22,5 +22,23 @@ describe("performance coverage", () => {
     expect(createPerformanceReportSchema.safeParse({ ...input, currency: null }).success).toBe(false);
     expect(createPerformanceReportSchema.safeParse({ ...input, costsComplete: true, values: { ...input.values, costMinor: null } }).success).toBe(false);
     expect(performanceSummary([report("zero", { values: { ...input.values, revenueMinor: 0, costMinor: 0 } })], 1).profit).toBe(0);
+  });
+});
+
+
+describe("performance query scope", () => {
+  it("preserves the legacy all-scope read and rejects ambiguous or incomplete scope", () => {
+    const base = { period: "2026-11" }, id = "10000000-0000-4000-8000-000000000001";
+    expect(companyPerformanceQuerySchema.parse(base).scope).toBe("all");
+    for (const scope of ["company", "all"]) {
+      expect(companyPerformanceQuerySchema.safeParse({ ...base, scope }).success).toBe(true);
+      expect(companyPerformanceQuerySchema.safeParse({ ...base, scope, scopeId: id }).success).toBe(false);
+    }
+    for (const scope of ["project", "department"]) {
+      expect(companyPerformanceQuerySchema.safeParse({ ...base, scope, scopeId: id }).success).toBe(true);
+      expect(companyPerformanceQuerySchema.safeParse({ ...base, scope }).success).toBe(false);
+      expect(companyPerformanceQuerySchema.safeParse({ ...base, scope, scopeId: "invalid" }).success).toBe(false);
+    }
+    expect(companyPerformanceQuerySchema.safeParse({ ...base, scope: "portfolio" }).success).toBe(false);
   });
 });

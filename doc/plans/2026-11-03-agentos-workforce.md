@@ -116,10 +116,9 @@ agents deny access. A role label alone is insufficient.
 Cross-company Friday delegation needs an explicit portfolio mandate with an
 owner, authorized company set, permitted actions, revision/revocation and native
 target-company revalidation. The current company coordinator binding is not
-that mandate. Agent retirement also needs a scoped lifecycle grant: the native
-termination endpoint is board-only, so hiring/configuration grants cannot be
-reinterpreted as termination authority. Keep those operations board-only until
-their contracts exist and are tested.
+that mandate. The native termination endpoint remains board-only.
+Company assignment retirement now has its separate explicit scoped grant contract
+below; hiring/configuration grants do not imply termination authority.
 
 ## Completion evidence
 
@@ -146,6 +145,14 @@ The company-scoped slice is implemented at:
   an existing shared employee to an approved native agent. The body contains
   `id`, `employeeId`, `agentId` and optional `department`; `companyId` comes only
   from the authenticated path. No owner or portfolio ID is accepted in the body.
+- `POST /api/companies/{companyId}/workforce/assignments/{assignmentId}/retire`:
+  revision-checked company retirement with `expectedRevision` and `reason`.
+  Target read and explicit `workforce:retire` grants are checked using
+  `scope: { targetAgentId }`; an administrator may constrain each grant with
+  `{ agentIds: [targetAgentId] }`. Both the actual caller and its responsible
+  owner must qualify through native authorization; a pinned authorizing user
+  retains its native ceiling too. No new role defaults or automatic grants are
+  added. The existing board portfolio route retains its owner checks.
 
 The acting manager needs native `applications:manage` and `agents:create` grants;
 binding also checks native `agent:read` and `agent_config:update`. The responsible
@@ -157,8 +164,11 @@ uniqueness, native lifecycle readiness, duplicate-request handling and durable
 audit use the same implementation as the original board binding path.
 
 No existing portfolio route was opened to agents. Creating portfolios, linking
-companies, registering global identities and retiring assignments remain on the
-board-only routes. This slice does not provision roles, change instructions,
+companies and registering global identities remain on the board-only routes.
+The company retirement endpoint shares revision/idempotency, direct-report,
+native termination, key revocation and durable audit behavior with board
+retirement. Authorization rows are held through commit after waiting for the
+target agent; no acting board identity is substituted. This slice does not provision roles, change instructions,
 grant provider access or launch employee work.
 
 The focused PostgreSQL/HTTP suite now includes four delegated-staffing scenarios
@@ -168,3 +178,14 @@ This is blocked verification, not a passing result. The log is retained at
 `/private/tmp/agentos-workforce-20261103.log`. `node scripts/check-maps.mjs` passed
 the structural map check (37 areas, 198 capability IDs). Integrated typechecking
 and runtime proof are tracked by the main implementation session.
+
+The 2026-11-04 retirement extension adds CEO/Friday target-scope, responsible-owner,
+home-administration, default-denial, role-change, isolation, direct-report,
+concurrent revocation and SQL-audit-rollback cases. These cases remain unrun under
+the same sandbox listener restriction; the failing PostgreSQL setup was not
+repeated. The native permission key is exported through the shared/plugin SDK
+catalog and accepted by native grant validators. Advanced permission editing in
+the core Members page is delegated to an installed extension; there is no second
+workforce-specific grant store or authority UI.
+
+Independent continuation review found the responsible-user shadow rollout could bypass retirement's owner grant. `workforce:retire` now always enforces that intersection, matching the existing strict instruction-update pattern without changing other actions. Two additional database cases cover absent/wrong owner scope under shadow and current authorizing-user scope/membership, bringing this suite to 23 cases. These remain unrun here. Final integrated server semantic checking and independent source re-review pass; neither certifies runtime locking or lifecycle completion.

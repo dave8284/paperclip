@@ -170,6 +170,15 @@ describe("runner API catalog", () => {
     ).toThrow("different query");
     expect(() => searchRunnerApi({ query: "project", limit: 50 })).toThrow();
   });
+  it("discovers employee assignment evidence as a bounded native read in conversation modes", () => {
+    const operationId = "GET /api/companies/{companyId}/friday/agents/{agentId}/awareness";
+    expect(searchRunnerApi({ query: "employee awareness assignments" }).results.map(entry => entry.operationId)).toContain(operationId);
+    const operation = runnerApiOperation(operationId);
+    expect(operation.allowedModes).toEqual(expect.arrayContaining(["standard", "ask", "planning"]));
+    expect(operation.parameters.find(parameter => parameter.name === "limit")?.schema.maximum).toBe(5);
+    expect(operation.summary).toContain("own current-company assignment");
+    expect(operation.callPolicy).toBe("rest");
+  });
 });
 
 describe("runner API request boundary", () => {

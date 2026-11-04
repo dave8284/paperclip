@@ -1308,6 +1308,7 @@ function createAuthorizationService(db: Db | DbTransaction, readSnapshot?: ReadA
       // the effective execution context (agent, project, issue, or run
       // policy) resolves to low trust.
       input.action === "agents:create" ||
+      input.action === "workforce:retire" ||
       input.action === "decision_queue:manage" ||
       input.action === "decision_queue:read" ||
       input.action === "decision_triage:manage" ||
@@ -2750,7 +2751,10 @@ function createAuthorizationService(db: Db | DbTransaction, readSnapshot?: ReadA
       responsibleUserId,
     }, "responsible-user authorization intersection denied");
 
-    return input.action !== "agent_instructions:update" && responsibleUserAuthzShadowMode() ? agentDecision : denied;
+    // Explicitly delegated retirement always requires the responsible user's
+    // target grant, including instances still using the legacy shadow rollout.
+    return input.action !== "agent_instructions:update" && input.action !== "workforce:retire"
+      && responsibleUserAuthzShadowMode() ? agentDecision : denied;
   }
 
   async function applyAuthorizingUserIntersection(

@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
-import { createDb, companies, projects, activityLog, companyMemberships } from "@paperclipai/db";
+import { createDb, companies, projects, activityLog, companyMemberships, companyPerformanceReports, agentosDepartments, agentosDepartmentProjects } from "@paperclipai/db";
 import { startEmbeddedPostgresTestDatabase } from "@paperclipai/db/test-embedded-postgres";
 import { createPerformanceReportSchema } from "@paperclipai/shared";
 import { companyPerformanceService } from "../services/company-performance.js";
@@ -20,10 +20,10 @@ describe("company performance ledger", () => {
     const second = await service.record(companyId, { ...input, costsComplete: true, expectedReportId: first.id }, actor, who);
     expect(second.revision).toBe(2);
     await expect(service.record(companyId, { ...input, expectedReportId: first.id }, actor, who)).rejects.toThrow("changed");
-    const history = await service.list(companyId, "2026-10", actor);
+    const history = await service.list(companyId, { period: "2026-10", scope: "all" }, actor);
     expect(history.reports).toHaveLength(2); expect(history.reports.find(row => row.id === first.id)?.costsComplete).toBe(false);
     expect((await db.select().from(activityLog).where(eq(activityLog.companyId, companyId))).filter(row => row.action === "company.performance_recorded")).toHaveLength(2);
-    expect((await service.list(otherId, "2026-10", actor)).reports).toEqual([]);
+    expect((await service.list(otherId, { period: "2026-10", scope: "all" }, actor)).reports).toEqual([]);
   });
   it("rejects cross-company reports and filters private project reports before returning history", async () => {
     const service = companyPerformanceService(db);
@@ -31,7 +31,42 @@ describe("company performance ledger", () => {
     await service.record(companyId, { ...input, projectId }, actor, who);
     await db.insert(companyMemberships).values({ companyId, principalId: "viewer", principalType: "user", membershipRole: "member", status: "active" });
     const viewer = { type: "board" as const, source: "session" as const, userId: "viewer", companyIds: [companyId] };
-    expect((await service.list(companyId, "2026-10", viewer)).reports.every(row => !row.projectId)).toBe(true);
+    expect((await service.list(companyId, { period: "2026-10", scope: "all" }, viewer)).reports.every(row => !row.projectId)).toBe(true);
+    await expect(service.list(otherId, { period: "2026-10", scope: "company" }, viewer)).rejects.toThrow("Company discovery access required");
     await expect(service.record(companyId, { ...input, projectId }, viewer, { ...who, actorId: "viewer" })).rejects.toThrow();
+  });
+  it("applies project and company scopes before the revision cap", async () => {
+    const service = companyPerformanceService(db);
+    const busyProjectId = randomUUID();
+    await db.insert(projects).values({ id: busyProjectId, companyId, name: "Busy project" });
+    await db.insert(companyPerformanceReports).values(Array.from({ length: 501 }, (_, index) => ({ companyId, projectId: busyProjectId, period: "2026-10", currency: "USD", basis: "cash", values: input.values, revenueComplete: true, costsComplete: true, sourceLabel: "Unrelated history", evidenceRef: input.evidenceRef, createdBy: "local-board", revision: index + 1 })));
+    const selected = await service.list(companyId, { period: "2026-10", scope: "project", scopeId: projectId }, actor);
+    expect(selected.scopeProjectIds).toEqual([projectId]);
+    expect(selected.reports).toHaveLength(1);
+    expect(selected.truncated).toBe(false);
+    const company = await service.list(companyId, { period: "2026-10", scope: "company" }, actor);
+    expect(company.reports).toHaveLength(2);
+    expect(company.reports.every(row => row.projectId === null)).toBe(true);
+    expect(company.truncated).toBe(false);
+    const busy = await service.list(companyId, { period: "2026-10", scope: "project", scopeId: busyProjectId }, actor);
+    expect(busy.reports).toHaveLength(500);
+    expect(busy.truncated).toBe(true);
+  });
+  it("retains unreported accessible department projects and excludes private ones", async () => {
+    const service = companyPerformanceService(db), departmentId = randomUUID(), unreportedId = randomUUID();
+    await db.insert(projects).values({ id: unreportedId, companyId, name: "Unreported" });
+    await db.insert(agentosDepartments).values({ id: departmentId, companyId, name: "Reporting department" });
+    await db.insert(agentosDepartmentProjects).values([projectId, unreportedId].map(id => ({ companyId, departmentId, projectId: id })));
+    const query = { period: "2026-10", scope: "department" as const, scopeId: departmentId };
+    const full = await service.list(companyId, query, actor);
+    expect(full.scopeProjectIds.sort()).toEqual([projectId, unreportedId].sort());
+    expect(full.reports).toHaveLength(1);
+    const viewer = { type: "board" as const, source: "session" as const, userId: "viewer", companyIds: [companyId] };
+    const visible = await service.list(companyId, query, viewer);
+    expect(visible.scopeProjectIds).toEqual([unreportedId]);
+    expect(visible.reports).toEqual([]);
+    await expect(service.list(companyId, { ...query, scope: "project", scopeId: projectId }, viewer)).rejects.toThrow("Project not found");
+    await expect(service.list(otherId, query, actor)).rejects.toThrow("Department not found");
+    await expect(service.list(otherId, { ...query, scope: "project", scopeId: projectId }, actor)).rejects.toThrow("Project not found");
   });
 });

@@ -20,6 +20,11 @@ export function agentosWorkforceRoutes(db: Db) {
     const input = createAgentosAssignmentSchema.omit({ companyId: true }).parse(req.body);
     res.status(201).json(await service.assignCompany(req.actor, getActorInfo(req), companyId, input));
   });
+  router.post("/companies/:companyId/workforce/assignments/:assignmentId/retire", async (req, res) => {
+    const companyId = id(req.params.companyId);
+    assertCompanyAccess(req, companyId);
+    res.json(await service.retireCompany(req.actor, getActorInfo(req), companyId, id(req.params.assignmentId), retireAgentosAssignmentSchema.parse(req.body)));
+  });
   router.use("/agentos/portfolios", (req, _res, next) => { assertBoard(req); next(); });
   router.get("/agentos/portfolios", async (req, res) => res.json(await service.list(req.actor)));
   router.post("/agentos/portfolios", async (req, res) => res.status(201).json(await service.create(req.actor, getActorInfo(req), createAgentosPortfolioSchema.parse(req.body))));

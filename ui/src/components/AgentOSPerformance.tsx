@@ -9,37 +9,45 @@ import { queryKeys } from "@/lib/queryKeys";
 import { latestPerformance, performanceSummary, formatPerformanceMoney, currencyScale } from "@/lib/company-performance";
 import { Button } from "./ui/button";
 
-export function AgentOSPerformance({ companyId, projectId, departmentId }: { companyId: string; projectId?: string; departmentId?: string; onAsk: (message: string) => void }) {
+type PerformanceProps = { companyId: string; projectId?: string; departmentId?: string; onAsk: (message: string) => void };
+export function AgentOSPerformance(props: PerformanceProps) {
+  return <PerformanceScope key={`${props.companyId}:${props.projectId ?? ""}:${props.departmentId ?? ""}`} {...props} />;
+}
+
+function PerformanceScope({ companyId, projectId, departmentId }: PerformanceProps) {
   const [period, setPeriod] = useState(() => { const now = new Date(); return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`; });
   const [department, setDepartment] = useState(departmentId ?? "");
   const [project, setProject] = useState(projectId ?? "");
   const [editing, setEditing] = useState(false);
-  const reports = useQuery({ queryKey: ["company-performance", companyId, period], queryFn: () => api.get<CompanyPerformanceResponse>(`/companies/${companyId}/friday/performance?period=${period}`) });
+  const scope = project ? "project" : department ? "department" : "company";
+  const scopeId = project || department;
+  const reports = useQuery({ queryKey: ["company-performance", companyId, period, scope, scopeId], queryFn: ({ signal }) => api.get<CompanyPerformanceResponse>(`/companies/${companyId}/friday/performance?${new URLSearchParams({ period, scope, ...(scopeId ? { scopeId } : {}) })}`, { signal }) });
   const projects = useQuery({ queryKey: queryKeys.projects.list(companyId), queryFn: () => projectsApi.list(companyId) });
   const departments = useQuery({ queryKey: departmentKey(companyId), queryFn: () => departmentsApi.list(companyId) });
   const selectedDepartment = departments.data?.find(row => row.id === department);
-  const filteredProjects = (projects.data ?? []).filter(row => !department || selectedDepartment?.projectIds.includes(row.id));
-  const scopeIds: Array<string | null> = project ? [project] : department ? filteredProjects.map(row => row.id) : [null];
-  const latest = latestPerformance(reports.data?.reports ?? []);
-  const scoped = latest.filter(row => scopeIds.includes(row.projectId));
+  const filteredProjects = (projects.isSuccess ? projects.data : []).filter(row => !department || selectedDepartment?.projectIds.includes(row.id));
+  const readable = reports.isSuccess && projects.isSuccess && departments.isSuccess;
+  const history = readable ? reports.data.reports : [];
+  const scopeIds = readable ? reports.data.scopeProjectIds : [];
+  const scoped = latestPerformance(history);
   const selectedReport = project || !department ? scoped[0] : undefined;
-  const summary = performanceSummary(reports.isError || reports.data?.truncated ? [] : scoped, scopeIds.length);
+  const summary = performanceSummary(reports.data?.truncated ? [] : scoped, scopeIds.length);
   const number = (value: number | null) => value === null ? "Not reported" : new Intl.NumberFormat().format(value);
   const metrics = [["Revenue", formatPerformanceMoney(summary.revenue, summary.currency)], ["Costs", formatPerformanceMoney(summary.costs, summary.currency)], ["Profit / loss", formatPerformanceMoney(summary.profit, summary.currency)], ["Views", number(summary.views)], ["Engagements", number(summary.engagements)], ["Published items", number(summary.publications)]];
   return <div className="space-y-6"><div className="flex flex-wrap items-end gap-4"><label className="text-sm">Period<input type="month" className="mt-2 block rounded-lg border bg-background p-3" value={period} onChange={event => { if (event.target.value) { setPeriod(event.target.value); setEditing(false); } }} /></label>
-    {!projectId && <><label className="text-sm">Department<select className="mt-2 block rounded-lg border bg-background p-3" value={department} onChange={event => { setDepartment(event.target.value); setProject(""); setEditing(false); }}><option value="">Company totals</option>{departments.data?.map(row => <option key={row.id} value={row.id}>{row.name}</option>)}</select></label><label className="text-sm">Project<select className="mt-2 block rounded-lg border bg-background p-3" value={project} onChange={event => { setProject(event.target.value); setEditing(false); }}><option value="">{department ? "All projects in department" : "Company-wide report"}</option>{filteredProjects.map(row => <option key={row.id} value={row.id}>{row.name}</option>)}</select></label></>}
-    <Button variant="outline" disabled={!!department && !project || !reports.isSuccess || reports.data.truncated} onClick={() => setEditing(value => !value)}>{selectedReport ? "Record new revision" : "Record results"}</Button>
+    {!projectId && <><label className="text-sm">Department<select className="mt-2 block rounded-lg border bg-background p-3" value={department} onChange={event => { setDepartment(event.target.value); setProject(""); setEditing(false); }}><option value="">Company totals</option>{(departments.isSuccess ? departments.data : []).map(row => <option key={row.id} value={row.id}>{row.name}</option>)}</select></label><label className="text-sm">Project<select className="mt-2 block rounded-lg border bg-background p-3" value={project} onChange={event => { setProject(event.target.value); setEditing(false); }}><option value="">{department ? "All projects in department" : "Company-wide report"}</option>{filteredProjects.map(row => <option key={row.id} value={row.id}>{row.name}</option>)}</select></label></>}
+    <Button variant="outline" disabled={!!department && !project || !readable || reports.data?.truncated} onClick={() => setEditing(value => !value)}>{selectedReport ? "Record new revision" : "Record results"}</Button>
     </div>
     {[reports.error, projects.error, departments.error].filter(Boolean).map((error, index) => <p key={index} role="alert" className="text-destructive">{error!.message}</p>)}
     {reports.isPending && <p role="status">Reading performance reports…</p>}
     <p className="text-sm text-muted-foreground">{department && !project ? "Totals from this department’s accessible projects. Every project must report before totals are shown." : project ? "Results attributed to this project." : "Company-wide figures, recorded separately from project attribution to avoid double counting."} Reports retain their original source and every revision.</p>
     <div className="agentos-performance-metrics">{metrics.map(([label, value]) => <section key={label}><span>{label}</span><strong>{value}</strong></section>)}</div>
     {summary.profit === null && <p className="text-sm text-muted-foreground">Profit needs complete revenue and cost coverage for this month, using the same currency and accounting basis. Unreported values are not zero.</p>}
-    {reports.data?.truncated && <p role="alert" className="text-destructive">This month has more than 500 report revisions. Totals are withheld until the full history is available.</p>}
-    {editing && <PerformanceReportForm key={`${companyId}:${period}:${project}:${selectedReport?.id}`} companyId={companyId} period={period} projectId={project || null} previous={selectedReport} onClose={() => setEditing(false)} />}
+    {readable && reports.data.truncated && <p role="alert" className="text-destructive">This scope has more than 500 report revisions this month. Totals are withheld until the full history is available.</p>}
+    {editing && readable && !reports.data.truncated && <PerformanceReportForm key={`${companyId}:${period}:${project}:${selectedReport?.id}`} companyId={companyId} period={period} projectId={project || null} previous={selectedReport} onClose={() => setEditing(false)} />}
     <div className="overflow-x-auto"><table className="agentos-data-table"><caption className="text-left text-sm font-semibold">Sources and reporting coverage</caption><thead><tr><th>Scope</th><th>Source</th><th>Coverage</th><th>Recorded</th><th>Evidence</th></tr></thead><tbody>{scoped.map(row => <tr key={row.id}><td>{row.projectId ? projects.data?.find(project => project.id === row.projectId)?.name ?? "Project" : "Company"}</td><td>{row.sourceLabel}<small className="block">Revision {row.revision} · {row.currency ?? "No currency"} · {row.basis}</small></td><td>{row.revenueComplete ? "Revenue complete" : "Revenue partial / unreported"}<br />{row.costsComplete ? "Costs complete" : "Costs partial / unreported"}</td><td>{new Date(row.createdAt).toLocaleString()}</td><td className="max-w-xs break-words">{row.evidenceRef}</td></tr>)}</tbody></table></div>
-    {!scoped.length && reports.isSuccess && <p className="agentos-empty">No results reported in this scope yet. Record a source-backed report, or ask Friday to collect one from the company’s connected tools.</p>}
-    <details><summary className="cursor-pointer text-sm">Report history</summary><div className="overflow-x-auto"><table className="agentos-data-table"><thead><tr><th>Revision</th><th>Source</th><th>Revenue</th><th>Costs</th><th>Recorded</th></tr></thead><tbody>{reports.data?.reports.filter(row => scopeIds.includes(row.projectId)).map(row => <tr key={row.id}><td>{row.revision}</td><td>{row.sourceLabel}</td><td>{formatPerformanceMoney(row.values.revenueMinor, row.currency)}</td><td>{formatPerformanceMoney(row.values.costMinor, row.currency)}</td><td>{new Date(row.createdAt).toLocaleString()}</td></tr>)}</tbody></table></div></details>
+    {!scoped.length && readable && <p className="agentos-empty">No results reported in this scope yet. Record a source-backed report, or ask Friday to collect one from the company’s connected tools.</p>}
+    <details><summary className="cursor-pointer text-sm">Report history</summary><div className="overflow-x-auto"><table className="agentos-data-table"><thead><tr><th>Revision</th><th>Source</th><th>Revenue</th><th>Costs</th><th>Recorded</th></tr></thead><tbody>{history.map(row => <tr key={row.id}><td>{row.revision}</td><td>{row.sourceLabel}</td><td>{formatPerformanceMoney(row.values.revenueMinor, row.currency)}</td><td>{formatPerformanceMoney(row.values.costMinor, row.currency)}</td><td>{new Date(row.createdAt).toLocaleString()}</td></tr>)}</tbody></table></div></details>
   </div>;
 }
 
