@@ -10,6 +10,11 @@ export function googleSignInConfiguration(env: NodeJS.ProcessEnv = process.env) 
   return clientId && clientSecret ? { clientId, clientSecret } : null;
 }
 
+/** Deployment opt-out; existing installations retain their password sign-in. */
+export function passwordAuthenticationEnabled(env: NodeJS.ProcessEnv = process.env) {
+  return env.PAPERCLIP_AUTH_PASSWORD_ENABLED?.trim().toLowerCase() !== "false";
+}
+
 export async function initialRegistrationStatus(db: Db, email: string, emailVerified: boolean) {
   if (!emailVerified) return "pending" as const;
   const [invitation] = await db.select({ id: agentosUserInvitations.id }).from(agentosUserInvitations)

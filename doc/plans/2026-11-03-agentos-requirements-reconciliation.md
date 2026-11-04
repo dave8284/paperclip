@@ -46,6 +46,18 @@ The next [search and namespace checkpoint](2026-11-03-agentos-action-plan.md#sea
 11. **Discuss with Friday appears only in Decisions.** It supplies the selected decision's context automatically and opens a right-side panel with a background, with Friday responding. Ordinary home chat remains borderless and explicitly toggled. Sources: U139–U140.
 12. Google credentials have been supplied. Higgsfield sign-in was explicitly deferred. Sources: U129, U143–U146.
 
+### Additional requests — 4 November 2026
+
+These extend the recovered 146-message source audit; they are direct requests in
+the current conversation, not invented additions to its historical numbering.
+
+| ID | Requested outcome | Current disposition |
+| --- | --- | --- |
+| X01 | Fix Google `redirect_uri_mismatch`; use Google sign-in only, without email/password login. | App-side policy and UI implemented with focused checks. Local environment is prepared with password access disabled after restart. The actual callback is `http://localhost:3100/api/auth/callback/google`; saving it in the correct Google OAuth client's authorized redirects and completing live sign-in remain pending. |
+| X02 | Add several actual application screenshots and explain key features, including the Whisper voice flow, on the landing page. | Feature copy/layout implemented for voice, companies/work, workforce and decisions. Current app screenshots remain outstanding: inspected saved images show older upstream screens, and no usable local-browser capture tool is exposed in this session. Do not substitute fabricated or outdated screenshots. |
+| X03 | Replace “A little clarity, a lot in motion” with a meaningful tagline. | “Turn ideas into coordinated action.” now replaces the old wording across landing, footer, sign-in and Friday workspace. |
+| X04 | Make the landing sphere pulse and vary its rotation as the pointer moves. | Landing-only pointer position and movement response implemented with a bounded settling animation. Reduced-motion, touch, hidden-page/offscreen and idle behavior have focused checks. Browser visual acceptance remains separate. |
+
 ## Foundation and delivery method
 
 | ID | Required outcome | Sources | Current disposition |

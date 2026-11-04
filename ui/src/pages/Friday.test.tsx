@@ -68,7 +68,7 @@ describe("AgentOS approved Friday experience", () => {
 
   it("opens real company and project cards in the canvas with scoped decisions and routines", async () => {
     await render();
-    expect(host.textContent).toContain("A little clarity. A lot in motion.");
+    expect(host.textContent).toContain("Turn ideas into coordinated action.");
     expect(host.textContent).not.toContain("Paperclip");
     expect(navigation().textContent).toContain("Agent Map");
     await click("Companies", navigation());

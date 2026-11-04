@@ -5,6 +5,12 @@
   --motion-ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
   --motion-duration-instant: 80ms;
   --motion-duration-fast: 160ms;
+  --friday-pointer-settle-ms: 1200;
+  --friday-pointer-yaw: 1.8;
+  --friday-pointer-pitch: 0.9;
+  --friday-pointer-roll: 1.2;
+  --friday-pointer-pulse: 0.18;
+  --friday-pointer-twist: 1.4;
   --onboarding-motion-step: 280ms;
   --onboarding-motion-capsule: 1000ms;
   --onboarding-motion-preview: 450ms;
@@ -26,4 +32,8 @@
   --onboarding-motion-capsule-bounce: 0.4;
   --onboarding-motion-hero-stiffness: 150;
   --onboarding-motion-hero-damping: 16;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root { --friday-pointer-settle-ms: 0; }
 }

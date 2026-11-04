@@ -31,7 +31,7 @@ const meta = {
       "status": "current",
       "implementation": "production",
       "boundary": "fixtures",
-      "notes": "AuthPage email form, session read loading/error, submission pending/failure and navigation to Companies after a fixture session. Real authentication, bootstrap claim and sign-out remain separate."
+      "notes": "AuthPage Google-only and password-enabled entry, auth-options/session loading/error, submission pending/failure and navigation to Companies after a fixture session. Google redirects are simulated without navigation. Real authentication, bootstrap claim and sign-out remain separate."
     },
   },
   beforeEach: ({ parameters }) => {
@@ -49,6 +49,21 @@ const meta = {
         },
         { path: "/api/auth/get-session", read: () => session },
         {
+          path: "/api/registration/options",
+          state: parameters.authOptionsState as FixtureState | undefined,
+          read: () => ({
+            googleEnabled: parameters.googleOnly === true,
+            passwordSignInEnabled: parameters.googleOnly !== true,
+            passwordSignUpEnabled: parameters.googleOnly !== true,
+            approvalRequired: true,
+          }),
+        },
+        {
+          path: "/api/auth/sign-in/social",
+          method: "POST",
+          read: () => Response.json({ error: "Google sign-in is simulated in this preview." }, { status: 503 }),
+        },
+        {
           path: "/api/auth/sign-in/email",
           method: "POST",
           read: () => {
@@ -64,6 +79,26 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 export const SignedOut: Story = {};
+export const GoogleOnly: Story = {
+  parameters: { googleOnly: true },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await canvas.findByRole("button", { name: "Continue with Google" });
+    await expect(canvas.queryByLabelText("Email")).not.toBeInTheDocument();
+    await expect(canvas.queryByLabelText("Password")).not.toBeInTheDocument();
+    await expect(canvas.queryByRole("button", { name: "Create one" })).not.toBeInTheDocument();
+  },
+};
+export const GoogleSignInFailed: Story = {
+  parameters: { googleOnly: true },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(await canvas.findByRole("button", { name: "Continue with Google" }));
+    await expect(await canvas.findByRole("alert")).toHaveTextContent("Google sign-in is simulated in this preview.");
+  },
+};
+export const OptionsLoading: Story = { parameters: { authOptionsState: "loading" } };
+export const OptionsFailed: Story = { parameters: { authOptionsState: "failure" } };
 export const Loading: Story = { parameters: { fixtureState: "loading" } };
 export const SessionFailed: Story = { parameters: { fixtureState: "failure" } };
 async function submit(canvasElement: HTMLElement) {

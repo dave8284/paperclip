@@ -11,7 +11,7 @@ import {
   authVerifications,
 } from "@paperclipai/db";
 import type { Config } from "../config.js";
-import { googleSignInConfiguration, initialRegistrationStatus } from "./agentos-registration.js";
+import { googleSignInConfiguration, initialRegistrationStatus, passwordAuthenticationEnabled } from "./agentos-registration.js";
 import { resolvePaperclipInstanceId } from "../home-paths.js";
 import {
   workspaceLoginHandoffPlugin,
@@ -257,6 +257,7 @@ export function createBetterAuthInstance(db: Db, config: Config, trustedOrigins:
     authPublicBaseUrl: config.authPublicBaseUrl,
     publicUrl,
   });
+  const passwordEnabled = passwordAuthenticationEnabled();
 
   const authConfig = {
     baseURL: baseUrl,
@@ -285,10 +286,15 @@ export function createBetterAuthInstance(db: Db, config: Config, trustedOrigins:
       },
     }),
     emailAndPassword: {
-      enabled: true,
+      enabled: passwordEnabled,
       requireEmailVerification: false,
       disableSignUp: config.authDisableSignUp,
     },
+    // Better Auth gates email sign-in/sign-up itself. Its password maintenance
+    // endpoints have separate guards, so disable them for Google-only installs.
+    disabledPaths: passwordEnabled ? [] : [
+      "/request-password-reset", "/reset-password", "/change-password", "/verify-password",
+    ],
     rateLimit: buildBetterAuthRateLimitOptions({
       deploymentMode: config.deploymentMode,
       deploymentExposure: config.deploymentExposure,

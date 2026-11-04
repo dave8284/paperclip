@@ -26,6 +26,28 @@ Agent access: [companion](../agent-access-map/access.md).
 
 Open `/auth`; first-owner bootstrap uses `/board-claim/:token` when configured.
 
+The AgentOS public landing introduces Friday, local Whisper voice, company work,
+digital employees and decisions with the tagline “Turn ideas into coordinated
+action.” Its hero orb responds to pointer position and movement across the page
+with tilt, spin and a brief pulse, then settles without an idle frame loop.
+Reduced-motion, coarse/touch input, hidden-page and offscreen guards keep this
+decoration separate from the workspace orb's observed voice/run states. The
+landing does not open the microphone or start agent work. Sign-in, sign-up and
+approved/pending redirects retain the existing registration flow.
+`AgentOSLanding.test.tsx` and `FridayOrb.test.tsx` cover DOM routing and motion
+lifecycle; `Friday.test.tsx` and `FridayWorkspace.test.tsx` retain workspace
+coverage. Current application screenshots and browser visual acceptance remain
+outstanding: available saved captures show older Paperclip screens, browser tools
+are unavailable, and normal Chromium startup was sandbox-blocked. No old or
+fabricated screenshots are presented as the current application. Physical voice
+input/output remains a separate qualification.
+
+Google-only instances show **Continue with Google** without password fields or
+email registration controls. Loading or failed method discovery does not show
+cached password options. New Google accounts still need native approval unless
+an existing explicit invitation/owner ceremony supplies it. The deployment
+setting and exact OAuth callback are documented in [development setup](../../doc/DEVELOPING.md).
+
 When converting a local Agent OS instance to authenticated ownership, the native
 claim ceremony transfers local-board-owned portfolios, explicit company defaults,
 visible unfinished task responsibility and current routine responsibility to the
@@ -59,6 +81,13 @@ Preconditions: follow the [baseline](./README.md#before-driving-a-journey). For 
 ### `login`
 
 Automated: [auth UI](../../ui/src/pages/Auth.test.tsx) and [session routes](../../server/src/__tests__/auth-session-route.test.ts) cover their respective layers.
+
+The 2026-11-04 Google-only change passed 36 UI/API cases and 32 auth cases,
+including [actual handler policy checks](../../server/src/__tests__/password-auth-policy.test.ts)
+without a listener. Verify the real Google consent/redirect separately, including
+owner-claim and remembered-invitation return paths, account approval, sign-out and
+denial of direct password endpoints. Local source tests do not establish that
+Google's OAuth client registration or a live session works.
 
 The [claim regression cases](../../server/src/__tests__/board-claim.test.ts) cover
 operational ownership, null-default membership fallback, other-owner/history/key

@@ -23,6 +23,8 @@ API: `present` — representative operation IDs:
 
 - `GET /api/auth/get-session`.
 - `POST /api/bootstrap/claim`.
+- `GET /api/registration/options`.
+- `POST /api/auth/sign-in/social` (configured Google provider).
 
 Agent access: `restricted` — Agent authenticates with its own issued bearer; board login
 uses human/client auth.
@@ -39,6 +41,27 @@ own policy and access review.
 
 Gaps: An agent identity is not a board login or board claim; explicit delegation is a
 product-policy decision.
+
+The AgentOS landing copy and opt-in decorative pointer motion add no endpoint,
+agent grant, microphone access or execution path. Account links and registration
+redirects remain native. The workspace orb still uses its existing voice/run
+states. DOM and animation-lifecycle tests are local presentation evidence;
+current app screenshots, real browser rendering and physical voice input/output
+remain unqualified.
+
+Google-only deployment policy (2026-11-04):
+`PAPERCLIP_AUTH_PASSWORD_ENABLED=false` disables password login/registration and
+password reset/change/verification paths in native Better Auth. Public options
+report separate password sign-in/sign-up flags; the UI waits for fresh options
+before displaying methods. Google sign-in retains native approval, signup policy,
+session handling and the owner-claim ceremony. It adds no agent authority and
+does not delete existing accounts or credentials. See
+[configuration](../../server/src/auth/better-auth.ts),
+[public options](../../server/src/routes/agentos-administration.ts), and
+[handler tests](../../server/src/__tests__/password-auth-policy.test.ts).
+Thirty-two auth configuration/handler checks and 36 UI/API checks pass locally;
+Google's real redirect/consent/session journey remains unverified. The local
+Google OAuth client must register the exact callback before that journey works.
 
 Bootstrap ownership correction (2026-11-04): the native human claim transaction
 transfers only explicit `local-board` operational responsibility (company defaults,

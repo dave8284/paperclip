@@ -14,9 +14,13 @@ import { ApiError } from "../api/client";
 const getSessionMock = vi.hoisted(() => vi.fn());
 const signInEmailMock = vi.hoisted(() => vi.fn());
 const signUpEmailMock = vi.hoisted(() => vi.fn());
+const signInGoogleMock = vi.hoisted(() => vi.fn());
+const authOptionsMock = vi.hoisted(() => vi.fn());
+const navigateTopLevelMock = vi.hoisted(() => vi.fn());
 const healthMock = vi.hoisted(() => vi.fn());
 const beginCloudSignInMock = vi.hoisted(() => vi.fn());
-vi.mock("@/api/administration", () => ({ administrationApi: { authOptions: async () => ({ googleEnabled: false, passwordSignUpEnabled: true, approvalRequired: true }) } }));
+vi.mock("@/api/administration", () => ({ administrationApi: { authOptions: () => authOptionsMock() } }));
+vi.mock("@/lib/browserNavigation", () => ({ navigateTopLevel: (url: string) => navigateTopLevelMock(url) }));
 vi.mock("@/components/FridayOrb", () => ({ FridayOrb: () => <div>Friday</div> }));
 
 vi.mock("../api/health", () => ({ healthApi: { get: () => healthMock() } }));
@@ -30,6 +34,7 @@ vi.mock("../api/auth", () => ({
     getSession: () => getSessionMock(),
     signInEmail: (input: unknown) => signInEmailMock(input),
     signUpEmail: (input: unknown) => signUpEmailMock(input),
+    signInGoogle: (input: unknown) => signInGoogleMock(input),
   },
 }));
 
@@ -103,6 +108,9 @@ describe("AuthPage", () => {
     beginCloudSignInMock.mockReturnValue(true);
     signInEmailMock.mockResolvedValue(undefined);
     signUpEmailMock.mockResolvedValue(undefined);
+    signInGoogleMock.mockReset().mockResolvedValue("https://accounts.example.test/oauth-fixture");
+    authOptionsMock.mockReset().mockResolvedValue({ googleEnabled: false, passwordSignInEnabled: true, passwordSignUpEnabled: true, approvalRequired: true });
+    window.localStorage.clear();
   });
 
   afterEach(() => {
@@ -111,8 +119,9 @@ describe("AuthPage", () => {
     vi.clearAllMocks();
   });
 
-  async function mount(path = "/auth") {
+  async function mount(path = "/auth", cachedOptions?: Record<string, unknown>) {
     const { root, queryClient } = renderAuthPage(container);
+    if (cachedOptions) queryClient.setQueryData(["public-auth-options"], cachedOptions);
     await act(async () => {
       root.render(
         <MemoryRouter initialEntries={[path]}>
@@ -172,6 +181,110 @@ describe("AuthPage", () => {
     await vi.waitFor(() => expect(container.textContent).toContain("Cloud sign-in is unavailable"));
     expect(container.querySelector("form")).toBeNull();
     expect(beginCloudSignInMock).not.toHaveBeenCalled();
+    await act(() => root.unmount());
+  });
+
+  it.each(["/auth", "/auth?mode=sign_up"])("offers Google only without password registration at %s", async path => {
+    authOptionsMock.mockResolvedValue({ googleEnabled: true, passwordSignInEnabled: false, passwordSignUpEnabled: false, approvalRequired: true });
+    const { root } = await mount(path);
+    expect(container.textContent).toContain("Continue with Google");
+    expect(container.textContent).toContain("New accounts require administrator approval.");
+    expect(container.textContent).toContain("Turn ideas into coordinated action.");
+    expect(container.textContent).not.toContain("Registration is closed");
+    expect(container.textContent).not.toContain("Create one");
+    expect(container.querySelector("form")).toBeNull();
+    expect(container.querySelector("input")).toBeNull();
+    expect(signInEmailMock).not.toHaveBeenCalled();
+    expect(signUpEmailMock).not.toHaveBeenCalled();
+    await act(() => root.unmount());
+  });
+
+  it("never flashes cached password options while fresh options are loading", async () => {
+    authOptionsMock.mockReturnValue(new Promise(() => {}));
+    const { root } = await mount("/auth", { googleEnabled: false, passwordSignInEnabled: true, passwordSignUpEnabled: true, approvalRequired: true });
+    expect(container.querySelector("form")).toBeNull();
+    expect(container.querySelector("input")).toBeNull();
+    expect(container.querySelector('[role="status"]')?.textContent).toContain("Opening AgentOS");
+    await act(() => root.unmount());
+  });
+
+  it("hides stale methods on an options error and lets the user retry", async () => {
+    authOptionsMock.mockRejectedValueOnce(new Error("Options unavailable"));
+    const { root } = await mount("/auth", { googleEnabled: false, passwordSignInEnabled: true, passwordSignUpEnabled: true, approvalRequired: true });
+    await vi.waitFor(() => expect(container.textContent).toContain("Unable to load sign-in options"));
+    expect(container.querySelector("form")).toBeNull();
+    const retry = Array.from(container.querySelectorAll("button")).find(button => button.textContent === "Try again")!;
+    await act(() => retry.click());
+    await vi.waitFor(() => expect(container.querySelector('input[name="password"]')).not.toBeNull());
+    expect(authOptionsMock).toHaveBeenCalledTimes(2);
+    await act(() => root.unmount());
+  });
+
+  it("keeps Google errors visible without a password form", async () => {
+    authOptionsMock.mockResolvedValue({ googleEnabled: true, passwordSignInEnabled: false, passwordSignUpEnabled: false, approvalRequired: true });
+    signInGoogleMock.mockRejectedValue(new Error("Google sign-in could not start. Try again."));
+    const { root } = await mount();
+    const google = Array.from(container.querySelectorAll("button")).find(button => button.textContent === "Continue with Google")!;
+    await act(() => google.click());
+    await vi.waitFor(() => expect(container.querySelector('[role="alert"]')?.textContent).toContain("Google sign-in could not start"));
+    expect(container.querySelector("form")).toBeNull();
+    expect(navigateTopLevelMock).not.toHaveBeenCalled();
+    expect(google.disabled).toBe(false);
+    await act(() => root.unmount());
+  });
+
+  it.each([
+    ["/board-claim/fixture-owner?source=sign-in", "/board-claim/fixture-owner?source=sign-in"],
+    ["/invite/fixture-invite", "/invite/fixture-invite"],
+    ["https://untrusted.example.test/redirect", "/"],
+  ])("retains the safe Google return path for %s", async (requested, expected) => {
+    authOptionsMock.mockResolvedValue({ googleEnabled: true, passwordSignInEnabled: false, passwordSignUpEnabled: false, approvalRequired: true });
+    const { root } = await mount(`/auth?next=${encodeURIComponent(requested)}`);
+    const google = Array.from(container.querySelectorAll("button")).find(button => button.textContent === "Continue with Google")!;
+    await act(() => google.click());
+    await vi.waitFor(() => {
+      expect(signInGoogleMock).toHaveBeenCalledWith(expected);
+      expect(navigateTopLevelMock).toHaveBeenCalledWith("https://accounts.example.test/oauth-fixture");
+    });
+    await act(() => root.unmount());
+  });
+
+  it("retains the remembered invite when Google sign-in has no explicit return path", async () => {
+    window.localStorage.setItem("paperclip:pending-invite-token", "fixture-remembered-invite");
+    authOptionsMock.mockResolvedValue({ googleEnabled: true, passwordSignInEnabled: false, passwordSignUpEnabled: false, approvalRequired: true });
+    const { root } = await mount();
+    const google = Array.from(container.querySelectorAll("button")).find(button => button.textContent === "Continue with Google")!;
+    await act(() => google.click());
+    await vi.waitFor(() => expect(signInGoogleMock).toHaveBeenCalledWith("/invite/fixture-remembered-invite"));
+    await act(() => root.unmount());
+  });
+
+  it("retains local-trusted entry when auth options are unavailable", async () => {
+    healthMock.mockResolvedValue({ status: "ok", deploymentMode: "local_trusted" });
+    authOptionsMock.mockRejectedValue(new Error("No authenticated options"));
+    const { root } = await mount();
+    expect(container.textContent).toContain("Your local workspace is ready.");
+    expect(container.querySelector('a[href="/workspace"]')).not.toBeNull();
+    expect(container.querySelector("form")).toBeNull();
+    await act(() => root.unmount());
+  });
+
+  it("does not offer a password fallback when no sign-in method is available", async () => {
+    authOptionsMock.mockResolvedValue({ googleEnabled: false, passwordSignInEnabled: false, passwordSignUpEnabled: false, approvalRequired: true });
+    const { root } = await mount();
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain("Sign-in is unavailable");
+    expect(container.querySelector("form")).toBeNull();
+    expect(container.querySelector("input")).toBeNull();
+    await act(() => root.unmount());
+  });
+
+  it("keeps Google and existing password sign-in when email registration is closed", async () => {
+    authOptionsMock.mockResolvedValue({ googleEnabled: true, passwordSignInEnabled: true, passwordSignUpEnabled: false, approvalRequired: true });
+    const { root } = await mount("/auth?mode=sign_up");
+    expect(container.textContent).toContain("Continue with Google");
+    expect(container.querySelector("form")?.getAttribute("action")).toBe("/api/auth/sign-in/email");
+    expect(container.querySelector('input[name="name"]')).toBeNull();
+    expect(container.textContent).not.toContain("Create one");
     await act(() => root.unmount());
   });
 
@@ -280,6 +393,7 @@ describe("AuthPage", () => {
     const { root, queryClient } = await mount();
     queryClient.setQueryData(["registration", "previous-user"], { status: "approved" });
     queryClient.setQueryData(["administration", "previous-user", "overview"], { private: "previous account" });
+    queryClient.setQueryData(queryKeys.companies.all, [{ id: "private-previous-company" }]);
     queryClient.setQueryData(queryKeys.health, {
       status: "ok",
       deploymentMode: "authenticated",
@@ -313,6 +427,7 @@ describe("AuthPage", () => {
     expect(healthMock).toHaveBeenCalledTimes(2);
     expect(queryClient.getQueryData(["registration", "previous-user"])).toBeUndefined();
     expect(queryClient.getQueryData(["administration", "previous-user", "overview"])).toBeUndefined();
+    expect(queryClient.getQueryData(queryKeys.companies.all)).toBeUndefined();
 
     await act(async () => {
       root.unmount();

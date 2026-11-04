@@ -3,7 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import { instanceUserRoles, type Db } from "@paperclipai/db";
 import { adminInvitationCreateSchema, adminUserDeleteSchema, adminUserUpdateSchema } from "@paperclipai/shared";
-import { googleSignInConfiguration, readUserApproval } from "../auth/agentos-registration.js";
+import { googleSignInConfiguration, passwordAuthenticationEnabled, readUserApproval } from "../auth/agentos-registration.js";
 import { administrationService, assertAdministration, type AdminPrincipal } from "../services/agentos-administration.js";
 import { assertBoard } from "./authz.js";
 import type { Request } from "express";
@@ -16,14 +16,16 @@ import { modelIntelligenceAnalytics } from "../services/agentos-model-analytics.
 export function agentosAdministrationRoutes(db: Db, options: { deploymentMode: "local_trusted" | "authenticated"; authDisableSignUp?: boolean }) {
   const router = Router();
   const service = administrationService(db);
+  const passwordSignInEnabled = options.deploymentMode === "authenticated" && passwordAuthenticationEnabled();
   router.use("/admin", (_req, res, next) => { res.setHeader("Cache-Control", "no-store"); next(); });
   const principal = (req: Request): AdminPrincipal => {
     assertBoard(req);
     return { userId: req.actor.userId ?? "", local: req.actor.source === "local_implicit" };
   };
-  router.get("/registration/options", (_req, res) => res.json({
+  router.get("/registration/options", (_req, res) => res.setHeader("Cache-Control", "no-store").json({
     googleEnabled: options.deploymentMode === "authenticated" && Boolean(googleSignInConfiguration()),
-    passwordSignUpEnabled: options.deploymentMode === "authenticated" && !options.authDisableSignUp,
+    passwordSignInEnabled,
+    passwordSignUpEnabled: passwordSignInEnabled && !options.authDisableSignUp,
     approvalRequired: options.deploymentMode === "authenticated",
   }));
   router.get("/registration", async (req, res) => {

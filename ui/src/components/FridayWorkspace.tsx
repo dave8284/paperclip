@@ -144,7 +144,7 @@ export function FridayWorkspace({ companyId, contextCompany, data, panel, setPan
     <FridayPresence data={data} connected={connected} docked={!!panel} assistantName={assistantName} onConversation={onConversation} onType={onType} />
     {askError && <p role="alert" className="text-sm text-destructive">{askError}</p>}
     {(viewError || requestedView.error || scopeAgents.error || project.error) && <p role="alert" className="text-sm text-destructive">{viewError || requestedView.error?.message || scopeAgents.error?.message || project.error?.message}</p>}
-    {!panel && <div className="agentos-home-content">{!introduced && !compact && <section className="agentos-home-intro"><h1>A little clarity. A lot in motion.</h1><p>Your companies, projects and people.<br />One conversation to move things forward.</p></section>}
+    {!panel && <div className="agentos-home-content">{!introduced && !compact && <section className="agentos-home-intro"><h1>Turn ideas into coordinated action.</h1><p>Your companies, projects and people.<br />One conversation to move things forward.</p></section>}
       <FridaySuggestions companies={visibleCompanies} navigate={go} onNew={() => { data.onTranscript("I want to create a new project: "); onType?.(); }} />
       <AgentOSDecisionPeek companies={visibleCompanies} navigate={go} /><footer className="agentos-home-footer"><span>{companies.length} {companies.length === 1 ? "company" : "companies"} in your portfolio</span><button type="button" onClick={() => { data.onTranscript("I want to create a new project: "); onType?.(); }}>Start something new <ArrowRight /></button></footer>
     </div>}

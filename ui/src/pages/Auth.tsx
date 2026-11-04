@@ -30,7 +30,10 @@ export function AuthPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const errorId = "auth-error";
-  const options = useQuery({ queryKey: ["public-auth-options"], queryFn: administrationApi.authOptions });
+  const options = useQuery({ queryKey: ["public-auth-options"], queryFn: administrationApi.authOptions, retry: false, refetchOnMount: "always" });
+  const passwordEnabled = options.data?.passwordSignInEnabled === true && !options.error;
+  const signUpEnabled = passwordEnabled && options.data?.passwordSignUpEnabled === true;
+  const formMode: AuthMode = mode === "sign_up" && signUpEnabled ? "sign_up" : "sign_in";
   const google = useMutation({ mutationFn: () => authApi.signInGoogle(nextPath), onSuccess: navigateTopLevel,
     onError: (failure: Error) => setError(failure.message) });
 
@@ -58,7 +61,8 @@ export function AuthPage() {
 
   const mutation = useMutation({
     mutationFn: async () => {
-      if (mode === "sign_in") {
+      if (!passwordEnabled || options.isFetching) throw new Error("Password sign-in is unavailable.");
+      if (formMode === "sign_in") {
         await authApi.signInEmail({ email: email.trim(), password });
         return;
       }
@@ -88,9 +92,10 @@ export function AuthPage() {
   });
 
   const canSubmit =
+    passwordEnabled &&
     email.trim().length > 0 &&
     password.trim().length > 0 &&
-    (mode === "sign_in" || (name.trim().length > 0 && password.trim().length >= 8));
+    (formMode === "sign_in" || (name.trim().length > 0 && password.trim().length >= 8));
 
   if (healthQuery.isLoading || isSessionLoading || session) {
     return (
@@ -118,8 +123,19 @@ export function AuthPage() {
     </main>;
   }
 
-  if (mode === "sign_up" && options.data?.passwordSignUpEnabled === false) {
-    return <main className="mx-auto flex min-h-dvh max-w-lg flex-col justify-center gap-4 px-6"><h1 className="text-2xl font-medium">Registration is closed.</h1><p className="text-sm text-muted-foreground">This instance is accepting existing accounts only.</p><Button variant="outline" onClick={() => setMode("sign_in")}>Sign in</Button></main>;
+  // Revalidate cached options before exposing an authentication method. Cloud
+  // and trusted-local deployments above retain their own entry flows.
+  if (options.isPending || options.isFetching) {
+    return <div className="fixed inset-0 flex items-center justify-center">
+      <AgentOSLoading className="min-h-0" />
+    </div>;
+  }
+  if (options.error || !options.data) {
+    return <main className="mx-auto flex min-h-dvh max-w-lg flex-col justify-center gap-4 px-6">
+      <AgentOSBrand to="/welcome" />
+      <p role="alert" className="text-sm text-destructive">Unable to load sign-in options. Try again.</p>
+      <div><Button variant="outline" onClick={() => void options.refetch()}>Try again</Button></div>
+    </main>;
   }
 
   return (
@@ -132,19 +148,30 @@ export function AuthPage() {
           </div>
 
           <h1 className="text-xl font-semibold">
-            {mode === "sign_in" ? "Sign in to AgentOS" : "Create your AgentOS account"}
+            {formMode === "sign_in" ? "Sign in to AgentOS" : "Create your AgentOS account"}
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            {mode === "sign_in"
-              ? "Welcome back. Sign in to your workspace."
-              : "Register now. An administrator will review your account before granting workspace access."}
+            {!passwordEnabled && options.data.googleEnabled
+              ? "Continue with Google to access your workspace."
+              : formMode === "sign_in"
+                ? "Welcome back. Sign in to your workspace."
+                : "Register now. An administrator will review your account before granting workspace access."}
           </p>
-          {options.data?.googleEnabled && <Button className="mt-6 w-full" variant="outline" disabled={google.isPending} onClick={() => google.mutate()}>{google.isPending ? "Connecting…" : "Continue with Google"}</Button>}
+          {!passwordEnabled && options.data.googleEnabled && options.data.approvalRequired && (
+            <p className="mt-2 text-sm text-muted-foreground">New accounts require administrator approval.</p>
+          )}
+          {options.data.googleEnabled && <Button className="mt-6 w-full" variant="outline" disabled={google.isPending} onClick={() => { setError(null); google.mutate(); }}>{google.isPending ? "Connecting…" : "Continue with Google"}</Button>}
+          {!passwordEnabled && !options.data.googleEnabled && (
+            <p role="alert" className="mt-6 text-sm text-destructive">Sign-in is unavailable. Contact the instance administrator.</p>
+          )}
+          {error && (
+            <p id={errorId} role="alert" className="mt-4 text-xs text-destructive">{error}</p>
+          )}
 
-          <form
+          {passwordEnabled && <form
             className="mt-6 space-y-4"
             method="post"
-            action={mode === "sign_up" ? "/api/auth/sign-up/email" : "/api/auth/sign-in/email"}
+            action={formMode === "sign_up" ? "/api/auth/sign-up/email" : "/api/auth/sign-in/email"}
             onSubmit={(event) => {
               event.preventDefault();
               if (mutation.isPending) return;
@@ -155,7 +182,7 @@ export function AuthPage() {
               mutation.mutate();
             }}
           >
-            {mode === "sign_up" && (
+            {formMode === "sign_up" && (
               <div>
                 <label htmlFor="name" className="text-xs text-muted-foreground mb-1 block">Name</label>
                 <input
@@ -187,7 +214,7 @@ export function AuthPage() {
                 aria-required="true"
                 aria-invalid={error ? true : undefined}
                 aria-describedby={error ? errorId : undefined}
-                autoFocus={mode === "sign_in"}
+                autoFocus={formMode === "sign_in"}
               />
             </div>
             <div>
@@ -199,18 +226,13 @@ export function AuthPage() {
                 type="password"
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
-                autoComplete={mode === "sign_in" ? "current-password" : "new-password"}
+                autoComplete={formMode === "sign_in" ? "current-password" : "new-password"}
                 required
                 aria-required="true"
                 aria-invalid={error ? true : undefined}
                 aria-describedby={error ? errorId : undefined}
               />
             </div>
-            {error && (
-              <p id={errorId} role="alert" className="text-xs text-destructive">
-                {error}
-              </p>
-            )}
             <Button
               type="submit"
               disabled={mutation.isPending}
@@ -219,31 +241,31 @@ export function AuthPage() {
             >
               {mutation.isPending
                 ? "Working…"
-                : mode === "sign_in"
+                : formMode === "sign_in"
                   ? "Sign In"
                   : "Create Account"}
             </Button>
-          </form>
+          </form>}
 
-          <div className="mt-5 text-sm text-muted-foreground">
-            {mode === "sign_in" ? "Need an account?" : "Already have an account?"}{" "}
+          {signUpEnabled && <div className="mt-5 text-sm text-muted-foreground">
+            {formMode === "sign_in" ? "Need an account?" : "Already have an account?"}{" "}
             <button
               type="button"
               className="font-medium text-foreground underline underline-offset-2"
               onClick={() => {
                 setError(null);
-                setMode(mode === "sign_in" ? "sign_up" : "sign_in");
+                setMode(formMode === "sign_in" ? "sign_up" : "sign_in");
               }}
             >
-              {mode === "sign_in" ? "Create one" : "Sign in"}
+              {formMode === "sign_in" ? "Create one" : "Sign in"}
             </button>
-          </div>
+          </div>}
         </div>
       </div>
 
       <div className="hidden w-1/2 flex-col items-center justify-center gap-6 overflow-hidden border-l border-border md:flex">
         <FridayOrb state="idle" label="Friday" />
-        <p className="text-lg text-muted-foreground">A little clarity, a lot in motion.</p>
+        <p className="text-lg text-muted-foreground">Turn ideas into coordinated action.</p>
       </div>
     </div>
   );

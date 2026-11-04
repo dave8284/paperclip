@@ -44,7 +44,8 @@ export const registrationStateSchema = z.object({
 });
 export type RegistrationState = z.infer<typeof registrationStateSchema>;
 export const publicAuthOptionsSchema = z.object({
-  googleEnabled: z.boolean(), passwordSignUpEnabled: z.boolean(), approvalRequired: z.boolean(),
+  googleEnabled: z.boolean(), passwordSignInEnabled: z.boolean().default(true),
+  passwordSignUpEnabled: z.boolean(), approvalRequired: z.boolean(),
 });
 export const adminOverviewSchema = z.object({
   counts: z.object({users: z.number(), pending: z.number(), approved: z.number(), suspended: z.number(), admins: z.number()}),

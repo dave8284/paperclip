@@ -1,8 +1,9 @@
 import { useEffect, useRef } from "react";
-import { drawFridayOrb, orbPoints, type FridayOrbState } from "@/lib/friday-orb";
+import { drawFridayOrb, orbPoints, type FridayOrbPose, type FridayOrbState } from "@/lib/friday-orb";
+import { observeFridayOrbPointer } from "@/lib/friday-orb-pointer";
 
-export function FridayOrb({ state, label, onActivate, disabled = false, compact = false, decorative = false }: {
-  state: FridayOrbState; label: string; onActivate?: () => void; disabled?: boolean; compact?: boolean; decorative?: boolean;
+export function FridayOrb({ state, label, onActivate, disabled = false, compact = false, decorative = false, pointerReactive = false }: {
+  state: FridayOrbState; label: string; onActivate?: () => void; disabled?: boolean; compact?: boolean; decorative?: boolean; pointerReactive?: boolean;
 }) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const redraw = useRef<(() => void) | null>(null);
@@ -15,12 +16,13 @@ export function FridayOrb({ state, label, onActivate, disabled = false, compact 
     const points = orbPoints();
     const media = window.matchMedia("(prefers-reduced-motion: reduce)");
     let frame = 0, last = 0, elapsed = 0, size = 0;
-    const paint = () => {
+    const paint = (pose?: FridayOrbPose) => {
       const style = getComputedStyle(element);
       drawFridayOrb(ctx, points, size, elapsed, stateRef.current,
         style.getPropertyValue("--friday-orb-ink").trim(),
-        style.getPropertyValue("--friday-orb-glow").trim(), media.matches);
+        style.getPropertyValue("--friday-orb-glow").trim(), media.matches, pose);
     };
+    const pointer = pointerReactive ? observeFridayOrbPointer(element, paint) : undefined;
     const draw = (now: number) => {
       if (document.hidden || !size) { frame = 0; return; }
       if (now - last >= 32) {
@@ -30,6 +32,7 @@ export function FridayOrb({ state, label, onActivate, disabled = false, compact 
     };
     const restart = () => {
       cancelAnimationFrame(frame); frame = 0;
+      if (pointer) { pointer.redraw(); return; }
       if (!document.hidden && size) { paint(); if (!media.matches) frame = requestAnimationFrame(draw); }
     };
     const resize = () => {
@@ -44,11 +47,12 @@ export function FridayOrb({ state, label, onActivate, disabled = false, compact 
     redraw.current = restart;
     return () => {
       cancelAnimationFrame(frame); observer.disconnect(); redraw.current = null;
+      pointer?.dispose();
       document.removeEventListener("visibilitychange", restart); media.removeEventListener("change", restart);
     };
-  }, []);
+  }, [pointerReactive]);
   useEffect(() => { redraw.current?.(); }, [state]);
-  if (decorative) return <span className="friday-orb" data-state={state} data-compact={compact} aria-hidden="true"><canvas ref={canvas} /><span className="friday-orb-fallback" /></span>;
+  if (decorative) return <span className="friday-orb" data-state={state} data-compact={compact} data-pointer-reactive={pointerReactive} aria-hidden="true"><canvas ref={canvas} /><span className="friday-orb-fallback" /></span>;
   return <button type="button" className="friday-orb" data-state={state} data-compact={compact} onClick={onActivate} disabled={disabled || !onActivate} aria-label={label} title={label}>
     <canvas ref={canvas} aria-hidden="true" />
     <span className="friday-orb-fallback" aria-hidden="true" />

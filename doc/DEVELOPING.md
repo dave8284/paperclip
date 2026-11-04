@@ -672,6 +672,22 @@ browser. The CLI fallback remains:
 pnpm paperclipai auth bootstrap-ceo
 ```
 
+For Google-only human sign-in, configure `PAPERCLIP_GOOGLE_CLIENT_ID` and
+`PAPERCLIP_GOOGLE_CLIENT_SECRET` privately, and set
+`PAPERCLIP_AUTH_PASSWORD_ENABLED=false` in the instance environment before a
+normal restart. This disables password sign-in, sign-up and password maintenance
+routes; it does not delete accounts, sessions or history. With the setting absent,
+existing password-enabled deployments retain their behavior. Google registration
+still respects `PAPERCLIP_AUTH_DISABLE_SIGN_UP` and the native account approval
+and owner-claim flows.
+
+Register the app's exact callback in that client's **Authorized redirect URIs**.
+For the local origin `http://localhost:3100`, it is
+`http://localhost:3100/api/auth/callback/google`. Google requires the request URI
+to match the client's registered value; changing a post-login return path does
+not fix a callback mismatch. See [Google's web-server OAuth guide](https://developers.google.com/identity/protocols/oauth2/web-server#redirect-uri-mismatch).
+Keep OAuth secrets out of documentation and screenshots.
+
 For Tailscale-only reachability on a detected tailnet address:
 
 ```sh
