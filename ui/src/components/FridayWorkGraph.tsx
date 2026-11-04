@@ -59,7 +59,7 @@ export function FridayWorkGraph({ data, agents, running, onSelect, companies }: 
             onMouseEnter={() => setHovered(node.id)} onMouseLeave={() => setHovered(null)} onFocus={() => setHovered(node.id)} onBlur={() => setHovered(null)} onClick={() => setSelectedId(node.id)} onDoubleClick={() => onSelect(node)} onKeyDown={event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setSelectedId(node.id); } }}>
             <circle className="agentos-map-hit" cx={node.x} cy={node.y} r={node.kind === "agent" ? 49 : anchor ? 28 : 14} aria-hidden="true" />
             {anchor && node.kind !== "agent" && <circle className="friday-graph-halo" cx={node.x} cy={node.y} aria-hidden="true" />}
-            {node.kind === "agent" ? <AgentMapSphere x={node.x} y={node.y} size={132} running={node.running} quiet={quiet} /> : <circle className="friday-graph-core" cx={node.x} cy={node.y} />}
+            {node.kind === "agent" ? <AgentMapSphere key={category} x={node.x} y={node.y} size={132} running={node.running} quiet={quiet} /> : <circle className="friday-graph-core" cx={node.x} cy={node.y} />}
             {node.kind === "task" && node.status === "done" && <path className="agentos-map-completed" d={`M ${node.x - 3} ${node.y} l 2 2 l 4 -4`} aria-hidden="true" />}
             <title>{node.title}{node.status ? ` · ${node.status}` : ""}</title>
             {(anchor || focused || view.zoom > 1.6) && <text className="friday-graph-label" x={node.x} y={node.y + (node.kind === "agent" ? 57 : anchor ? 34 : 23)} textAnchor="middle">{node.title.length > 24 ? `${node.title.slice(0, 23)}…` : node.title}</text>}

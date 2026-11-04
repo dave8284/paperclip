@@ -8,7 +8,7 @@ const api = vi.hoisted(() => ({ archiveConnection: vi.fn(), listConnectionGrants
 vi.mock("@/api/ai-connections", () => ({ aiConnectionsApi: { list: async () => ({ connections: [{ id: "seat", name: "Codex seat", provider: "openai", status: "connected", method: "subscription" }] }) } }));
 vi.mock("@/api/tools", () => ({ toolsApi: { ...api,
   listConnections: async () => ({ connections: [{ id: "pending", name: "Higgsfield marketing", status: "draft", healthStatus: "failed", enabled: false, config: { sourceTemplateKey: "higgsfield" }, ownership: "organization" }] }),
-  listGallery: async () => ({ apps: [{ slug: "higgsfield", name: "Higgsfield", description: "Create marketing assets" }, { slug: "supabase", name: "Supabase", description: "Data and storage" }] }),
+  listGallery: async () => ({ apps: [{ slug: "higgsfield", name: "Higgsfield", description: "Create marketing assets" }, { slug: "supabase", name: "Supabase", description: "Data and storage" }, { slug: "google-workspace", name: "Google Workspace", description: "Gmail, Calendar and Drive" }, { slug: "slack", name: "Slack", description: "Team chat" }] }),
 } }));
 vi.mock("@/lib/router", () => ({ Link: ({ to, children }: { to: string; children: React.ReactNode }) => <a href={to}>{children}</a> }));
 it("distinguishes pending provider sign-in from connected seats and checks disconnect authority", async () => {
@@ -20,6 +20,8 @@ it("distinguishes pending provider sign-in from connected seats and checks disco
     expect(host.textContent).toContain("connected");
     expect(host.querySelector('a[href="/apps/connect?source=higgsfield&resume=pending"]')?.textContent).toBe("Finish sign-in");
     expect(host.querySelector('a[href="/apps/connect?source=supabase"]')).toBeTruthy();
+    expect(host.querySelector('a[href="/apps/connect?source=google-workspace"]')).toBeTruthy();
+    expect(host.querySelector('a[href="/apps/connect?source=slack"]')).toBeNull();
     await act(async () => [...host.querySelectorAll("button")].filter(button => button.textContent === "Disconnect")[1].click());
     await act(async () => { await new Promise(resolve => setTimeout(resolve, 10)); });
     const confirm = host.querySelector('[aria-label="Confirm disconnect"]')!;

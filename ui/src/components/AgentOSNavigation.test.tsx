@@ -26,6 +26,13 @@ it("keeps Departments above Projects, Settings below Saved displays and the hier
     expect(host.textContent).not.toContain("Delete company");
     expect(host.textContent).toContain("one department");
     expect(host.textContent).not.toContain("two department");
+    const departmentTree = host.querySelector('[aria-label="Departments and their projects"]')!;
+    expect(departmentTree.previousElementSibling?.textContent).toBe("Departments");
+    const projectTree = host.querySelector('[aria-label="Company projects"]')!;
+    expect(projectTree.previousElementSibling?.textContent).toBe("Projects");
+    expect(projectTree.textContent).not.toContain("one department");
+    await act(async () => (departmentTree.querySelector("summary") as HTMLElement).click());
+    expect(navigate).toHaveBeenLastCalledWith({ panel: "projects", companyId: "one", departmentId: "one-department" });
     await act(async () => render("two"));
     await act(async () => { await new Promise(resolve => setTimeout(resolve, 10)); });
     expect(host.textContent).toContain("two department");

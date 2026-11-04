@@ -147,14 +147,28 @@ describe("AttentionQueueRow", () => {
     expect(approve).toBeTruthy(); expect(disapprove).toBeTruthy();
     expect(el.querySelector('a[href="/PAP/approvals/approval-1"]')).toBeNull();
     await vi.waitFor(() => expect(approve.disabled).toBe(false));
-    expect(el.textContent).toContain("Hire for the launch research");
-    expect(el.textContent).toContain("Create the employee with the approved role");
+    expect(el.textContent).not.toContain("Create the employee with the approved role");
+    expect(el.querySelector("textarea")).toBeNull();
     act(() => approve.click());
     await vi.waitFor(() => expect(approvalsApi.approve).toHaveBeenCalledWith("approval-1", undefined));
     await vi.waitFor(() => expect(disapprove.disabled).toBe(false));
     act(() => disapprove.click());
     await vi.waitFor(() => expect(approvalsApi.reject).toHaveBeenCalledWith("approval-1", undefined));
     expect(toggle).not.toHaveBeenCalled();
+  });
+
+  it("opens the complete AgentOS proposal and note from the compact decision statement", async () => {
+    function Row() {
+      const [expanded, setExpanded] = useState(false);
+      return <AttentionQueueRow presentation="agentos" item={buildItem()} companyId="c1" expanded={expanded} onToggleExpand={() => setExpanded(value => !value)} onDismiss={noop} />;
+    }
+    const el = render(<Row />);
+    await vi.waitFor(() => expect([...el.querySelectorAll("button")].find(button => button.textContent === "Approve")?.disabled).toBe(false));
+    expect(el.textContent).not.toContain("Create the employee with the approved role");
+    act(() => el.querySelector<HTMLElement>('[role="button"][aria-label="Expand decision"]')!.click());
+    expect(el.textContent).toContain("Hire for the launch research");
+    expect(el.textContent).toContain("Create the employee with the approved role");
+    expect(el.querySelector("textarea")).not.toBeNull();
   });
 
   it("shows native approval failures in AgentOS instead of claiming success", async () => {

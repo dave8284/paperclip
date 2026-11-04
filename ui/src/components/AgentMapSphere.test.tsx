@@ -29,6 +29,11 @@ it("pauses particle animation for reduced motion", async () => {
   expect(requestAnimationFrame).not.toHaveBeenCalled();
   expect(drawFridayOrb).toHaveBeenLastCalledWith(expect.anything(), expect.any(Array), 92, 0, "thinking", expect.any(String), expect.any(String), true);
 });
+it("uses the category dot swatch for both particles and the sphere interior", async () => {
+  vi.spyOn(window, "getComputedStyle").mockReturnValue({ color: "text-color", getPropertyValue: (name: string) => name === "--graph-orb" ? "category-dot-color" : "dark-label-color" } as CSSStyleDeclaration);
+  await act(async () => root.render(<svg><AgentMapSphere x={10} y={20} /></svg>));
+  expect(drawFridayOrb).toHaveBeenLastCalledWith(expect.anything(), expect.any(Array), 92, 0, "idle", "category-dot-color", "category-dot-color", true);
+});
 it("shares one animation clock and cancels it when the map leaves the page", async () => {
   await act(async () => root.render(<svg><AgentMapSphere x={10} y={20} running /><AgentMapSphere x={150} y={20} running /></svg>));
   expect(requestAnimationFrame).toHaveBeenCalledTimes(1);

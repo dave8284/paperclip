@@ -44,10 +44,11 @@ export interface DecisionUsage {
   inputTokens: number | null; outputTokens: number | null; costCents: string | null;
   costStatus: "reported" | "estimated" | "unpriced";
 }
+export interface DecisionExecutionProfile { provider: DecisionProvider; requestedModel: string; resolvedModel: string | null }
 export type DecisionResult =
-  | { status: "succeeded"; invocationId: string; answers: Record<string, DecisionAnswer>; usage: DecisionUsage }
+  | { status: "succeeded"; invocationId: string; answers: Record<string, DecisionAnswer>; usage: DecisionUsage; execution?: DecisionExecutionProfile }
   | { status: "unavailable"; reason: DecisionUnavailableReason; invocationId?: string }
-  | { status: "failed"; invocationId: string; errorCode: string; usage: DecisionUsage };
+  | { status: "failed"; invocationId: string; errorCode: string; usage: DecisionUsage; execution?: DecisionExecutionProfile };
 export interface DecisionHistoryEntry {
   id: string; feature: string; actorType: string; responsibleUserId: string | null; userName: string | null;
   issueId: string | null; issueIdentifier: string | null; agentId: string | null; runId: string | null;

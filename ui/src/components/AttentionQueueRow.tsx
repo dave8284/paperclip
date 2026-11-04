@@ -359,7 +359,7 @@ export const AttentionQueueRow = memo(function AttentionQueueRow({
             }
           : {})}
       >
-        <span className="line-clamp-2 text-sm font-medium text-foreground" title={item.subject.title ?? undefined}>
+        <span className={cn(agentOS && !expanded ? "line-clamp-1" : "line-clamp-2", "text-sm font-medium text-foreground")} title={item.subject.title ?? undefined}>
           {item.subject.title ?? meta.label}
         </span>
         <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{detailLine}</p>
@@ -413,7 +413,7 @@ export const AttentionQueueRow = memo(function AttentionQueueRow({
 
       {inline && agentOS && (
         <DecisionPresentation value="approval"><InlineResolver item={item} companyId={companyId} agentMap={agentMap}
-          currentUserId={currentUserId} userLabelMap={userLabelMap} toggle={toggle} agentOS /></DecisionPresentation>
+          currentUserId={currentUserId} userLabelMap={userLabelMap} toggle={toggle} agentOS compact={!expanded} onExpand={activate} /></DecisionPresentation>
       )}
 
       {/* A non-inline row keeps one footer across both states — its Open or
@@ -771,6 +771,8 @@ function InlineResolver({
   userLabelMap,
   toggle,
   agentOS = false,
+  compact = false,
+  onExpand,
 }: {
   item: AttentionItem;
   companyId: string;
@@ -779,20 +781,25 @@ function InlineResolver({
   userLabelMap?: ReadonlyMap<string, string> | null;
   toggle: ReactNode;
   agentOS?: boolean;
+  compact?: boolean;
+  onExpand?: () => void;
 }) {
   if (item.sourceKind === "decision") {
     return (
-      <DecisionResolver
+      <><DecisionResolver
         companyId={companyId}
         decisionId={item.subject.id}
         originIssue={item.relatedIssue}
         agentMap={agentMap}
         actionLabels={agentOS ? "approval" : "native"}
-      />
+        compact={compact}
+        onExpand={onExpand}
+      />{toggle}</>
     );
   }
 
   if (item.sourceKind === "issue_thread_interaction") {
+    if (compact) return <ResolverFooter toggle={toggle}><CompactDecisionActions item={item} companyId={companyId} audience={describeAttentionResolverAudience(item)} onOpen={() => onExpand?.()} /></ResolverFooter>;
     const issueId = (item.subject.metadata?.issueId as string | undefined) ?? item.relatedIssue?.id;
     if (!issueId) {
       return <p className="text-xs text-muted-foreground">Missing issue reference for this decision.</p>;
@@ -813,7 +820,7 @@ function InlineResolver({
   }
 
   if (item.sourceKind === "approval") {
-    return <ApprovalResolver item={item} companyId={companyId} toggle={toggle} agentOS={agentOS} />;
+    return <ApprovalResolver item={item} companyId={companyId} toggle={toggle} agentOS={agentOS} compact={compact} />;
   }
 
   if (item.sourceKind === "join_request") {
@@ -821,6 +828,7 @@ function InlineResolver({
   }
 
   if (item.sourceKind === "review") {
+    if (compact) return <ResolverFooter toggle={toggle}><Button size="sm" onClick={onExpand}>Review proposal</Button></ResolverFooter>;
     // Inline only for stalled reviews (server sets inlineResolvable then); the
     // subject IS the issue, so its id is the decision target.
     return (
@@ -846,7 +854,7 @@ function ResolverFooter({ toggle, children }: { toggle: ReactNode; children: Rea
   );
 }
 
-function ApprovalResolver({ item, companyId, toggle, agentOS = false }: { item: AttentionItem; companyId: string; toggle: ReactNode; agentOS?: boolean }) {
+function ApprovalResolver({ item, companyId, toggle, agentOS = false, compact = false }: { item: AttentionItem; companyId: string; toggle: ReactNode; agentOS?: boolean; compact?: boolean }) {
   const queryClient = useQueryClient();
   const [note, setNote] = useState("");
   const detail = useQuery({ queryKey: queryKeys.approvals.detail(item.subject.id), queryFn: () => approvalsApi.get(item.subject.id), enabled: agentOS });
@@ -875,22 +883,22 @@ function ApprovalResolver({ item, companyId, toggle, agentOS = false }: { item: 
   return (
     <>
       {agentOS && <section className="space-y-2" aria-label="Proposed course of action">
-        <h4 className="text-sm font-semibold">Proposed course of action</h4>
+        {!compact && <h4 className="text-sm font-semibold">Proposed course of action</h4>}
         {detail.isPending && <p role="status" className="text-sm text-muted-foreground">Reading the current proposal…</p>}
         {detail.error && <p role="alert" className="text-sm text-destructive">{detail.error.message}</p>}
         {!detail.isPending && !detail.error && !proposal && <p role="alert" className="text-sm text-destructive">This proposal is not available in this company.</p>}
         {proposal && <>
-          <ApprovalPayloadRenderer type={proposal.type} payload={proposal.payload} />
-          {proposal.type !== "request_board_approval" && <BoardApprovalPayload payload={{ summary: proposal.payload.summary, recommendedAction: proposal.payload.recommendedAction, nextActionOnApproval: proposal.payload.nextActionOnApproval, risks: proposal.payload.risks }} hideTitle />}
+          {!compact && <ApprovalPayloadRenderer type={proposal.type} payload={proposal.payload} />}
+          {!compact && proposal.type !== "request_board_approval" && <BoardApprovalPayload payload={{ summary: proposal.payload.summary, recommendedAction: proposal.payload.recommendedAction, nextActionOnApproval: proposal.payload.nextActionOnApproval, risks: proposal.payload.risks }} hideTitle />}
           {proposal.status !== "pending" && <p role="status" className="text-sm text-muted-foreground">This proposal is {proposal.status.replaceAll("_", " ")}; it cannot be approved from this card.</p>}
         </>}
       </section>}
-      <Textarea
+      {!compact && <Textarea
         value={note}
         onChange={(e) => setNote(e.target.value)}
         placeholder="Optional decision note…"
         className="min-h-16 text-sm"
-      />
+      />}
       <ResolverFooter toggle={toggle}>
         <Button size="sm" variant="outline" onClick={() => revise.mutate()} disabled={pending}>
           {revise.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}

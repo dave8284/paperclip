@@ -420,3 +420,23 @@ disabled unless a specific exception and budget are authorized. An open/local
 candidate still needs execution and resource qualification. This proposal does
 not connect an account or change that policy.
 [Provider billing model](https://docs.typesafe.ai/models)
+
+
+## Local System One implementation update — 2026-11-04
+
+The user explicitly requested implementing the triage layer, then chose an
+open-source alternative before paying for hosted Jev. The current tracked
+implementation is in [the platform fixes log](2026-11-04-agentos-platform-fixes.md),
+F08/F13. Laya is a separately named local candidate, using pinned SDK/weights
+and the same bounded typed-question/abstention policy. The first lane is shadow
+observation; native permissions, subscription LLM selection, model pins and
+review floors remain authoritative. A local decision is not subscription
+usage and must not be inserted as zero-cost metered provider usage.
+
+The new native receipt records deterministic task classification, review
+recommendation, candidate/input digests and local/hosted decision evidence.
+Resolved provider model identity stays unknown unless actually reported. The
+admin view separates computation kinds, task cohorts and recorded prepared
+review contexts; no fixture or prepared context is presented as an accepted
+outcome or verified fresh reviewer. Broader worker/skill selection and calibrated
+automatic routing remain subsequent qualification work.

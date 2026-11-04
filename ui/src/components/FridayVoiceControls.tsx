@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
 import { Mic, MicOff, Volume2, Square } from "lucide-react";
-import { FridayVoiceSession, fridayVoiceSession } from "@/lib/friday-voice-session";
+import { FridayVoiceSession, fridayVoiceSession, type SpokenReply } from "@/lib/friday-voice-session";
 import { useFridayVoicePreferences, setFridayVoicePreferences } from "@/lib/friday-voice-preferences";
 import { Button } from "./ui/button";
 export { spokenReply } from "@/lib/friday-voice-session";
 
 export function FridayVoiceControls({ onTranscript, reply, question, disabled = false, renderPresence, compact = false, minimal = false, speakReplies = false, onVoiceMessage, assistantName = "Friday", sessionKey, companyId, busy, onTurn }: {
   assistantName?: string; onTranscript: (text: string) => void;
-  reply?: { id: string; body: string; createdAt?: Date | string };
+  reply?: SpokenReply;
   question?: { id: string; body: string };
   disabled?: boolean; compact?: boolean; minimal?: boolean; speakReplies?: boolean;
   onVoiceMessage?: (text: string) => Promise<void>;

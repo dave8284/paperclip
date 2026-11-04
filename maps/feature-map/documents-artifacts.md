@@ -92,3 +92,17 @@ Sources: Source: [IssueDocumentsSection.tsx](../../ui/src/components/IssueDocume
 ### Documentation scope: Artifacts and work products
 
 Document/attachment/library/work-product journeys are mapped; every media preview type, storage backend, annotation conflict, and runtime-resource lifecycle variant remains separate.
+
+
+### AgentOS files and saved research — 2026-11-04
+
+The library projection also drives project/type folders in Friday. The UI keeps
+loaded pages together, labels counts as loaded, and preserves native file and
+source-task access. Explicit native document keys `research`, `sources`, and
+`web-search` (including suffixed variants), or artifact work-product metadata
+`collection: "research"`, add the optional `collection` hint. Other outputs keep
+their original types. No raw run logs or arbitrary web calls are exposed by this
+view. Saving research uses existing revision-protected task documents and the
+same company/task/project authorization; tagging a record grants no access.
+The focused folder/pagination/detail UI check passed; browser and real stored
+record acceptance remain separate.

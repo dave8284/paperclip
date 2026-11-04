@@ -168,3 +168,14 @@ No product-design clarification is needed to begin. Ask only when an actual impl
 - [Independent Model Intelligence plan](2026-10-27-agentos-model-intelligence.md)
 
 Update this execution ledger with actual results as work proceeds. Do not mark all packages complete based on the first local demonstration.
+
+
+## 2026-11-04 platform review execution
+
+The latest user review adds fourteen concrete fixes and asks for focused checks
+with a final user retest. The [full per-item execution log](2026-11-04-agentos-platform-fixes.md)
+tracks artefact folders/research, routine editing/creation, Performance, sphere
+shadows/palettes, department navigation, voice latency/completeness, admin
+edit/delete, Model Intelligence/EGM/Jev analytics, scoped self-diagnosis, the
+eight-connector starting catalog, compact decisions, Jev implementation, and
+the failed restart. Existing broader acceptance gaps above remain open.

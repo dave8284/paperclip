@@ -12,6 +12,7 @@ import {
   resolveNativeRunnerRequirement,
 } from "./dev-runner-native-binary.mjs";
 import { applyDevRunnerOptions } from "./dev-runner-options.ts";
+import { devRestartIdentityStatus } from "./dev-runner-restart.ts";
 import { collectWatchedSnapshot as collectDevServerWatchedSnapshot, diffSnapshots } from "./dev-runner-snapshot.mjs";
 import { createDevServiceIdentity, repoRoot } from "./dev-service-profile.ts";
 import { bootstrapDevRunnerWorktreeEnv, isWorktreeSeedPending } from "../server/src/dev-runner-worktree.ts";
@@ -760,7 +761,7 @@ async function maybeAutoRestartChild() {
   if (!manualRestartRequest && dirtyPaths.size === 0 && pendingMigrations.length === 0) return;
 
   restartInFlight = true;
-  let health: { devServer?: { enabled?: boolean; autoRestartEnabled?: boolean; activeRunCount?: number } } | null = null;
+  let health: { serverInfo?: { processStartedAt?: unknown }; devServer?: { enabled?: boolean; autoRestartEnabled?: boolean; activeRunCount?: number } } | null = null;
   try {
     health = await getDevHealthPayload();
   } catch {
@@ -773,16 +774,12 @@ async function maybeAutoRestartChild() {
     restartInFlight = false;
     return;
   }
-  const observedServerIdentity =
-    typeof (health as { serverInfo?: { processStartedAt?: unknown } })
-      .serverInfo?.processStartedAt === "string"
-      ? (health as { serverInfo: { processStartedAt: string } }).serverInfo
-          .processStartedAt
-      : null;
-  if (
-    manualRestartRequest?.previousServerIdentity &&
-    observedServerIdentity !== manualRestartRequest.previousServerIdentity
-  ) {
+  const identityStatus = devRestartIdentityStatus(health, manualRestartRequest?.previousServerIdentity);
+  if (identityStatus === "unavailable") {
+    restartInFlight = false;
+    return;
+  }
+  if (identityStatus === "stale" && manualRestartRequest) {
     removeDevServerRestartRequest(
       manualRestartRequest.requestId
         ? { requestId: manualRestartRequest.requestId }

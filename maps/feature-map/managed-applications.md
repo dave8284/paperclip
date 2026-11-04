@@ -97,3 +97,26 @@ Agent Map presentation uses Friday's particle renderer for employee glyphs, with
 AgentOS visual identity uses Friday particle artwork for product marks, installed icons, offline/loading states and default employee portraits. Existing uploaded portraits, appearance palette IDs and compatibility URLs remain valid; inherited mascot playback is not loaded by these product components. `scripts/generate-agentos-brand.mjs` deterministically derives SVG/PNG/ICO assets from Friday geometry. Home conversation remains borderless with increased left inset; a docked workspace conversation has an opaque panel. Asset, portrait, onboarding and offline regression tests verify paths/contracts; live browser rendering remains unverified.
 
 Performance extends `managed-applications/work`: open Performance in the company/project/department workspace, choose a month and record source-backed monthly totals. Company figures are separate from project attribution. Scope is resolved by the server before the 500-revision history bound; unrelated projects cannot truncate a selected report. Department coverage includes every accessible project, even those with no report. Missing coverage, mixed financial bases/currencies and truncated history withhold totals; errors hide cached figures, sources and history. Navigation to another company/project/department resets the panel scope. Immutable revisions preserve original evidence. `AgentOSPerformance.test.tsx` covers scope navigation, missing reports, truncation and failed refreshes; `company-performance.test.ts` adds actual database scope/privacy checks, unexecuted in the restricted local sandbox. Live collection from business providers remains unqualified.
+
+Friday's existing `coordination` and `work` capabilities include on-demand diagnosis through GET `/api/companies/{companyId}/friday/diagnostics` (optional projectId, bounded limit/offset). Ask Friday to diagnose a problem: the native conversation directive is injected on new and resumed turns, so installed coordinators receive the guidance after backend activation. The response distinguishes checked/unknown results, shows observation time and native source paths, and pages readable blocked tasks and historical task/conversation failures. Conversation failures require participant identity as well as native task/project privacy. Speech installation readiness does not certify microphone input, playback or latency; saved restart readiness is administrator-only; external connection/capacity checks remain unknown. No inference, provider probes, automatic repairs or polling occur.
+
+Friday and Agent Map particles now use an interior tint without an outer halo; map particles match their category dots. Decision rows initially show a one-line statement, brief context and native actions; expanding reveals proposal details and notes. Required inputs, stale-target blocking and destructive confirmations remain native. Persisted user-facing replies may begin playback while run housekeeping finishes; sentence-first speech and one-chunk local synthesis lookahead reduce serial waiting. This is not token-stream speech or a measured latency result. Interruption and conversation changes stop further lookahead. Runtime guidance asks for a complete useful answer and revision-protected `research` documents for useful source findings.
+
+Local Laya triage adds a read-only diagnostic with explicit disabled, setup-required, unloaded, warming, ready, busy and unavailable states. The check never starts or stops a worker, runs inference, downloads models or changes operator configuration. Configured files alone do not verify model loading; a loaded model does not establish prediction quality. No paid fallback is introduced.
+
+Verification: 113 focused UI tests passed (voice/session, orb/map, decisions), UI/server semantic checks and token gates passed; 22 no-listener diagnostic tests cover actual SQL construction, controlled permission/failure paths, seven local-triage states without inference, direct route handlers, API discovery and dynamic prompt insertion. PostgreSQL privacy execution, browser visuals, physical audio, live agent use, provider readiness and runtime activation remain unverified. The initial diagnostic SQL assertion failure and two invalid UI test-fixture types were corrected; no failed live acceptance was relabeled as passed.
+
+
+### AgentOS review fixes — 2026-11-04
+
+The department tree is now under Departments; selecting a department opens its
+projects. Projects lists actual active projects. Routine creation and editing
+use focused dialogs with native saves, errors and revision checks. Performance
+rejects stale/malformed payloads with a retryable message; the exact reported
+undefined-type browser stack still needs a user retest after restart. Main/map
+spheres tint only their interiors with matching dot colors. Decisions use a
+compact statement/context/action view and retain full expansion/native gates.
+Voice can play a committed reply before unrelated run cleanup and prepares only
+one subsequent local speech chunk ahead. Focused source tests pass; browser,
+physical audio and native runtime activation are tracked separately in the
+[execution log](../../doc/plans/2026-11-04-agentos-platform-fixes.md).

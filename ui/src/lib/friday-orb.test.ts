@@ -9,6 +9,15 @@ function render(pose?: FridayOrbPose, reduced = false) {
 }
 
 describe("Friday orb decorative pose", () => {
+  it("tints only the interior without an outer glow or shadow", () => {
+    const fillRect = vi.fn(), createRadialGradient = vi.fn();
+    const ctx = { clearRect() {}, createRadialGradient, fillRect, beginPath() {}, arc: vi.fn(), fill: vi.fn() } as unknown as CanvasRenderingContext2D;
+    drawFridayOrb(ctx, orbPoints(12), 200, 0, "idle", "role-color", "role-color", true);
+    expect(createRadialGradient).not.toHaveBeenCalled();
+    expect(fillRect).not.toHaveBeenCalled();
+    expect(ctx.fillStyle).toBe("role-color");
+    expect(ctx.arc).toHaveBeenNthCalledWith(1, 100, 100, 200 * .31 * .98, 0, Math.PI * 2);
+  });
   const pose = { yaw: 0.8, pitch: -0.4, roll: 0.2, pulse: 0.1, twist: 0.5 };
   it("changes projected points while preserving finite canvas geometry", () => {
     const ordinary = render();

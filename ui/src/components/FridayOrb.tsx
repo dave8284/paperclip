@@ -20,7 +20,7 @@ export function FridayOrb({ state, label, onActivate, disabled = false, compact 
       const style = getComputedStyle(element);
       drawFridayOrb(ctx, points, size, elapsed, stateRef.current,
         style.getPropertyValue("--friday-orb-ink").trim(),
-        style.getPropertyValue("--friday-orb-glow").trim(), media.matches, pose);
+        style.getPropertyValue("--friday-orb-ink").trim(), media.matches, pose);
     };
     const pointer = pointerReactive ? observeFridayOrbPointer(element, paint) : undefined;
     const draw = (now: number) => {

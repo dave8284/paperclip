@@ -9,7 +9,7 @@ import { PendingApproval } from "./PendingApproval";
 
 const mocks = vi.hoisted(() => ({ overview: vi.fn(), people: vi.fn(), update: vi.fn(), intelligence: vi.fn(), registration: vi.fn() }));
 vi.mock("@/api/administration", () => ({ administrationApi: mocks, adminKey: (id: string) => ["admin", id], registrationKey: (id: string) => ["registration", id] }));
-vi.mock("@/api/companies-query", () => ({ useAccountIdentity: () => ({ userId: "admin" }), companyDirectoryQueryOptions: () => ({ queryKey: ["directory"], queryFn: async () => [] }) }));
+vi.mock("@/api/companies-query", () => ({ useAccountIdentity: () => ({ userId: "admin", settled: true, failed: false }), companyDirectoryQueryOptions: () => ({ queryKey: ["directory"], queryFn: async () => [] }) }));
 vi.mock("@/api/access", () => ({ accessApi: { getUserCompanyAccess: async () => ({ companyAccess: [] }) } }));
 vi.mock("@/lib/router", async () => await import("react-router-dom"));
 
@@ -59,8 +59,8 @@ describe("AgentOS administration screens", () => {
   });
   it("keeps pending users on a status page and supports an explicit refresh", async () => {
     await render("/pending-approval", true);
-    expect(host.textContent).toContain("You're on the list.");
-    await click("Check status");
+    expect(host.textContent).toContain("Thank you for joining the waiting list");
+    await click("Refresh approval status");
     expect(mocks.registration.mock.calls.length).toBeGreaterThan(1);
     expect(mocks.people).not.toHaveBeenCalled();
   });

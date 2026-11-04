@@ -457,6 +457,7 @@ export function companyArtifactsService(db: Db, storage?: StorageService) {
           artifacts.push({
             id: row.artifactId,
             source: "document",
+            ...(/^(research|sources|web-search)([-_]|$)/.test(row.key) ? { collection: "research" as const } : {}),
             mediaKind: "document",
             title: row.title ?? row.key,
             previewText: normalizePreviewText(row.latestBody),
@@ -601,6 +602,7 @@ export function companyArtifactsService(db: Db, storage?: StorageService) {
           artifacts.push({
             id: row.artifactId,
             source: "work_product",
+            ...(row.metadata?.collection === "research" ? { collection: "research" as const } : {}),
             mediaKind: classifyMediaKind(contentType, attachmentMetadata ? "file" : "empty"),
             title: row.title,
             previewText: normalizePreviewText(row.summary),

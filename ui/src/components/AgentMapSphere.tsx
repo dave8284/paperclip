@@ -33,11 +33,11 @@ export function AgentMapSphere({ x, y, size = 92, running = false, quiet = false
     let visible = true;
     let unsubscribe = () => {};
     const styles = getComputedStyle(canvas);
-    const ink = styles.getPropertyValue("--agentos-role-ink").trim() || styles.color;
-    const glow = styles.getPropertyValue("--graph-orb").trim() || ink;
+    // Use the same role swatch as the map's small category dots.
+    const ink = styles.getPropertyValue("--graph-orb").trim() || styles.color;
     const paint = (now: number) => {
       const reduced = !!motion?.matches || quiet || document.hidden || !running || !visible;
-      drawFridayOrb(context, points, size, reduced ? 0 : now / 1000, running ? "thinking" : "idle", ink, glow, reduced);
+      drawFridayOrb(context, points, size, reduced ? 0 : now / 1000, running ? "thinking" : "idle", ink, ink, reduced);
     };
     const restart = () => {
       unsubscribe(); unsubscribe = () => {};

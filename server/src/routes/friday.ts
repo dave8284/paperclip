@@ -1,13 +1,14 @@
 import { Router, json } from "express";
 import { z } from "zod";
 import type { Db } from "@paperclipai/db";
-import { fridayWorkQuerySchema, createDepartmentSchema, updateDepartmentSchema, assignDepartmentProjectSchema, createPerformanceReportSchema, companyPerformanceQuerySchema } from "@paperclipai/shared";
+import { fridayWorkQuerySchema, fridayDiagnosticsQuerySchema, createDepartmentSchema, updateDepartmentSchema, assignDepartmentProjectSchema, createPerformanceReportSchema, companyPerformanceQuerySchema } from "@paperclipai/shared";
 import { modelCatalog } from "../services/model-intelligence.js";
 import { fridayVoiceStatus, fridayVoiceRequest } from "../services/friday-voice.js";
 import { companyPerformanceService } from "../services/company-performance.js";
 import { departmentService } from "../services/agentos-departments.js";
 import { fridayAwarenessService } from "../services/friday-awareness.js";
 import { employeeAwarenessService } from "../services/employee-awareness.js";
+import { fridayDiagnosticsService } from "../services/friday-diagnostics.js";
 import { employeeAwarenessQuerySchema } from "@paperclipai/shared";
 import { forbidden } from "../errors.js";
 import { assertCompanyAccess, assertBoard, getActorInfo } from "./authz.js";
@@ -27,6 +28,9 @@ export function fridayRoutes(db: Db) {
     next();
   });
   router.get("/companies/:companyId/friday/work", async (req, res) => res.json(await service.work(req.params.companyId as string, req.actor, fridayWorkQuerySchema.parse(req.query))));
+  router.get("/companies/:companyId/friday/diagnostics", async (req, res) => {
+    res.set("Cache-Control", "no-store").json(await fridayDiagnosticsService(db).read(req.params.companyId as string, req.actor, fridayDiagnosticsQuerySchema.parse(req.query)));
+  });
   router.get("/companies/:companyId/friday/agents/:agentId/awareness", async (req, res) => {
     res.set("Cache-Control", "no-store").json(await employeeAwarenessService(db).read(req.params.companyId as string,
       z.string().uuid().parse(req.params.agentId), req.actor, employeeAwarenessQuerySchema.parse(req.query)));

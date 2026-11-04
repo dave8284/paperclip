@@ -8,7 +8,8 @@ export interface VoiceRecognition {
   start(): void; stop(): void; abort(): void;
 }
 type VoiceWindow = { SpeechRecognition?: new () => VoiceRecognition; webkitSpeechRecognition?: new () => VoiceRecognition };
-export interface VoiceBinding { key: string; companyId?: string; disabled: boolean; busy?: boolean; send?: (text: string) => Promise<void>; draft: (text: string) => void; reply?: { id: string; body: string; createdAt?: Date | string }; question?: { id: string; body: string }; onTurn?: () => void }
+export interface SpokenReply { id: string; body: string; createdAt?: Date | string; /** Persisted user-facing comment, never a transient model/tool stream. */ committed?: boolean }
+export interface VoiceBinding { key: string; companyId?: string; disabled: boolean; busy?: boolean; send?: (text: string) => Promise<void>; draft: (text: string) => void; reply?: SpokenReply; question?: { id: string; body: string }; onTurn?: () => void }
 export interface VoiceState { enabled: boolean; listening: boolean; hearingSpeech: boolean; speaking: boolean; starting: boolean; sending: boolean; interim: string; error: string; local: boolean; checking: boolean; preparing: boolean }
 // Acoustic echo cancellation handles speaker leakage first. Ignore recognisable
 // playback phrases too, without discarding short answers such as "yes" or "stop".
@@ -19,6 +20,22 @@ function playbackEcho(text: string, reference: string) {
 }
 export function spokenReply(text: string) {
   return text.replace(/```[\s\S]*?```/g, " Code is available in the conversation. ").replace(/!\[[^\]]*\]\([^)]*\)/g, "").replace(/\[([^\]]*)\]\([^)]*\)/g, "$1").replace(/https?:\/\/\S+/g, " linked source ").replace(/[#*_`>|]/g, " ").replace(/\s+/g, " ").trim().slice(0, 6000);
+}
+/** Start with the first sentence, then keep synthesis bounded without cutting
+ * words. Playback can begin before the rest of the answer is synthesized. */
+export function spokenReplyChunks(text: string) {
+  const chunks: string[] = [];
+  let remaining = text.trim();
+  while (remaining) {
+    const limit = chunks.length ? 220 : 120;
+    const prefix = remaining.slice(0, limit);
+    const sentence = /[.!?](?:\s|$)/.exec(prefix);
+    let end = sentence ? sentence.index + 1 : remaining.length <= limit ? remaining.length : prefix.lastIndexOf(" ");
+    if (end <= 0) end = limit;
+    chunks.push(remaining.slice(0, end).trim());
+    remaining = remaining.slice(end).trim();
+  }
+  return chunks;
 }
 export function pcmWave(chunks: Float32Array[], rate: number) {
   const size = chunks.reduce((n, chunk) => n + chunk.length, 0);
@@ -74,7 +91,7 @@ export class FridayVoiceSession {
       this.patch({ checking: true });
       void api.get<{ available: boolean }>(`/companies/${value.companyId}/friday/voice`).then(status => { if (this.identity === value.key) { this.patch({ local: status.available }); if (status.available && !document.hidden) void this.prepareLocal(); } }).catch(() => { if (this.identity === value.key) this.patch({ local: false }); }).finally(() => { if (this.identity === value.key) this.patch({ checking: false }); });
     }
-    if (value.reply && !value.disabled && !value.busy && !value.question && !this.seen.has(value.reply.id)) {
+    if (value.reply && !value.disabled && (!value.busy || value.reply.committed) && !value.question && !this.state.hearingSpeech && !this.seen.has(value.reply.id)) {
       this.seen.add(value.reply.id);
       const fresh = !value.reply.createdAt || new Date(value.reply.createdAt).getTime() >= this.since;
       if ((this.autoSpeak || this.requestedReply) && fresh && !document.hidden) { this.requestedReply = false; void this.speak(value.reply.body); }
@@ -257,16 +274,28 @@ export class FridayVoiceSession {
     const text = spokenReply(body); if (!text || this.binding?.disabled || (this.state.enabled && this.state.hearingSpeech)) return;
     this.stopSpeaking(false); this.patch({ speaking: true, error: "" }); this.resume();
     const generation = this.speechGeneration;
-    const chunks = text.match(/.{1,220}(?:\s|$)|\S{1,220}/g) ?? [];
+    const chunks = spokenReplyChunks(text);
+    // One lookahead chunk overlaps synthesis with playback. There is no idle
+    // work and an interrupted turn cannot enqueue more local inference.
+    const companyId = this.state.local ? this.binding?.companyId : undefined;
+    const synthesize = (chunk: string) => api.post<{ audio: string }>(`/companies/${companyId}/friday/voice`, { op: "speak", text: chunk })
+      .then(result => ({ result, error: null }), error => ({ result: null, error }));
+    let prepared = companyId ? synthesize(chunks[0]) : undefined;
     try {
-      for (const chunk of chunks) {
+      for (const [index, chunk] of chunks.entries()) {
         if (generation !== this.speechGeneration) break;
         this.playbackText = chunk;
-        if (this.state.local && this.binding?.companyId) {
-          const result = await api.post<{ audio: string }>(`/companies/${this.binding.companyId}/friday/voice`, { op: "speak", text: chunk });
+        if (companyId && prepared) {
+          const { result, error } = await prepared;
           if (generation !== this.speechGeneration) break;
+          if (error || !result) throw error ?? new Error("Speech synthesis failed");
           const audio = new Audio(`data:audio/wav;base64,${result.audio}`); this.audio = audio;
-          await new Promise<void>((resolve, reject) => { this.playbackCancel = resolve; audio.onended = () => resolve(); audio.onerror = () => reject(new Error("Audio playback failed")); void audio.play().catch(reject); });
+          await new Promise<void>((resolve, reject) => {
+            this.playbackCancel = resolve; audio.onended = () => resolve(); audio.onerror = () => reject(new Error("Audio playback failed"));
+            void audio.play().then(() => {
+              if (generation === this.speechGeneration && chunks[index + 1]) prepared = synthesize(chunks[index + 1]);
+            }).catch(reject);
+          });
         } else {
           if (!window.speechSynthesis) throw new Error("Speech playback is unavailable");
           await new Promise<void>((resolve, reject) => {

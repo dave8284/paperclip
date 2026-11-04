@@ -2,14 +2,33 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "no
 import os from "node:os";
 import path from "node:path";
 import express from "express";
-import request from "supertest";
+import { IncomingMessage } from "node:http";
+import { inject } from "light-my-request";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Db } from "@paperclipai/db";
 import { healthRoutes } from "../routes/health.js";
 import * as devServerStatus from "../dev-server-status.js";
-import { resolveHotRestartIntentPath } from "../services/hot-restart.js";
+import { readHotRestartIntent, resumePendingHotRestartIntent, resolveHotRestartIntentPath } from "../services/hot-restart.js";
+import { devRestartIdentityStatus } from "../../../scripts/dev-runner-restart.js";
+
+vi.mock("node:child_process", async (original) => ({
+  ...await original<typeof import("node:child_process")>(),
+  // Keep native intent/file coordination real; OS probing is a controlled
+  // boundary because this test runs without process-spawn permission.
+  execFile: vi.fn((_command, _args, _options, callback) => callback(null, "Wed Nov 4 10:00:00 2026\n")),
+}));
 
 const tempDirs: string[] = [];
+
+async function dispatch(app: express.Express, method: "GET" | "POST", headers?: Record<string, string>) {
+  // Isolate Express prototypes when injecting real HTTP messages without a socket.
+  for (const target of [app.request, app.response]) {
+    const parent = Object.getPrototypeOf(target);
+    Object.setPrototypeOf(target, Object.create(Object.getPrototypeOf(parent), Object.getOwnPropertyDescriptors(parent)));
+  }
+  const result = await inject(app, { method, url: method === "GET" ? "/health" : "/health/dev-server/restart", headers, Request: IncomingMessage });
+  return { status: result.statusCode, body: result.json() };
+}
 
 function createDevServerStatusFile(payload: unknown) {
   const dir = mkdtempSync(path.join(os.tmpdir(), "paperclip-health-dev-server-"));
@@ -97,9 +116,7 @@ describe("GET /health dev-server supervisor access", () => {
         }),
       );
 
-      const res = await request(app)
-        .get("/health")
-        .set("X-Paperclip-Dev-Server-Status-Token", "dev-runner-token");
+      const res = await dispatch(app, "GET", { "X-Paperclip-Dev-Server-Status-Token": "dev-runner-token" });
 
       expect(res.status).toBe(200);
       expect(res.body).toEqual({
@@ -110,6 +127,7 @@ describe("GET /health dev-server supervisor access", () => {
         commit: null,
         bootstrapStatus: "ready",
         bootstrapInviteActive: false,
+        serverInfo: { processStartedAt: "2026-03-20T11:00:00.000Z" },
         devServer: {
           enabled: true,
           restartRequired: true,
@@ -124,6 +142,12 @@ describe("GET /health dev-server supervisor access", () => {
           lastRestartAt: "2026-03-20T11:30:00.000Z",
         },
       });
+      expect(devRestartIdentityStatus(res.body, "2026-03-20T11:00:00.000Z")).toBe("current");
+      for (const headers of [{}, { "X-Paperclip-Dev-Server-Status-Token": "wrong-token" }]) {
+        const anonymous = await dispatch(app, "GET", headers);
+        expect(anonymous.body).not.toHaveProperty("serverInfo");
+        expect(anonymous.body).not.toHaveProperty("devServer");
+      }
     } finally {
       if (previousFile === undefined) {
         delete process.env.PAPERCLIP_DEV_SERVER_STATUS_FILE;
@@ -166,7 +190,7 @@ describe("POST /health/dev-server/restart", () => {
       } as unknown as Db;
       app.use("/health", healthRoutes(db));
 
-      const res = await request(app).post("/health/dev-server/restart");
+      const res = await dispatch(app, "POST");
 
       expect(res.status).toBe(202);
       expect(res.body).toMatchObject({
@@ -185,6 +209,20 @@ describe("POST /health/dev-server/restart", () => {
         mode: "hot",
         requestId: res.body.requestId,
       });
+      const originalIntent = await readHotRestartIntent();
+      devServerStatus.removeDevServerRestartRequest({ requestId: res.body.requestId });
+      const retry = await dispatch(app, "POST");
+      expect(retry.status).toBe(202);
+      expect(retry.body.requestId).toBe(res.body.requestId);
+      expect(await readHotRestartIntent()).toEqual(originalIntent);
+      expect(JSON.parse(readFileSync(requestPath, "utf8"))).toMatchObject({ requestId: res.body.requestId });
+      vi.spyOn(devServerStatus, "writeDevServerRestartRequest").mockReturnValueOnce(false);
+      const failedRetry = await dispatch(app, "POST");
+      expect(failedRetry.status).toBe(404);
+      expect(await readHotRestartIntent()).toEqual(originalIntent);
+      // A changed boot cannot resume this pending request, even with the same PID.
+      expect(await resumePendingHotRestartIntent({ previousServerPid: process.pid, previousServerIdentity: "different-boot", preflightActiveRunIds: [] })).toBeNull();
+      expect(await readHotRestartIntent()).toEqual(originalIntent);
     } finally {
       if (previousFile === undefined) {
         delete process.env.PAPERCLIP_DEV_SERVER_STATUS_FILE;
@@ -219,7 +257,7 @@ describe("POST /health/dev-server/restart", () => {
       } as unknown as Db;
       app.use("/health", healthRoutes(db));
 
-      const res = await request(app).post("/health/dev-server/restart");
+      const res = await dispatch(app, "POST");
 
       expect(res.status).toBe(404);
       expect(res.body).toEqual({ error: "dev_server_supervisor_unavailable" });
@@ -260,7 +298,7 @@ describe("POST /health/dev-server/restart", () => {
         }),
       );
 
-      const res = await request(app).post("/health/dev-server/restart");
+      const res = await dispatch(app, "POST");
 
       expect(res.status).toBe(403);
       expect(res.body).toEqual({ error: "board_access_required" });
@@ -271,5 +309,16 @@ describe("POST /health/dev-server/restart", () => {
         process.env.PAPERCLIP_DEV_SERVER_STATUS_FILE = previousFile;
       }
     }
+  });
+});
+
+
+describe("dev supervisor boot identity admission", () => {
+  it("waits without discarding a restart when authenticated identity is missing", () => {
+    expect(devRestartIdentityStatus({}, "boot-a")).toBe("unavailable");
+    expect(devRestartIdentityStatus({ serverInfo: { processStartedAt: null } }, "boot-a")).toBe("unavailable");
+    expect(devRestartIdentityStatus({ serverInfo: { processStartedAt: "boot-b" } }, "boot-a")).toBe("stale");
+    expect(devRestartIdentityStatus({ serverInfo: { processStartedAt: "boot-a" } }, "boot-a")).toBe("current");
+    expect(devRestartIdentityStatus({}, undefined)).toBe("current");
   });
 });

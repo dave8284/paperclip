@@ -70,3 +70,17 @@ describe("decision provider contract", () => {
     expect(decisionProviderForConnection({ provider: "openrouter", method: "api_key", routing: { kind: "openrouter" } })).toBe("openrouter");
   });
 });
+
+
+it("retains only provider-reported model identity, without SDK alias fallback", async () => {
+  const reported = await runDecisionProvider({ provider: "openai", model: "configured-alias", apiKey: "fixture", request: DECISION_TEST_REQUEST, signal: new AbortController().signal }, { fetch: async () => Response.json({ ...openaiResponse(), model: "reported-version" }) });
+  expect(reported.resolvedModel).toBe("reported-version");
+  const { model: _model, ...withoutModel } = openaiResponse();
+  const missing = await runDecisionProvider({ provider: "openai", model: "configured-alias", apiKey: "fixture", request: DECISION_TEST_REQUEST, signal: new AbortController().signal }, { fetch: async () => Response.json(withoutModel) });
+  expect(missing.answers).toBeDefined(); expect(missing.resolvedModel).toBeNull();
+});
+it("does no provider work when cancelled before dispatch", async () => {
+  const controller = new AbortController(); controller.abort(); const transport = vi.fn();
+  const result = await runDecisionProvider({ provider: "openrouter", model: DECISION_MODELS.openrouter.id, apiKey: "fixture", request: DECISION_TEST_REQUEST, signal: controller.signal }, { fetch: transport });
+  expect(transport).not.toHaveBeenCalled(); expect(result).toMatchObject({ noProviderWork: true, errorCode: "cancelled_before_dispatch", resolvedModel: null, receipt: { costCents: "0.0000000", costStatus: "estimated" } });
+});

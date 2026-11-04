@@ -22,10 +22,10 @@ export function drawFridayOrb(ctx: CanvasRenderingContext2D, points: OrbPoint[],
   const motion = reduced ? undefined : pose;
   const radius = size * 0.31 * breath * (1 + (motion?.pulse ?? 0));
   const center = size / 2;
-  const halo = ctx.createRadialGradient(center, center, radius * 0.45, center, center, radius * 1.5);
-  halo.addColorStop(0, glow); halo.addColorStop(1, "transparent");
-  ctx.fillStyle = halo; ctx.globalAlpha = state === "offline" ? 0.15 : 0.35;
-  ctx.fillRect(0, 0, size, size);
+  // Tint only the sphere's interior. A gradient beyond the particle boundary
+  // reads as a dark shadow, especially on the white workspace and map.
+  ctx.fillStyle = glow; ctx.globalAlpha = state === "offline" ? 0.015 : 0.045;
+  ctx.beginPath(); ctx.arc(center, center, radius * 0.98, 0, Math.PI * 2); ctx.fill();
   ctx.fillStyle = ink;
   const tilt = -0.22 + (motion?.pitch ?? 0);
   const roll = motion?.roll ?? 0;

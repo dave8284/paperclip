@@ -563,6 +563,11 @@ owns committed updates.
 
 ## Hot-Restart Deploys
 
+The native `scripts/request-hot-restart.ts` preparation command can resume an
+accepted same-boot pending request only after fresh database and OS process
+identity preflight. Signalling the verified server remains a separate operator
+action and must never follow failed preparation.
+
 During a restart, the board's health, session, and access checks retry temporary
 network/gateway failures and non-JSON API responses every five seconds. A new
 page shows **Reconnecting to Paperclip** with a **Try again** action and waits
@@ -3394,3 +3399,29 @@ in `_test` for `PAPERCLIP_MCP_SLEEP_TEST_DATABASE_URL`,
 `PAPERCLIP_DOT_RUNNER_TEST_DATABASE_URL`. The interaction-service regression suite
 also accepts `PAPERCLIP_INTERACTIONS_TEST_DATABASE_URL`. The suites migrate and write to those
 URLs; the sleep suite truncates company data between tests.
+
+
+### Local AgentOS System One triage
+
+The local lane uses pinned Laya, independently of hosted Jev and the subscription
+LLM executor. For this Apple Silicon/Python 3.12 installation,
+`scripts/setup-local-triage.py <absolute-private-runtime-directory>` prepares
+an isolated environment from the hashes in `scripts/local-triage-models.json`.
+`--offline` uses predownloaded, verified artifacts. Setup does not edit server
+configuration or start a service.
+
+Configure `PAPERCLIP_LOCAL_TRIAGE_ENABLED=true`,
+`PAPERCLIP_LOCAL_TRIAGE_PYTHON=<absolute-venv-python>` and
+`PAPERCLIP_LOCAL_TRIAGE_MODEL_DIR=<absolute-model-directory>` in the instance's
+protected environment, then use the native restart lifecycle. No company-supplied
+URL or external inference fallback exists. First use warms a fixed local stdio
+worker and immediately retains baseline execution. Ready requests are bounded
+to two seconds, one in flight; idle workers unload after five minutes.
+
+The worker verifies SDK and checkpoint content before readiness, rejects
+truncated input and unsupported option counts, and records abstention. Local
+results are shadow evidence, not authorization or routing changes. Admin →
+Model Intelligence reports setup/readiness and actual task receipts; hosted
+usage, local hardware cost and generative subscription usage remain distinct.
+For the guarded local launchd recovery command and final acceptance checklist,
+see [the platform fixes log](plans/2026-11-04-agentos-platform-fixes.md).

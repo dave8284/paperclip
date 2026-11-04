@@ -30,18 +30,19 @@ export function AgentOSHeader({ view, navigate, admin, companies = [], homePath 
   </header>;
 }
 
-function CompanyTree({ companyId, view, navigate }: { companyId: string; view: FridayNavigation; navigate: Navigation }) {
+function CompanyTree({ companyId, view, navigate, section }: { companyId: string; view: FridayNavigation; navigate: Navigation; section: "departments" | "projects" }) {
   const departments = useQuery({ queryKey: departmentKey(companyId), queryFn: () => departmentsApi.list(companyId) });
   const projects = useQuery({ queryKey: queryKeys.projects.list(companyId), queryFn: () => projectsApi.list(companyId) });
   const rows = departments.data ?? [];
-  const groups = [...rows.map(row => ({ id: row.id, name: row.name, projects: projects.data?.filter(project => row.projectIds.includes(project.id)) ?? [] })), { id: "", name: "Ungrouped projects", projects: projects.data?.filter(project => !rows.some(row => row.projectIds.includes(project.id))) ?? [] }];
-  return <div className="agentos-company-tree" role="group" aria-label="Company structure">
-    {groups.filter(group => group.id || group.projects.length).map(group => <details key={group.id} open={group.projects.some(project => project.id === view.projectId) || group.id === view.departmentId || undefined}>
-      <summary><ChevronRight /><span>{group.name}</span><small>{group.projects.length}</small></summary>
-      <button type="button" onClick={() => navigate({ panel: "projects", companyId, departmentId: group.id || undefined })}>View projects</button>
+  const activeProjects = (projects.data ?? []).filter(project => !project.archivedAt);
+  const groups = rows.map(row => ({ id: row.id, name: row.name, projects: activeProjects.filter(project => row.projectIds.includes(project.id)) }));
+  return <div className="agentos-company-tree" role="group" aria-label={section === "departments" ? "Departments and their projects" : "Company projects"}>
+    {section === "departments" && groups.map(group => <details key={group.id} open={group.projects.some(project => project.id === view.projectId) || group.id === view.departmentId || undefined}>
+      <summary onClick={() => navigate({ panel: "projects", companyId, departmentId: group.id })}><ChevronRight /><span>{group.name}</span><small>{group.projects.length}</small></summary>
       {group.projects.map(project => <button type="button" key={project.id} aria-current={view.projectId === project.id ? "page" : undefined} onClick={() => navigate({ panel: "work", companyId, departmentId: group.id || undefined, projectId: project.id, mode: "combined" })}><FolderKanban /><span>{project.name}</span></button>)}
       {!group.projects.length && <p className="p-3 text-xs text-muted-foreground">No projects yet</p>}
     </details>)}
+    {section === "projects" && activeProjects.map(project => <button type="button" key={project.id} aria-current={view.projectId === project.id ? "page" : undefined} onClick={() => navigate({ panel: "work", companyId, departmentId: rows.find(row => row.projectIds.includes(project.id))?.id, projectId: project.id, mode: "combined" })}><FolderKanban /><span>{project.name}</span></button>)}
     {departments.isPending || projects.isPending ? <p className="p-3 text-xs text-muted-foreground">Loading company structure…</p> : null}
     {(departments.error || projects.error) && <p role="alert" className="p-3 text-xs text-destructive">Could not load company structure.</p>}
   </div>;
@@ -68,7 +69,7 @@ export function AgentOSSidebar({ companies, view, navigate }: { companies: Compa
     <div className="agentos-sidebar-content"><button type="button" className="agentos-back" onClick={() => go({ panel: null, companyId: view.companyId, scope: view.scope })}><ArrowLeft />Back to Friday</button>
       <p className="agentos-eyebrow">{company?.name ?? "Across your portfolio"}</p>
       {view.projectId && <button type="button" className="agentos-back" onClick={() => go({ panel: "projects", companyId: view.companyId })}><FolderKanban />All projects</button>}
-      <nav aria-label="Workspace">{links.map(({ label, Icon, next }) => <Fragment key={label}><button type="button" onClick={() => go(next)} aria-current={view.panel === next.panel && (next.panel !== "work" || (view.mode ?? "combined") === next.mode) ? "page" : undefined}><Icon /><span>{label}</span></button>{label === "Projects" && company && <CompanyTree key={company.id} companyId={company.id} view={view} navigate={go} />}</Fragment>)}</nav>
+      <nav aria-label="Workspace">{links.map(({ label, Icon, next }) => <Fragment key={label}><button type="button" onClick={() => go(next)} aria-current={view.panel === next.panel && (next.panel !== "work" || (view.mode ?? "combined") === next.mode) ? "page" : undefined}><Icon /><span>{label}</span></button>{(label === "Departments" || label === "Projects") && company && <CompanyTree key={`${company.id}:${label}`} companyId={company.id} view={view} navigate={go} section={label === "Departments" ? "departments" : "projects"} />}</Fragment>)}</nav>
       <div className="agentos-sidebar-bottom"><div className="agentos-sidebar-divider" /><nav aria-label="People, history and settings">
         <button type="button" onClick={() => go({ panel: "team", companyId: view.companyId, scope: view.scope })} aria-current={view.panel === "team" ? "page" : undefined}><Users />Workforce</button>
         <button type="button" onClick={() => go({ panel: "activity", ...scope })} aria-current={view.panel === "activity" ? "page" : undefined}><Activity />Audit trail</button>

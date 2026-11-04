@@ -38,6 +38,7 @@ import { serverVersion } from "../version.js";
 import { getStartupRecoveryState } from "../startup-recovery-state.js";
 import { nativeRestartRecoverySummary } from "../services/native-runtime/native-restart-recovery.js";
 import {
+  resumePendingHotRestartIntent,
   removeHotRestartIntent,
   writeHotRestartIntent,
 } from "../services/hot-restart.js";
@@ -164,7 +165,7 @@ export function healthRoutes(
       return;
     }
 
-    const requestId = randomUUID();
+    let requestId: string = randomUUID();
     const requestedAt = new Date();
     const serverInfo = opts.serverInfo ?? getServerInfoSnapshot();
     const preflightActiveRunIds = await db
@@ -173,17 +174,31 @@ export function healthRoutes(
       .where(eq(heartbeatRuns.status, "running"))
       .then((rows) => rows.map((row) => row.id));
     let intent: Awaited<ReturnType<typeof writeHotRestartIntent>> | null = null;
+    let createdIntent = false;
     try {
-      intent = await writeHotRestartIntent({
-        previousServerPid: process.pid,
-        previousServerIdentity: serverInfo.processStartedAt,
-        previousServerVersion: serverVersion,
-        preflightActiveRunIds,
-        recoveryRequestId: requestId,
-        requestedAt,
-      });
+      try {
+        intent = await writeHotRestartIntent({
+          previousServerPid: process.pid,
+          previousServerIdentity: serverInfo.processStartedAt,
+          previousServerVersion: serverVersion,
+          preflightActiveRunIds,
+          recoveryRequestId: requestId,
+          requestedAt,
+        });
+        createdIntent = true;
+      } catch (error) {
+        // A supervisor may not have consumed an earlier accepted request.
+        // Retry that exact operation only for this still-running boot; never
+        // replace another process's intent or a shutdown already in progress.
+        const pending = (error as NodeJS.ErrnoException).code === "EEXIST"
+          ? await resumePendingHotRestartIntent({ previousServerPid: process.pid, previousServerIdentity: serverInfo.processStartedAt, preflightActiveRunIds })
+          : null;
+        if (!pending?.recoveryRequestId) throw error;
+        intent = pending;
+        requestId = pending.recoveryRequestId;
+      }
       const written = writeDevServerRestartRequest({
-        requestedAt: requestedAt.toISOString(),
+        requestedAt: intent.requestedAt,
         reason: "manual_restart_now",
         requestId,
         mode: "hot",
@@ -194,14 +209,16 @@ export function healthRoutes(
       }
     } catch (error) {
       try {
-        removeDevServerRestartRequest({ requestId });
+        if (createdIntent) {
+          removeDevServerRestartRequest({ requestId });
+        }
       } catch (rollbackError) {
         logger.error(
           { err: rollbackError, requestId },
           "failed to roll back dev-server restart request",
         );
       }
-      if (intent) {
+      if (intent && createdIntent) {
         await removeHotRestartIntent(undefined, intent).catch(
           (rollbackError) => {
             logger.error(
@@ -257,8 +274,8 @@ export function healthRoutes(
     // one, unlike the fuller `serverInfo` block. Deploy tooling (and anyone)
     // can read which commit this server is running without authenticating.
     const commit = serverInfo.git.available ? serverInfo.git.fullSha : null;
-    const exposeDevServerDetails =
-      exposeFullDetails || hasDevServerStatusToken(req.get("x-paperclip-dev-server-status-token"));
+    const supervisorAuthenticated = hasDevServerStatusToken(req.get("x-paperclip-dev-server-status-token"));
+    const exposeDevServerDetails = exposeFullDetails || supervisorAuthenticated;
     // Workspace readiness names the instance and execution workspace that
     // answered, so it rides the protected responses only. Public health stays
     // redacted: an anonymous caller still learns liveness and nothing else.
@@ -417,6 +434,9 @@ export function healthRoutes(
         ...(redactedDatabaseBackup ? { databaseBackup: redactedDatabaseBackup } : {}),
         ...(redactedWarnings ? { warnings: redactedWarnings } : {}),
         ...(devServer ? { devServer } : {}),
+        // The supervisor needs the same boot identity recorded by the restart
+        // endpoint. Its token grants no board authority or other server metadata.
+        ...(supervisorAuthenticated ? { serverInfo: { processStartedAt: serverInfo.processStartedAt } } : {}),
         // Token-authorized probe on an otherwise redacted response: the control
         // plane needs readiness without a board session, and nothing else about
         // this instance becomes visible.

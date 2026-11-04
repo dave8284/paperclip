@@ -205,3 +205,13 @@ verify any listed agent request/result path separately. A delegated operation ne
 own policy and access review.
 
 Gaps: CLI board login/revocation cannot be counted as agent self-authentication.
+
+
+### AgentOS account controls — 2026-11-04
+
+Admin → Users exposes explicit Edit/Delete actions instead of requiring a name
+click. Management focuses and scrolls into view. It reuses native revisioned
+rename, approval, role, membership and delete endpoints; confirmation, self/last
+admin and outstanding ownership safeguards remain authoritative. The focused
+UI flow verifies rename, self-delete disabled and visible ownership-conflict
+feedback. No real account was deleted for acceptance.

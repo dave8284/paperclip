@@ -13,6 +13,7 @@ import { aiProviderSetupPreset, type ToolConnectionCredentialSource } from "@pap
 import { useCompany } from "@/context/CompanyContext";
 import { useNavigate, useParams, useSearchParams } from "@/lib/router";
 import { consumeSkillSourceReturn, skillSourceReturnPath } from "@/lib/skill-source-connect-return";
+import { AgentOSConnectorPage } from "../AgentOSConnectorPage";
 
 export { AccessStep, OAuthConnectStateScreen, type OAuthConnectPhase } from "@/features/connections/ConnectionSetupFlow";
 
@@ -75,6 +76,7 @@ export function AppsConnect({ byoOnly = false, credentialSource = "paperclip_vau
     if (!router) return <p role="alert">{gallery.error?.message ?? "This connection pool plugin is unavailable. Enable it in Plugins."}</p>;
     return <AiConnectionPoolConnector pluginKey={router.pluginKey} />;
   }
+  if (!source && !searchParams.get("resume") && !reconnectId && !byoOnly) return <AgentOSConnectorPage />;
   return <ConnectionSetupFlow byoOnly={byoOnly} credentialSource={credentialSource} host="page"
     onComplete={returningToSkills ? returnToSkills : undefined}
     onCancel={returningToSkills ? returnToSkills : undefined} />;

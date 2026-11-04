@@ -119,6 +119,7 @@ export async function prepareHeartbeatExecutionConfiguration(db: Db, input: Hear
     // native receipt/request there as well as in the admission database update.
     context.modelIntelligence = modelSelection.receipt;
     context.modelIntelligenceRequest = modelSelection.request;
+    context.modelTriage = modelSelection.triage;
     await input.services.appendRunEvent(run, { eventType: "lifecycle", stream: "system", level: "info", message: "Model profile selected", payload: { receiptId: modelSelection.receipt.id, model: modelSelection.receipt.candidate.model, taskType: modelSelection.receipt.taskType, policyVersion: modelSelection.receipt.policyVersion, reason: modelSelection.receipt.reason } });
   }
   const { trustPreset, useIsolatedTaskDirectory, explicitTaskDirectory, requestedExecutionWorkspaceMode } = input.policy;

@@ -19,6 +19,8 @@ interface DecisionResolverProps {
   /** Called after a decide/dismiss so the parent can refresh the feed row. */
   onResolved?: () => void;
   actionLabels?: "native" | "approval";
+  compact?: boolean;
+  onExpand?: () => void;
 }
 
 type IssueDetail = Awaited<ReturnType<typeof issuesApi.get>>;
@@ -41,7 +43,7 @@ export function signedCancelTreePreviewIds(targetIssueId: string, snapshot: { de
  * dismiss mutations, and invalidates the attention feed + target-issue keys on
  * success — same conventions as {@link AttentionInteractionResolver}.
  */
-export function DecisionResolver({ companyId, decisionId, originIssue, agentMap, initialDecision, onResolved, actionLabels }: DecisionResolverProps) {
+export function DecisionResolver({ companyId, decisionId, originIssue, agentMap, initialDecision, onResolved, actionLabels, compact, onExpand }: DecisionResolverProps) {
   const queryClient = useQueryClient();
   const { selectedCompany } = useCompany();
   const prefix = selectedCompany?.issuePrefix ?? "";
@@ -189,6 +191,8 @@ export function DecisionResolver({ companyId, decisionId, originIssue, agentMap,
   return (
     <DecisionCard
       actionLabels={actionLabels}
+      compact={compact}
+      onExpand={onExpand}
       decision={decision}
       executions={decision.executions}
       targetChanged={targetChanged}

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { FridayVoiceSession, pcmWave } from "./friday-voice-session";
+import { FridayVoiceSession, pcmWave, spokenReplyChunks } from "./friday-voice-session";
 class Recognition {
   static latest: Recognition; static starts = 0;
   onstart?: () => void; onend?: () => void; onerror?: (event: { error: string }) => void; onresult?: (event: unknown) => void;
@@ -52,6 +52,21 @@ describe("Friday voice session", () => {
     expect(synthesis.speak).not.toHaveBeenCalled(); expect(session.snapshot().listening).toBe(true);
     session.bind({ ...binding(), busy: false }); expect(session.snapshot().listening).toBe(true);
     session.bind({ ...binding(), busy: false, reply: { id: "stream", body: "The review is complete." } }); expect(synthesis.speak).toHaveBeenCalledOnce();
+  });
+  it("speaks a committed native answer while its run finishes without replaying it at idle", async () => {
+    session.bind({ ...binding(), busy: true, reply: { id: "answer", body: "The review is complete.", committed: true } });
+    expect(synthesis.speak).toHaveBeenCalledOnce();
+    expect(synthesis.speak.mock.calls[0][0].text).toBe("The review is complete.");
+    synthesis.speak.mock.calls[0][0].onend(); await Promise.resolve();
+    session.bind({ ...binding(), busy: false, reply: { id: "answer", body: "The review is complete.", committed: true } });
+    expect(synthesis.speak).toHaveBeenCalledOnce();
+  });
+  it("starts with a short sentence and retains the complete explanation across bounded chunks", () => {
+    const text = `The launch needs your approval. ${"The next step has useful context and evidence. ".repeat(20)}`.trim();
+    const chunks = spokenReplyChunks(text);
+    expect(chunks[0]).toBe("The launch needs your approval.");
+    expect(chunks.join(" ")).toBe(text);
+    expect(chunks.every(chunk => chunk.length <= 220)).toBe(true);
   });
   it("encodes bounded mono PCM as a valid WAV", () => { const data = Uint8Array.from(atob(pcmWave([new Float32Array([0, 1, -1])], 16000)), char => char.charCodeAt(0)); const view = new DataView(data.buffer); expect(new TextDecoder().decode(data.slice(0, 4))).toBe("RIFF"); expect(view.getUint32(24, true)).toBe(16000); expect(view.getInt16(46, true)).toBe(32767); expect(view.getInt16(48, true)).toBe(-32768); });
   it("speaks a clarification and listens for its answer while the provider waits", async () => {

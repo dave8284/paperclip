@@ -321,3 +321,13 @@ and Vercel's signed-in browser served the preview. The Vercel first-deployment
 production exception remains recorded as a separate failed outcome; default
 preview now requires an existing deployment and reports target mismatches for
 reconciliation. See the provider documents for the external-deletion race limit.
+
+
+### AgentOS starting catalog — 2026-11-04
+
+Default discovery in Settings and `/apps` is limited to OpenAI, Anthropic, Stripe,
+Higgsfield, Supabase, Vercel, Google and Calendly. Google uses the native
+`google-workspace` setup. Other saved connections remain manageable behind an
+optional control; credentials, grants, history and explicit existing setup
+continuations are retained. Blank `/apps/connect` returns to the curated catalog.
+This changes discovery, not native connector authorization or allowed actions.

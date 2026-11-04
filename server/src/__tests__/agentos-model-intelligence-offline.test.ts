@@ -181,3 +181,15 @@ describe("native model profile effort identity", () => {
     expect(second.receipt!.candidate.id).toEqual(first.receipt!.candidate.id);
   });
 });
+
+
+it("records native shadow triage alongside the selected model without inventing paid usage or review success", async () => {
+  const selected = await select(selectionDatabase(), {});
+  expect(selected.config.model).toBe(model);
+  expect(selected.triage).toMatchObject({ companyId, runId, taskId: "issue-1", agentId,
+    taskType: "engineering.building", routeChangedByTriage: false,
+    reviewEvidence: "not_established_by_triage",
+    decision: { status: "not_run", reason: "local_disabled", invocationId: null, costCents: null, costStatus: null },
+  });
+  expect(selected.triage?.selectedCandidateId).toBe(selected.receipt?.candidate.id);
+});

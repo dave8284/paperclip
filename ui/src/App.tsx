@@ -110,7 +110,7 @@ const CompanyAccessLegacyRoute = lazy(() => import("./pages/CompanyAccess").then
 const AdvancedToolsRoute = lazy(() => import("./pages/tools/AdvancedToolsRoute").then((module) => ({ default: module.AdvancedToolsRoute })));
 const ProfileWizardRoute = lazy(() => import("./pages/tools/profiles/ProfileWizardRoute").then((module) => ({ default: module.ProfileWizardRoute })));
 const ProfileDetailRoute = lazy(() => import("./pages/tools/profiles/ProfileDetailRoute").then((module) => ({ default: module.ProfileDetailRoute })));
-const Browse = lazy(() => import("./pages/apps/Browse").then((module) => ({ default: module.Browse })));
+const Browse = lazy(() => import("./pages/AgentOSConnectorPage").then((module) => ({ default: module.AgentOSConnectorPage })));
 const AppsConnect = lazy(() => import("./pages/apps/AppsConnect").then((module) => ({ default: module.AppsConnect })));
 const ChatEndpointSetup = lazy(() => import("./pages/apps/chat/ChatEndpointSetup").then((module) => ({ default: module.ChatEndpointSetup })));
 const ChatEndpointDetail = lazy(() => import("./pages/apps/chat/ChatEndpointDetail").then((module) => ({ default: module.ChatEndpointDetail })));

@@ -174,11 +174,13 @@ export function decisionModelService(db: Db, options: { provider?: typeof runDec
     }));
   }
   async function decide(context: DecisionContext, request: DecisionRequest, signal?: AbortSignal): Promise<DecisionResult> {
+    signal?.throwIfAborted();
     const parsed = decisionRequestSchema.safeParse(request);
     if (!parsed.success || Buffer.byteLength(JSON.stringify(parsed.data)) > 32_000) throw unprocessable("Decisions require 1–20 valid questions and at most 32 KB of text/JSON");
     let selected: Awaited<ReturnType<typeof resolve>>;
     try { selected = await resolve(context); }
     catch (error) { const reason = unavailableReason(error); if (reason) return { status: "unavailable", reason }; throw error; }
+    signal?.throwIfAborted();
     const secretId = selected.connection.grant.credentialSecretRefs.find(ref => ref.configPath === "ai.credential")?.secretId;
     const [credentialSnapshot] = secretId ? await db.select({ id: companySecrets.id, status: companySecrets.status, version: companySecrets.latestVersion })
       .from(companySecrets).where(and(eq(companySecrets.companyId, context.companyId), eq(companySecrets.id, secretId))) : [];
@@ -234,8 +236,9 @@ export function decisionModelService(db: Db, options: { provider?: typeof runDec
     await settle(invocation, outcome);
     const { inputTokens, outputTokens, costCents, costStatus } = outcome.receipt;
     const usage = { inputTokens, outputTokens, costCents, costStatus };
-    return outcome.answers ? { status: "succeeded", invocationId: invocation.id, answers: outcome.answers, usage }
-      : { status: "failed", invocationId: invocation.id, errorCode: outcome.errorCode ?? "provider_failed", usage };
+    const execution = { provider: selected.connection.provider, requestedModel: invocation.model, resolvedModel: outcome.resolvedModel ?? null };
+    return outcome.answers ? { status: "succeeded", invocationId: invocation.id, answers: outcome.answers, usage, execution }
+      : { status: "failed", invocationId: invocation.id, errorCode: outcome.errorCode ?? "provider_failed", usage, execution };
   }
   async function recoverInterrupted() {
     const stale = await db.select().from(decisionInvocations).where(and(eq(decisionInvocations.status, "running"), lt(decisionInvocations.startedAt, new Date(Date.now() - 120_000)))).limit(100);

@@ -229,3 +229,15 @@ Product requests, corrections and settled choices are referenced in the tables a
 - U144–U146: credential handoff and repeat branding correction; S02/N07 retain the final state.
 
 This ledger captures the requirements recoverable from the saved text. It does not claim to recover unseen image details, nor does coverage mean implementation is complete. Future work should update individual requirement IDs with acceptance evidence rather than replacing this checklist with another high-level summary.
+
+
+## Latest platform review — 2026-11-04
+
+This new request is tracked in [the fourteen-item execution log](2026-11-04-agentos-platform-fixes.md).
+Its F01–F14 identifiers are local to that document, not replacements for this
+reconciliation's original IDs. It includes all ten original bullets plus the
+main-orb shadow, latest voice clarification (audio works but is slow and too
+brief), compact decisions/detail, explicit Jev implementation, restart failure,
+and focused verification/logging instructions. Paid Jev use still requires a
+funding exception; implementation does not silently override subscription-only
+policy. Public/cloud deployment and Higgsfield sign-in remain deferred.

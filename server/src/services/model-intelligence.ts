@@ -3,10 +3,11 @@ import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { and, desc, eq, gte, lte, sql } from "drizzle-orm";
 import { agents, agentInstructionHeads, companyOperatingProfiles, costEvents, heartbeatRuns, issues, type Db } from "@paperclipai/db";
-import { agentHarnessType, type AiConnectionAttribution, type AiConnectionBinding } from "@paperclipai/shared";
+import { agentHarnessType, type AiConnectionAttribution, type AiConnectionBinding, type ModelTriageReceipt } from "@paperclipai/shared";
 import { models as codexModels } from "@paperclipai/adapter-codex-local";
 import { models as claudeModels } from "@paperclipai/adapter-claude-local";
 import { createModelIntelligence, classifyWork, type ModelIntelligence, type SelectionReceipt, type SelectionInput } from "@agentos/model-intelligence";
+import { observeModelTriage } from "./model-triage.js";
 import { conflict, notFound } from "../errors.js";
 import { logActivity } from "./activity-log.js";
 import type { LogActivityInput } from "./activity-log.js";
@@ -29,7 +30,7 @@ export const classifyModelWork = classifyWork;
 export async function selectCompanyModelProfile(db: Db, input: {
   runId: string; issueId: string | null; agent: typeof agents.$inferSelect;
   config: Record<string, unknown>; binding?: AiConnectionBinding; resumed: boolean;
-}): Promise<{ config: Record<string, unknown>; receipt?: SelectionReceipt; request?: SelectionInput }> {
+}): Promise<{ config: Record<string, unknown>; receipt?: SelectionReceipt; request?: SelectionInput; triage?: ModelTriageReceipt }> {
   const engine = modelIntelligenceProduct();
   const { agent, config, binding } = input;
   if (!engine || input.resumed || !input.issueId || !binding) return { config };
@@ -66,9 +67,16 @@ export async function selectCompanyModelProfile(db: Db, input: {
   const candidatesStillAuthorized = Array.isArray(frozen?.candidates) && frozen.candidates.every(candidate => request.candidates.some(current => current.id === candidate.id && current.provider === candidate.provider && current.model === candidate.model && candidate.method === "subscription" && candidate.available === true));
   if (!frozen || !candidatesStillAuthorized || frozen.pinTask !== undefined || frozen.requestId !== input.runId || frozen.namespace !== agent.companyId || frozen.taskKey !== request.taskKey || frozen.promptFingerprint !== request.promptFingerprint || frozen.contextFingerprint !== request.contextFingerprint || frozen.taskType !== request.taskType || frozen.complexity !== request.complexity || frozen.defaultCandidateId !== request.defaultCandidateId) throw conflict("The queued execution profile changed. Review this task before retrying.");
   const receipt = engine.select(frozen);
-  // Selection is persisted before execution; failure to record audit prevents admission.
-  await db.update(heartbeatRuns).set({ contextSnapshot: sql`coalesce(${heartbeatRuns.contextSnapshot}, '{}'::jsonb) || ${JSON.stringify({ modelIntelligence: receipt })}::jsonb` }).where(and(eq(heartbeatRuns.id, input.runId), eq(heartbeatRuns.companyId, agent.companyId)));
-  return { config: { ...config, model: receipt.candidate.model }, receipt, request: frozen };
+  const triage = await observeModelTriage(db, {
+    context: { companyId: agent.companyId, issueId: input.issueId, actor: { type: "agent", companyId: agent.companyId, agentId: agent.id, runId: input.runId } },
+    runId: input.runId, taskId: input.issueId, agentId: agent.id, title: task.title, description: task.description,
+    candidates: frozen.candidates.map(candidate => ({ id: candidate.id, label: `${candidate.provider} / ${candidate.model}` })),
+    selectedCandidateId: receipt.candidate.id,
+  });
+  // Selection and shadow observations are retained together before execution.
+  // Triage never changes the selected profile or claims an independent review.
+  await db.update(heartbeatRuns).set({ contextSnapshot: sql`coalesce(${heartbeatRuns.contextSnapshot}, '{}'::jsonb) || ${JSON.stringify({ modelIntelligence: receipt, modelTriage: triage })}::jsonb` }).where(and(eq(heartbeatRuns.id, input.runId), eq(heartbeatRuns.companyId, agent.companyId)));
+  return { config: { ...config, model: receipt.candidate.model }, receipt, request: frozen, triage };
 }
 
 export async function modelCatalog(db: Db, companyId: string, includeLearning = false) {

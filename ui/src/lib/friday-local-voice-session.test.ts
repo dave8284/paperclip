@@ -113,3 +113,29 @@ it("keeps local capture alive during speech, drops playback echo and accepts an 
   for (let i = 0; i < 6; i++) capture.frame(0); await flush(); await playback;
   expect(send).toHaveBeenCalledExactlyOnceWith(words); expect(session.snapshot().enabled).toBe(true);
 });
+it("prepares only the next audio chunk during playback and stops lookahead after an interruption", async () => {
+  api.post.mockImplementation(async (_path, body) => body.op === "speak" ? { audio: "YQ==" } : { ready: true });
+  session.bind(binding); await flush();
+  const playback = session.speak("The review is ready. The launch needs one approval. The remaining work is scheduled.");
+  await flush();
+  const calls = () => api.post.mock.calls.filter(call => call[1].op === "speak");
+  expect(calls().map(call => call[1].text)).toEqual(["The review is ready.", "The launch needs one approval."]);
+  expect(Playback.latest.play).toHaveBeenCalledOnce();
+  session.stopSpeaking(); await playback; await flush();
+  expect(calls()).toHaveLength(2);
+  expect(session.snapshot().speaking).toBe(false);
+});
+
+it("plays prepared chunks in order without waiting to start synthesis at the audio boundary", async () => {
+  api.post.mockImplementation(async (_path, body) => body.op === "speak" ? { audio: btoa(body.text) } : { ready: true });
+  session.bind(binding); await flush();
+  const playback = session.speak("The review is ready. The launch needs one approval.");
+  await flush();
+  const first = Playback.latest;
+  expect(first.src).toContain(btoa("The review is ready."));
+  first.onended?.(); await flush();
+  expect(Playback.latest).not.toBe(first);
+  expect(Playback.latest.src).toContain(btoa("The launch needs one approval."));
+  Playback.latest.onended?.(); await playback;
+  expect(session.snapshot().speaking).toBe(false);
+});

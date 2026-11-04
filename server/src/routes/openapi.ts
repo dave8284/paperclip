@@ -10,7 +10,7 @@ import { Router } from "express";
 import { createAgentosPortfolioSchema, createAgentosEmployeeSchema, createAgentosAssignmentSchema, retireAgentosAssignmentSchema } from "@paperclipai/shared";
 import { companyPerformanceQuerySchema, createPerformanceReportSchema } from "@paperclipai/shared";
 import { createManagedApplicationSchema, updateManagedApplicationSchema, managedApplicationListSchema, managedApplicationWorkQuerySchema, linkManagedApplicationProjectSchema, updateOperatingProfileSchema, fridayWorkQuerySchema } from "@paperclipai/shared";
-import { employeeAwarenessQuerySchema } from "@paperclipai/shared";
+import { employeeAwarenessQuerySchema, fridayDiagnosticsQuerySchema } from "@paperclipai/shared";
 import { subscriptionPriceSchema, mergeSubscriptionsSchema } from "@paperclipai/shared";
 import { z } from "zod";
 import {
@@ -5045,6 +5045,7 @@ for (const operation of [
 
 for (const operation of [
   { method: "get", path: "/api/companies/{companyId}/friday/work", summary: "Read current authorized work: project assignments, paginated tasks and owners, department heads, project leads and bounded reporting chains, messages, artifacts and recorded case handoffs", query: fridayWorkQuerySchema },
+  { method: "get", path: "/api/companies/{companyId}/friday/diagnostics", summary: "Diagnose currently readable blocked tasks and task-bound failed runs, local speech installation, local Laya triage readiness and administrator-only saved restart readiness. On-demand, read-only, bounded pages with checked/unknown results, observation time and native source paths. No model loading, inference, provider probes, raw run logs, credentials or complete-platform health claim.", query: fridayDiagnosticsQuerySchema },
   { method: "get", path: "/api/companies/{companyId}/friday/agents/{agentId}/awareness", summary: "Read a shared employee's current authorized assignments and work evidence. Agent callers may read only their own current-company assignment; board callers may read independently authorized company assignments. Shared identity grants no company or private-work access. Paginate assignments with offset/limit; use each company's friday/work agentId filter for further task/project pages.", query: employeeAwarenessQuerySchema },
   { method: "get", path: "/api/companies/{companyId}/friday/performance", summary: "Read source-backed report history for an authorized company, project or department scope; includes accessible unreported projects and explicit truncation", query: companyPerformanceQuerySchema },
   { method: "post", path: "/api/companies/{companyId}/friday/performance", summary: "Record an audited monthly performance revision (applications:manage and project access; expected report ID required)", body: createPerformanceReportSchema },

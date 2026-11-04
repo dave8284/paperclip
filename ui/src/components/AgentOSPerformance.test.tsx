@@ -61,6 +61,33 @@ describe("company performance scope and refresh", () => {
     expect(metrics()).not.toContain("123");
     expect([...host.querySelectorAll("button")].find(button => button.textContent === "Record results")?.disabled).toBe(true);
   });
+  it.each([
+    { reports: [], truncated: false },
+    { reports: [null], truncated: false, scopeProjectIds: [null] },
+    { ...response(null), reports: [{ ...response(null).reports[0], values: undefined }] },
+  ])("shows an actionable read failure for incomplete server data and recovers on retry", async invalid => {
+    mocks.get.mockResolvedValue(invalid);
+    await render();
+    expect(host.querySelector('[role="alert"]')?.textContent).toContain("Performance reports could not be read");
+    expect(metrics()).toContain("Not reported");
+    expect(host.textContent).not.toContain("Private ledger");
+    mocks.get.mockResolvedValue(response(null));
+    await act(async () => [...host.querySelectorAll("button")].find(button => button.textContent === "Retry performance")!.click());
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
+    expect(host.querySelector('[role="alert"]')).toBeNull();
+    expect(metrics()).toContain("123");
+  });
+  it("rejects incomplete cached data before a pending refresh can render it", async () => {
+    const now = new Date(), period = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    client.setQueryData(["company-performance", "company", period, "company", ""], { reports: [], truncated: false });
+    let finish!: (value: CompanyPerformanceResponse) => void;
+    mocks.get.mockReturnValue(new Promise<CompanyPerformanceResponse>(resolve => { finish = resolve; }));
+    await render();
+    expect(host.querySelector('[role="alert"]')?.textContent).toContain("Performance reports could not be read");
+    expect(metrics()).toContain("Not reported");
+    await act(async () => { finish(response(null)); await new Promise(resolve => setTimeout(resolve, 0)); });
+    expect(metrics()).toContain("123");
+  });
   it("withholds totals and editing when the selected scope itself exceeds the cap", async () => {
     mocks.get.mockResolvedValue({ ...response(projectA), truncated: true });
     await render({ projectId: projectA });

@@ -1,4 +1,27 @@
-import type { CompanyPerformanceReport, PerformanceValues } from "@paperclipai/shared";
+import type { CompanyPerformanceReport, CompanyPerformanceResponse, PerformanceValues } from "@paperclipai/shared";
+
+/** Do not render partial/older responses as authoritative reporting coverage. */
+export function readPerformanceResponse(value: unknown): CompanyPerformanceResponse {
+  const response = value as Partial<CompanyPerformanceResponse> | null;
+  if (!response || !Array.isArray(response.reports) || !Array.isArray(response.scopeProjectIds)
+    || typeof response.truncated !== "boolean"
+    || response.scopeProjectIds.some(id => id !== null && typeof id !== "string")
+    || response.reports.some(row => !row || !row.values
+      || typeof row.id !== "string" || typeof row.period !== "string"
+      || !Number.isInteger(row.revision) || row.revision < 1
+      || !response.scopeProjectIds!.includes(row.projectId)
+      || typeof row.sourceLabel !== "string" || typeof row.evidenceRef !== "string"
+      || (row.currency !== null && typeof row.currency !== "string")
+      || !["cash", "accrual"].includes(row.basis)
+      || typeof row.revenueComplete !== "boolean" || typeof row.costsComplete !== "boolean"
+      || ["revenueMinor", "costMinor", "views", "engagements", "publications"].some(key => {
+        const measure = row.values[key as keyof PerformanceValues];
+        return measure !== null && (!Number.isSafeInteger(measure) || measure < 0);
+      }))) {
+    throw new Error("Performance reports could not be read. Retry after the server has finished updating.");
+  }
+  return response as CompanyPerformanceResponse;
+}
 export function latestPerformance(reports: CompanyPerformanceReport[]) {
   const current = new Map<string, CompanyPerformanceReport>();
   for (const report of reports) {

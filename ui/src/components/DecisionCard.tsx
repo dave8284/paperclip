@@ -61,6 +61,9 @@ export interface DecisionCardProps {
   className?: string;
   /** Wording only: typed effects, required inputs and stale-target gates stay native. */
   actionLabels?: "native" | "approval";
+  /** Queue summary retains native actions; details open from its parent row. */
+  compact?: boolean;
+  onExpand?: () => void;
 }
 
 // --- small helpers ----------------------------------------------------------
@@ -241,6 +244,8 @@ export function DecisionCard({
   onDismiss,
   className,
   actionLabels = "native",
+  compact = false,
+  onExpand,
 }: DecisionCardProps) {
   const [inputValues, setInputValues] = useState<Record<string, string>>({});
   const [confirmOptionId, setConfirmOptionId] = useState<string | null>(null);
@@ -293,6 +298,7 @@ export function DecisionCard({
 
   const runOption = (option: DecisionOption) => {
     if (busy) return;
+    if (compact && (isDestructiveOption(option) || (decision.inputs ?? []).length > 0)) { onExpand?.(); return; }
     const cancelTree = cancelTreeEffect(option);
     if (cancelTree && confirmOptionId !== option.id) {
       setConfirmOptionId(option.id);
@@ -323,15 +329,15 @@ export function DecisionCard({
   return (
     <div
       className={cn(
-        "rounded-2xl border bg-background/82 p-4 text-sm",
-        SHELL[tone],
+        compact ? "text-sm" : "rounded-2xl border bg-background/82 p-4 text-sm",
+        !compact && SHELL[tone],
         dimmed && "opacity-80",
         className,
       )}
       data-decision-state={badgeLabel.toLowerCase()}
     >
       {/* Header */}
-      <div className="flex flex-wrap items-start justify-between gap-2">
+      {!compact && <div className="flex flex-wrap items-start justify-between gap-2">
         <h3 className="min-w-0 flex-1 text-base font-semibold text-foreground">{decision.title}</h3>
         <div className="flex shrink-0 items-center gap-1.5">
           {open && hasCancelTree && (
@@ -343,10 +349,10 @@ export function DecisionCard({
             {badgeLabel}
           </span>
         </div>
-      </div>
+      </div>}
 
       {/* Provenance */}
-      <p className="mt-1 text-xs text-muted-foreground">
+      {!compact && <p className="mt-1 text-xs text-muted-foreground">
         Proposed by <span className="font-medium text-foreground">{originAgentName ?? "an agent"}</span>
         {originIssue && (
           <>
@@ -379,10 +385,10 @@ export function DecisionCard({
             <a href={runHref} className="hover:underline">view run</a>
           </>
         )}
-      </p>
+      </p>}
 
       {/* Body */}
-      {decision.body?.trim() && (
+      {!compact && decision.body?.trim() && (
         <div className="mt-3 text-sm leading-6 text-foreground/90">
           {actionLabels === "approval" && <h4 className="mb-2 text-sm font-semibold">Recommendation and context</h4>}
           <MarkdownBody>{decision.body}</MarkdownBody>
@@ -417,7 +423,7 @@ export function DecisionCard({
       )}
 
       {/* Inputs (open only) */}
-      {open && (decision.inputs ?? []).length > 0 && (
+      {!compact && open && (decision.inputs ?? []).length > 0 && (
         <div className="mt-3 space-y-2">
           {(decision.inputs ?? []).map((field) => (
             <label key={field.id} className="block">
@@ -439,14 +445,14 @@ export function DecisionCard({
 
       {/* Options (open only) */}
       {open && (
-        <div className="mt-3 space-y-2">
-          {actionLabels === "approval" && <h4 className="text-sm font-semibold">Proposed course of action</h4>}
+        <div className={compact ? "flex flex-wrap items-center gap-2" : "mt-3 space-y-2"}>
+          {!compact && actionLabels === "approval" && <h4 className="text-sm font-semibold">Proposed course of action</h4>}
           {decision.options.map((option) => {
             const destructive = isDestructiveOption(option);
             const blockedStale = option.effects.some(
               (effect) => effect.staleness === "strict" && decisionEffectTargetIssueIds(effect).some((id) => staleTargetIdSet.has(id)),
             );
-            const disabled = busy || requiredUnmet || blockedStale;
+            const disabled = busy || (!compact && requiredUnmet) || blockedStale || (compact && !onExpand && (requiredUnmet || destructive));
             const cancelTree = cancelTreeEffect(option);
             const confirming = confirmOptionId === option.id;
             const previewRows = cancelTree && cancelTreePreview ? cancelTreePreview(cancelTree.targetIssueId) : null;
@@ -459,7 +465,8 @@ export function DecisionCard({
                   disabled={disabled}
                   onClick={() => runOption(option)}
                   className={cn(
-                    "w-full rounded-sm border px-4 py-3 text-left transition-colors outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50",
+                    "rounded-sm border text-left transition-colors outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50",
+                    compact ? "px-3 py-2" : "w-full px-4 py-3",
                     disabled && "cursor-not-allowed opacity-60",
                     destructive
                       ? "border-rose-500/70 bg-rose-500/5 text-foreground hover:border-rose-500 hover:bg-rose-500/10"
@@ -476,10 +483,10 @@ export function DecisionCard({
                       </span>
                     )}
                   </div>
-                  {option.description && (
+                  {!compact && option.description && (
                     <div className="mt-1 text-sm leading-6 text-muted-foreground">{option.description}</div>
                   )}
-                  {option.effects.length > 0 && (
+                  {!compact && option.effects.length > 0 && (
                     <ul className="mt-2 space-y-0.5">
                       {option.effects.map((effect, index) => (
                         <li
@@ -566,7 +573,7 @@ export function DecisionCard({
           {/* Always-present zero-effect Dismiss (telemetered "no", distinct from expiry) */}
           {(actionLabels === "approval" || !decision.options.some((option) => option.effects.length === 0)) && (
             <div className="flex items-center justify-between gap-2 pt-1">
-              <span className="text-xs text-muted-foreground">{actionLabels === "approval" ? "Decline the proposal without applying its changes." : "Not now?"}</span>
+              {!compact && <span className="text-xs text-muted-foreground">{actionLabels === "approval" ? "Decline the proposal without applying its changes." : "Not now?"}</span>}
               <Button variant="ghost" size="sm" disabled={busy} onClick={() => onDismiss?.()}>
                 {actionLabels === "approval" ? "Disapprove" : "Dismiss — no effects"}
               </Button>

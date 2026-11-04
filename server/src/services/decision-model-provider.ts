@@ -9,7 +9,7 @@ export interface DecisionProviderReceipt {
   costCents: string | null; costStatus: "reported" | "estimated" | "unpriced";
   pricingProvenance: { source: "provider_reported" | "rate_card" | "unknown"; version?: string; evidence?: string; inputCentsPerMillion?: string };
 }
-export interface DecisionProviderOutcome { noProviderWork?: boolean; answers?: Record<string, DecisionAnswer>; errorCode?: string; receipt: DecisionProviderReceipt }
+export interface DecisionProviderOutcome { resolvedModel?: string | null; noProviderWork?: boolean; answers?: Record<string, DecisionAnswer>; errorCode?: string; receipt: DecisionProviderReceipt }
 const record = (v: unknown): Record<string, unknown> => v !== null && typeof v === "object" && !Array.isArray(v) ? v as Record<string, unknown> : {};
 const tokenCount = (v: unknown) => typeof v === "number" && Number.isSafeInteger(v) && v >= 0 && v <= 2_147_483_647 ? v : null;
 function rejectedResponseData(error: unknown) {
@@ -43,16 +43,29 @@ export function decisionReceipt(provider: DecisionProvider, result: unknown): De
 export async function runDecisionProvider(input: {
   provider: DecisionProvider; model: string; apiKey: string; request: DecisionRequest; signal: AbortSignal;
 }, options: { fetch?: typeof fetch } = {}): Promise<DecisionProviderOutcome> {
+  if (input.signal.aborted) return {
+    errorCode: "cancelled_before_dispatch", noProviderWork: true, resolvedModel: null,
+    receipt: { inputTokens: 0, outputTokens: 0, providerRequestId: null, costCents: "0.0000000", costStatus: "estimated",
+      pricingProvenance: { source: "unknown", evidence: "Cancelled before provider dispatch" } },
+  };
   const native = input.provider === "openai"
     ? createOpenAI({ apiKey: input.apiKey, fetch: options.fetch }).decisionModel(input.model)
     : createOpenRouter({ apiKey: input.apiKey, fetch: options.fetch, headers: OPENROUTER_ATTRIBUTION_HEADERS }).evaluationModel(input.model);
   let receipt = decisionReceipt(input.provider, null);
+  let resolvedModel: string | null = null;
+  const retainReportedModel = (body: unknown) => {
+    const model = record(body).model;
+    if (typeof model === "string" && model.trim() && model.length <= 300) resolvedModel = model;
+  };
   // Capture only accounting metadata before SDK answer validation/refusal errors.
   const model: Exclude<Experimental_DecisionModel, string> = {
     specificationVersion: "v4", provider: native.provider, modelId: native.modelId, supportedQuestionTypes: native.supportedQuestionTypes,
     async doDecide(args) {
       const response = await ("doDecide" in native ? native.doDecide(args) : native.doEvaluate(args));
       receipt = decisionReceipt(input.provider, response);
+      // Read the wire field, not SDK modelId: SDKs may substitute the requested
+      // alias when the provider did not report which model answered.
+      retainReportedModel(record(record(response).response).body);
       return { ...response, warnings: [] };
     },
   };
@@ -65,7 +78,7 @@ export async function runDecisionProvider(input: {
         : record(record(record(metadata.openrouter).answers)[id]).confidence;
       return [id, { ...answer, ...(typeof confidence === "number" && confidence >= 0 && confidence <= 1 ? { confidence } : {}) }];
     }));
-    return { answers, receipt };
+    return { answers, receipt, resolvedModel };
   } catch (error) {
     // Never expose provider error messages/bodies; they may contain inputs or credentials.
     const name = error instanceof Error ? error.name : "";
@@ -73,6 +86,7 @@ export async function runDecisionProvider(input: {
     // SDKs can reject refusals or malformed answers before normalized usage.
     // Keep only validated accounting fields, even in this failure path.
     const data = rejectedResponseData(error);
+    retainReportedModel(data);
     const rawUsage = record(data.usage);
     if (receipt.costStatus === "unpriced") {
       receipt = decisionReceipt(input.provider, { usage: { inputTokens: rawUsage.input_tokens, outputTokens: rawUsage.output_tokens },
@@ -88,6 +102,6 @@ export async function runDecisionProvider(input: {
     const noProviderWork = receipt.costStatus === "unpriced" && [400, 401, 403, 404, 422, 429].includes(Number(status));
     if (noProviderWork) receipt = { ...receipt, inputTokens: 0, outputTokens: 0, costCents: "0.0000000", costStatus: "estimated",
       pricingProvenance: { source: "unknown", evidence: `Provider rejected request before model work (HTTP ${status})` } };
-    return { errorCode, receipt, noProviderWork };
+    return { errorCode, receipt, noProviderWork, resolvedModel };
   }
 }

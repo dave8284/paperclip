@@ -128,6 +128,26 @@ afterEach(() => {
 });
 
 describe("DecisionCard", () => {
+  it("keeps native summary actions without repeating the decision body and effect plan", () => {
+    const decide = vi.fn();
+    const el = render({ compact: true, actionLabels: "approval", onDecide: decide });
+    expect(el.querySelector("h3")).toBeNull();
+    expect(el.textContent).not.toContain("Comment on PAP-456");
+    clickButtonWithText(el, "Approve · Comment and snooze");
+    expect(decide).toHaveBeenCalledWith("comment", {});
+  });
+
+  it("opens full detail for destructive and input-bearing summary options without executing them", () => {
+    const decide = vi.fn(), expand = vi.fn();
+    const el = render({ compact: true, onExpand: expand, onDecide: decide, decision: mkDecision({
+      inputs: [{ id: "reason", label: "Reason", required: true }],
+      options: [{ id: "cancel", label: "Cancel work", style: "destructive", effects: [{ type: "cancel_issue_tree", targetIssueId: "issue-target", staleness: "strict", reasonComment: "The launch was withdrawn." }] }],
+    }) });
+    clickButtonWithText(el, "Cancel work");
+    expect(expand).toHaveBeenCalledOnce();
+    expect(decide).not.toHaveBeenCalled();
+    expect(el.querySelector("textarea")).toBeNull();
+  });
   it("labels AgentOS effects as approvals and disapproval uses the native no-effect dismissal", async () => {
     const decide = vi.fn(), dismiss = vi.fn();
     const el = render({ actionLabels: "approval", onDecide: decide, onDismiss: dismiss });

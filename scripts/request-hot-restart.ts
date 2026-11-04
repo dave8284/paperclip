@@ -3,6 +3,8 @@ import { createDb } from "../packages/db/src/index.js";
 import { loadConfig } from "../server/src/config.js";
 import {
   resolveHotRestartIntentPath,
+  readProcessStartedAt,
+  resumePendingHotRestartIntent,
   writeHotRestartIntent,
 } from "../server/src/services/hot-restart.js";
 
@@ -99,17 +101,33 @@ async function readPreflightActiveRunIds() {
 const { serverPid, drainRequired } = readArgs(process.argv.slice(2));
 const preflightActiveRunIds = drainRequired ? [] : await readPreflightActiveRunIds();
 const previousServerInfo = await readPreviousServerInfo();
-const intent = await writeHotRestartIntent({
+const previousServerStartedAt = await readProcessStartedAt(serverPid);
+const input = {
   previousServerPid: serverPid,
   previousServerIdentity: previousServerInfo.identity,
+  previousServerStartedAt,
   previousServerVersion: previousServerInfo.version,
   drainRequired,
   requestedByRunId: process.env.PAPERCLIP_RUN_ID?.trim() || null,
   preflightActiveRunIds,
-});
+};
+let intent: Awaited<ReturnType<typeof writeHotRestartIntent>>;
+try {
+  intent = await writeHotRestartIntent(input);
+} catch (error) {
+  // An accepted board restart may have lost its supervisor notice. The local
+  // operator can resume only that same pending operation after fresh DB and OS
+  // preflight; a stored PID or marker alone is never identity proof.
+  const pending = (error as NodeJS.ErrnoException).code === "EEXIST" && !drainRequired
+    ? await resumePendingHotRestartIntent(input)
+    : null;
+  if (!pending) throw error;
+  intent = pending;
+}
 
 console.log(JSON.stringify({
   status: "hot_restart_intent_written",
+  requestedAt: intent.requestedAt,
   intentPath: resolveHotRestartIntentPath(),
   previousServerPid: intent.previousServerPid,
   previousServerIdentity: intent.previousServerIdentity,

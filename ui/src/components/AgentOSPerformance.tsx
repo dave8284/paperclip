@@ -6,7 +6,7 @@ import { api } from "@/api/client";
 import { projectsApi } from "@/api/projects";
 import { departmentsApi, departmentKey } from "@/api/departments";
 import { queryKeys } from "@/lib/queryKeys";
-import { latestPerformance, performanceSummary, formatPerformanceMoney, currencyScale } from "@/lib/company-performance";
+import { latestPerformance, performanceSummary, formatPerformanceMoney, currencyScale, readPerformanceResponse } from "@/lib/company-performance";
 import { Button } from "./ui/button";
 
 type PerformanceProps = { companyId: string; projectId?: string; departmentId?: string; onAsk: (message: string) => void };
@@ -21,7 +21,7 @@ function PerformanceScope({ companyId, projectId, departmentId }: PerformancePro
   const [editing, setEditing] = useState(false);
   const scope = project ? "project" : department ? "department" : "company";
   const scopeId = project || department;
-  const reports = useQuery({ queryKey: ["company-performance", companyId, period, scope, scopeId], queryFn: ({ signal }) => api.get<CompanyPerformanceResponse>(`/companies/${companyId}/friday/performance?${new URLSearchParams({ period, scope, ...(scopeId ? { scopeId } : {}) })}`, { signal }) });
+  const reports = useQuery({ queryKey: ["company-performance", companyId, period, scope, scopeId], select: readPerformanceResponse, queryFn: ({ signal }) => api.get<CompanyPerformanceResponse>(`/companies/${companyId}/friday/performance?${new URLSearchParams({ period, scope, ...(scopeId ? { scopeId } : {}) })}`, { signal }) });
   const projects = useQuery({ queryKey: queryKeys.projects.list(companyId), queryFn: () => projectsApi.list(companyId) });
   const departments = useQuery({ queryKey: departmentKey(companyId), queryFn: () => departmentsApi.list(companyId) });
   const selectedDepartment = departments.data?.find(row => row.id === department);
@@ -39,6 +39,7 @@ function PerformanceScope({ companyId, projectId, departmentId }: PerformancePro
     <Button variant="outline" disabled={!!department && !project || !readable || reports.data?.truncated} onClick={() => setEditing(value => !value)}>{selectedReport ? "Record new revision" : "Record results"}</Button>
     </div>
     {[reports.error, projects.error, departments.error].filter(Boolean).map((error, index) => <p key={index} role="alert" className="text-destructive">{error!.message}</p>)}
+    {(reports.isError || projects.isError || departments.isError) && <Button type="button" variant="outline" onClick={() => { void reports.refetch(); void projects.refetch(); void departments.refetch(); }}>Retry performance</Button>}
     {reports.isPending && <p role="status">Reading performance reports…</p>}
     <p className="text-sm text-muted-foreground">{department && !project ? "Totals from this department’s accessible projects. Every project must report before totals are shown." : project ? "Results attributed to this project." : "Company-wide figures, recorded separately from project attribution to avoid double counting."} Reports retain their original source and every revision.</p>
     <div className="agentos-performance-metrics">{metrics.map(([label, value]) => <section key={label}><span>{label}</span><strong>{value}</strong></section>)}</div>

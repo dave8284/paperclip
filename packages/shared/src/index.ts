@@ -2854,3 +2854,5 @@ export * from "./agentos-workforce.js";
 export * from "./agentos-administration.js";
 export * from "./agentos-departments.js";
 export * from "./company-performance.js";
+export * from "./model-triage.js";
+export * from "./friday-diagnostics.js";

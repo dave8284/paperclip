@@ -486,6 +486,39 @@ export async function readHotRestartIntent(homeDir?: string) {
     : instanceIntent;
 }
 
+/** Recover only this instance's matching, unconsumed coordinated request. */
+export async function resumePendingHotRestartIntent(input: {
+  previousServerPid: number;
+  previousServerIdentity?: string | null;
+  /** Fresh operating-system observation, required when boot health is unavailable. */
+  previousServerStartedAt?: string | null;
+  preflightActiveRunIds: string[];
+  homeDir?: string;
+}) {
+  const instancePath = resolveHotRestartIntentPath(input.homeDir);
+  const legacyPath = resolveLegacyHotRestartIntentPath(input.homeDir);
+  const bootIdentity = asString(input.previousServerIdentity);
+  const processStartedAt = asDateString(input.previousServerStartedAt);
+  if (!bootIdentity && !processStartedAt) return null;
+  return withHotRestartPathLock(legacyPath, () => withHotRestartPathLock(instancePath, async () => {
+    const instance = await readHotRestartIntentAtPath(instancePath);
+    const legacy = await readHotRestartIntentAtPath(legacyPath);
+    if (!instance?.recoveryRequestId || !legacy
+      || !isSameHotRestartRequest(instance, legacy)
+      || instance.previousServerPid !== input.previousServerPid
+      || (bootIdentity && (instance.previousServerIdentity !== bootIdentity || legacy.previousServerIdentity !== bootIdentity))
+      || (processStartedAt && (instance.previousServerStartedAt !== processStartedAt || legacy.previousServerStartedAt !== processStartedAt))
+      || instance.drainRequired || legacy.drainRequired
+      || instance.shutdownSnapshot || legacy.shutdownSnapshot) return null;
+    // A retry can observe work that started after the first request. Preserve
+    // both preflight sets so an absent shutdown snapshot cannot hide that work.
+    const resumed = { ...instance, preflightActiveRunIds: asStringArray([...instance.preflightActiveRunIds, ...input.preflightActiveRunIds]) };
+    await writeJsonFileAtomic(instancePath, resumed);
+    await writeJsonFileAtomic(legacyPath, resumed);
+    return resumed;
+  }));
+}
+
 export function findMissingHotRestartSnapshotRunIds(intent: HotRestartIntent) {
   const snapshotRunIds = new Set(intent.shutdownSnapshot?.activeRuns.map((run) => run.runId) ?? []);
   return intent.preflightActiveRunIds.filter((runId) => !snapshotRunIds.has(runId));
@@ -554,7 +587,7 @@ export async function writeHotRestartShutdownSnapshot(input: {
   capturedAt?: Date;
   homeDir?: string;
 }) {
-  const updated: HotRestartIntent = {
+  let updated: HotRestartIntent = {
     ...input.intent,
     ...(input.drainReason
       ? {
@@ -570,7 +603,15 @@ export async function writeHotRestartShutdownSnapshot(input: {
     },
   };
   const instancePath = resolveHotRestartIntentPath(input.homeDir);
-  await withHotRestartPathLock(instancePath, () => writeJsonFileAtomic(instancePath, updated));
+  await withHotRestartPathLock(instancePath, async () => {
+    const current = await readHotRestartIntentAtPath(instancePath);
+    if (current && isSameHotRestartRequest(current, input.intent)) {
+      // The signal handler can hold a request read before a concurrent operator
+      // retry added its preflight set. Keep that evidence in the shutdown copy.
+      updated = { ...updated, preflightActiveRunIds: asStringArray([...current.preflightActiveRunIds, ...updated.preflightActiveRunIds]) };
+    }
+    await writeJsonFileAtomic(instancePath, updated);
+  });
   const legacyPath = resolveLegacyHotRestartIntentPath(input.homeDir);
   await withHotRestartPathLock(legacyPath, async () => {
     const legacyIntent = await readHotRestartIntentAtPath(legacyPath).catch(() => null);

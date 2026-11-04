@@ -168,3 +168,13 @@ Scope: ui
 Storybook: CLI authorization approval, pending, expired/denied and already-authorized states.
 Production: Authorize intended CLI identity/context, make scoped request, revoke current server token and retry same bearer; logout alone is insufficient.
 Sources: Source: [CliAuth.tsx](../../ui/src/pages/CliAuth.tsx). Tests: [cli-auth-routes.test.ts](../../server/src/__tests__/cli-auth-routes.test.ts), [board-auth.test.ts](../../cli/src/__tests__/board-auth.test.ts), [token.test.ts](../../cli/src/__tests__/token.test.ts)
+
+
+### AgentOS account controls — 2026-11-04
+
+Admin → Users exposes explicit Edit/Delete actions instead of requiring a name
+click. Management focuses and scrolls into view. It reuses native revisioned
+rename, approval, role, membership and delete endpoints; confirmation, self/last
+admin and outstanding ownership safeguards remain authoritative. The focused
+UI flow verifies rename, self-delete disabled and visible ownership-conflict
+feedback. No real account was deleted for acceptance.

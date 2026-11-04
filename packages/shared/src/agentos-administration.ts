@@ -59,15 +59,21 @@ export const adminEventSchema = z.object({
 
 export const adminModelIntelligenceSchema = z.object({
   since: z.string(), through: z.string(),
-  usage: z.array(z.object({ provider: z.string(), model: z.string(), billingType: z.string(),
+  usage: z.array(z.object({ provider: z.string(), model: z.string(), billingType: z.string(), usageKind: z.string().optional(),
     receipts: z.number(), inputTokens: z.number(), outputTokens: z.number(), recordedCostCents: z.number(),
     unpriced: z.number(),
   })),
-  decisions: z.array(z.object({ provider: z.string(), model: z.string(), attempts: z.number(),
+  decisions: z.array(z.object({ provider: z.string(), model: z.string(), feature: z.string().optional(), attempts: z.number(),
     succeeded: z.number(), failed: z.number(), unknown: z.number(), running: z.number(),
     meanDurationMs: z.number().nullable(),
   })),
   runs: z.array(z.object({ status: z.string(), count: z.number() })),
+  triage: z.object({
+    localRuntime: z.object({ provider: z.literal("local_laya"), state: z.enum(["disabled", "setup_required", "cold", "warming", "ready", "busy", "unavailable"]), model: z.string(), sdkVersion: z.string(), checkpoint: z.string(), externalFallback: z.literal(false) }).optional(),
+    groups: z.array(z.object({ taskType: z.string(), complexity: z.string(), contextStrategy: z.string(), decisionStatus: z.string(), reason: z.string(), provider: z.string().nullable().optional(), requestedModel: z.string().nullable().optional(), resolvedModel: z.string().nullable().optional(), computationKind: z.string().nullable().optional(), proposedTaskType: z.string().nullable().optional(), meanElapsedMs: z.number().nullable().optional(), runs: z.number() })),
+    recordedRuns: z.number(), unrecordedRuns: z.number(), nativeReviewPreparedRuns: z.number(),
+    quality: z.literal("not_evaluated"),
+  }).optional(),
   learning: z.object({ status: z.enum(["not_connected", "connected"]), evaluations: z.number().nullable(), policyReleases: z.number().nullable(),
     selections: z.number().default(0),
     explanation: z.string(),

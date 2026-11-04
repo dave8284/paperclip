@@ -23,6 +23,8 @@ export interface CompanyArtifactAgentSummary {
 export interface CompanyArtifact {
   id: string;
   source: CompanyArtifactSource;
+  /** Explicit saved research records; omitted for uncategorized legacy outputs. */
+  collection?: "research";
   mediaKind: CompanyArtifactMediaKind;
   title: string;
   previewText: string | null;
