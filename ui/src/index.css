@@ -4973,6 +4973,11 @@ html:has(.design-proposal-theme) [data-canonical-toolbar] .collection-toolbar-ta
   --friday-orb-ink: #484848; --friday-orb-glow: #ffffff;
   color-scheme: light; color: var(--foreground); background: var(--background);
 }
+.agentos-public { --agentos-landing-orb-size: 120%; overflow-x: clip; }
+/* The renderer reserves space around its particles for motion. Enlarge only
+   the landing canvas so the visible sphere fills the hero's right column. */
+.agentos-landing-orb-stage { display: grid; place-items: center; width: 100%; aspect-ratio: 1; min-width: 0; }
+.agentos-landing-orb-stage .friday-orb { grid-area: 1 / 1; width: var(--agentos-landing-orb-size); max-width: none; }
 .agentos-root-frame { height: 100dvh; display: flex; flex-direction: column; background: var(--agentos-paper); }
 .agentos-loading { min-height: 60dvh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1rem; font-size: .8125rem; color: var(--muted-foreground); }
 .agentos-loading .friday-orb { width: 6rem; height: 6rem; }

@@ -27,15 +27,15 @@ export function AgentOSLanding({ preview = false }: { preview?: boolean }) {
       </nav>
     </header>
     <main className="mx-auto max-w-6xl px-6">
-      <section className="flex flex-col items-center gap-8 py-12 text-center md:py-16">
-        <div className="flex max-w-4xl flex-col items-center gap-6">
+      <section className="grid items-center gap-8 py-12 text-left md:py-16 lg:grid-cols-2 lg:gap-12">
+        <div className="flex min-w-0 flex-col items-start gap-6">
           <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">Your companies. One conversation.</p>
-          <h1 className="text-5xl font-medium tracking-tight md:text-7xl">Turn ideas into coordinated action.</h1>
+          <h1 className="text-5xl font-medium tracking-tight md:text-6xl xl:text-7xl">Turn ideas into coordinated action.</h1>
           <p className="max-w-xl text-lg leading-relaxed text-muted-foreground">Meet Friday. One place to talk through your ideas, bring your digital team together, and keep your companies moving.</p>
-          <div className="flex flex-wrap items-center justify-center gap-4"><Button asChild size="lg"><Link to="/auth?mode=sign_up">Join the waiting list <ArrowRight className="size-4" /></Link></Button><a href="#how-it-works" className="inline-flex items-center gap-2 text-sm">Take a look around <ArrowDown className="size-4" /></a></div>
+          <div className="flex flex-wrap items-center gap-4"><Button asChild size="lg"><Link to="/auth?mode=sign_up">Join the waiting list <ArrowRight className="size-4" /></Link></Button><a href="#how-it-works" className="inline-flex items-center gap-2 text-sm">Take a look around <ArrowDown className="size-4" /></a></div>
           <p className="text-xs text-muted-foreground">Sign up with Google. We’re welcoming new members as access opens.</p>
         </div>
-        <div className="flex flex-col items-center justify-center gap-2"><FridayOrb state="idle" label="Friday, your portfolio coordinator" decorative pointerReactive /><p className="text-sm text-muted-foreground">Friday, your portfolio coordinator.</p></div>
+        <div className="flex min-w-0 flex-col items-center justify-center gap-2"><div className="agentos-landing-orb-stage"><FridayOrb state="idle" label="Friday, your portfolio coordinator" decorative pointerReactive /></div><p className="text-center text-sm text-muted-foreground">Friday, your portfolio coordinator.</p></div>
       </section>
 
       <section id="meet-friday" aria-labelledby="friday-heading" className="grid scroll-mt-8 gap-10 rounded-3xl bg-muted p-6 md:grid-cols-2 md:p-12">
