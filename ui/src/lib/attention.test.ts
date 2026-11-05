@@ -6,6 +6,7 @@ import {
   attentionBadgeCount,
   attentionDateBucket,
   attentionDetailLine,
+  attentionDecisionSummary,
   attentionIsNewToday,
   attentionKind,
   attentionStatus,
@@ -25,6 +26,18 @@ import {
   sortAttentionItems,
   sourceMeta,
 } from "./attention";
+
+describe("AgentOS decision summary", () => {
+  it("uses the actual summary rather than repeating the plan title", () => {
+    const item = buildItem({ detail: { kind: "plan_approval", issueTitle: "t", planTitle: "Rollout plan", summaryExcerpt: "Release to the pilot group before widening access.", images: [] } });
+    expect(attentionDecisionSummary(item)).toBe("Release to the pilot group before widening access.");
+  });
+  it("skips duplicate titles and markdown headings while preserving recorded context", () => {
+    const item = buildItem({ detail: { kind: "approval", approvalType: "hire_agent", summaryExcerpt: "t", images: [] } });
+    expect(attentionDecisionSummary(item, { payload: { summary: "t", recommendedAction: "## Recommendation\n\nHire **one analyst** for [launch research](https://example.com)." } })).toBe("Hire one analyst for launch research.");
+    expect(attentionDecisionSummary(item)).toBe("why");
+  });
+});
 
 function buildItem(overrides: Partial<AttentionItem> = {}): AttentionItem {
   return {

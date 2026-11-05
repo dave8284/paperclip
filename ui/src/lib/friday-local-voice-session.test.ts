@@ -17,8 +17,9 @@ class LocalAudio {
 }
 class Playback {
   static latest: Playback;
+  static playResult?: () => Promise<void>;
   onended?: () => void; onerror?: () => void;
-  play = vi.fn().mockResolvedValue(undefined); pause = vi.fn();
+  play = vi.fn(() => Playback.playResult?.() ?? Promise.resolve()); pause = vi.fn();
   constructor(public src: string) { Playback.latest = this; }
 }
 let session: FridayVoiceSession;
@@ -27,6 +28,7 @@ const binding = { key: "company:friday", companyId: "company", disabled: false, 
 const flush = () => new Promise(resolve => setTimeout(resolve, 0));
 beforeEach(() => {
   vi.clearAllMocks();
+  Playback.playResult = undefined;
   api.get.mockResolvedValue({ available: true });
   api.post.mockResolvedValue({ ready: true });
   vi.stubGlobal("AudioContext", LocalAudio);
@@ -138,4 +140,66 @@ it("plays prepared chunks in order without waiting to start synthesis at the aud
   expect(Playback.latest.src).toContain(btoa("The launch needs one approval."));
   Playback.latest.onended?.(); await playback;
   expect(session.snapshot().speaking).toBe(false);
+});
+
+it("measures final transcription including outstanding preview work, then submission separately", async () => {
+  let now = 0;
+  session = new FridayVoiceSession(() => now);
+  let finishPreview!: (value: { text: string }) => void, finishFinal!: (value: { text: string }) => void, acknowledge!: () => void;
+  let requests = 0;
+  api.post.mockImplementation((_path, body) => body.op === "prepare" ? Promise.resolve({ ready: true }) : ++requests === 1
+    ? new Promise(resolve => { finishPreview = resolve; }) : new Promise(resolve => { finishFinal = resolve; }));
+  send.mockImplementationOnce(() => new Promise<void>(resolve => { acknowledge = resolve; }));
+  session.bind(binding); await flush(); session.toggle(); await flush();
+  for (let i = 0; i < 6; i++) LocalAudio.processor.frame(.06);
+  now = 100;
+  for (let i = 0; i < 6; i++) LocalAudio.processor.frame(0);
+  await flush();
+  expect(session.snapshot().timings.transcription).toEqual({ status: "pending", durationMs: null });
+  now = 450; finishPreview({ text: "Show my" }); await flush();
+  now = 900; finishFinal({ text: "Show my projects" }); await flush();
+  expect(session.snapshot().timings.transcription).toEqual({ status: "measured", durationMs: 800 });
+  expect(session.snapshot().timings.submission.status).toBe("pending");
+  now = 940; acknowledge(); await flush();
+  expect(session.snapshot().timings.submission).toEqual({ status: "measured", durationMs: 40 });
+  expect(JSON.stringify(session.snapshot().timings)).not.toContain("Show my projects");
+});
+
+it("includes speech preparation in final transcription timing", async () => {
+  let now = 0;
+  session = new FridayVoiceSession(() => now);
+  let ready!: () => void, finish!: (value: { text: string }) => void;
+  api.post.mockImplementation((_path, body) => body.op === "prepare"
+    ? new Promise<void>(resolve => { ready = resolve; }) : new Promise(resolve => { finish = resolve; }));
+  session.bind(binding); await flush(); session.toggle(); await flush();
+  for (let i = 0; i < 6; i++) LocalAudio.processor.frame(.06);
+  now = 100;
+  for (let i = 0; i < 6; i++) LocalAudio.processor.frame(0);
+  await flush(); expect(finish).toBeUndefined();
+  now = 400; ready(); await flush();
+  now = 1000; finish({ text: "Show my projects" }); await flush();
+  expect(session.snapshot().timings.transcription).toEqual({ status: "measured", durationMs: 900 });
+});
+
+it("times audio only after play resolves and ignores a late start after the conversation changes", async () => {
+  let now = 0;
+  session = new FridayVoiceSession(() => now);
+  let synthesized!: (value: { audio: string }) => void, started!: () => void;
+  api.post.mockImplementation((_path, body) => body.op === "prepare" ? Promise.resolve({ ready: true }) : new Promise(resolve => { synthesized = resolve; }));
+  Playback.playResult = () => new Promise<void>(resolve => { started = resolve; });
+  session.bind(binding); await flush();
+  now = 100;
+  const playback = session.speak("Your review is ready.");
+  now = 300; synthesized({ audio: "YQ==" }); await flush();
+  expect(session.snapshot().timings.playback).toEqual({ status: "pending", durationMs: null });
+  now = 550; started(); await flush();
+  expect(session.snapshot().timings.playback).toEqual({ status: "measured", durationMs: 450 });
+  Playback.latest.onended?.(); await playback;
+
+  const later = session.speak("Another reply.");
+  synthesized({ audio: "YQ==" }); await flush();
+  session.bind({ ...binding, key: "other:employee", companyId: "other" });
+  now = 2000; started(); await later; await flush();
+  expect(session.snapshot().timings.companyId).toBe("other");
+  expect(session.snapshot().timings.playback).toEqual({ status: "unmeasured", durationMs: null });
 });

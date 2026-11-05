@@ -10,7 +10,7 @@ const api = vi.hoisted(() => ({ list: vi.fn(), dismiss: vi.fn(async () => ({})),
 vi.mock("../api/attention", () => ({ attentionApi: { list: api.list } }));
 vi.mock("../api/auth", () => ({ authApi: { getSession: api.session } }));
 vi.mock("../api/inboxDismissals", () => ({ inboxDismissalsApi: { dismiss: api.dismiss } }));
-vi.mock("./AttentionQueueRow", () => ({ AttentionQueueRow: ({ item, onDismiss }: any) => <div data-native-decision={item.id}>{item.subject.title}<button onClick={() => onDismiss(item)}>Dismiss {item.id}</button></div> }));
+vi.mock("./AttentionQueueRow", () => ({ AttentionQueueRow: ({ item, onDismiss, expanded, onToggleExpand }: any) => <div data-native-decision={item.id}>{item.subject.title}<button aria-expanded={expanded} onClick={() => onToggleExpand(item)}>Details {item.id}</button><button onClick={() => onDismiss(item)}>Dismiss {item.id}</button></div> }));
 
 describe("Friday project attention", () => {
   let host: HTMLDivElement, root: Root, client: QueryClient;
@@ -19,8 +19,8 @@ describe("Friday project attention", () => {
   const feed = { items: [item], totalCount: 51, nextCursor: "next", generatedAt: "2026-10-25T00:00:00Z" };
   beforeEach(() => { vi.clearAllMocks(); api.list.mockResolvedValue(feed); host = document.createElement("div"); document.body.append(host); root = createRoot(host); client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } }); });
   afterEach(async () => { await act(async () => root.unmount()); host.remove(); client.clear(); });
-  async function render(projectId?: string) {
-    await act(async () => { root.render(<QueryClientProvider client={client}><FridayAttention companyId="company" agents={[]} projectId={projectId} onProject={onProject} onAsk={onAsk} /></QueryClientProvider>); });
+  async function render(projectId?: string, decisionId?: string) {
+    await act(async () => { root.render(<QueryClientProvider client={client}><FridayAttention companyId="company" agents={[]} projectId={projectId} decisionId={decisionId} onProject={onProject} onAsk={onAsk} /></QueryClientProvider>); });
     await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
   }
   async function click(label: string) { await act(async () => [...host.querySelectorAll("button")].find(button => button.textContent === label)!.click()); }
@@ -47,5 +47,16 @@ describe("Friday project attention", () => {
   it("supplies native identity, task, scope and observed proposal to the spoken discussion", () => {
     const context = fridayDecisionContext({ ...item, sourceKind: "decision", updatedAt: "2026-10-28T00:00:00Z", detail: { kind: "generic", summaryExcerpt: "Approve staged rollout", images: [] }, relatedIssue: { id: "task-id", href: "/issues/AGE-2" } } as any, "company");
     for (const expected of ["Company: company", "Project: project", "Native source kind: decision", "id: task", "Related task id: task-id", "/issues/AGE-2", "2026-10-28T00:00:00Z", "Approve staged rollout", "current revision"]) expect(context).toContain(expected);
+  });
+  it("lets a deep-linked decision stay collapsed across a feed refresh", async () => {
+    await render("project", "decision");
+    expect(host.querySelector('button[aria-expanded="true"]')).not.toBeNull();
+    await click("Details decision");
+    expect(host.querySelector('button[aria-expanded="false"]')).not.toBeNull();
+    await click("Refresh");
+    await render("project", "decision");
+    expect(host.querySelector('button[aria-expanded="false"]')).not.toBeNull();
+    await click("Details decision");
+    expect(host.querySelector('button[aria-expanded="true"]')).not.toBeNull();
   });
 });

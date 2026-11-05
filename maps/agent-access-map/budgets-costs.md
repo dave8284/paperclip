@@ -55,6 +55,48 @@ remaining operations before qualifying the whole capability.
 Gaps: Cost visibility applies. Provider accounting imports and quota-window inspection
 have additional board gates.
 
+## `model-routing-audit`
+
+Capability ID: `budgets-costs/model-routing-audit`.
+
+Review: `baseline`.
+
+API: `present` — GET /api/admin/model-intelligence adds read-only task/model
+cohorts and recent run audit projections; GET /api/admin/model-intelligence/learning
+retains the independent selection/evaluation ledger.
+
+Agent access: `restricted` — these are instance-level board administrator reads.
+Company membership, an agent role or task execution does not grant this
+cross-company report. Ordinary task/run links still use their native access rules.
+
+Policy: `assertAdministration` executes before queries. Actual usage joins both
+company and run; selection/triage receipts bind their recorded company/run, and
+evaluation links match both namespace and receipt ID. No prompts, transcripts,
+credentials or full configurations are returned. This projection does not mutate
+model policy, evaluation, review requirements or permissions.
+
+Queue timing uses native run timestamps. First-comment timing requires native
+issue scope, exact company/issue/run/author matching, ordinary comment origin,
+nondeleted state and a timestamp between run start and report time. Only the
+minimum timestamp is read, using the existing company/issue/created-at index.
+No raw comment body or inferred author is projected. These timings do not prove
+provider first-token or audible-response performance.
+
+Evidence: `source-only` — [administrator route](../../server/src/routes/agentos-administration.ts),
+[authorized report](../../server/src/services/agentos-model-analytics.ts) and
+[bounded audit projection](../../server/src/services/agentos-model-audit.ts).
+
+Verification: `not-run` for live board/agent requests. Focused SQL-projection tests
+and administrator component checks cover authorization-before-read, company/run
+binding, selected/actual distinction, bounded truncation and company-owned links.
+Use an administrator and a denied ordinary actor against an owned fixture for
+live acceptance; recorded successful process completion must not become a
+quality pass.
+
+Gaps: The report limits the last 30 days to 100 model/task groups and 50 recent
+runs. Review lookup uses the latest 100 evaluation records; no match is unknown.
+It does not qualify System One accuracy or independent reviewer isolation.
+
 ## `budgets`
 
 Capability ID: `budgets-costs/budgets`.

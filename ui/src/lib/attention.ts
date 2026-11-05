@@ -248,6 +248,51 @@ export function attentionDetailLine(item: AttentionItem): string | null {
   }
 }
 
+/** Use recorded proposal context, never the title or a generated recommendation. */
+export function attentionDecisionSummary(item: AttentionItem, proposal?: {
+  payload?: Record<string, unknown>;
+  body?: string;
+}): string {
+  const detail = item.detail;
+  const excerpt = detail && "summaryExcerpt" in detail ? detail.summaryExcerpt : null;
+  const title = summaryText(item.subject.title).toLocaleLowerCase();
+  const candidates = [
+    proposal?.payload?.summary,
+    proposal?.payload?.recommendedAction,
+    proposal?.payload?.description,
+    proposal?.payload?.nextActionOnApproval,
+    proposal?.payload?.capabilities,
+    proposal?.payload?.plan,
+    proposal?.body,
+    excerpt,
+    attentionDetailLine(item),
+  ];
+  for (const candidate of candidates) {
+    if (typeof candidate !== "string") continue;
+    for (const paragraph of candidate.split(/\n\s*\n/)) {
+      const text = summaryText(paragraph);
+      if (!text || text.toLocaleLowerCase() === title || /^(?:summary|context|recommendation|decision needed):?$/i.test(text)) continue;
+      if (text.length <= 280) return text;
+      const clipped = text.slice(0, 277).replace(/\s+\S*$/, "");
+      return `${clipped || text.slice(0, 277)}…`;
+    }
+  }
+  return item.whyNow?.trim() || "Open the proposal to review the decision and its context.";
+}
+
+function summaryText(value: unknown): string {
+  if (typeof value !== "string") return "";
+  return value
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, "")
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
+    .replace(/^\s*#{1,6}\s+.*$/gm, "")
+    .replace(/^\s*(?:>\s*|[-*+]\s+)/gm, "")
+    .replace(/[*_`]/g, "")
+    .replace(/\s+/g, " ")
+    .replace(/^[“”"]|[“”"]$/g, "")
+    .trim();
+}
+
 /** Screenshot / thumbnail images attached to the detail block, if any. */
 export function attentionDetailImages(item: AttentionItem): AttentionDetailImage[] {
   return (item.detail as AttentionItemDetail | null)?.images ?? [];

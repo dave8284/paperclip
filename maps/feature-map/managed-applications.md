@@ -120,3 +120,20 @@ Voice can play a committed reply before unrelated run cleanup and prepares only
 one subsequent local speech chunk ahead. Focused source tests pass; browser,
 physical audio and native runtime activation are tracked separately in the
 [execution log](../../doc/plans/2026-11-04-agentos-platform-fixes.md).
+
+Voice settings now includes an optional response-timing disclosure. It measures
+the latest final local transcription (including setup/preview waits), native
+message acknowledgment and first playback start using a monotonic clock.
+Playback requires Audio.play resolution or browser speech onstart. These are
+separate operations, not a correlated total; agent-response/end-to-end timing
+is explicitly unmeasured. Durations stay in memory, clear on conversation
+changes, and cancelled/stale work cannot overwrite the current scope. The voice
+session regressions cover those boundaries; physical audible latency still
+requires a user/device check.
+
+The workspace passes the active conversation's company and session key to the
+timing panel separately from the selected business settings scope. Platform
+Friday's timings therefore remain inspectable while viewing business settings;
+the settings API stays company-bound. Missing, mismatched or fully unbound voice
+contexts show no retained measurements. `FridayWorkspaceVoiceTiming.test.tsx`
+exercises this complete component path.

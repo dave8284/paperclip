@@ -10,7 +10,11 @@ export interface VoiceRecognition {
 type VoiceWindow = { SpeechRecognition?: new () => VoiceRecognition; webkitSpeechRecognition?: new () => VoiceRecognition };
 export interface SpokenReply { id: string; body: string; createdAt?: Date | string; /** Persisted user-facing comment, never a transient model/tool stream. */ committed?: boolean }
 export interface VoiceBinding { key: string; companyId?: string; disabled: boolean; busy?: boolean; send?: (text: string) => Promise<void>; draft: (text: string) => void; reply?: SpokenReply; question?: { id: string; body: string }; onTurn?: () => void }
-export interface VoiceState { enabled: boolean; listening: boolean; hearingSpeech: boolean; speaking: boolean; starting: boolean; sending: boolean; interim: string; error: string; local: boolean; checking: boolean; preparing: boolean }
+export interface VoiceTimingMeasurement { status: "unmeasured" | "pending" | "measured" | "unavailable" | "cancelled" | "failed"; durationMs: number | null }
+export interface VoiceTimingContext { companyId?: string; sessionKey: string }
+export interface VoiceTimings { companyId?: string; sessionKey?: string; active: boolean; transcription: VoiceTimingMeasurement; submission: VoiceTimingMeasurement; playback: VoiceTimingMeasurement }
+export interface VoiceState { enabled: boolean; listening: boolean; hearingSpeech: boolean; speaking: boolean; starting: boolean; sending: boolean; interim: string; error: string; local: boolean; checking: boolean; preparing: boolean; timings: VoiceTimings }
+const emptyTimings = (companyId?: string, sessionKey?: string): VoiceTimings => ({ companyId, sessionKey, active: !!sessionKey, transcription: { status: "unmeasured", durationMs: null }, submission: { status: "unmeasured", durationMs: null }, playback: { status: "unmeasured", durationMs: null } });
 // Acoustic echo cancellation handles speaker leakage first. Ignore recognisable
 // playback phrases too, without discarding short answers such as "yes" or "stop".
 function playbackEcho(text: string, reference: string) {
@@ -53,7 +57,7 @@ export function pcmWave(chunks: Float32Array[], rate: number) {
 /** Owns the microphone across React route changes. Native chat owns delivery.
  * No speech is sent without a bound conversation and explicit microphone opt-in. */
 export class FridayVoiceSession {
-  private state: VoiceState = { enabled: false, listening: false, hearingSpeech: false, speaking: false, starting: false, sending: false, interim: "", error: "", local: false, checking: false, preparing: false };
+  private state: VoiceState = { enabled: false, listening: false, hearingSpeech: false, speaking: false, starting: false, sending: false, interim: "", error: "", local: false, checking: false, preparing: false, timings: emptyTimings() };
   private listeners = new Set<() => void>();
   private binding: VoiceBinding | null = null;
   private identity = "";
@@ -75,16 +79,29 @@ export class FridayVoiceSession {
   private captureGeneration = 0;
   private preparation: Promise<void> | null = null;
   private localReady = false;
+  private timingGeneration = 0;
+  constructor(private readonly monotonicNow = () => performance.now()) {}
   autoSpeak = true;
   voiceURI = "";
   subscribe = (listener: () => void) => { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; };
   snapshot = () => this.state;
   private patch(next: Partial<VoiceState>) { this.state = { ...this.state, ...next }; this.listeners.forEach(listener => listener()); }
+  private timing(stage: "transcription" | "submission" | "playback", status: VoiceTimingMeasurement["status"], durationMs: number | null = null) {
+    this.patch({ timings: { ...this.state.timings, [stage]: { status, durationMs } } });
+  }
+  private cancelTimings() {
+    this.timingGeneration++;
+    const timings = this.state.timings;
+    if (![timings.transcription, timings.submission, timings.playback].some(value => value.status === "pending")) return;
+    const cancel = (value: VoiceTimingMeasurement): VoiceTimingMeasurement => value.status === "pending" ? { status: "cancelled", durationMs: null } : value;
+    this.patch({ timings: { ...timings, transcription: cancel(timings.transcription), submission: cancel(timings.submission), playback: cancel(timings.playback) } });
+  }
   canListen() { const host = window as unknown as VoiceWindow; return this.state.local ? !!navigator.mediaDevices?.getUserMedia : !!(host.SpeechRecognition ?? host.webkitSpeechRecognition); }
   bind(value: VoiceBinding) {
     clearTimeout(this.detachTimer);
     if (this.identity && this.identity !== value.key) { this.disable(); this.seen.clear(); this.since = Date.now(); }
     const first = this.identity !== value.key;
+    if (first || this.binding?.companyId !== value.companyId || !this.state.timings.active) { this.cancelTimings(); this.patch({ timings: emptyTimings(value.companyId, value.key) }); }
     this.identity = value.key; this.binding = value;
     if (first && value.reply) this.seen.add(value.reply.id);
     if (first && value.companyId) {
@@ -96,7 +113,7 @@ export class FridayVoiceSession {
       const fresh = !value.reply.createdAt || new Date(value.reply.createdAt).getTime() >= this.since;
       if ((this.autoSpeak || this.requestedReply) && fresh && !document.hidden) { this.requestedReply = false; void this.speak(value.reply.body); }
     }
-    if (value.disabled) { this.pauseCapture(); if (this.state.speaking) this.stopSpeaking(false); }
+    if (value.disabled) { this.cancelTimings(); this.pauseCapture(); if (this.state.speaking) this.stopSpeaking(false); }
     else { this.presentQuestion(); this.resume(); }
   }
   private presentQuestion() {
@@ -107,7 +124,7 @@ export class FridayVoiceSession {
       if (this.autoSpeak || this.requestedReply) { this.requestedReply = false; void this.speak(question.body); }
     }
   }
-  unbind(key: string) { if (this.binding?.key === key) { this.detachTimer = setTimeout(() => { this.disable(); if (this.binding?.key === key) this.binding = null; }, 1500); } }
+  unbind(key: string) { if (this.binding?.key === key) { this.detachTimer = setTimeout(() => { this.disable(); if (this.binding?.key === key) { this.binding = null; this.patch({ timings: { ...this.state.timings, active: false } }); } }, 1500); } }
   private prepareLocal() {
     if (this.preparation) return this.preparation;
     if (!this.state.local || !this.binding?.companyId) return Promise.resolve();
@@ -139,7 +156,7 @@ export class FridayVoiceSession {
     if (this.state.local) void this.listenLocal(); else this.listenBrowser();
   }
   toggle = () => { if (this.state.enabled) this.disable(); else { this.since = Date.now(); this.patch({ enabled: true, error: "" }); if (this.state.local) void this.prepareLocal(); this.presentQuestion(); this.resume(); } };
-  disable = () => { clearTimeout(this.detachTimer); this.requestedReply = false; this.patch({ enabled: false, sending: false, interim: "" }); this.pauseCapture(); this.stopSpeaking(false); };
+  disable = () => { clearTimeout(this.detachTimer); this.cancelTimings(); this.requestedReply = false; this.patch({ enabled: false, sending: false, interim: "" }); this.pauseCapture(); this.stopSpeaking(false); };
   /** A Discuss click requests one spoken response without enabling capture or
    * changing the user's persistent voice preference. */
   requestSpokenReply = (key: string) => {
@@ -149,15 +166,19 @@ export class FridayVoiceSession {
     return true;
   };
   cancelRequestedReply = () => { this.requestedReply = false; };
-  visibility = () => { if (document.hidden) { this.pauseCapture(); this.stopSpeaking(false); } else { if (this.state.local) void this.prepareLocal(); this.presentQuestion(); this.resume(); } };
+  visibility = () => { if (document.hidden) { this.cancelTimings(); this.pauseCapture(); this.stopSpeaking(false); } else { if (this.state.local) void this.prepareLocal(); this.presentQuestion(); this.resume(); } };
   private async deliver(text: string) {
     const target = this.binding;
     if (!text.trim() || !target || target.disabled || !this.state.enabled) { this.resume(); return; }
     this.pauseCapture(); target.onTurn?.();
     if (!target.send) { target.draft(text); this.resume(); return; }
+    if (!this.state.local) this.timing("transcription", "unavailable");
+    const startedAt = this.monotonicNow(), timingGeneration = this.timingGeneration;
+    const currentTiming = () => timingGeneration === this.timingGeneration && this.identity === target.key;
+    this.timing("submission", "pending");
     this.patch({ sending: true, interim: text });
-    try { await target.send(text); }
-    catch (error) { if (this.identity !== target.key) return; if (!(error instanceof Error && "draftPreserved" in error && error.draftPreserved)) target.draft(text); this.patch({ error: error instanceof Error ? error.message : "Message could not be sent. Your text is preserved as a draft." }); }
+    try { await target.send(text); if (currentTiming()) this.timing("submission", "measured", Math.max(0, this.monotonicNow() - startedAt)); }
+    catch (error) { if (currentTiming()) this.timing("submission", "failed"); if (this.identity !== target.key) return; if (!(error instanceof Error && "draftPreserved" in error && error.draftPreserved)) target.draft(text); this.patch({ error: error instanceof Error ? error.message : "Message could not be sent. Your text is preserved as a draft." }); }
     finally { if (this.identity === target.key) { this.patch({ sending: false, interim: "" }); this.resume(); } }
   }
   private listenBrowser() {
@@ -236,15 +257,20 @@ export class FridayVoiceSession {
         // Energy drives endpoint detection, but recognised words confirm a user
         // turn. A steady fan must not silently suppress Friday's next reply.
         if (speechMs >= 250 && (silenceMs >= 750 || totalMs >= 45000)) {
+          // Include encoding, preparation and queued preview work, not merely
+          // the final HTTP request. Do not mix this with provider response time.
+          const startedAt = this.monotonicNow(), timingGeneration = this.timingGeneration;
+          this.timing("transcription", "pending");
           const audio = pcmWave(chunks, context.sampleRate), target = this.binding, reference = turnReference;
           chunks = []; speechMs = 0; this.pauseCapture(); this.patch({ sending: true, interim: previewText || "Finishing your words…" });
-          if (!target?.companyId) { this.patch({ sending: false, interim: "" }); return; }
+          if (!target?.companyId) { this.timing("transcription", "unavailable"); this.patch({ sending: false, interim: "" }); return; }
           const turnGeneration = this.captureGeneration;
           void (async () => { await this.preparation; await previewRequest; if (!this.state.enabled || this.identity !== target.key || this.captureGeneration !== turnGeneration) return { text: "" }; return api.post<{ text: string }>(`/companies/${target.companyId}/friday/voice`, { op: "transcribe", audio }); })().then(result => {
             if (this.identity !== target.key || this.captureGeneration !== turnGeneration) return;
+            if (timingGeneration === this.timingGeneration) this.timing("transcription", "measured", Math.max(0, this.monotonicNow() - startedAt));
             this.patch({ sending: false, interim: "" });
             if (this.state.enabled && result.text.trim() && !playbackEcho(result.text, reference)) { if (this.state.speaking) this.stopSpeaking(false); return this.deliver(result.text); }
-          }).catch(() => { if (this.identity === target.key && this.captureGeneration === turnGeneration) { if (previewText) target.draft(previewText); this.patch({ sending: false, error: "Local transcription could not finish this turn. Any recognised words are saved as a draft. You can retry or type." }); } }).finally(() => this.resume());
+          }).catch(() => { if (this.identity === target.key && this.captureGeneration === turnGeneration) { if (timingGeneration === this.timingGeneration) this.timing("transcription", "failed"); if (previewText) target.draft(previewText); this.patch({ sending: false, error: "Local transcription could not finish this turn. Any recognised words are saved as a draft. You can retry or type." }); } }).finally(() => this.resume());
         } else if (speechMs > 0 && speechMs < 250 && silenceMs >= 750) { chunks = []; speechMs = 0; totalMs = 0; previewAt = 0; speechPeak = 0; turnReference = ""; }
         else if (voiced && speechMs >= 350 && totalMs - previewAt >= 450 && !previewPending && this.localReady && this.binding?.companyId) {
           const target = this.binding;
@@ -266,6 +292,7 @@ export class FridayVoiceSession {
   private playbackReference() { return this.state.speaking ? this.playbackText : ""; }
   stopSpeaking = (resume = true) => {
     this.speechGeneration++;
+    if (this.state.timings.playback.status === "pending") this.timing("playback", "cancelled");
     this.playbackCancel?.(); this.playbackCancel = undefined;
     this.audio?.pause(); if (this.audio) this.audio.src = ""; this.audio = null;
     window.speechSynthesis?.cancel(); this.patch({ speaking: false }); if (resume) this.resume();
@@ -274,6 +301,13 @@ export class FridayVoiceSession {
     const text = spokenReply(body); if (!text || this.binding?.disabled || (this.state.enabled && this.state.hearingSpeech)) return;
     this.stopSpeaking(false); this.patch({ speaking: true, error: "" }); this.resume();
     const generation = this.speechGeneration;
+    const startedAt = this.monotonicNow();
+    this.timing("playback", "pending");
+    const started = () => {
+      if (generation === this.speechGeneration && this.state.timings.playback.status === "pending") {
+        this.timing("playback", "measured", Math.max(0, this.monotonicNow() - startedAt));
+      }
+    };
     const chunks = spokenReplyChunks(text);
     // One lookahead chunk overlaps synthesis with playback. There is no idle
     // work and an interrupted turn cannot enqueue more local inference.
@@ -293,6 +327,7 @@ export class FridayVoiceSession {
           await new Promise<void>((resolve, reject) => {
             this.playbackCancel = resolve; audio.onended = () => resolve(); audio.onerror = () => reject(new Error("Audio playback failed"));
             void audio.play().then(() => {
+              if (index === 0) started();
               if (generation === this.speechGeneration && chunks[index + 1]) prepared = synthesize(chunks[index + 1]);
             }).catch(reject);
           });
@@ -303,13 +338,14 @@ export class FridayVoiceSession {
             const utterance = new SpeechSynthesisUtterance(chunk);
             const voices = window.speechSynthesis.getVoices();
             utterance.voice = voices.find(voice => voice.voiceURI === this.voiceURI) ?? voices.find(voice => voice.localService && /^en\b/.test(voice.lang)) ?? null;
+            if (index === 0) utterance.onstart = started;
             utterance.onend = () => resolve(); utterance.onerror = () => generation !== this.speechGeneration ? resolve() : reject(new Error("Playback blocked"));
             window.speechSynthesis.speak(utterance);
           });
         }
       }
-    } catch { if (generation === this.speechGeneration) this.patch({ error: "Speech playback failed or was blocked. Click Read reply to retry; the response is in your conversation." }); }
-    finally { if (generation === this.speechGeneration) { this.audio = null; this.patch({ speaking: false }); this.resume(); } }
+    } catch { if (generation === this.speechGeneration) { if (this.state.timings.playback.status === "pending") this.timing("playback", "failed"); this.patch({ error: "Speech playback failed or was blocked. Click Read reply to retry; the response is in your conversation." }); } }
+    finally { if (generation === this.speechGeneration) { if (this.state.timings.playback.status === "pending") this.timing("playback", "unavailable"); this.audio = null; this.patch({ speaking: false }); this.resume(); } }
   }
 }
 export const fridayVoiceSession = new FridayVoiceSession();

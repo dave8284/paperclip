@@ -144,6 +144,9 @@ Evidence: `/private/tmp/agentos-auth-waitlist-ui-20261104-r2.log`,
 The [5 November landing and remaining-work checkpoint](2026-11-05-agentos-landing-and-remaining-work.md)
 provides the latest consolidated disposition, including local Laya implementation,
 the new left-text/right-sphere hero and the still-missing application screenshots.
+The subsequent [navigation, response and model-audit backlog](2026-11-05-agentos-navigation-response-model-backlog.md)
+tracks the owner's next review, including collapsible navigation, stable footer,
+decision summaries/disclosure, voice measurements and harness assessment.
 
 1. **Account activation and administration:** complete the owner's native ownership claim and activate the reviewed Google-only/configured-owner backend through its normal authenticated restart; sign in again with the configured Google account to reconcile any legacy ownership, inspect retained conversations/company access, then verify sign-out/in, registration approval, company assignment, suspension and deletion. The supplied credentials are already configured.
 2. **A real operating and EGM proof:** execute Friday → lead → specialist → independent reviewer → accepted output, inspect actual actions/evidence, prove reviewer isolation and restart/recovery, and evaluate a reusable lesson. The Northstar example and installed prompts do not establish this.

@@ -13,6 +13,7 @@ function database() {
   const queries: string[] = [];
   const db = drizzle(async text => {
     queries.push(text);
+    if (text.includes('"model_activity_per_run"') || text.includes('jsonb_agg(observed_model)')) return { rows: [] };
     if (text.includes('from "cost_events"')) return { rows: [["typesafe", "typesafe/jev-1.13", "metered_api", "decision", 1, 12, 0, 0, 1]] };
     if (text.includes('from "decision_invocations"')) return { rows: [["openrouter", "typesafe/jev-1.13", "model_intelligence.triage", 1, 0, 0, 1, 0, null]] };
     if (text.includes("nativeReviewContextReceipt")) return { rows: [[2, 3, 1]] };
@@ -30,8 +31,9 @@ it("separates decision purpose and computation receipts while retaining missing 
   expect(result.decisions[0]).toMatchObject({ feature: "model_intelligence.triage", unknown: 1, meanDurationMs: null });
   expect(result.triage).toMatchObject({ recordedRuns: 2, unrecordedRuns: 3, nativeReviewPreparedRuns: 1, quality: "not_evaluated" });
   expect(result.triage?.groups[0]).toMatchObject({ reason: "subscription_only_policy", decisionStatus: "not_run" });
-  expect(queries).toHaveLength(5);
-  expect(queries.find(text => text.includes('from "cost_events"'))).toContain('group by "cost_events"."provider", "cost_events"."model", "cost_events"."billing_type", "cost_events"."usage_kind"');
+  expect(result.activity).toMatchObject({ taskModels: [], recentRuns: [], moreRuns: false });
+  expect(queries).toHaveLength(7);
+  expect(queries.find(text => text.includes('from "cost_events"') && !text.includes('"model_activity_per_run"'))).toContain('group by "cost_events"."provider", "cost_events"."model", "cost_events"."billing_type", "cost_events"."usage_kind"');
   expect(queries.find(text => text.includes('from "decision_invocations"'))).toContain('"decision_invocations"."feature"');
   expect(queries.every(text => text.includes(" <= ") && text.includes(" >= "))).toBe(true);
 });

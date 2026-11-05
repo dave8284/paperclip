@@ -130,3 +130,15 @@ Voice can play a committed reply before unrelated run cleanup and prepares only
 one subsequent local speech chunk ahead. Focused source tests pass; browser,
 physical audio and native runtime activation are tracked separately in the
 [execution log](../../doc/plans/2026-11-04-agentos-platform-fixes.md).
+
+Voice timing disclosure (2026-11-05) adds no endpoint, agent grant, persistent
+record, telemetry or background polling. It observes client operation boundaries
+using a monotonic clock and stores durations only in memory. Scope changes reset
+measurements; cancelled/stale callbacks cannot attribute old work to the new
+conversation. Native reply/run correlation is absent, so agent-response and
+end-to-end timings remain unmeasured rather than inferred from overlapping turns.
+
+Inspection requires the explicitly active conversation company/session pair;
+the display's business company is not substituted for Friday's platform context.
+The settings API retains its original selected-company scope. Missing,
+mismatched and fully unbound voice contexts cannot expose retained timings.

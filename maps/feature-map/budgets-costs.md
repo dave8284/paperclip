@@ -25,6 +25,7 @@ that hold. See [accounting behavior](../../doc/prompt-injection-prevention.md).
 - `resolution`: `budgets-costs/resolution` — raise or resolve a budget incident through authorized controls and verify resumption.
 - `subscriptions`: `budgets-costs/subscriptions` — inspect subscription fees separately from API usage, edit owned prices, link duplicate accounts, and end or exclude tracking.
 - `accounting-recovery`: `budgets-costs/accounting-recovery` — inspect missing or unresolved run costs and retry saved cost recording without rerunning the agent.
+- `model-routing-audit`: `budgets-costs/model-routing-audit` — administrators compare recorded model/task usage and inspect selection, System One observations and reviewed outcomes per execution.
 
 ## How to get to it (user POV)
 
@@ -43,6 +44,13 @@ Open Activity → Costs (or `/costs` in the production shell), then Subscription
 ### `cost-recording`
 
 Open the Costs overview and expand **run costs unavailable** or **billing types unknown**. Follow **View run** or the agent configuration link for context. **Retry cost recording** appears only for retryable entries and an eligible board user.
+
+### `model-intelligence`
+
+Open Administration → Model Intelligence. Compare Models by task type, filter
+the displayed task/model groups, then expand and collapse a Routing audit trail
+row. Follow its owning-company execution/task links. Selection and evaluation
+controls remain in the existing learning ledger further down the page.
 
 ## Driving it with Playwright and the Paperclip CLI
 
@@ -86,6 +94,36 @@ Manual: Use saved-cost fixtures for waiting-for-receipt, receipt-unavailable, un
 Sources: [Cost notice](../../ui/src/components/CostDataQualityNotice.tsx), [cost routes](../../server/src/routes/costs.ts), [quality report](../../server/src/services/cost-data-quality.ts), and [accounting retry](../../server/src/services/accounting-integrity.ts).
 
 ## Gotchas
+
+### Model Intelligence audit
+
+Source checks: [joined model audit](../../server/src/__tests__/agentos-model-audit.test.ts)
+and [administrator UI](../../ui/src/components/AdminModelIntelligence.test.tsx)
+exercise bounded projections, selected versus observed models, namespace-bound
+reviews, explicit truncation, detail expansion and owning-company links.
+These are controlled SQL-projection/component checks, not a live database or
+browser acceptance claim.
+
+Manual: Compare a known run's actual usage with its selected profile and any
+shadow observation; inspect a mismatching/unrecorded model and absent review.
+Use the company-owned execution link, collapse the row again and change the
+task/model filters. Completed execution is not reviewed quality. Run time includes
+tools/orchestration; a multi-model run appears once in each observed model group.
+The period is 30 days, with up to 100 company/task/model groups and 50 recent runs;
+filters apply to the displayed records. Review lookup uses the current 100-entry
+evaluation ledger, so an absent match remains unknown. No raw prompt, transcript,
+credential or full run configuration is projected into this audit.
+
+Each audit row also separates native queue delay (creation → execution start),
+first recorded agent comment (execution start → earliest retained exact
+company/task/run/agent comment), and total run time. The comment may be progress;
+it is not provider first-token, full-answer or audible-response latency. Missing
+native issue scope or timing/comment evidence is unknown. Fast-response and
+deleted comments, derived attribution and other runs/agents/tasks are excluded.
+
+Sources: [audit projection](../../server/src/services/agentos-model-audit.ts),
+[admin report](../../server/src/services/agentos-model-analytics.ts),
+[audit view](../../ui/src/components/ModelActivityAudit.tsx).
 
 - Retry cost recording consumes saved usage evidence. It does not rerun the agent, recover missing historical model metadata, or prove that a provider invoice is reconciled.
 

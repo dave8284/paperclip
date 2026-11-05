@@ -12,6 +12,7 @@ import { AgentOSConnectors } from "./AgentOSConnectors";
 import { AgentOSVoiceSettings } from "./AgentOSVoiceSettings";
 import { AgentOSDelete } from "./AgentOSDelete";
 import { Button } from "./ui/button";
+import type { VoiceTimingContext } from "@/lib/friday-voice-session";
 
 function CompanyPreferences({ company, onRemoved }: { company: Company; onRemoved?: () => void }) {
   const client = useQueryClient();
@@ -42,7 +43,7 @@ function CompanyPreferences({ company, onRemoved }: { company: Company; onRemove
   </section>;
 }
 
-export function AgentOSSettings({ companyId, onCompanyRemoved }: { companyId: string; onCompanyRemoved?: () => void }) {
+export function AgentOSSettings({ companyId, voiceContext, onCompanyRemoved }: { companyId: string; voiceContext?: VoiceTimingContext; onCompanyRemoved?: () => void }) {
   const [tab, setTab] = useState("Company");
   const company = useQuery({ queryKey: ["agentos-company-settings", companyId], queryFn: () => companiesApi.get(companyId), enabled: tab === "Company" });
   const models = useQuery({ queryKey: ["ai-connections", companyId], queryFn: () => aiConnectionsApi.list(companyId), enabled: tab === "Models" });
@@ -51,7 +52,7 @@ export function AgentOSSettings({ companyId, onCompanyRemoved }: { companyId: st
   return <div className="space-y-6"><nav className="agentos-workspace-tabs" aria-label="Settings sections">{["Company", "Voice", "Connectors", "Models"].map(label => <button type="button" key={label} aria-current={tab === label ? "page" : undefined} onClick={() => setTab(label)}>{label === "Company" && company.data?.purpose === "platform" ? "Platform" : label}</button>)}</nav>
     {[models.error, catalog.error].filter(Boolean).map((error, index) => <p role="alert" key={index} className="text-destructive">{error!.message}</p>)}
     {tab === "Connectors" && <AgentOSConnectors companyId={companyId} />}
-    {tab === "Voice" && <AgentOSVoiceSettings companyId={companyId} />}
+    {tab === "Voice" && <AgentOSVoiceSettings companyId={companyId} voiceContext={voiceContext} />}
     {tab === "Models" && <section className="space-y-4">{catalog.data?.learning && <ModelIntelligenceInsights learning={catalog.data.learning} />}{catalog.data?.learningAccess === "restricted" && <p className="text-sm text-muted-foreground">Company-wide learning and evaluations are available to instance administrators because they include private project work.</p>}<h2 className="text-lg font-semibold">Subscription seats</h2><p className="text-sm text-muted-foreground">Only connected subscription accounts can power company agents. Model access and limits come from the selected account and harness.</p><div className="overflow-x-auto"><table className="agentos-data-table"><thead><tr><th>Account</th><th>Provider</th><th>Billing</th><th>Status</th><th>Access</th></tr></thead><tbody>{models.data?.connections.map(connection => <tr key={connection.grantId}><td>{connection.name}</td><td>{connection.provider}</td><td>{connection.method}</td><td>{connection.status.replaceAll("_", " ")}</td><td><Link to={`/apps/${connection.id}/permissions`}>Manage</Link></td></tr>)}</tbody></table></div><div className="flex gap-4 text-sm"><Link to="/apps/connect?source=openai">Connect Codex</Link><Link to="/apps/connect?source=anthropic">Connect Claude</Link><Link to="/admin?tab=intelligence">Model intelligence and evaluations</Link></div><h3 className="font-semibold">Model catalogue for connected providers</h3><p className="text-sm text-muted-foreground">Models supported by the installed harness. An observed subscription receipt is evidence of previous use; current account entitlement is checked again when work starts. Unproven profiles cannot replace your configured model automatically.</p><div className="overflow-x-auto"><table className="agentos-data-table"><thead><tr><th>Model</th><th>Subscription evidence</th><th>Configured employees</th></tr></thead><tbody>{catalog.data?.models.filter(model => connectedProviders.has(model.provider as "openai" | "anthropic")).map(model => <tr key={`${model.provider}:${model.id}`}><td>{model.label}</td><td>{model.observed ? "Observed in this company" : "Not yet observed"}</td><td>{model.configuredAgents.map(agent => agent.name).join(", ") || "—"}</td></tr>)}</tbody></table></div></section>}
     {tab === "Company" && (company.isPending ? <p role="status">Reading company settings…</p> : company.error ? <p role="alert" className="text-destructive">{company.error.message}</p> : company.data && <CompanyPreferences key={companyId} company={company.data} onRemoved={onCompanyRemoved} />)}
   </div>;

@@ -157,18 +157,35 @@ describe("AttentionQueueRow", () => {
     expect(toggle).not.toHaveBeenCalled();
   });
 
-  it("opens the complete AgentOS proposal and note from the compact decision statement", async () => {
+  it("shows actual proposal context under the title and can expand then collapse its complete plan", async () => {
     function Row() {
       const [expanded, setExpanded] = useState(false);
       return <AttentionQueueRow presentation="agentos" item={buildItem()} companyId="c1" expanded={expanded} onToggleExpand={() => setExpanded(value => !value)} onDismiss={noop} />;
     }
     const el = render(<Row />);
     await vi.waitFor(() => expect([...el.querySelectorAll("button")].find(button => button.textContent === "Approve")?.disabled).toBe(false));
+    expect(el.querySelector('[data-attention-summary]')?.textContent).toBe("Hire for the launch research");
     expect(el.textContent).not.toContain("Create the employee with the approved role");
     act(() => el.querySelector<HTMLElement>('[role="button"][aria-label="Expand decision"]')!.click());
     expect(el.textContent).toContain("Hire for the launch research");
     expect(el.textContent).toContain("Create the employee with the approved role");
     expect(el.querySelector("textarea")).not.toBeNull();
+    const collapse = el.querySelector<HTMLButtonElement>('button[aria-label="Collapse decision"]')!;
+    expect(collapse.textContent).toContain("Hide details");
+    act(() => collapse.click());
+    expect(el.querySelector('button[aria-label="Expand decision"]')).not.toBeNull();
+    expect(el.textContent).not.toContain("Create the employee with the approved role");
+    expect(el.querySelector("textarea")).toBeNull();
+    expect(el.querySelector('[data-attention-summary]')?.textContent).toBe("Hire for the launch research");
+    expect(approvalsApi.approve).not.toHaveBeenCalled();
+    expect(approvalsApi.get).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not read a summary from a mismatched-company proposal", async () => {
+    vi.mocked(approvalsApi.get).mockResolvedValueOnce({ id: "approval-1", companyId: "another-company", status: "pending", payload: { summary: "Private context from another company" } } as never);
+    const el = render(<AttentionQueueRow presentation="agentos" item={buildItem()} companyId="c1" expanded={false} onToggleExpand={noop} onDismiss={noop} />);
+    await vi.waitFor(() => expect(el.textContent).toContain("This proposal is not available in this company"));
+    expect(el.textContent).not.toContain("Private context from another company");
   });
 
   it("shows native approval failures in AgentOS instead of claiming success", async () => {

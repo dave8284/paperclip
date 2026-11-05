@@ -2,6 +2,7 @@ import { ModelLearningPanel } from "./ModelLearningPanel";
 import { useQuery } from "@tanstack/react-query";
 import { administrationApi, adminKey } from "@/api/administration";
 import { Button } from "@/components/ui/button";
+import { ModelActivityAudit } from "./ModelActivityAudit";
 
 const number = (value: number) => new Intl.NumberFormat().format(Math.round(value));
 
@@ -13,6 +14,12 @@ export function AdminModelIntelligence({ userId }: { userId: string | null }) {
     {query.error && <p role="alert" className="text-sm text-destructive">{query.error.message}</p>}
     {query.isPending && <p role="status">Loading recorded model activity…</p>}
     {data && <>
+      <section className="grid gap-4 md:grid-cols-3" aria-label="How model routing works">
+        <div className="space-y-2 rounded-xl border border-border p-4"><h2 className="font-medium">System One · Laya / Jev</h2><p className="text-sm leading-relaxed text-muted-foreground">Small typed decisions such as classifying a task or choosing from an allowed list. Local Laya currently records shadow suggestions; it does not generate Friday’s answers or choose the execution model.</p></div>
+        <div className="space-y-2 rounded-xl border border-border p-4"><h2 className="font-medium">Generative LLM · execution</h2><p className="text-sm leading-relaxed text-muted-foreground">Conversation, research, planning, writing and code run through an eligible harness and model. Recorded usage below identifies the model actually used, separately from the selected profile.</p></div>
+        <div className="space-y-2 rounded-xl border border-border p-4"><h2 className="font-medium">Elephant / Goldfish · context</h2><p className="text-sm leading-relaxed text-muted-foreground">Elephant keeps authoring context; Goldfish requests an independent review with fresh context. These are work and review strategies, not different model providers or proof of quality.</p></div>
+      </section>
+      {data.activity ? <ModelActivityAudit activity={data.activity} /> : <p className="text-sm text-muted-foreground">The connected server does not yet expose the model/task audit. Activate the updated backend to see these records.</p>}
       <section className="space-y-3 rounded-xl border border-border p-5">
         <h2 className="font-medium">Task triage · Shadow observations</h2>
         <p className="text-sm leading-relaxed text-muted-foreground">Rules classify the task; a locally configured Laya model can add typed shadow observations without an external API call. Triage keeps the approved execution route unchanged. It cannot grant access or remove required reviews.</p>

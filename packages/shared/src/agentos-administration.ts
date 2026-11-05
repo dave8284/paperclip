@@ -57,6 +57,28 @@ export const adminEventSchema = z.object({
   action: z.string(), details: z.record(z.string(), z.unknown()), createdAt: z.string(),
 });
 
+export const adminModelActivitySchema = z.object({
+  taskModels: z.array(z.object({
+    companyId: z.string(), companyName: z.string(), taskType: z.string(), provider: z.string(), model: z.string(),
+    runs: z.number(), succeeded: z.number(), failed: z.number(), meanDurationMs: z.number().nullable(),
+    inputTokens: z.number(), outputTokens: z.number(), unpricedReceipts: z.number(),
+  })),
+  moreTaskModels: z.boolean(), taskModelLimit: z.number(),
+  recentRuns: z.array(z.object({
+    id: z.string(), companyId: z.string(), companyName: z.string(), companyPrefix: z.string(), agentId: z.string(), taskId: z.string().nullable(),
+    createdAt: z.string(), status: z.string(), taskType: z.string(), durationMs: z.number().nullable(),
+    queueDelayMs: z.number().nonnegative().nullable().default(null), firstAgentCommentMs: z.number().nonnegative().nullable().default(null),
+    selected: z.object({ provider: z.string(), model: z.string(), reason: z.string(), policyVersion: z.string() }).nullable(),
+    triage: z.object({ status: z.string(), reason: z.string(), provider: z.string().nullable(), model: z.string().nullable(),
+      elapsedMs: z.number().nullable(), contextStrategy: z.string(), proposedTaskType: z.string().nullable(), proposedCandidateId: z.string().nullable(),
+    }).nullable(),
+    actualModels: z.array(z.object({ provider: z.string(), model: z.string() })), actualModelsTruncated: z.boolean(),
+    review: z.object({ passed: z.boolean(), source: z.string(), evidenceRef: z.string(), iterations: z.number(), latencyMs: z.number() }).nullable(),
+  })),
+  moreRuns: z.boolean(), runLimit: z.number(), reviewLookupLimit: z.number(),
+});
+export type AdminModelActivity = z.infer<typeof adminModelActivitySchema>;
+
 export const adminModelIntelligenceSchema = z.object({
   since: z.string(), through: z.string(),
   usage: z.array(z.object({ provider: z.string(), model: z.string(), billingType: z.string(), usageKind: z.string().optional(),
@@ -68,6 +90,7 @@ export const adminModelIntelligenceSchema = z.object({
     meanDurationMs: z.number().nullable(),
   })),
   runs: z.array(z.object({ status: z.string(), count: z.number() })),
+  activity: adminModelActivitySchema.optional(),
   triage: z.object({
     localRuntime: z.object({ provider: z.literal("local_laya"), state: z.enum(["disabled", "setup_required", "cold", "warming", "ready", "busy", "unavailable"]), model: z.string(), sdkVersion: z.string(), checkpoint: z.string(), externalFallback: z.literal(false) }).optional(),
     groups: z.array(z.object({ taskType: z.string(), complexity: z.string(), contextStrategy: z.string(), decisionStatus: z.string(), reason: z.string(), provider: z.string().nullable().optional(), requestedModel: z.string().nullable().optional(), resolvedModel: z.string().nullable().optional(), computationKind: z.string().nullable().optional(), proposedTaskType: z.string().nullable().optional(), meanElapsedMs: z.number().nullable().optional(), runs: z.number() })),

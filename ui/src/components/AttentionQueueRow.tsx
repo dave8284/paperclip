@@ -50,6 +50,7 @@ import {
 import { AttentionInteractionResolver } from "./AttentionInteractionResolver";
 import { DecisionResolver } from "./DecisionResolver";
 import { DecisionPresentation } from "./DecisionPresentation";
+import { AttentionDecisionSummary } from "./AttentionDecisionSummary";
 import { ApprovalPayloadRenderer, BoardApprovalPayload } from "./ApprovalPayload";
 import { StalledReviewActions } from "./StalledReviewActions";
 import { readIssueReviewPolicyMetadata } from "../lib/review-policy";
@@ -181,9 +182,9 @@ export const AttentionQueueRow = memo(function AttentionQueueRow({
   // footer a swap rather than a survivor, so it crossfades with the panel.
   const hasCollapsedOnlyContent = hasImages || inline;
 
-  // Disclosure control. Now the row's only expand affordance: it names what it
-  // does instead of leaving a bare chevron to be decoded, and it sits at the
-  // bottom-left where the eye lands after reading the row.
+  // The named disclosure stays beside the AgentOS headline in both states,
+  // so collapsing a long proposal never requires scrolling to its footer.
+  // Classic rows retain their existing footer placement.
   const toggle = expandable ? (
     <button
       type="button"
@@ -193,7 +194,7 @@ export const AttentionQueueRow = memo(function AttentionQueueRow({
       onClick={activate}
     >
       {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-      {expanded ? "See less" : "See more"}
+      {agentOS ? (expanded ? "Hide details" : "View details") : (expanded ? "See less" : "See more")}
     </button>
   ) : null;
 
@@ -209,7 +210,7 @@ export const AttentionQueueRow = memo(function AttentionQueueRow({
     if (!toggle && !showCompact && !showOpen && !showRestore) return null;
     return (
       <div className="flex flex-wrap items-center justify-between gap-2" data-attention-actions="true">
-        {toggle ?? <span />}
+        {(!agentOS && toggle) || <span />}
 
         <div className="flex flex-wrap items-center gap-2 @xl:justify-end">
           {showCompact && (
@@ -343,26 +344,29 @@ export const AttentionQueueRow = memo(function AttentionQueueRow({
 
       {/* Headline — the primary expand target for inline rows. Title wraps to
           two lines instead of truncating to a sliver on narrow screens. */}
-      <div
-        className={cn(
-          "min-w-0 rounded-md",
-          expandable && "cursor-pointer focus-visible:ring-ring focus-visible:ring-(length:--rad-3) focus-visible:outline-none",
-        )}
-        {...(expandable
-          ? {
-              role: "button",
-              tabIndex: 0,
-              "aria-expanded": expanded,
-              "aria-label": expanded ? "Collapse decision" : "Expand decision",
-              onClick: activate,
-              onKeyDown: onHeaderKeyDown,
-            }
-          : {})}
-      >
-        <span className={cn(agentOS && !expanded ? "line-clamp-1" : "line-clamp-2", "text-sm font-medium text-foreground")} title={item.subject.title ?? undefined}>
-          {item.subject.title ?? meta.label}
-        </span>
-        <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{detailLine}</p>
+      <div className="flex items-start justify-between gap-3">
+        <div
+          className={cn(
+            "min-w-0 flex-1 rounded-md",
+            expandable && "cursor-pointer focus-visible:ring-ring focus-visible:ring-(length:--rad-3) focus-visible:outline-none",
+          )}
+          {...(expandable
+            ? {
+                role: "button",
+                tabIndex: 0,
+                "aria-expanded": expanded,
+                "aria-label": expanded ? "Collapse decision" : "Expand decision",
+                onClick: activate,
+                onKeyDown: onHeaderKeyDown,
+              }
+            : {})}
+        >
+          <span className={cn(agentOS && !expanded ? "line-clamp-1" : "line-clamp-2", "text-sm font-medium text-foreground")} title={item.subject.title ?? undefined}>
+            {item.subject.title ?? meta.label}
+          </span>
+          {agentOS ? <AttentionDecisionSummary item={item} companyId={companyId} /> : <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{detailLine}</p>}
+        </div>
+        {agentOS && toggle}
       </div>
 
       {/* Collapsed-only content. It has no counterpart to morph into — the
@@ -413,7 +417,7 @@ export const AttentionQueueRow = memo(function AttentionQueueRow({
 
       {inline && agentOS && (
         <DecisionPresentation value="approval"><InlineResolver item={item} companyId={companyId} agentMap={agentMap}
-          currentUserId={currentUserId} userLabelMap={userLabelMap} toggle={toggle} agentOS compact={!expanded} onExpand={activate} /></DecisionPresentation>
+          currentUserId={currentUserId} userLabelMap={userLabelMap} toggle={null} agentOS compact={!expanded} onExpand={activate} /></DecisionPresentation>
       )}
 
       {/* A non-inline row keeps one footer across both states — its Open or

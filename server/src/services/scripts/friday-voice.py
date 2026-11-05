@@ -3,27 +3,36 @@ import base64, contextlib, io, json, os, sys
 from pathlib import Path
 root = Path(os.environ["AGENTOS_VOICE_HOME"])
 speech = None
-prepared = False
+prepared = set()
 
 def handle(message):
-    global speech, prepared
+    global speech
     import numpy as np
     import soundfile as sf
     if message["op"] == "prepare":
-        if not prepared:
-            import mlx_whisper
+        mode = message.get("mode", "all")
+        if mode not in ("all", "speech", "transcription"):
+            raise ValueError("Unsupported preparation mode")
+        if mode in ("all", "speech") and "speech" not in prepared:
             from kokoro_onnx import Kokoro
+            if speech is None: speech = Kokoro(str(root / "kokoro-v1.0.onnx"), str(root / "voices-v1.0.bin"))
+            # Explicit voice preparation absorbs the first inference cost.
+            # Discard synthetic audio; nothing is played or recorded here.
+            speech.create("Ready.", voice="af_heart", speed=1.0, lang="en-us")
+            prepared.add("speech")
+        if mode in ("all", "transcription") and "transcription" not in prepared:
+            import mlx_whisper
             # Prime local model loading/compilation with synthetic silence only.
             # No microphone access or network model download is involved.
             mlx_whisper.transcribe(np.zeros(16000, dtype=np.float32), path_or_hf_repo=str(root / "whisper"), language="en", condition_on_previous_text=False, temperature=0.0, verbose=False)
-            if speech is None: speech = Kokoro(str(root / "kokoro-v1.0.onnx"), str(root / "voices-v1.0.bin"))
-            prepared = True
+            prepared.add("transcription")
         return {"ready": True}
     if message["op"] == "speak":
         if speech is None:
             from kokoro_onnx import Kokoro
             speech = Kokoro(str(root / "kokoro-v1.0.onnx"), str(root / "voices-v1.0.bin"))
         samples, rate = speech.create(message["text"], voice="af_heart", speed=1.0, lang="en-us")
+        prepared.add("speech")
         stream = io.BytesIO()
         sf.write(stream, samples, rate, format="WAV", subtype="PCM_16")
         return {"audio": base64.b64encode(stream.getvalue()).decode(), "sampleRate": rate}

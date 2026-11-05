@@ -3,12 +3,14 @@ import { modelIntelligenceProduct } from "./model-intelligence.js";
 import { and, gte, lte, sql } from "drizzle-orm";
 import { costEvents, decisionInvocations, heartbeatRuns, type Db } from "@paperclipai/db";
 import { assertAdministration, type AdminPrincipal } from "./agentos-administration.js";
+import { modelActivityAudit } from "./agentos-model-audit.js";
 
 // Agent OS's read projection over recorded native evidence. Learning policy
 // state belongs to the independent model product, not these billing tables.
 export async function modelIntelligenceAnalytics(db: Db, actor: AdminPrincipal, now = new Date()) {
   await assertAdministration(db, actor);
   const since = new Date(now.getTime() - 30 * 86400000);
+  const learning = modelIntelligenceProduct()?.analytics();
   const triageTask = sql<string>`${heartbeatRuns.contextSnapshot} #>> '{modelTriage,taskType}'`;
   const triageComplexity = sql<string>`${heartbeatRuns.contextSnapshot} #>> '{modelTriage,complexity}'`;
   const triageContext = sql<string>`${heartbeatRuns.contextSnapshot} #>> '{modelTriage,contextStrategy}'`;
@@ -20,7 +22,7 @@ export async function modelIntelligenceAnalytics(db: Db, actor: AdminPrincipal, 
   const triageComputation = sql<string | null>`${heartbeatRuns.contextSnapshot} #>> '{modelTriage,decision,computationKind}'`;
   const triageProposedTask = sql<string | null>`${heartbeatRuns.contextSnapshot} #>> '{modelTriage,decision,proposedTaskType}'`;
   const recordedTriage = sql`${heartbeatRuns.contextSnapshot} #>> '{modelTriage,schema}' = 'agentos.model-triage.v1'`;
-  const [usage, decisions, runs, triageGroups, triageCounts] = await Promise.all([
+  const [usage, decisions, runs, triageGroups, triageCounts, activity] = await Promise.all([
     db.select({
       provider: costEvents.provider, model: costEvents.model, billingType: costEvents.billingType, usageKind: costEvents.usageKind,
       receipts: sql<number>`count(*)::int`,
@@ -52,9 +54,9 @@ export async function modelIntelligenceAnalytics(db: Db, actor: AdminPrincipal, 
       unrecordedRuns: sql<number>`count(*) filter (where not coalesce((${recordedTriage}), false))::int`,
       nativeReviewPreparedRuns: sql<number>`count(*) filter (where ${heartbeatRuns.runnerProfileJson} #>> '{nativeReviewContextReceipt,stage}' = 'server_prepared')::int`,
     }).from(heartbeatRuns).where(and(gte(heartbeatRuns.createdAt, since), lte(heartbeatRuns.createdAt, now))),
+    modelActivityAudit(db, since, now, learning),
   ]);
-  const learning = modelIntelligenceProduct()?.analytics();
-  return { since: since.toISOString(), through: now.toISOString(), usage, decisions, runs,
+  return { since: since.toISOString(), through: now.toISOString(), usage, decisions, runs, activity,
     triage: { localRuntime: { provider: "local_laya" as const, state: await localTriageRuntime.status({ readOnly: true }), model: localTriageModelId, sdkVersion: localTriagePin.sdkVersion, checkpoint: localTriagePin.checkpoint, externalFallback: false as const }, groups: triageGroups, recordedRuns: triageCounts[0]?.recordedRuns ?? 0,
       unrecordedRuns: triageCounts[0]?.unrecordedRuns ?? 0, nativeReviewPreparedRuns: triageCounts[0]?.nativeReviewPreparedRuns ?? 0,
       quality: "not_evaluated" as const },

@@ -6,6 +6,7 @@ import { attentionApi } from "@/api/attention";
 import { fridayApi, fridayKey } from "@/api/friday";
 import { heartbeatsApi } from "@/api/heartbeats";
 import { queryKeys } from "@/lib/queryKeys";
+import { attentionDecisionSummary } from "@/lib/attention";
 import type { FridayNavigation } from "@/lib/friday-navigation";
 import { useFridayUpdates } from "@/hooks/useFridayUpdates";
 import { AgentOSCompanyScope } from "./AgentOSCompanyScope";
@@ -40,7 +41,7 @@ export function AgentOSDecisionPeek({ companies, navigate }: { companies: Compan
   const feeds = useQueries({ queries: companies.map(company => ({ queryKey: [...queryKeys.attention(company.id), "preview"], queryFn: () => attentionApi.list(company.id, { limit: 3, sort: "decide" }) })) });
   const items = feeds.flatMap((feed, index) => feed.isSuccess ? feed.data.items.map(item => ({ item, company: companies[index] })) : []).slice(0, 3);
   return <section className="agentos-home-decisions" aria-label="Decisions and blockers"><div className="agentos-section-heading"><h2>A few things to move forward</h2><button type="button" onClick={() => navigate(companies.length === 1 ? { panel: "attention", companyId: companies[0].id } : { panel: "attention", scope: "portfolio" })}>Review all <ArrowRight /></button></div>
-    <div className="agentos-decision-cards">{items.map(({ item, company }) => <button type="button" key={`${company.id}:${item.id}`} onClick={() => navigate({ panel: "attention", companyId: company.id, projectId: item.project?.id ?? undefined, decisionId: item.id })}><span className="agentos-eyebrow">{company.name}{item.project ? ` / ${item.project.name}` : ""}</span><strong>{item.subject.title ?? item.whyNow}</strong><span>{item.whyNow}<ArrowRight /></span></button>)}</div>
+    <div className="agentos-decision-cards">{items.map(({ item, company }) => <button type="button" key={`${company.id}:${item.id}`} onClick={() => navigate({ panel: "attention", companyId: company.id, projectId: item.project?.id ?? undefined, decisionId: item.id })}><span className="agentos-eyebrow">{company.name}{item.project ? ` / ${item.project.name}` : ""}</span><strong>{item.subject.title ?? item.whyNow}</strong><span>{attentionDecisionSummary(item)}<ArrowRight /></span></button>)}</div>
     {feeds.some(feed => feed.isPending) && <p className="text-sm text-muted-foreground">Checking what needs you…</p>}
     {feeds.some(feed => feed.isError) && <p role="alert" className="text-sm text-destructive">Some companies could not be checked. Open Decisions to retry.</p>}
     {!items.length && feeds.every(feed => feed.isSuccess) && <p className="agentos-empty">A little room to breathe. No decisions or blockers currently need you.</p>}

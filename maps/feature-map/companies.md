@@ -37,7 +37,16 @@ Settings opens Company information and contains Voice, Connectors and Models.
 Company archival/deletion is confined to Company settings in the Agent OS shell;
 ordinary Workforce and work headers have no company-delete action. The native
 review and portfolio-home retention rules still apply.
-Departments precede Projects in the sidebar. Assign department heads in
+Departments precede Projects in the sidebar. Both lists start collapsed and can
+be opened/closed independently; expanding a department reveals its projects,
+and an active department can still be collapsed. Opening a group also opens its
+scoped overview. Project rows are compact, truncate long names with the full
+name available on hover, and exclude archived projects. Switching companies
+resets the visible branches to avoid carrying the previous company's tree.
+The desktop main menu scrolls independently from the footer; Workforce, Audit
+trail, Saved displays and Settings remain reachable beside long Audit results.
+Mobile group expansion keeps the menu open until a destination is selected.
+Assign department heads in
 Departments and project leads in Projects; these labels do not expand access.
 Friday can read the associated ownership/reporting chain through the work
 awareness API before asking an authorized lead for more context. The bundled
@@ -51,7 +60,10 @@ Project attribution is not added to a separate company total.
 Automated refinement evidence: Friday/navigation, display-context and performance
 unit tests plus the performance service tests. Settings, navigation and department
 tests cover profile/deletion placement, same-company active heads, revision
-conflicts and private-project filtering. Browser verification remains blocked.
+conflicts and private-project filtering. `AgentOSNavigation.test.tsx` also covers
+progressive collapse/expansion, company changes, archived-project exclusion and
+footer destinations through Audit navigation. Viewport/footer positioning still
+requires rendered-browser acceptance; browser verification remains blocked.
 
 ### `package-transfer`
 

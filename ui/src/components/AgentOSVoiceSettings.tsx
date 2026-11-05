@@ -3,7 +3,9 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "@/api/client";
 import { useFridayVoicePreferences, setFridayVoicePreferences } from "@/lib/friday-voice-preferences";
 import { Button } from "./ui/button";
-export function AgentOSVoiceSettings({ companyId }: { companyId: string }) {
+import { FridayVoiceTiming } from "./FridayVoiceTiming";
+import type { VoiceTimingContext } from "@/lib/friday-voice-session";
+export function AgentOSVoiceSettings({ companyId, voiceContext }: { companyId: string; voiceContext?: VoiceTimingContext }) {
   const preferences = useFridayVoicePreferences();
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
   const voice = useQuery({ queryKey: ["friday-voice", companyId], queryFn: () => api.get<{ available: boolean; reason: string | null }>(`/companies/${companyId}/friday/voice`) });
@@ -19,5 +21,6 @@ export function AgentOSVoiceSettings({ companyId }: { companyId: string }) {
     <p className="text-sm text-muted-foreground">Tap the microphone on Friday to begin. Red means muted; blue means enabled. Your words appear as you speak. A brief pause sends your turn, and you can interrupt Friday and keep talking while she thinks. Moving to another view keeps the mic enabled and minimises the conversation.</p>
     <p className="text-sm text-muted-foreground">Local speech runs on this computer; audio is not retained. The transcript goes to your connected agent. Browser speech fallback may use your browser’s speech provider.</p>
     <Button variant="outline" onClick={() => void voice.refetch()}>Check local speech</Button>{voice.error && <p role="alert" className="text-destructive">{voice.error.message}</p>}
+    <FridayVoiceTiming context={voiceContext} />
   </section>;
 }

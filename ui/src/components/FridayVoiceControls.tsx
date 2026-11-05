@@ -3,6 +3,7 @@ import { Mic, MicOff, Volume2, Square } from "lucide-react";
 import { FridayVoiceSession, fridayVoiceSession, type SpokenReply } from "@/lib/friday-voice-session";
 import { useFridayVoicePreferences, setFridayVoicePreferences } from "@/lib/friday-voice-preferences";
 import { Button } from "./ui/button";
+import { FridayVoiceTiming } from "./FridayVoiceTiming";
 export { spokenReply } from "@/lib/friday-voice-session";
 
 export function FridayVoiceControls({ onTranscript, reply, question, disabled = false, renderPresence, compact = false, minimal = false, speakReplies = false, onVoiceMessage, assistantName = "Friday", sessionKey, companyId, busy, onTurn }: {
@@ -36,6 +37,7 @@ export function FridayVoiceControls({ onTranscript, reply, question, disabled = 
     <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={autoSpeak} onChange={event => toggleAutoSpeak(event.target.checked)} />Speak new replies</label>
     {!voice.local && !!voices.length && <select aria-label={`${assistantName} voice`} className="rounded-md border bg-background px-2 py-1 text-xs" value={voiceURI} onChange={event => setFridayVoicePreferences({ voiceURI: event.target.value })}><option value="">System voice</option>{voices.map(item => <option key={item.voiceURI} value={item.voiceURI}>{item.name} · {item.lang}</option>)}</select>}
     <p className="text-xs text-muted-foreground">{voice.checking ? "Checking local speech…" : voice.local ? "Whisper + Kokoro · speech runs on this computer. Pause briefly to send; you can interrupt Friday or keep talking while she thinks." : session.canListen() ? "Browser speech fallback: your browser may send audio to its speech provider. Pause to send. Your microphone stays enabled as you navigate." : "This browser does not support dictation and local speech is not ready. You can type and listen to replies."}</p>
+    <FridayVoiceTiming session={session} context={{ companyId, sessionKey: key }} />
   </>;
   return <div className={compact ? "friday-voice" : "space-y-2"} aria-label={`${assistantName} voice controls`}>
     {renderPresence?.({ ...voice, canListen, toggleListening: session.toggle })}

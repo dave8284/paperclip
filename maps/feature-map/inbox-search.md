@@ -173,3 +173,11 @@ Agent OS decision presentation keeps native resolvers visible without expanding 
 AgentOS requests the native attention feed with `category=proposals` for Decisions and `category=work` for its Work attention list. Category and project filtering happen after native visibility checks and before counts/pagination; unfiltered callers keep the classic feed. Typed decisions, resolvable approvals/join requests, and explicit interaction confirmations are proposals. Raw failed runs, review stalls and operational alerts stay Work; questions stay conversational. Legacy board-approval records without an inline native resolver remain accessible through their Work source link rather than being relabelled as an executable binary approval.
 
 Approval cards load the actual native payload, recommendation, stated approval effect and risks inline. Unreadable, mismatched-company or no-longer-pending proposals cannot be acted on in this presentation. Native typed decisions retain options, input requirements, effect previews and stale-revision guards. Discuss/alternative instructions carry the selected company, project, native source/task identity and observed proposal context to Friday; they never grant approval. `attention-service.test.ts`, `attention-category.test.ts`, `AttentionQueueRow.test.tsx`, `FridayAttention.test.tsx`, and `FridayWorkBlockers.test.tsx` cover filtering, private-source exclusions, pagination, empty categories and native controls. Browser visuals and actual spoken output remain separate verification.
+
+AgentOS keeps View details / Hide details beside the decision title in both states.
+The summary below the title prefers recorded proposal context over a repeated
+title or generic waiting reason. It observes the existing resolver's detail cache
+without an additional request and excludes failed or mismatched-company reads;
+the feed supplies the initial fallback. Home previews use the recorded feed
+summary too. A deep-linked decision can be collapsed and remains collapsed after
+refresh. The row and Friday attention regressions cover this interaction.

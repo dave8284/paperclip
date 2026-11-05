@@ -7,6 +7,7 @@ import { AdminModelIntelligence } from "./AdminModelIntelligence";
 const intelligence = vi.hoisted(() => vi.fn());
 vi.mock("@/api/administration", () => ({ administrationApi: { intelligence }, adminKey: (id: string) => ["admin", id] }));
 vi.mock("./ModelLearningPanel", () => ({ ModelLearningPanel: () => null }));
+vi.mock("@/lib/router", () => ({ Link: ({ to, children, ...props }: any) => <a href={to} {...props}>{children}</a> }));
 (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;
 let root: Root, host: HTMLDivElement, client: QueryClient;
 const fixture = {
@@ -59,4 +60,31 @@ it("shows local readiness and measured shadow evidence without claiming quality 
   expect(host.textContent).toContain("Reported unknown");
   expect(host.textContent).toContain("Hardware cost unpriced");
   expect(host.textContent).not.toContain("Jev route · typed decisions");
+});
+
+it("shows task/model evidence, reversible audit details and company-owned execution links", async () => {
+  const group = { companyId: "company-a", companyName: "Northstar", taskType: "engineering.building", provider: "openai", model: "actual-model", runs: 1, succeeded: 1, failed: 0, meanDurationMs: 5000, inputTokens: 12, outputTokens: 3, unpricedReceipts: 1 };
+  intelligence.mockResolvedValue({ ...fixture, activity: {
+    taskModels: [group], moreTaskModels: false, taskModelLimit: 100, moreRuns: false, runLimit: 50, reviewLookupLimit: 100,
+    recentRuns: [{ id: "run-a", companyId: "company-a", companyName: "Northstar", companyPrefix: "NST", agentId: "agent-a", taskId: "task-a", createdAt: "2026-11-04T00:00:00Z", status: "succeeded", taskType: group.taskType, durationMs: 5000, queueDelayMs: 125, firstAgentCommentMs: 2500,
+      selected: { provider: "openai", model: "selected-model", reason: "baseline", policyVersion: "v1" }, triage: null,
+      actualModels: [{ provider: "openai", model: "actual-model" }], actualModelsTruncated: false,
+      review: { passed: true, source: "human", evidenceRef: "Acceptance tests reviewed", iterations: 2, latencyMs: 5000 } }],
+  } });
+  await mount();
+  expect(host.textContent).toContain("Models by task type");
+  expect(host.textContent).toContain("Actual execution");
+  expect(host.textContent).toContain("completed runs are not quality passes");
+  expect(host.textContent).toContain("Acceptance tests reviewed");
+  expect(host.textContent).toContain("Queue delay125 ms");
+  expect(host.textContent).toContain("First recorded agent comment2.5 s");
+  expect(host.textContent).toContain("not provider first-token, complete-answer or audible-response timing");
+  const audit = host.querySelector<HTMLDetailsElement>('[aria-label="Model activity and routing audit"] details')!;
+  expect(audit.open).toBe(false);
+  await act(async () => audit.querySelector("summary")!.click()); expect(audit.open).toBe(true);
+  await act(async () => audit.querySelector("summary")!.click()); expect(audit.open).toBe(false);
+  expect(host.querySelector('a[href="/NST/agents/agent-a/runs/run-a"]')).not.toBeNull();
+  expect(host.querySelector('a[href="/NST/issues/task-a"]')).not.toBeNull();
+  const filter = [...host.querySelectorAll("select")].find(select => select.parentElement?.textContent?.startsWith("Executed model"))!;
+  expect([...filter.options].map(option => option.value)).toEqual(["", "openai / actual-model"]);
 });

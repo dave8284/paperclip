@@ -202,3 +202,9 @@ Friday consumes the existing attention feed and native decision controls. `GET /
 Agent OS inline decision presentation changes no endpoint or actor grant. Always-visible approval controls call the existing approval/join-request/interaction/typed-decision resolvers. Disapprove on a typed-effect decision calls native no-effect dismissal; it does not reject or mutate unrelated tasks. Required inputs, rejection reasons, target staleness, preview confirmations, resolver audience and native mutation failures remain authoritative. “Discuss with Friday” sends explicit source/company/project/task context and keeps changed actions subject to their native approval requirements. DOM regressions cover this wiring; they do not establish additional agent authorization or live-provider execution.
 
 AgentOS presentation extension (2026-10-28): optional `category=proposals|work` on the existing attention GET filters authorized records before counts/pages. It grants no additional agent access; route board/user checks and native source permissions remain intact. Linked approvals now inherit project/task references from the already-authorized issue summary, so company/project Decisions agree. Discussion context identifies native sources and asks Friday to re-read current revisions; it is not an approval or an autonomous resolver. Raw operational items and conversational questions are not counted as executable proposals. Database and UI regression coverage is described in the companion feature map; no live agent or microphone qualification is claimed.
+
+Decision summary/disclosure refinement (2026-11-05): summaries are excerpts of
+existing authorized feed/payload/body context, not generated recommendations.
+The summary observes the native resolver cache and discards failed or
+mismatched-company detail reads. No endpoint, actor grant or mutation changes;
+expanding/collapsing never resolves a decision.

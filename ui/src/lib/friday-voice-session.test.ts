@@ -139,4 +139,29 @@ describe("Friday voice session", () => {
     session.bind({ ...binding(), send: vi.fn().mockRejectedValue(error) }); session.toggle(); Recognition.latest.result("Show the decision", false); await vi.advanceTimersByTimeAsync(1000);
     expect(session.snapshot()).toMatchObject({ error: "Draft needs review", enabled: true, listening: true }); expect(draft).not.toHaveBeenCalled();
   });
+  it("waits for browser speech onstart to measure playback and drops cancelled starts", async () => {
+    let now = 100;
+    session = new FridayVoiceSession(() => now); session.bind(binding());
+    const playback = session.speak("The plan is ready.");
+    const utterance = synthesis.speak.mock.calls[0][0];
+    expect(session.snapshot().timings.playback).toEqual({ status: "pending", durationMs: null });
+    now = 300; utterance.onstart();
+    expect(session.snapshot().timings.playback).toEqual({ status: "measured", durationMs: 200 });
+    utterance.onend(); await playback;
+    const next = session.speak("Another reply.");
+    const cancelled = synthesis.speak.mock.calls[1][0];
+    session.stopSpeaking(); now = 900; cancelled.onstart(); await next;
+    expect(session.snapshot().timings.playback).toEqual({ status: "cancelled", durationMs: null });
+  });
+  it("drops pending acknowledgment timing after changing conversation", async () => {
+    let now = 100, acknowledge!: () => void;
+    session = new FridayVoiceSession(() => now);
+    session.bind({ ...binding(), send: () => new Promise<void>(resolve => { acknowledge = resolve; }) });
+    session.toggle(); Recognition.latest.result("Review the launch"); await vi.advanceTimersByTimeAsync(1000);
+    expect(session.snapshot().timings.submission.status).toBe("pending");
+    expect(session.snapshot().timings.transcription.status).toBe("unavailable");
+    session.bind({ ...binding(), key: "other:employee" });
+    now = 900; acknowledge(); await Promise.resolve();
+    expect(session.snapshot().timings.submission).toEqual({ status: "unmeasured", durationMs: null });
+  });
 });
