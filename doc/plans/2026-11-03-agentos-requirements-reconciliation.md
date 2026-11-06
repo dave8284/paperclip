@@ -75,7 +75,7 @@ the current conversation, not invented additions to its historical numbering.
 
 | ID | Required outcome | Sources | Current disposition |
 | --- | --- | --- | --- |
-| F01 | Maintain an actual GitHub fork of Paperclip, extending its working engine and preserving existing capabilities and history. Push reviewed work to the fork. | U2–U4, U17, U21–U26, U30 | Implemented; reviewed checkpoints are committed and pushed to `agentos/platform`, most recently `16997c75b` before the next continuation. |
+| F01 | Maintain an actual GitHub fork of Paperclip, extending its working engine and preserving existing capabilities and history. Push reviewed work to the fork. | U2–U4, U17, U21–U26, U30 | Implemented; reviewed source checkpoint `4057682fd` is committed and pushed to `agentos/platform`. The 6 November completion ledger records its checks and outstanding activation/acceptance. |
 | F02 | Build the whole platform without requiring the owner to nominate a pilot application first. Support both existing in-flight repositories and new ideas. | U21–U23, U26, U30 | Constraint; registry foundation exists, complete delivery journeys remain open. |
 | F03 | Retain the requested full plans/design demonstrations and carry accepted refinements into the real application. Existing approval authorises routine implementation; this is not a requirement for another approval/demo before every change. | U8–U12, U16–U19, U21–U22, U42, U76, U80–U82, U90–U91, U98 | Plans/prototypes exist; real-interface acceptance remains incomplete. |
 | F04 | Use parallel development agents where useful; implement here, not by sending platform-build tasks to Friday. | U58, U80, U136–U137, U141 | Constraint; applied during implementation and this audit. |

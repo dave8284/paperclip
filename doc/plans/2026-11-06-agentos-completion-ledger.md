@@ -183,6 +183,12 @@ questions. These updates are tracked as **F04/F05/L04**, **V10**, and **A01**.
 
 ## Combined source verification — 7 November NZDT
 
+Source checkpoint `4057682fd` is committed and pushed to `agentos/platform`.
+The working tree was clean after push. Local health is healthy in private,
+authenticated mode with healthy database backups. Its reported commit follows
+the checkout and still does not establish loaded backend code or migration
+activation. No live portfolio grant or capacity group was created.
+
 Integrated shared build, database/server/UI typechecks, migration numbering/safety,
 production UI build and design-token gates pass. Evidence prefix:
 `/private/tmp/agentos-completion-`; final UI build is
@@ -217,6 +223,15 @@ and complete repository test campaign were not run; the owner requested practica
 checks. Native listener/database tests blocked by this session, and the distinct
 global forbidden-token check that rejects existing fork branding/local paths,
 remain documented in the feature logs rather than being counted as passes.
+
+Next required operator step was requested after the source became reviewable:
+run `python3 /Users/dave/cursor-tutor-1/AgentOS/paperclip/scripts/restart-agentos-local.py`
+from normal Mac Terminal and return its result. This session's `/bin/ps` denial
+prevents the native restart preflight; no preflight bypass or force-kill was
+attempted. The helper requires current native preparation and a matching healthy
+recovery report with no lost runs. Browser capture/access remains independently
+unavailable. The unanswered concurrency, portfolio-private-scope and Supabase
+choices are still not approvals.
 
 This source checkpoint does not close screenshots, backend activation, live
 Google-owner/voice acceptance, current-account model qualification, packet-only
