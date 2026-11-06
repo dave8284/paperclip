@@ -18,7 +18,7 @@ Those requirements remain in scope; the rows below do not replace or erase them.
 | Graph and artefact provenance (G01/G04/A01) | Graph nodes/actions correspond to actual resources, permissions differ from observed reads/writes, and produced artefacts retain versions/provenance | Native record-backed graph and document/attachment histories exist. File access refresh failures now hide cached names/content/links, with seven focused checks passing. Complete operating coverage and live history acceptance remain open |
 | Local System One qualification | Record real local-model behavior and failures on explicit tasks; promote only with qualified evidence | Offline 12-case diagnostic completed; every profile suggestion contradicted another answer and was rejected; no routing promotion justified |
 | Landing screenshots | Current workspace, Agent Map and Decisions screenshots beside matching features | Browser/Chrome execution tool unavailable; reconnection requested |
-| Backend activation | Native graceful restart, matching recovery report and retained runs; Google owner/admin behavior verified after activation | Read-only preflight fails with macOS process-access denial; no signal sent |
+| Backend activation | Native graceful restart, matching recovery report and retained runs; Google owner/admin behavior verified after activation | Graceful restart completed 7 November NZDT after process access became available; two pending migrations applied, health/recovery confirmed and no lost runs. Actual owner/admin sign-in remains unverified |
 | Practical application acceptance | Navigation, loops, Decisions, Performance, admin, Google-only login, spheres and real voice in the running UI | Source checks previously pass; browser/audio and authenticated acceptance still open |
 | Portfolio delegated authority (O03/O07/O09) | Explicit company grants and current owner intersection for portfolio coordination and employee awareness | Company-shared read mandates implemented and reviewed; focused checks pass. See [mandate evidence](2026-11-06-agentos-portfolio-read-mandates.md). Private scope question pending; no live grants. Cross-company write/delegation remains separate |
 | Real EGM operating journey (A05/R05) | Friday → lead → specialist → independent reviewer → accepted output, evidence and reusable lesson | Frozen packet preparation and exact named-reviewer binding added. Actual packet-only execution, findings/resolution and the complete journey remain open |
@@ -56,7 +56,7 @@ application has passed the owner's final acceptance. Detailed evidence is in the
 | Only eight starting connectors | OpenAI, Anthropic, Stripe, Higgsfield, Supabase, Vercel, Google and Calendly catalog checked | Live catalog acceptance; Higgsfield sign-in remains deferred |
 | Friday self-diagnosis | Authorized, on-demand diagnostics implemented and checked | Ask live Friday to diagnose a company after activation |
 | Model Intelligence route/task/outcome audit | Selected versus observed models, task cohorts, timing, shadow and review evidence implemented and checked | Activate and inspect real records; unknown quality remains unknown |
-| Restart works | Native supervisor identity/retry fix and guarded helper checked | Operator restart blocked in this session by process-inspection permission |
+| Restart works | Native supervisor identity/retry fix and guarded helper checked; guarded local restart completed 7 November NZDT | Matching recovery report and healthy app confirmed with no lost runs; signed-in Restart button still needs browser acceptance |
 
 ## Execution evidence
 
@@ -233,10 +233,37 @@ recovery report with no lost runs. Browser capture/access remains independently
 unavailable. The unanswered concurrency, portfolio-private-scope and Supabase
 choices are still not approvals.
 
-This source checkpoint does not close screenshots, backend activation, live
+This source checkpoint did not itself close screenshots, backend activation, live
 Google-owner/voice acceptance, current-account model qualification, packet-only
 EGM, the real delegated/recovery journey, portfolio writes, provider business
 loops, Supabase scope or privileged component/platform release workflows.
+
+## Runtime activation — 7 November NZDT
+
+The session's filesystem/process/network restrictions were removed. The existing
+helper's read-only preflight then verified the launchd service, listener and
+process ancestry. Running `python3 scripts/restart-agentos-local.py` through its
+normal native preparation completed successfully. No preflight bypass was used.
+
+The native service log records two pending migrations applied successfully,
+followed by “Migrations already applied” and completed startup recovery.
+The generated pending migrations were `0389_secret_scrambler.sql` and
+`0390_tough_virginia_dare.sql`. The matching recovery report completed at
+`2026-11-06T11:21:14.586Z` (7 November, 00:21 NZDT), changing server PID 59616
+to 36929, with empty lost/missing-snapshot/skipped run lists. There were no
+active runs at shutdown, so this proves idle graceful activation rather than
+active delegated-work recovery. The helper correctly resumed the existing
+same-boot pending request and matched its original request identity.
+
+Evidence: `.runtime/tunnel/com.agentos.backend.log` and
+`.runtime/instances/default/hot-restart-report.json` under the parent workspace.
+Fresh health is OK in private authenticated mode with healthy database backups,
+serving checkout `f17eb1d1b`. No capacity group or portfolio mandate was created.
+The historical process/listener denials above describe the earlier restricted
+session; they are not current blockers. Browser controller availability, actual
+owner login, physical audio and the outstanding worksheet requirements remain
+separate. Database/listener tests can now be attempted through their ordinary
+isolated fixtures; their earlier failures are not retroactively marked passed.
 
 ## Implementation ownership
 

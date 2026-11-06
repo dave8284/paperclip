@@ -41,6 +41,15 @@ and **X07/M03/M04/M07** model evidence and interactive latency. Migrations/live
 activation, current screenshots, physical voice and the real operating journey
 remain separate acceptance. Pending choices and explicit deferrals are retained.
 
+On 7 November NZDT, restored process access allowed the existing guarded restart
+to complete. Both pending migrations applied; the matching recovery report and
+fresh health confirm healthy activation with no lost runs. There were no active
+runs, so live delegated-work recovery remains unproven. The completion ledger's
+runtime activation entry supersedes earlier process-access/activation blockers;
+actual owner login, screenshots, voice and all other unfinished requirements
+remain open. The worksheet retains 86 original rows plus X01–X07 (93 total);
+the 14-item and 18-item follow-up fix logs refine these rather than replacing them.
+
 ## Final choices that supersede earlier wording
 
 1. The product is **AgentOS**, with **Friday** as its fixed coordinator. Earlier permission to keep the Paperclip name was superseded. Preserve required license/attribution outside the ordinary product branding. Sources: U32, U38, U123, U138, U145.
