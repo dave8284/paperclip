@@ -1,3 +1,4 @@
+import { parseExpectedCodexIdentity, type ExpectedCodexIdentity } from "../contracts/codex-identity.js";
 import { createHash } from "node:crypto";
 import { parseNativeRuntimeContext, retargetNativeSystemInstructions } from "../contracts/runtime-context.js";
 import { resolve } from "node:path";
@@ -28,6 +29,7 @@ export interface RunnerProviderLaunchRequirements {
   instructions: string;
   runtimeContext: NativeRuntimeContextSnapshot | null;
   executionPurpose?: NativeEgmPacketReviewPurpose;
+  expectedCodexIdentity?: ExpectedCodexIdentity;
 }
 
 /** A prepared descriptor belongs to one exact request and contains no launch secrets. */
@@ -49,6 +51,10 @@ export function runnerProviderLaunchRequirements(
   runtimeContext: NativeRuntimeContextSnapshot | null,
   instructions: string,
 ): RunnerProviderLaunchRequirements {
+  const expectedCodexIdentity = options.expectedCodexIdentity === undefined ? undefined : parseExpectedCodexIdentity(options.expectedCodexIdentity);
+  if (expectedCodexIdentity && ((options.provider ?? "codex") !== "codex" || options.homeMode === "preconfigured"
+    || options.lifecyclePolicy?.mode === "warm" || options.executionPurpose || params.model !== expectedCodexIdentity.model
+    || params.permissions === "paperclip-runner-workspace-read-only")) throw new Error("runner_qualified_codex_authority_invalid");
   const executionPurpose = options.executionPurpose === undefined ? undefined : parseNativeExecutionPurpose(options.executionPurpose);
   if (executionPurpose && ((options.provider ?? "codex") !== "codex" || options.homeMode === "preconfigured"
     || options.lifecyclePolicy?.mode === "warm" || runtimeContext?.skills.length || runtimeContext?.mcp.bindingId
@@ -61,6 +67,7 @@ export function runnerProviderLaunchRequirements(
     model: typeof params.model === "string" ? params.model : null,
     instructions, runtimeContext,
     ...(executionPurpose ? { executionPurpose } : {}),
+    ...(expectedCodexIdentity ? { expectedCodexIdentity } : {}),
     settings: {
       acpxAgent: options.acpxAgent, acpxMode: options.acpxMode,
       acpxPermissionMode: options.acpxPermissionMode,
@@ -115,7 +122,8 @@ export function validatePreparedRunnerLaunch(
     || !prepared.provider || typeof prepared.provider !== "object") reject();
   const descriptor = prepared.provider;
   if (JSON.stringify(descriptor.executionPurpose) !== JSON.stringify(requirements.executionPurpose)) reject();
-  if (requirements.executionPurpose && descriptor.preconfiguredHome != null) reject();
+  if (JSON.stringify(descriptor.expectedCodexIdentity) !== JSON.stringify(requirements.expectedCodexIdentity)) reject();
+  if ((requirements.executionPurpose || requirements.expectedCodexIdentity) && descriptor.preconfiguredHome != null) reject();
   if (!requirements.runtimeContext && descriptor.runtimeContext != null) reject();
   if (descriptor.kind !== requirements.provider || descriptor.model !== requirements.model) reject();
   if (requirements.provider === "codex" && (descriptor.approvalPolicy !== requirements.approvalPolicy
@@ -183,6 +191,9 @@ export function createRunnerProviderLaunch(
   input: RunnerProviderLaunchEnvironment,
 ): Record<string, unknown> {
   const { identity, instructions: baseInstructions, runtimeContext, settings, provider } = requirements;
+  const expectedCodexIdentity = requirements.expectedCodexIdentity === undefined ? undefined : parseExpectedCodexIdentity(requirements.expectedCodexIdentity);
+  if (expectedCodexIdentity && (provider !== "codex" || input.options.homeMode === "preconfigured" || requirements.executionPurpose
+    || requirements.model !== expectedCodexIdentity.model || requirements.readOnly)) throw new Error("runner_qualified_codex_authority_invalid");
   const executionPurpose = requirements.executionPurpose === undefined ? undefined : parseNativeExecutionPurpose(requirements.executionPurpose);
   if (executionPurpose && (provider !== "codex" || input.options.homeMode === "preconfigured" || !requirements.readOnly || requirements.approvalPolicy !== "never")) {
     throw new Error("runner_packet_review_authority_invalid");
@@ -305,6 +316,7 @@ export function createRunnerProviderLaunch(
                   kind: provider,
                   provider,
                   ...(executionPurpose ? { executionPurpose } : {}),
+                  ...(expectedCodexIdentity ? { expectedCodexIdentity } : {}),
                   ...(input.options.homeMode === "preconfigured" ? { preconfiguredHome: { HOME: input.options.environment!.HOME, CODEX_HOME: codexHome } } : {}),
                   driver:
                     provider === "opencode"
@@ -362,8 +374,8 @@ export function createRunnerProviderLaunch(
                     requirements.readOnly && !executionPurpose
                       ? "plan"
                       : "default",
-                  ...(executionPurpose || requirements.preparedConversation
-                    ? { conversationMode: executionPurpose ? "egm_packet_review" : "prepared" }
+                  ...(executionPurpose || expectedCodexIdentity || requirements.preparedConversation
+                    ? { conversationMode: executionPurpose ? "egm_packet_review" : expectedCodexIdentity ? "qualified_codex" : "prepared" }
                     : {}),
                   includeCollaborationModeInstructions:
                     includeCodexCollaborationInstructions,

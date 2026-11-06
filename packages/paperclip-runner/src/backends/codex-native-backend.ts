@@ -34,6 +34,7 @@ export interface CodexNativeSessionBackendOptions {
   }) => Promise<void>;
   transportFactory?: (context?: {
     baseInstructions?: string;
+    expectedCodexIdentity?: import("../contracts/codex-identity.js").ExpectedCodexIdentity;
     executionPurpose?: NativeEgmPacketReviewPurpose;
     providerRecoveryPolicy?: PersistedNativeSession["providerRecoveryPolicy"];
     persistedSession?: Pick<
@@ -118,6 +119,7 @@ function createTransportBackedNativeSessionBackend(
     );
   }
   const driverIdentity = transportDriverIdentity(input);
+  const expectedCodexIdentity = "expectedCodexIdentity" in input ? input.expectedCodexIdentity : undefined;
   const executionPurpose = "executionPurpose" in input ? input.executionPurpose : undefined;
   const isCodex = input.provider.kind === "codex";
   const preparedContext = input.schema === NATIVE_EXECUTION_INPUT_SCHEMA
@@ -190,9 +192,9 @@ function createTransportBackedNativeSessionBackend(
         options.runnerInstanceId ?? `paperclip-native-${input.binding.runId}`,
       onSpawn: options.onSpawn,
       transportFactory: transportFactory
-        ? (context) => transportFactory({ ...context, baseInstructions, executionPurpose })
-        : executionPurpose
-          ? () => { throw new Error("Packet reviews require the purpose-enforcing native Runner transport"); }
+        ? (context) => transportFactory({ ...context, baseInstructions, executionPurpose, expectedCodexIdentity })
+        : executionPurpose || expectedCodexIdentity
+          ? () => { throw new Error("Bound Codex profiles require the purpose-enforcing native Runner transport"); }
           : undefined,
       dynamicTools: options.dynamicTools,
       dynamicToolHandler: options.dynamicToolHandler,

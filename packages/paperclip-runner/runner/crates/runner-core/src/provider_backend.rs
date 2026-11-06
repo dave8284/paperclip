@@ -2025,6 +2025,8 @@ impl CodexCommandExecutor {
             }
             let resumed_provider_session_id = provider.provider_session_id().map(str::to_owned);
             let resumed_process_id = provider.process_id();
+            let observed_codex_identity = provider.observed_codex_identity().cloned();
+            let observed_model = provider.observed_model().map(str::to_owned);
             {
                 let state = self
                     .state
@@ -2042,6 +2044,7 @@ impl CodexCommandExecutor {
                         "providerSessionId": thread_id.clone(),
                         "providerAccountSessionId": resumed_provider_session_id,
                         "processId": resumed_process_id,
+                        "providerDescriptor": { "effectiveModel": observed_model, "observedCodexIdentity": observed_codex_identity },
                     }),
                 })?;
             }
@@ -2447,6 +2450,11 @@ impl CodexCommandExecutor {
             .state
             .clone()
             .ok_or_else(|| DurableRunnerError::invalid("Codex provider has not been prepared"))?;
+        if next_state.config.expected_codex_identity.is_some() {
+            return Err(DurableRunnerError::invalid(
+                "qualified Codex cannot attach another run",
+            ));
+        }
         if next_state.config.execution_purpose.is_some() {
             return Err(DurableRunnerError::invalid(
                 "EGM packet review cannot attach another run",
@@ -2640,6 +2648,7 @@ impl CodexCommandExecutor {
             active_provider_turn_id,
             goal_probe,
             observed_model,
+            observed_codex_identity,
         ) = {
             let provider = self.ensure_provider()?;
             (
@@ -2649,6 +2658,7 @@ impl CodexCommandExecutor {
                 provider.active_provider_turn_id().map(str::to_owned),
                 provider.get_goal(),
                 provider.observed_model().map(str::to_owned),
+                provider.observed_codex_identity().cloned(),
             )
         };
         let (goal_capability, goal) = match goal_probe {
@@ -2736,7 +2746,7 @@ impl CodexCommandExecutor {
                         "providerSessionId": thread_id,
                         "providerAccountSessionId": provider_session_id,
                         "processId": process_id,
-                        "providerDescriptor": { "driver": driver, "providerVersion": provider_version, "effectiveModel": observed_model },
+                        "providerDescriptor": { "driver": driver, "providerVersion": provider_version, "effectiveModel": observed_model, "observedCodexIdentity": observed_codex_identity },
                     }),
                 ),
                 (
@@ -2922,6 +2932,16 @@ impl CodexCommandExecutor {
     }
 
     fn start_turn(&mut self, payload: &Value) -> Result<CommandExecution, DurableRunnerError> {
+        if self
+            .state
+            .as_ref()
+            .is_some_and(|state| state.config.expected_codex_identity.is_some())
+            && (payload.get("model").is_some() || payload.get("collaborationMode").is_some())
+        {
+            return Err(DurableRunnerError::invalid(
+                "qualified Codex forbids turn model overrides",
+            ));
+        }
         // Validate before recovery or marking dispatch ambiguous: malformed
         // selections must not launch a provider or poison a durable session.
         let skills: Vec<CodexSkillInput> =
@@ -5101,6 +5121,7 @@ mod tests {
                 include_skill_instructions: None,
                 conversation_mode: None,
                 execution_purpose: None,
+                expected_codex_identity: None,
             },
             Some(CompletionContractBinding {
                 revision: "revision-1".to_owned(),
@@ -5515,6 +5536,7 @@ mod tests {
                 include_skill_instructions: None,
                 conversation_mode: None,
                 execution_purpose: None,
+                expected_codex_identity: None,
             },
             Some(CompletionContractBinding {
                 revision: "revision-1".to_owned(),
@@ -5608,6 +5630,7 @@ mod tests {
                 include_skill_instructions: None,
                 conversation_mode: None,
                 execution_purpose: None,
+                expected_codex_identity: None,
             },
             opencode_launch_profile_digest: None,
             completion_contract: None,
@@ -5663,6 +5686,7 @@ mod tests {
                 include_skill_instructions: None,
                 conversation_mode: None,
                 execution_purpose: None,
+                expected_codex_identity: None,
             },
             None,
             ProviderToolBridge::default(),
@@ -5708,6 +5732,7 @@ mod tests {
                 include_skill_instructions: None,
                 conversation_mode: None,
                 execution_purpose: None,
+                expected_codex_identity: None,
             },
             Some(CompletionContractBinding {
                 revision: "1".to_owned(),
@@ -5802,6 +5827,7 @@ mod tests {
                 include_skill_instructions: None,
                 conversation_mode: None,
                 execution_purpose: None,
+                expected_codex_identity: None,
             },
             None,
             ProviderToolBridge::default(),
@@ -5871,6 +5897,7 @@ mod tests {
                 include_skill_instructions: None,
                 conversation_mode: None,
                 execution_purpose: None,
+                expected_codex_identity: None,
             },
             None,
             ProviderToolBridge::default(),
@@ -5923,6 +5950,7 @@ mod tests {
                 include_skill_instructions: None,
                 conversation_mode: None,
                 execution_purpose: None,
+                expected_codex_identity: None,
             },
             None,
             ProviderToolBridge::default(),
@@ -6049,6 +6077,7 @@ mod tests {
                 include_skill_instructions: None,
                 conversation_mode: None,
                 execution_purpose: None,
+                expected_codex_identity: None,
             },
             None,
             bridge,
@@ -6163,6 +6192,7 @@ mod tests {
                 include_skill_instructions: None,
                 conversation_mode: None,
                 execution_purpose: None,
+                expected_codex_identity: None,
             },
             None,
             bridge,
@@ -6222,6 +6252,7 @@ mod tests {
                 include_skill_instructions: None,
                 conversation_mode: None,
                 execution_purpose: None,
+                expected_codex_identity: None,
             },
             None,
             ProviderToolBridge::default(),
@@ -6366,6 +6397,7 @@ mod tests {
                 include_skill_instructions: None,
                 conversation_mode: None,
                 execution_purpose: None,
+                expected_codex_identity: None,
             },
             None,
             bridge,
@@ -6409,6 +6441,7 @@ mod tests {
                 include_skill_instructions: None,
                 conversation_mode: None,
                 execution_purpose: None,
+                expected_codex_identity: None,
             },
             None,
             ProviderToolBridge::default(),
@@ -6449,6 +6482,7 @@ mod tests {
                 include_skill_instructions: None,
                 conversation_mode: None,
                 execution_purpose: None,
+                expected_codex_identity: None,
             },
             None,
             ProviderToolBridge::default(),
@@ -6528,6 +6562,7 @@ mod tests {
                 include_skill_instructions: None,
                 conversation_mode: None,
                 execution_purpose: None,
+                expected_codex_identity: None,
             },
             None,
             ProviderToolBridge::default(),

@@ -11564,6 +11564,9 @@ export async function createRunnerdBackend(input: {
     },
   ) => Promise<unknown>;
 }): Promise<NativeSessionBackend & { bindManagedSession(session: NativeSession): NativeSession }> {
+  if (input.runnerExecutionTarget?.kind === "remote" && "expectedCodexIdentity" in input.execution && input.execution.expectedCodexIdentity) {
+    throw new Error("qualified_codex_identity_requires_local_execution");
+  }
   const sessionScopeId = nativeSessionScopeKey(input.execution);
   const scopeOwner = executingRunnerdSessionScopes.get(sessionScopeId);
   if (scopeOwner && scopeOwner !== input.execution.binding.runId) {
@@ -13492,6 +13495,7 @@ async function createRunnerdBackendWithinSessionClaim(
         runnerRuntimeContext: remoteRuntimeContext,
         baseInstructions: recoveryContext?.baseInstructions,
         executionPurpose: recoveryContext?.executionPurpose ?? egmExecutionPurpose(runnerExecution),
+        expectedCodexIdentity: recoveryContext?.expectedCodexIdentity ?? ("expectedCodexIdentity" in runnerExecution ? runnerExecution.expectedCodexIdentity : undefined),
         runnerFilesystemRoot: remoteRunnerFilesystemRoot ?? undefined,
         resumeWorkingDirectory: runnerExecution.workspace.cwd,
         externallySandboxed: remoteTarget?.transport === "sandbox",

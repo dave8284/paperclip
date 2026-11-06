@@ -7,7 +7,7 @@ import {
   experimentalApiQueries,
 } from "./experimental-api-paths.js";
 import { Router } from "express";
-import { requestPlatformChangeSchema, createDepartmentSchema, updateDepartmentSchema, assignDepartmentProjectSchema, saveAiExecutionCapacitySchema } from "@paperclipai/shared";
+import { requestPlatformChangeSchema, registerModelProfileQualificationSchema, createDepartmentSchema, updateDepartmentSchema, assignDepartmentProjectSchema, saveAiExecutionCapacitySchema } from "@paperclipai/shared";
 import { createAgentosPortfolioSchema, createAgentosEmployeeSchema, createAgentosAssignmentSchema, retireAgentosAssignmentSchema,
   publishAgentosCapabilitySchema, decideAgentosCapabilitySchema, savePortfolioReadMandateSchema, revokePortfolioReadMandateSchema } from "@paperclipai/shared";
 import { companyPerformanceQuerySchema, createPerformanceReportSchema } from "@paperclipai/shared";
@@ -5062,6 +5062,17 @@ for (const operation of [
     ...(operation.method === "post" && !operation.path.endsWith("/retire") && !operation.path.includes("/read-mandates") ? { 201: r.ok() } : { 200: r.ok() }),
     400: r.badRequest, 401: r.unauthorized, 403: r.forbidden, 404: r.notFound,
     409: { description: "Conflicting creation intent, binding or assignment revision" },
+  } });
+}
+
+for (const operation of [
+  { method: "get", path: "/api/companies/{companyId}/friday/model-qualifications", summary: "Read the latest 100 native account/profile qualification receipts (current instance administrator and company membership). Access verification and independently reviewed workflow qualification are distinct; stale or revoked receipts grant no model eligibility." },
+  { method: "post", path: "/api/companies/{companyId}/friday/model-qualifications", summary: "Register finite model qualification from an exact native run and optional independent native review interaction or stage decision (current instance administrator and company membership). Model, account, funding and observations derive only from native evidence; callers cannot supply a score or eligible model.", body: registerModelProfileQualificationSchema },
+  { method: "delete", path: "/api/companies/{companyId}/friday/model-qualifications/{id}", summary: "Revoke an account/profile qualification immediately while retaining its native evidence and audit history (current instance administrator and company membership)" },
+]) {
+  registerCurrentRoute({ ...operation, tags: ["model-qualifications"], responses: {
+    200: r.ok(), ...(operation.method === "post" ? { 201: r.ok() } : {}),
+    400: r.badRequest, 401: r.unauthorized, 403: r.forbidden, 404: r.notFound, 409: r.conflict,
   } });
 }
 

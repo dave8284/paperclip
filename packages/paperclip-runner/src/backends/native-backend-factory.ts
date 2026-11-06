@@ -27,6 +27,7 @@ export interface NativeBackendFactoryOptions extends Omit<
   dotRunnerOptions?: Omit<RunnerdDotDriverOptions, "execution" | "dynamicTools" | "dynamicToolHandler" | "completionFeedback" | "onSpawn">;
   codexTransportFactory?: (context?: {
     baseInstructions?: string;
+    expectedCodexIdentity?: import("../contracts/codex-identity.js").ExpectedCodexIdentity;
     executionPurpose?: import("../contracts/native-execution.js").NativeEgmPacketReviewPurpose;
     providerRecoveryPolicy?: PersistedNativeSession["providerRecoveryPolicy"];
     persistedSession?: Pick<

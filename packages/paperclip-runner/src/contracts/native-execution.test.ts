@@ -788,6 +788,20 @@ describe("frozen EGM packet review input", () => {
     runtimeContext: { ...context, aggregateDigest: canonicalNativeRuntimeContextDigest(context) },
     provider: { kind: "codex", model: null, approvalPolicy: "never" }, credentialBindings: [], executionPurpose: purpose };
 
+  it("freezes qualified identity in v9 while excluding incompatible runtime profiles", () => {
+    const { executionPurpose: _purpose, ...base } = current;
+    const expectedCodexIdentity = { cliVersion: "0.160.0", model: "selected-model" };
+    const qualified = { ...base, provider: { ...base.provider, model: expectedCodexIdentity.model }, expectedCodexIdentity };
+    const parsed = parseNativeExecutionInput(qualified);
+    expect(parsed).toMatchObject({ expectedCodexIdentity });
+    expect(parseNativeExecutionInput(parsed)).toEqual(parsed);
+    for (const change of [{ executionPurpose: purpose }, { homeMode: "preconfigured" },
+      { expectedCodexIdentity: { ...expectedCodexIdentity, model: "other" } },
+      { expectedCodexIdentity: { ...expectedCodexIdentity, extra: true } },
+      { session: { ...qualified.session, lifecyclePolicy: { mode: "warm", idleTimeoutMs: 60000 } } }]) {
+      expect(() => parseNativeExecutionInput({ ...qualified, ...change })).toThrow();
+    }
+  });
   it("round trips distinct packet envelope and body digests with one mandatory instruction asset", () => {
     const parsed = parseNativeExecutionInput(current);
     expect(parsed).toMatchObject({ executionPurpose: purpose });

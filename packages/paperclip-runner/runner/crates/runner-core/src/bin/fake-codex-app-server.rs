@@ -1118,7 +1118,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                 }
                 send(json!({
                 "id": id,
-                "result": {"user": {"sessionId": "codex-account-session"}}
+                "result": {"userAgent": "paperclip-runnerd/0.160.0 (Fake OS; test) unknown (paperclip-runnerd; 1)", "user": {"sessionId": "codex-account-session"}}
                 }))?;
             }
             "initialized" => {}
@@ -1169,7 +1169,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                 send(json!({
                     "id": id,
                     "result": {"thread": {"id": state.thread_id, "sessionId": "codex-account-session"},
-                        "model": argument(&args, "--returned-model").map(Value::String).unwrap_or_else(|| message.pointer("/params/model").filter(|model| model.is_string()).cloned().unwrap_or(json!("gpt-test")))}
+                        "reasoningEffort": argument(&args, "--returned-effort"), "model": argument(&args, "--returned-model").map(Value::String).unwrap_or_else(|| message.pointer("/params/model").filter(|model| model.is_string()).cloned().unwrap_or(json!("gpt-test")))}
                 }))?;
                 if agent_created_goal {
                     send(json!({
@@ -1219,7 +1219,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                 }
                 send(json!({
                     "id": id,
-                    "result": {"thread": {"id": state.thread_id, "sessionId": "codex-account-session"}}
+                    "result": {"thread": {"id": state.thread_id, "sessionId": "codex-account-session"}, "model": argument(&args, "--returned-model").map(Value::String).unwrap_or_else(|| message.pointer("/params/model").cloned().unwrap_or(Value::Null)), "reasoningEffort": argument(&args, "--returned-effort")}
                 }))?;
                 if args.iter().any(|arg| arg == "--resume-usage-snapshot")
                     && state.active_turn_id.is_none()

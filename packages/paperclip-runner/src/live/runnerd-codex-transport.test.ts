@@ -9130,3 +9130,19 @@ it("launches and closes native Codex without materializing or editing the precon
     await rm(root, { force: true, recursive: true });
   }
 }, 30_000);
+
+it("rejects qualified Codex turn model overrides before launching any process", async () => {
+  const root = await mkdtemp(join(tmpdir(), "qualified-codex-authority-"));
+  try {
+    const expectedCodexIdentity = { cliVersion: "0.160.0", model: "selected-model" };
+    for (const options of [{ homeMode: "preconfigured" as const }, { lifecyclePolicy: { mode: "warm" as const, idleTimeoutMs: 1000 } }]) {
+      expect(() => createCapabilityRunnerdCodexTransport({ stateDirectory: root, expectedCodexIdentity, ...options })).toThrow("qualified_codex_authority_invalid");
+    }
+    const bundle = createCapabilityRunnerdCodexTransport({ stateDirectory: root, expectedCodexIdentity });
+    for (const override of [{ model: "other" }, { model: "selected-model" }, { collaborationMode: { mode: "default", settings: { model: "other" } } }]) {
+      await expect(bundle.transport.request("turn/start", { ...override, input: [{ type: "text", text: "Work" }] })).rejects.toThrow("turn_model_override_forbidden");
+    }
+    expect(bundle.evidence().runnerPid).toBeNull();
+    await bundle.transport.close();
+  } finally { await rm(root, { recursive: true, force: true }); }
+});

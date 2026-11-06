@@ -72,6 +72,7 @@ fn provider_config(directory: &Path, switches: &[&str]) -> CodexProviderConfig {
         include_skill_instructions: None,
         conversation_mode: None,
         execution_purpose: None,
+        expected_codex_identity: None,
     }
 }
 
@@ -6990,5 +6991,203 @@ fn skill_flag_can_be_added_to_an_old_checkpoint_at_settled_run_attach() {
         resume["params"]["config"]["skills.include_instructions"],
         true
     );
+    fs::remove_dir_all(directory).unwrap();
+}
+
+fn qualified_codex_config(directory: &Path, switches: &[&str]) -> CodexProviderConfig {
+    let mut config = provider_config(directory, switches);
+    config.conversation_mode = Some("qualified_codex".to_owned());
+    config.expected_codex_identity = Some(
+        paperclip_runner_core::codex_provider::ExpectedCodexIdentity {
+            cli_version: "0.160.0".to_owned(),
+            model: "test-model".to_owned(),
+        },
+    );
+    config
+}
+
+#[test]
+fn qualified_codex_observes_session_identity_and_rechecks_model_on_resume() {
+    let directory = temporary_directory("qualified-observation");
+    let config = qualified_codex_config(&directory, &["--returned-effort", "high"]);
+    let mut provider = CodexProvider::start(&config, None).unwrap();
+    assert_eq!(
+        serde_json::to_value(provider.observed_codex_identity()).unwrap(),
+        json!({
+            "cliVersion":"0.160.0", "model":"test-model", "reasoningEffort":"high", "source":"thread/start"
+        })
+    );
+    let thread_id = provider.thread_id().to_owned();
+    provider.shutdown().unwrap();
+    let mut restored = CodexProvider::start(&config, Some(&thread_id)).unwrap();
+    assert_eq!(
+        restored.observed_codex_identity().unwrap().source,
+        "thread/resume"
+    );
+    restored.shutdown().unwrap();
+    let changed = qualified_codex_config(&directory, &["--returned-model", "different-model"]);
+    assert!(CodexProvider::start(&changed, Some(&thread_id)).is_err());
+    assert!(!fs::read_to_string(directory.join("calls.log"))
+        .unwrap()
+        .contains("turn/start"));
+    fs::remove_dir_all(directory).unwrap();
+}
+
+#[test]
+fn qualified_codex_rejects_version_or_model_mismatch_before_inference() {
+    let directory = temporary_directory("qualified-mismatch");
+    let mut config = qualified_codex_config(&directory, &[]);
+    config.expected_codex_identity.as_mut().unwrap().cli_version = "0.159.0".to_owned();
+    assert!(CodexProvider::start(&config, None).is_err());
+    assert!(
+        !directory.join("calls.log").exists(),
+        "version rejection must precede app-server spawn"
+    );
+    let config = qualified_codex_config(&directory, &["--returned-model", "different-model"]);
+    assert!(CodexProvider::start(&config, None).is_err());
+    assert!(!fs::read_to_string(directory.join("calls.log"))
+        .unwrap()
+        .contains("turn/start"));
+    let mut unbound = config;
+    unbound.expected_codex_identity = None;
+    assert!(unbound.validate().is_err());
+    fs::remove_dir_all(directory).unwrap();
+}
+
+#[test]
+fn qualified_codex_durable_restore_retains_identity_and_rejects_model_override() {
+    let directory = temporary_directory("qualified-durable");
+    let config = qualified_codex_config(&directory, &[]);
+    let runner_config = durable_config(&directory);
+    let mut executor = CodexCommandExecutor::with_runner_config(&directory, &runner_config);
+    executor
+        .execute(&command(
+            "prepare",
+            1,
+            "run.prepare",
+            json!({"provider":config}),
+        ))
+        .unwrap();
+    let opened = executor
+        .execute(&command("open", 2, "session.open", json!({})))
+        .unwrap();
+    assert_eq!(
+        opened
+            .events
+            .iter()
+            .find(|event| event.0 == "session.started")
+            .unwrap()
+            .2["providerDescriptor"]["observedCodexIdentity"],
+        json!({
+            "cliVersion":"0.160.0", "model":"test-model", "reasoningEffort":null, "source":"thread/start"
+        })
+    );
+    executor.shutdown().unwrap();
+    drop(executor);
+    let mut restored = CodexCommandExecutor::with_runner_config(&directory, &runner_config);
+    assert!(restored
+        .execute(&command(
+            "override",
+            3,
+            "turn.start",
+            json!({"text":"Do work", "model":"other"})
+        ))
+        .is_err());
+    let mut changed = config.clone();
+    changed
+        .expected_codex_identity
+        .as_mut()
+        .unwrap()
+        .cli_version = "0.161.0".to_owned();
+    assert!(restored
+        .execute(&command(
+            "changed",
+            4,
+            "run.prepare",
+            json!({"provider":changed})
+        ))
+        .is_err());
+    let resumed = restored
+        .execute(&command("resume", 5, "session.open", json!({})))
+        .unwrap();
+    assert_eq!(
+        resumed
+            .events
+            .iter()
+            .find(|event| event.0 == "session.resumed")
+            .unwrap()
+            .2["providerDescriptor"]["observedCodexIdentity"],
+        json!({
+            "cliVersion":"0.160.0", "model":"test-model", "reasoningEffort":null, "source":"thread/resume"
+        })
+    );
+    restored
+        .execute(&command("turn", 6, "turn.start", json!({"text":"Do work"})))
+        .unwrap();
+    restored.shutdown().unwrap();
+    fs::remove_dir_all(directory).unwrap();
+}
+
+#[test]
+#[cfg(unix)]
+fn qualified_codex_durable_recovery_rejects_an_upgraded_executable() {
+    use std::os::unix::fs::PermissionsExt;
+    let directory = temporary_directory("qualified-upgrade");
+    let executable = directory.join("codex-wrapper");
+    let wrapper = |version: &str| {
+        format!("#!/bin/sh\nif [ \"$1\" = --version ]; then echo 'codex-cli {version}'; exit 0; fi\nexec '{}' \"$@\"\n", env!("CARGO_BIN_EXE_fake-codex-app-server").replace('\'', "'\\''"))
+    };
+    fs::write(&executable, wrapper("0.160.0")).unwrap();
+    fs::set_permissions(&executable, fs::Permissions::from_mode(0o700)).unwrap();
+    let mut config = qualified_codex_config(&directory, &[]);
+    config.command = executable.clone();
+    let runner_config = durable_config(&directory);
+    let mut executor = CodexCommandExecutor::with_runner_config(&directory, &runner_config);
+    executor
+        .execute(&command(
+            "prepare",
+            1,
+            "run.prepare",
+            json!({"provider":config}),
+        ))
+        .unwrap();
+    executor
+        .execute(&command("open", 2, "session.open", json!({})))
+        .unwrap();
+    executor.shutdown().unwrap();
+    drop(executor);
+    let before = fs::read_to_string(directory.join("calls.log")).unwrap();
+    fs::write(&executable, wrapper("0.161.0")).unwrap();
+    let mut restored = CodexCommandExecutor::with_runner_config(&directory, &runner_config);
+    assert!(restored
+        .execute(&command("turn", 3, "turn.start", json!({"text":"Do work"})))
+        .is_err());
+    assert_eq!(
+        fs::read_to_string(directory.join("calls.log")).unwrap(),
+        before,
+        "changed CLI must not open a session or start inference"
+    );
+    assert!(
+        restored.shutdown().is_err(),
+        "failed recovery must remain failed during teardown"
+    );
+    drop(restored);
+    fs::remove_dir_all(directory).unwrap();
+}
+
+#[test]
+fn qualified_codex_does_not_infer_missing_model_or_effort_observations() {
+    let directory = temporary_directory("qualified-unknown-model");
+    let config = qualified_codex_config(&directory, &["--returned-model", ""]);
+    assert!(CodexProvider::start(&config, None).is_err());
+    let ordinary = provider_config(&directory, &["--returned-model", ""]);
+    let mut provider = CodexProvider::start(&ordinary, None).unwrap();
+    let identity = provider.observed_codex_identity().unwrap();
+    assert_eq!(identity.model, None);
+    assert_eq!(identity.reasoning_effort, None);
+    provider.shutdown().unwrap();
+    assert!(!fs::read_to_string(directory.join("calls.log"))
+        .unwrap()
+        .contains("turn/start"));
     fs::remove_dir_all(directory).unwrap();
 }

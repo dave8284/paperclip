@@ -210,6 +210,21 @@ function managedExecution(
 }
 
 describe("native backend factory", () => {
+  it("passes frozen qualified identity to the native transport and refuses an unenforced raw transport", async () => {
+    const base = preparedExecution(execution(), "v9");
+    const expectedCodexIdentity = { cliVersion: "0.160.0", model: "selected-model" };
+    const input = parseNativeExecutionInput({ ...base, provider: { ...base.provider, model: expectedCodexIdentity.model }, expectedCodexIdentity });
+    const identity = { companyId: "company", agentId: "agent", runId: "run", sessionId: "session" };
+    await expect(createCodexNativeSessionBackend(input, { environment: { PAPERCLIP_WORKSPACE_CWD: WORKSPACE } }).openSession({ identity, workingDirectory: WORKSPACE })).rejects.toThrow("native Runner transport");
+    let observed: unknown;
+    const backend = createRunnerdNativeSessionBackend(input, {
+      transportFactory: context => { observed = context?.expectedCodexIdentity; return new FakeCodexTransport(); },
+      workingDirectoryAuthority: "remote_runner", environment: { PAPERCLIP_WORKSPACE_CWD: WORKSPACE },
+    });
+    const session = await backend.openSession({ identity, workingDirectory: WORKSPACE });
+    expect(observed).toEqual(expectedCodexIdentity);
+    await session.close({ reason: "test complete" });
+  });
   it("describes frozen reviews without launching and requires purpose enforcement when opening", async () => {
     const executionPurpose = { kind: "egm_packet_review" as const, packetSha256: "a".repeat(64),
       sourceDigests: ["packet", "target", "persona", "standard"].map(id => ({ id, sha256: "b".repeat(64) })) };

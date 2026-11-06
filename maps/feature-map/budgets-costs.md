@@ -52,16 +52,24 @@ Open Administration → Model Intelligence. Compare Models by task type, filter
 the displayed task/model groups, then expand and collapse a Routing audit trail
 row. Follow its owning-company execution/task links. Selection and evaluation
 controls remain in the existing learning ledger further down the page.
-New admissions record only the configured model until current-account model
-qualification is available. Historical subscription use and harness catalog
-support do not authorize automatic alternatives. Retained sessions keep their
-model; older queued requests containing unqualified alternatives require review.
+Settings → Models exposes administrator-managed native qualification evidence.
+Select a completed task/employee/model record to retain access evidence or an
+independently reviewed workflow qualification, with an explicit finite expiry;
+revocation retains its history. A completed process alone is not quality proof.
+Routine-work alternatives require current account, employee, task-family,
+prompt/configuration and CLI bindings plus separate routing-quality evidence.
+Historical subscription use and harness catalogs do not authorize alternatives.
+Without qualified evidence, new admissions retain the configured model.
+Retained sessions keep their model; stale queued alternatives require review.
 The [offline service checks](../../server/src/__tests__/agentos-model-intelligence-offline.test.ts)
 cover this boundary alongside execution-account feedback attribution.
 Selected native executions also retain `modelAccountAccess` in their run context
 after managed-account preparation: a bounded observation of prior work using
 that exact account/credential epoch. Its evidence run and time remain explicit;
 it does not establish current entitlement or unlock alternative models.
+The [qualification checks](../../server/src/__tests__/model-profile-qualifications.test.ts)
+exercise native evidence, expiry, revocation and selection against a disposable
+database. These checks do not qualify a live subscription or production model.
 
 ### `shared-execution-capacity`
 

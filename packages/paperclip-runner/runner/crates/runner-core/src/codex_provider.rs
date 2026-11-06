@@ -393,10 +393,10 @@ impl EgmPacketReviewPurpose {
     }
 }
 
-fn qualify_packet_review_executable(config: &CodexProviderConfig) -> Result<(), LocalRunnerError> {
-    // Empty environment selection is a qualified 0.160.0 protocol boundary.
-    // Older providers may ignore unknown fields, so check the executable on
-    // every fresh or restored spawn before opening any provider session.
+fn probe_codex_cli_version(config: &CodexProviderConfig) -> Result<String, LocalRunnerError> {
+    // Only selected qualified profiles add this bounded metadata subprocess.
+    // Recheck the executable on every fresh or restored spawn, before opening
+    // a session. Ordinary providers retain the existing launch path.
     let mut probe = SupervisedProcess::spawn_in_directory_with_environment_keys(
         &config.command,
         &["--version".to_owned()],
@@ -417,13 +417,39 @@ fn qualify_packet_review_executable(config: &CodexProviderConfig) -> Result<(), 
         thread::sleep(Duration::from_millis(5));
     };
     probe.terminate_group()?;
-    if !success || version.as_deref().map(str::trim) != Some(QUALIFIED_PACKET_REVIEW_CODEX_VERSION)
-    {
-        return Err(LocalRunnerError::invalid(
-            "EGM packet review requires qualified Codex CLI 0.160.0",
-        ));
+    let parsed = version
+        .as_deref()
+        .and_then(|value| value.trim().strip_prefix("codex-cli "))
+        .filter(|value| valid_cli_version(value));
+    if !success || parsed.is_none() {
+        return Err(LocalRunnerError::invalid("Codex CLI identity probe failed"));
     }
-    Ok(())
+    Ok(parsed.unwrap().to_owned())
+}
+
+fn valid_cli_version(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 80
+        && value.as_bytes()[0].is_ascii_digit()
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || b".+-".contains(&byte))
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ExpectedCodexIdentity {
+    pub cli_version: String,
+    pub model: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ObservedCodexIdentity {
+    pub cli_version: Option<String>,
+    pub model: Option<String>,
+    pub reasoning_effort: Option<String>,
+    pub source: String,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
@@ -456,6 +482,8 @@ pub struct CodexProviderConfig {
     pub conversation_mode: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub execution_purpose: Option<EgmPacketReviewPurpose>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub expected_codex_identity: Option<ExpectedCodexIdentity>,
 }
 
 /// Explicit per-turn skill selection. The controller resolves assigned skill
@@ -545,6 +573,30 @@ impl CodexProviderConfig {
     }
 
     pub fn validate(&self) -> Result<(), LocalRunnerError> {
+        if let Some(expected) = &self.expected_codex_identity {
+            if self.provider != "codex"
+                || self.execution_purpose.is_some()
+                || self.read_only
+                || self.conversation_mode.as_deref() != Some("qualified_codex")
+                || self.model.as_ref() != Some(&expected.model)
+                || !valid_cli_version(&expected.cli_version)
+                || expected.model.is_empty()
+                || expected.model.len() > 240
+                || expected.model.trim() != expected.model
+                || expected.model.chars().any(char::is_control)
+            {
+                return Err(LocalRunnerError::invalid(
+                    "invalid qualified Codex identity",
+                ));
+            }
+        }
+        if self.conversation_mode.as_deref() == Some("qualified_codex")
+            && self.expected_codex_identity.is_none()
+        {
+            return Err(LocalRunnerError::invalid(
+                "qualified Codex context requires its expected identity",
+            ));
+        }
         if let Some(purpose) = &self.execution_purpose {
             purpose.validate()?;
             if self.provider != "codex"
@@ -558,7 +610,7 @@ impl CodexProviderConfig {
         }
         if !matches!(
             self.conversation_mode.as_deref(),
-            None | Some("task" | "prepared" | "egm_packet_review")
+            None | Some("task" | "prepared" | "egm_packet_review" | "qualified_codex")
         ) {
             return Err(LocalRunnerError::invalid(
                 "unsupported provider context mode",
@@ -817,6 +869,7 @@ pub struct CodexProvider {
     thread_id: String,
     provider_session_id: Option<String>,
     observed_model: Option<String>,
+    observed_codex_identity: Option<ObservedCodexIdentity>,
     active_provider_turn_id: Option<String>,
     pending_messages: VecDeque<BufferedProviderMessage>,
     deferred_ambiguous_messages: VecDeque<BufferedProviderMessage>,
@@ -1095,9 +1148,29 @@ impl CodexProvider {
                 "EGM packet review requires the exact frozen tool set",
             ));
         }
-        if config.execution_purpose.is_some() {
-            qualify_packet_review_executable(config)?;
-        }
+        let cli_version =
+            if config.execution_purpose.is_some() || config.expected_codex_identity.is_some() {
+                let version = probe_codex_cli_version(config)?;
+                if config.execution_purpose.is_some()
+                    && format!("codex-cli {version}") != QUALIFIED_PACKET_REVIEW_CODEX_VERSION
+                {
+                    return Err(LocalRunnerError::invalid(
+                        "EGM packet review requires qualified Codex CLI 0.160.0",
+                    ));
+                }
+                if config
+                    .expected_codex_identity
+                    .as_ref()
+                    .is_some_and(|expected| expected.cli_version != version)
+                {
+                    return Err(LocalRunnerError::invalid(
+                        "qualified Codex CLI version mismatch",
+                    ));
+                }
+                Some(version)
+            } else {
+                None
+            };
         let common_environment_keys = [
             "LANGUAGE",
             "SSL_CERT_FILE",
@@ -1216,6 +1289,7 @@ impl CodexProvider {
             thread_id: String::new(),
             provider_session_id: None,
             observed_model: None,
+            observed_codex_identity: None,
             active_provider_turn_id: None,
             pending_messages: VecDeque::new(),
             deferred_ambiguous_messages: VecDeque::new(),
@@ -1269,6 +1343,28 @@ impl CodexProvider {
                     },
                 }),
             )?;
+            let reported_version = initialized
+                .get("userAgent")
+                .and_then(Value::as_str)
+                // Codex 0.160 reports <initialize client name>/<actual CLI version>.
+                // The trailing parenthesized client version is our version, not Codex's.
+                .and_then(|agent| agent.strip_prefix("paperclip-runnerd/"))
+                .and_then(|suffix| suffix.split_whitespace().next())
+                .filter(|version| valid_cli_version(version))
+                .map(str::to_owned);
+            if config
+                .expected_codex_identity
+                .as_ref()
+                .is_some_and(|expected| {
+                    reported_version
+                        .as_ref()
+                        .is_some_and(|version| version != &expected.cli_version)
+                })
+            {
+                return Err(LocalRunnerError::invalid(
+                    "qualified Codex initialized CLI version mismatch",
+                ));
+            }
             provider.send_frame(&json!({"method": "initialized"}))?;
 
             let mut params = json!({
@@ -1362,6 +1458,49 @@ impl CodexProvider {
                 .filter(|value| !value.is_empty() && value.len() <= 240)
                 .map(str::to_owned);
 
+            if config.provider == "codex" {
+                provider.observed_codex_identity = Some(ObservedCodexIdentity {
+                    cli_version: cli_version.clone().or(reported_version),
+                    // Only the session response confirms the effective model.
+                    // A stored thread model may describe an earlier session.
+                    model: opened
+                        .get("model")
+                        .and_then(Value::as_str)
+                        .filter(|value| {
+                            !value.is_empty()
+                                && value.len() <= 240
+                                && value.trim() == *value
+                                && !value.chars().any(char::is_control)
+                        })
+                        .map(str::to_owned),
+                    reasoning_effort: opened
+                        .get("reasoningEffort")
+                        .and_then(Value::as_str)
+                        .filter(|value| {
+                            matches!(
+                                *value,
+                                "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max"
+                            )
+                        })
+                        .map(str::to_owned),
+                    source: method.to_owned(),
+                });
+                if config
+                    .expected_codex_identity
+                    .as_ref()
+                    .is_some_and(|expected| {
+                        provider
+                            .observed_codex_identity
+                            .as_ref()
+                            .and_then(|identity| identity.model.as_ref())
+                            != Some(&expected.model)
+                    })
+                {
+                    return Err(LocalRunnerError::invalid(
+                        "qualified Codex provider model mismatch",
+                    ));
+                }
+            }
             if resume_thread_id.is_some() {
                 stage = ProviderStartupStage::ThreadRead;
                 let snapshot = provider.read_thread()?;
@@ -1401,6 +1540,10 @@ impl CodexProvider {
 
     pub fn provider_session_id(&self) -> Option<&str> {
         self.provider_session_id.as_deref()
+    }
+
+    pub fn observed_codex_identity(&self) -> Option<&ObservedCodexIdentity> {
+        self.observed_codex_identity.as_ref()
     }
 
     pub fn observed_model(&self) -> Option<&str> {
@@ -4417,6 +4560,7 @@ done
             include_skill_instructions: None,
             conversation_mode: None,
             execution_purpose: None,
+            expected_codex_identity: None,
         };
         let mut provider = CodexProvider::start(&config, None).unwrap();
         provider.start_turn("First turn", &config.cwd).unwrap();
@@ -4806,6 +4950,7 @@ done
             include_skill_instructions: None,
             conversation_mode: None,
             execution_purpose: None,
+            expected_codex_identity: None,
         };
         let mut spawned = None;
         let mut failure = None;
@@ -4928,6 +5073,7 @@ done
             include_skill_instructions: None,
             conversation_mode: None,
             execution_purpose: None,
+            expected_codex_identity: None,
         };
         config.include_skill_instructions = Some(true);
         assert_eq!(

@@ -32,6 +32,30 @@ def respond(value):
     print(json.dumps(value, allow_nan=False, separators=(",", ":")), flush=True)
 
 
+def complete_questions_fit(agent, questions):
+    # Use the pinned SDK's validation, rendering, tokenizer and actual head
+    # projection. Its usage.options only detects collisions; distinct labels
+    # can still lose instructions/descriptions to either of its two caps.
+    from laya.common import build_head, encode_text, render_options
+    tok = agent.tok
+    for qid, definition in questions.items():
+        agent._check_question(qid, definition)
+        question = agent._to_internal(definition)
+        options = render_options(question)
+        order = question.get("option_order", list(range(len(options))))
+        instruction = "%s question: %s" % (question["t"], question["ins"].replace(tok.mask_token, " "))
+        full = [tok.cls_token_id] + encode_text(tok, instruction, add_special_tokens=False)["input_ids"] + [tok.sep_token_id]
+        for index in order:
+            text = " " + options[index].replace(tok.mask_token, " ")
+            full += [tok.mask_token_id] + encode_text(tok, text, add_special_tokens=False)["input_ids"]
+        full.append(tok.sep_token_id)
+        actual, _, _ = build_head(tok, question, agent.cfg.get("head_max_len", 192), option_order=order)
+        # build_sequence appends one more closing SEP after the state.
+        if actual != full or len(full) + 1 > agent.cfg.get("max_len", 512):
+            return False
+    return True
+
+
 def predict(agent, request):
     if not isinstance(request, dict) or set(request) != {"state", "questions"}:
         return {"status": "abstained", "reason": "local_input_invalid"}
@@ -42,9 +66,11 @@ def predict(agent, request):
     ):
         return {"status": "abstained", "reason": "local_input_invalid"}
     with contextlib.redirect_stdout(sys.stderr):
+        if not complete_questions_fit(agent, questions):
+            return {"status": "abstained", "reason": "local_context_truncated"}
         result = agent.predict(request["state"], questions)
     usage = result.get("usage", {})
-    # The SDK reports actual tokenizer truncation and option collapse; character counts cannot prove fit.
+    # Retain the SDK's separate state-truncation and option-collision checks.
     if usage.get("truncated") is not False or usage.get("state_tokens_dropped", 0) != 0:
         return {"status": "abstained", "reason": "local_context_truncated"}
     if usage.get("options"):

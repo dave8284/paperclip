@@ -27,6 +27,7 @@ import {
   executionWorkspaces,
   goals,
   heartbeatRuns,
+  modelProfileQualifications,
   aiExecutionCapacityClaims,
   runIdentityContexts,
   heartbeatRunEvents,
@@ -95,6 +96,9 @@ export async function deleteCompany(db: Db, id: string) {
         // Cases retain task and agent references. Their dependent handoffs and
         // access sources cascade here before those task/agent records are removed.
         await tx.delete(cases).where(eq(cases.companyId, id));
+        // Qualifications retain source run references until the company is
+        // explicitly deleted; release those references before deleting runs.
+        await tx.delete(modelProfileQualifications).where(eq(modelProfileQualifications.companyId, id));
         // Delete from child tables in dependency order
         const companyRunIds = await tx
           .select({ id: heartbeatRuns.id })

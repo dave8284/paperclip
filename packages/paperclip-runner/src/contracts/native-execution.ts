@@ -1,3 +1,4 @@
+import { parseExpectedCodexIdentity, type ExpectedCodexIdentity } from "./codex-identity.js";
 import { resolveClaudeEffort } from "../drivers/acpx/claude-effort.js";
 import type { DotBindingSnapshot, MuseBindingSnapshot, ExternalBotProviderKind } from "./external-provider.js";
 import { QUALIFIED_ACPX_VERSION } from "../drivers/acpx/generated-profiles.js";
@@ -296,6 +297,7 @@ export interface NativeExecutionInputV9 extends Omit<NativeExecutionInputV7, "sc
   schema: typeof NATIVE_EXECUTION_INPUT_SCHEMA_V9;
   provider: NativeProviderConfigV9;
   executionPurpose?: NativeEgmPacketReviewPurpose;
+  expectedCodexIdentity?: ExpectedCodexIdentity;
 }
 
 export interface NativeExecutionInputV8 extends Omit<NativeExecutionInputV6, "schema" | "provider" | "session"> {
@@ -469,7 +471,7 @@ export function parseNativeExecutionInput(value: unknown): NativeExecutionInput 
     ...(isV4 ? ["continuationPrompt", "initialCommunicationGuidance"] : []),
     ...(isV5 ? ["completionSources"] : []),
     ...(isV7 ? ["homeMode"] : []),
-    ...(isV9 ? ["executionPurpose"] : []),
+    ...(isV9 ? ["executionPurpose", "expectedCodexIdentity"] : []),
   ], "input");
   if (!isV2 && input.schema !== NATIVE_EXECUTION_INPUT_SCHEMA_V1) {
     throw new NativeExecutionInputError(
@@ -928,6 +930,11 @@ export function parseNativeExecutionInput(value: unknown): NativeExecutionInput 
   };
   if (!isV3) return { ...current, schema: NATIVE_EXECUTION_INPUT_SCHEMA_V2 };
   const withRuntimeContext = { ...current, runtimeContext: parseNativeRuntimeContext(input.runtimeContext) };
+  const expectedCodexIdentity = isV9 && input.expectedCodexIdentity !== undefined ? parseExpectedCodexIdentity(input.expectedCodexIdentity) : undefined;
+  if (expectedCodexIdentity && (parsedProvider.kind !== "codex" || parsedProvider.model !== expectedCodexIdentity.model
+    || input.homeMode !== "isolated" || executionMode !== "default" || common.session.lifecyclePolicy.mode !== "per_turn" || input.executionPurpose !== undefined)) {
+    throw new NativeExecutionInputError("Qualified Codex identity requires isolated per-turn Codex with the exact selected model");
+  }
   const executionPurpose = isV9 && input.executionPurpose !== undefined ? parseNativeExecutionPurpose(input.executionPurpose) : undefined;
   if (executionPurpose && (parsedProvider.kind !== "codex" || input.homeMode !== "isolated" || executionMode !== "default"
     || common.session.lifecyclePolicy.mode !== "per_turn" || common.credentialBindings.length !== 0 || common.interactionResponses.length !== 0
@@ -948,6 +955,7 @@ export function parseNativeExecutionInput(value: unknown): NativeExecutionInput 
     ...withPermissions, schema: NATIVE_EXECUTION_INPUT_SCHEMA_V9, homeMode: input.homeMode as NativeHomeMode,
     provider: parsedProvider as NativeProviderConfigV9,
     ...(executionPurpose ? { executionPurpose } : {}),
+    ...(expectedCodexIdentity ? { expectedCodexIdentity } : {}),
     ...(input.completionSources !== undefined ? { completionSources: parseCompletionSources(input.completionSources) } : {}),
   };
   return {

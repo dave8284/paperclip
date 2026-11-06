@@ -1,4 +1,8 @@
 import { observeSelectedModelAccountAccess, selectCompanyModelProfile } from "../model-intelligence.js";
+import { readLocalCodexIdentity } from "../../vendor/paperclip-runner/index.js";
+import { modelProfileQualificationService } from "../model-profile-qualifications.js";
+import { modelAccountFingerprint } from "../model-profile-binding.js";
+import type { ModelProfileBinding } from "@paperclipai/shared";
 import { agentHarnessType } from "@paperclipai/shared";
 import { assertCompanyModelPolicy, defaultCompanyModelBinding } from "../company-model-policy.js";
 import { observabilitySecretValues } from "@paperclipai/adapter-utils/agent-observability";
@@ -112,15 +116,11 @@ export async function prepareHeartbeatExecutionConfiguration(db: Db, input: Hear
   const aiBinding = preconfiguredHome ? undefined : input.config.aiBinding
     ?? await defaultCompanyModelBinding(db, agent.companyId, agent.adapterType, sourceWorkspaceConfig);
   if (preconfiguredHome) await assertCompanyModelPolicy(db, agent.companyId, null);
-  const modelSelection = await selectCompanyModelProfile(db, { runId: run.id, issueId, agent, config: sourceWorkspaceConfig, binding: aiBinding, resumed: !!persistedNativeExecutionInput || !!run.sessionIdBefore });
-  sourceWorkspaceConfig = modelSelection.config;
-  if (modelSelection.receipt) {
-    // Later lifecycle checkpoints persist this same context object. Keep the
-    // native receipt/request there as well as in the admission database update.
-    context.modelIntelligence = modelSelection.receipt;
-    context.modelIntelligenceRequest = modelSelection.request;
-    context.modelTriage = modelSelection.triage;
-    await input.services.appendRunEvent(run, { eventType: "lifecycle", stream: "system", level: "info", message: "Model profile selected", payload: { receiptId: modelSelection.receipt.id, model: modelSelection.receipt.candidate.model, taskType: modelSelection.receipt.taskType, policyVersion: modelSelection.receipt.policyVersion, reason: modelSelection.receipt.reason } });
+  let modelSelection: Awaited<ReturnType<typeof selectCompanyModelProfile>> = { config: sourceWorkspaceConfig };
+  // These fields are issued by native model admission, never by a wake payload.
+  if (!persistedNativeExecutionInput) {
+    delete context.modelProfileQualification;
+    delete context.modelProfileLearningScope;
   }
   const { trustPreset, useIsolatedTaskDirectory, explicitTaskDirectory, requestedExecutionWorkspaceMode } = input.policy;
   const { secretsSvc, companySkills, appendRunEvent, finalizeAiConnectionBusyDeferral } = input.services;
@@ -128,7 +128,7 @@ export async function prepareHeartbeatExecutionConfiguration(db: Db, input: Hear
   const forceDirectoryStrategy = useIsolatedTaskDirectory || (explicitTaskDirectory && (
     requestedExecutionWorkspaceMode === "agent_default" || Object.keys(parseObject(sourceWorkspaceConfig.workspaceStrategy)).length > 0
   ));
-  const mergedConfig = {
+  const mergedConfig: Record<string, unknown> = {
     ...sourceWorkspaceConfig,
     // The base below is already task-owned. Keep directory transport while
     // preserving isolated mode and the mandatory sandbox preflight.
@@ -233,7 +233,54 @@ export async function prepareHeartbeatExecutionConfiguration(db: Db, input: Hear
     )) {
       throw new ConfigurationIncompleteFailure("The AI account changed while this native run was suspended. Start a new execution.", { configurationIncomplete: { reason: "ai_connection_changed", actionUrl: `/agents/${agent.id}/runtime` } });
     }
-    Object.assign(resolvedConfig, managedAiRuntime.config);
+    const currentAccount = managedAiRuntime;
+    modelSelection = await selectCompanyModelProfile(db, { runId: run.id, issueId, agent, config: sourceWorkspaceConfig, binding: aiBinding,
+      resumed: !!persistedNativeExecutionInput || !!run.sessionIdBefore,
+      account: { attribution: currentAccount.attribution, sessionIdentity: currentAccount.sessionIdentity, assertCurrent: currentAccount.assertCurrent,
+        ...((!selectedEnvironmentForConfig || selectedEnvironmentForConfig.driver === "local") && initialHarness === "codex_local"
+          && agent.adapterType === "paperclip_runner" && agent.adapterConfig.lifecycleMode !== "warm" && !context.nativeReviewInteractionId
+          ? { readRuntimeIdentity: () => readLocalCodexIdentity({ environment: { ...process.env, ...parseObject(currentAccount.config.env) } as NodeJS.ProcessEnv,
+              workingDirectory: typeof resolvedConfig.cwd === "string" ? resolvedConfig.cwd : undefined }) } : {}) },
+    });
+    sourceWorkspaceConfig = modelSelection.config;
+    if (persistedNativeExecutionInput && "expectedCodexIdentity" in persistedNativeExecutionInput && persistedNativeExecutionInput.expectedCodexIdentity) {
+      const expected = persistedNativeExecutionInput.expectedCodexIdentity;
+      const saved = parseObject(run.contextSnapshot?.modelProfileQualification);
+      const profile = run.contextSnapshot?.modelProfileBinding as ModelProfileBinding | undefined;
+      if (!profile || typeof saved.id !== "string" || saved.model !== expected.model || saved.cliVersion !== expected.cliVersion
+        || !currentAccount.attribution.subscriptionId || profile.accountFingerprint !== modelAccountFingerprint(agent.companyId, {
+          provider: currentAccount.attribution.provider, subscriptionId: currentAccount.attribution.subscriptionId, sessionIdentity: currentAccount.sessionIdentity })) {
+        throw new ConfigurationIncompleteFailure("The restored execution no longer has its exact model qualification binding.", { configurationIncomplete: { reason: "model_qualification_changed" } });
+      }
+      const assertAccountCurrent = currentAccount.assertCurrent;
+      currentAccount.assertCurrent = async () => {
+        await assertAccountCurrent({ model: expected.model });
+        const eligible = await modelProfileQualificationService(db).candidates({ companyId: agent.companyId, agentId: agent.id, profile, cliVersion: expected.cliVersion });
+        if (!eligible.some(row => row.id === saved.id && row.profile.model === expected.model)) throw new ConfigurationIncompleteFailure("The restored model qualification is no longer current.", { configurationIncomplete: { reason: "model_qualification_changed" } });
+      };
+      await currentAccount.assertCurrent();
+    }
+    if (modelSelection.receipt) {
+      // Preserve the selected profile in all native preparation snapshots.
+      Object.assign(currentAccount.config, { model: modelSelection.receipt.candidate.model });
+      mergedConfig.model = modelSelection.receipt.candidate.model;
+      context.modelIntelligence = modelSelection.receipt;
+      context.modelIntelligenceRequest = modelSelection.request;
+      context.modelTriage = modelSelection.triage;
+      context.modelProfileBinding = modelSelection.profileBinding;
+      context.modelProfileAdmission = modelSelection.profileAdmission;
+      context.modelProfileLearningScope = modelSelection.learningScope ?? null;
+      context.modelProfileQualification = modelSelection.qualification ?? null;
+      if (modelSelection.assertQualificationCurrent) {
+        const assertAccountCurrent = currentAccount.assertCurrent;
+        const assertQualificationCurrent = modelSelection.assertQualificationCurrent;
+        currentAccount.assertCurrent = async () => { await assertAccountCurrent({ model: modelSelection.receipt!.candidate.model }); await assertQualificationCurrent(); };
+      }
+      await appendRunEvent(run, { eventType: "lifecycle", stream: "system", level: "info", message: "Model profile selected",
+        payload: { receiptId: modelSelection.receipt.id, model: modelSelection.receipt.candidate.model, taskType: modelSelection.receipt.taskType,
+          policyVersion: modelSelection.receipt.policyVersion, reason: modelSelection.receipt.reason } });
+    }
+    Object.assign(resolvedConfig, currentAccount.config);
     for (const key of AI_AUTH_ENV_KEYS) secretKeys.add(key);
     context.aiConnection = { ...managedAiRuntime.attribution, accountName: managedAiRuntime.accountName, identity: managedAiRuntime.identity, sessionIdentity: managedAiRuntime.sessionIdentity };
     if (modelSelection.receipt && agent.adapterType === "paperclip_runner") {

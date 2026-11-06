@@ -12,3 +12,6 @@ export { probeCopilotMetadata, validateCopilotMetadata, type CopilotMetadataResu
 export { probeAcpxCursorInstallation, probeAcpxPiInstallation } from "../drivers/acpx/profile-installation.js";
 
 export { bundledRemoteProviderPackManifestPath, bundledRemoteRunnerBinary } from "./bundled-remote-provider-pack.js";
+
+export * from "../contracts/codex-identity.js";
+export { readLocalCodexIdentity } from "../drivers/codex/codex-provider-identity.js";

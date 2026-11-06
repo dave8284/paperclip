@@ -48,6 +48,7 @@ const NATIVE_GITHUB_ATTACHMENT_RECOVERY_GUIDANCE = [
 /** Closed constructor: callers cannot spread legacy context or environment data. */
 export interface BuildNativeExecutionInput {
   executionPurpose?: NativeEgmPacketReviewPurpose;
+  expectedCodexIdentity?: { cliVersion: string; model: string };
   companyId: string;
   runId: string;
   issue: {
@@ -255,10 +256,11 @@ export function buildNativeExecutionInput(input: BuildNativeExecutionInput): Nat
   const workflowCase = input.caseContext && previousCaseProjection
     ? projectCaseContinuation(input.caseContext, previousCaseProjection) : null;
   const prepared = {
-    schema: input.executionPurpose || input.claudeEffort !== undefined ? "paperclip.native-execution-input.v9"
+    schema: input.executionPurpose || input.expectedCodexIdentity || input.claudeEffort !== undefined ? "paperclip.native-execution-input.v9"
       : input.homeMode === "preconfigured" ? "paperclip.native-execution-input.v7" : "paperclip.native-execution-input.v5",
-    ...(input.executionPurpose || input.claudeEffort !== undefined || input.homeMode === "preconfigured" ? { homeMode: input.homeMode ?? "isolated" } : {}),
+    ...(input.executionPurpose || input.expectedCodexIdentity || input.claudeEffort !== undefined || input.homeMode === "preconfigured" ? { homeMode: input.homeMode ?? "isolated" } : {}),
     ...(input.executionPurpose ? { executionPurpose: input.executionPurpose } : {}),
+    ...(input.expectedCodexIdentity ? { expectedCodexIdentity: input.expectedCodexIdentity } : {}),
     ...((input.initialCommunicationGuidance || input.freshSessionHandoff) ? {
       initialCommunicationGuidance: [input.initialCommunicationGuidance, input.freshSessionHandoff].filter(Boolean).join("\n\n"),
     } : {}),

@@ -131,7 +131,7 @@ function selectionDatabase(conversation = false, options: { statements?: Stateme
   const db = drizzle(async (text, params) => {
     options.statements?.push({ text, params });
     if (text.includes('from "company_operating_profiles"')) return { rows: [[]] };
-    if (text.includes('from "issues"')) return { rows: [["Implement a task list", null,
+    if (text.includes('from "issues"')) return { rows: [["Implement a task list", null, "standard",
       conversation ? agentId : null, conversation ? "owner-1" : null]] };
     if (text.includes('from "cost_events"')) return { rows: [["gpt-6.1-sol"]] };
     if (text.includes('from "agent_instruction_heads"')) return { rows: [["AGENTS.md", "revision-1"]] };

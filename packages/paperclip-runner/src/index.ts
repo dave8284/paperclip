@@ -102,3 +102,6 @@ export type { RunnerExecutionDriver } from "./control-plane/runner-execution-dri
 
 export { bindRunnerLaunchResources, createRunnerProviderLaunch, runnerProviderLaunchRequirements, runnerLaunchRequirementsDigest, validatePreparedRunnerLaunch } from "./live/runner-provider-launch.js";
 export type { RunnerProviderLaunchRequirements, RunnerProviderLaunchEnvironment, PreparedRunnerProviderLaunch, RunnerLaunchPreparer } from "./live/runner-provider-launch.js";
+
+export * from "./contracts/codex-identity.js";
+export { readLocalCodexIdentity } from "./drivers/codex/codex-provider-identity.js";

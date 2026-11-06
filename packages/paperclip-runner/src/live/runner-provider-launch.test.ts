@@ -96,3 +96,19 @@ describe("built-in provider launch preparation", () => {
     }
   });
 });
+
+it("binds qualified Codex identity to preparation and rejects provider or model substitutions", () => {
+  const expectedCodexIdentity = { cliVersion: "0.160.0", model: "selected-model" };
+  const selected = { ...requirements, readOnly: false, expectedCodexIdentity };
+  const provider = createRunnerProviderLaunch(selected, environment);
+  const prepared = { configurationId: "qualified", requirementsDigest: runnerLaunchRequirementsDigest(selected), provider };
+  expect(provider).toMatchObject({ expectedCodexIdentity, conversationMode: "qualified_codex" });
+  expect(() => validatePreparedRunnerLaunch(selected, prepared)).not.toThrow();
+  for (const changed of [undefined, { ...expectedCodexIdentity, cliVersion: "0.161.0" }, { ...expectedCodexIdentity, model: "other" }]) {
+    expect(() => validatePreparedRunnerLaunch(selected, { ...prepared, provider: { ...provider, expectedCodexIdentity: changed } })).toThrow("requirements_mismatch");
+    expect(runnerLaunchRequirementsDigest({ ...selected, expectedCodexIdentity: changed })).not.toBe(prepared.requirementsDigest);
+  }
+  expect(() => validatePreparedRunnerLaunch(selected, { ...prepared, provider: { ...provider, conversationMode: "prepared" } })).toThrow("requirements_mismatch");
+  expect(() => createRunnerProviderLaunch({ ...selected, model: "other" }, environment)).toThrow();
+  expect(() => createRunnerProviderLaunch(selected, { ...environment, options: { homeMode: "preconfigured" } })).toThrow();
+});

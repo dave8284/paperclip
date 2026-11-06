@@ -2,15 +2,18 @@ import { createHash } from "node:crypto";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { and, desc, eq, lte, sql } from "drizzle-orm";
-import { agents, agentInstructionHeads, companyOperatingProfiles, costEvents, heartbeatRuns, issues, type Db } from "@paperclipai/db";
-import { agentHarnessType, type AiConnectionAttribution, type AiConnectionBinding, type ModelTriageReceipt } from "@paperclipai/shared";
+import { agents, companyOperatingProfiles, costEvents, heartbeatRuns, issues, type Db } from "@paperclipai/db";
+import { agentHarnessType, type AiConnectionAttribution, type AiConnectionBinding, type ModelTriageReceipt, type ModelProfileBinding } from "@paperclipai/shared";
 import { models as codexModels } from "@paperclipai/adapter-codex-local";
 import { models as claudeModels } from "@paperclipai/adapter-claude-local";
 import { createModelIntelligence, classifyWork, type ModelIntelligence, type SelectionReceipt, type SelectionInput } from "@agentos/model-intelligence";
 import { observeModelTriage } from "./model-triage.js";
-import { conflict, notFound } from "../errors.js";
+import { conflict, notFound, HttpError } from "../errors.js";
 import { logActivity } from "./activity-log.js";
 import type { LogActivityInput } from "./activity-log.js";
+import { modelAccountFingerprint, modelProfileCandidateId, modelProfileConfiguration, modelProfileDigest, type ModelProfileLearningScope } from "./model-profile-binding.js";
+import { modelProfileQualificationService } from "./model-profile-qualifications.js";
+import { matchesNativeModelLearningScope } from "./native-runtime/native-model-profile-evidence.js";
 
 let product: ModelIntelligence | null = null;
 let currentPath: string | undefined;
@@ -105,11 +108,15 @@ export async function observeSelectedModelAccountAccess(db: Db, input: {
 /** Local product integration at execution-configuration admission. Record the
  * operator-configured profile, subject to native managed-account admission.
  * Historical usage and the harness catalog do not prove current-account model
- * access. Automatic alternatives require a qualification owner not yet present. */
+ * access. Alternatives require current native account/profile qualification. */
 export async function selectCompanyModelProfile(db: Db, input: {
   runId: string; issueId: string | null; agent: typeof agents.$inferSelect;
   config: Record<string, unknown>; binding?: AiConnectionBinding; resumed: boolean;
-}): Promise<{ config: Record<string, unknown>; receipt?: SelectionReceipt; request?: SelectionInput; triage?: ModelTriageReceipt }> {
+  account?: { attribution: AiConnectionAttribution & { subscriptionId?: string }; sessionIdentity: string;
+    assertCurrent: (profile?: { model: string }) => Promise<void>; readRuntimeIdentity?: () => Promise<{ cliVersion: string }> };
+}): Promise<{ config: Record<string, unknown>; receipt?: SelectionReceipt; request?: SelectionInput; triage?: ModelTriageReceipt;
+  profileBinding?: ModelProfileBinding; profileAdmission?: ModelProfileBinding; learningScope?: ModelProfileLearningScope;
+  qualification?: { id: string; cliVersion: string; model: string }; assertQualificationCurrent?: () => Promise<void> }> {
   const engine = modelIntelligenceProduct();
   const { agent, config, binding } = input;
   if (!engine || input.resumed || !input.issueId || !binding) return { config };
@@ -117,23 +124,60 @@ export async function selectCompanyModelProfile(db: Db, input: {
   if (!["codex_local", "claude_local"].includes(harness) || typeof config.model !== "string" || !config.model) return { config };
   const [profile] = await db.select().from(companyOperatingProfiles).where(eq(companyOperatingProfiles.companyId, agent.companyId)).limit(1);
   if (!profile) return { config };
-  const [task] = await db.select({ title: issues.title, description: issues.description,
+  const [task] = await db.select({ title: issues.title, description: issues.description, workMode: issues.workMode,
     conversationAgentId: issues.conversationAgentId, conversationUserId: issues.conversationUserId,
   }).from(issues).where(and(eq(issues.id, input.issueId), eq(issues.companyId, agent.companyId))).limit(1);
   if (!task) throw notFound("Model routing task not found");
   const provider = harness === "codex_local" ? "openai" : "anthropic";
   if (binding.provider !== provider || binding.method !== "subscription") return { config };
-  const instructionHeads = await db.select({ file: agentInstructionHeads.entryFile, revisionId: agentInstructionHeads.revisionId }).from(agentInstructionHeads).where(and(eq(agentInstructionHeads.companyId, agent.companyId), eq(agentInstructionHeads.agentId, agent.id))).orderBy(agentInstructionHeads.entryFile).limit(100);
-  // Match the effective effort used by the native Codex and Claude profiles.
-  const instructionHash = fingerprint({ revisions: instructionHeads, instructions: agent.adapterConfig.instructionsFilePath ?? null, prompt: agent.adapterConfig.promptTemplate ?? null, effort: config.modelReasoningEffort ?? config.reasoningEffort ?? config.effort ?? null });
-  const id = (model: string) => `${harness}:${model}:${instructionHash.slice(0, 16)}`;
+  const configuration = await modelProfileConfiguration(db, agent, config);
+  const instructionHash = configuration.promptFingerprint;
+  let learningScope: ModelProfileLearningScope | undefined;
+  const id = (model: string) => modelProfileCandidateId(harness, model, instructionHash, learningScope);
   const explicitOverride = typeof agent.adapterConfig.model === "string" && agent.adapterConfig.model !== config.model;
   // The independent engine's available flag admits this configured attempt; it
   // is not a provider entitlement assertion. Until an account-bound qualification
   // receipt exists, learning cannot replace the configured model automatically.
   const candidates = [{ id: id(config.model), provider, model: config.model, method: "subscription" as const, available: true as const }];
+  const work = classifyModelWork(task.title, task.description);
+  const account = input.account;
+  const profileBinding: ModelProfileBinding | undefined = account?.attribution.method === "subscription" && account.attribution.provider === "openai"
+    && account.attribution.subscriptionId && agent.adapterType === "paperclip_runner" && harness === "codex_local" && config.homeMode !== "preconfigured"
+    ? { schema: "agentos.model-profile-binding.v1", provider: "openai", model: config.model, ...work, ...configuration,
+        accountFingerprint: modelAccountFingerprint(agent.companyId, { provider: "openai", subscriptionId: account.attribution.subscriptionId, sessionIdentity: account.sessionIdentity }) }
+    : undefined;
+  const qualifications = modelProfileQualificationService(db);
+  let eligible: Awaited<ReturnType<typeof qualifications.candidates>> = [];
+  let cliVersion: string | undefined;
+  if (profileBinding && account?.readRuntimeIdentity && task.workMode === "standard"
+    && await qualifications.hasCandidates(agent.companyId, agent.id, profileBinding)) {
+    // Metadata only, and only when there are scoped native qualification rows.
+    // Unknown/currently unavailable identity keeps the configured default.
+    cliVersion = await account.readRuntimeIdentity().then(result => result.cliVersion).catch(() => undefined);
+    if (cliVersion) {
+      await account.assertCurrent();
+      eligible = await qualifications.candidates({ companyId: agent.companyId, agentId: agent.id, profile: profileBinding, cliVersion });
+      for (const row of eligible) {
+        if (explicitOverride || row.profile.model === config.model) continue;
+        try { await account.assertCurrent({ model: row.profile.model }); }
+        catch (error) {
+          if (!(error instanceof HttpError) || ![400, 401, 403, 404, 409, 422].includes(error.status)) throw error;
+          // Optional profile policy may change independently. Recheck the
+          // configured account so a revoked seat is never silently ignored.
+          await account.assertCurrent({ model: config.model });
+          continue;
+        }
+        candidates.push({ id: id(row.profile.model), provider, model: row.profile.model, method: "subscription", available: true });
+      }
+      eligible = eligible.filter(row => candidates.some(candidate => candidate.model === row.profile.model));
+      if (eligible.length) {
+        learningScope = { schema: "agentos.model-profile-learning-scope.v1", profile: profileBinding, cliVersion };
+        for (const candidate of candidates) candidate.id = id(candidate.model);
+      }
+    }
+  }
   const request: SelectionInput = { namespace: agent.companyId, requestId: input.runId,
-    taskKey: `${input.issueId}:${agent.id}${explicitOverride ? `:override:${config.model}` : ""}`, ...classifyModelWork(task.title, task.description),
+    taskKey: `${input.issueId}:${agent.id}${explicitOverride ? `:override:${config.model}` : ""}`, ...work,
     defaultCandidateId: id(config.model), candidates, contextFingerprint: fingerprint({ title: task.title, description: task.description }), promptFingerprint: instructionHash };
   // Freeze the request before calling the independent store. A credential-wait retry
   // must replay the same candidate/context snapshot. The native row also bridges
@@ -141,13 +185,26 @@ export async function selectCompanyModelProfile(db: Db, input: {
   const [admission] = await db.update(heartbeatRuns).set({ contextSnapshot: sql`
     coalesce(${heartbeatRuns.contextSnapshot}, '{}'::jsonb) || case
       when ${heartbeatRuns.contextSnapshot} #>> '{modelIntelligenceRequest,requestId}' = ${input.runId} then '{}'::jsonb
-      else ${JSON.stringify({ modelIntelligenceRequest: request })}::jsonb end`
+      else ${JSON.stringify({ modelIntelligenceRequest: request, modelProfileAdmission: profileBinding ?? null, modelProfileLearningScope: learningScope ?? null })}::jsonb end`
   }).where(and(eq(heartbeatRuns.id, input.runId), eq(heartbeatRuns.companyId, agent.companyId), eq(heartbeatRuns.agentId, agent.id))).returning({ context: heartbeatRuns.contextSnapshot });
   if (!admission) throw notFound("Model routing run not found");
   const frozen = admission.context?.modelIntelligenceRequest as SelectionInput | undefined;
+  const frozenAdmission = admission.context?.modelProfileAdmission;
+  if (modelProfileDigest(frozenAdmission ?? null) !== modelProfileDigest(profileBinding ?? null)) throw conflict("The queued execution account or profile changed. Start a fresh execution.");
+  if (modelProfileDigest(admission.context?.modelProfileLearningScope ?? null) !== modelProfileDigest(learningScope ?? null)) throw conflict("The queued execution profile changed. Start a fresh execution.");
   const candidatesStillAuthorized = Array.isArray(frozen?.candidates) && frozen.candidates.every(candidate => request.candidates.some(current => current.id === candidate.id && current.provider === candidate.provider && current.model === candidate.model && candidate.method === "subscription" && candidate.available === true));
   if (!frozen || !candidatesStillAuthorized || frozen.pinTask !== undefined || frozen.requestId !== input.runId || frozen.namespace !== agent.companyId || frozen.taskKey !== request.taskKey || frozen.promptFingerprint !== request.promptFingerprint || frozen.contextFingerprint !== request.contextFingerprint || frozen.taskType !== request.taskType || frozen.complexity !== request.complexity || frozen.defaultCandidateId !== request.defaultCandidateId) throw conflict("The queued execution profile changed. Review this task before retrying.");
   const receipt = engine.select(frozen);
+  const qualified = receipt.candidate.model !== config.model ? eligible.find(row => row.profile.model === receipt.candidate.model) : undefined;
+  if (receipt.candidate.model !== config.model && (!qualified || !cliVersion || !profileBinding || !account)) throw conflict("The selected model no longer has current account qualification");
+  const selectedBinding = profileBinding ? { ...profileBinding, model: receipt.candidate.model } : undefined;
+  const qualification = qualified && cliVersion ? { id: qualified.id, cliVersion, model: qualified.profile.model } : undefined;
+  const assertQualificationCurrent = qualification && profileBinding && account ? async () => {
+    await account.assertCurrent({ model: qualification.model });
+    const current = await qualifications.candidates({ companyId: agent.companyId, agentId: agent.id, profile: profileBinding, cliVersion: qualification.cliVersion });
+    if (!current.some(row => row.id === qualification.id && row.profile.model === qualification.model)) throw conflict("The model qualification changed while execution waited. Start a fresh execution.");
+  } : undefined;
+  await assertQualificationCurrent?.();
   const triage = await observeModelTriage(db, {
     context: { companyId: agent.companyId, issueId: input.issueId, actor: { type: "agent", companyId: agent.companyId, agentId: agent.id, runId: input.runId } },
     runId: input.runId, taskId: input.issueId, agentId: agent.id, title: task.title, description: task.description,
@@ -157,9 +214,12 @@ export async function selectCompanyModelProfile(db: Db, input: {
   // Selection and shadow observations are retained together before execution.
   // Triage never changes the selected profile or claims an independent review.
   await db.update(heartbeatRuns).set({ contextSnapshot: sql`coalesce(${heartbeatRuns.contextSnapshot}, '{}'::jsonb) || ${JSON.stringify({ modelIntelligence: receipt, modelTriage: triage,
-    modelIntelligenceQualification: { mode: "configured_only", source: "operator_configuration", accountModelAccess: "not_verified", automaticAlternatives: "current_account_qualification_required" },
+    modelIntelligenceQualification: { mode: qualification ? "qualified_profile" : "configured_only", source: qualification ? "native_reviewed_execution" : "operator_configuration",
+      accountModelAccess: qualification ? "session_access_verified" : "not_verified", automaticAlternatives: eligible.length ? "current_account_qualified" : "current_account_qualification_required" },
+    ...(selectedBinding ? { modelProfileBinding: selectedBinding } : {}), modelProfileQualification: qualification ?? null,
   })}::jsonb` }).where(and(eq(heartbeatRuns.id, input.runId), eq(heartbeatRuns.companyId, agent.companyId)));
-  return { config: { ...config, model: receipt.candidate.model }, receipt, request: frozen, triage };
+  return { config: { ...config, model: receipt.candidate.model }, receipt, request: frozen, triage,
+    profileBinding: selectedBinding, profileAdmission: profileBinding, learningScope, qualification, assertQualificationCurrent };
 }
 
 export async function modelCatalog(db: Db, companyId: string, includeLearning = false) {
@@ -194,6 +254,18 @@ export async function evaluateModelRun(db: Db, companyId: string, runId: string,
       && row.billingType === "subscription_included"
       && row.subscriptionId === execution.subscriptionId);
   if (!qualified) throw conflict("Actual model receipts or execution account attribution are missing or differ from the subscription selection. Reconcile them before training.");
+  const scope = run.contextSnapshot?.modelProfileLearningScope as ModelProfileLearningScope | undefined;
+  if (scope || receipt.candidate.id.includes(":qualified:")) {
+    if (!scope || scope.schema !== "agentos.model-profile-learning-scope.v1" || !scope.profile || typeof scope.cliVersion !== "string" || !scope.cliVersion
+      || scope.profile.schema !== "agentos.model-profile-binding.v1" || scope.profile.provider !== "openai"
+      || modelProfileDigest(scope.profile) !== modelProfileDigest(run.contextSnapshot?.modelProfileAdmission ?? null)
+      || modelProfileDigest({ ...scope.profile, model: receipt.candidate.model }) !== modelProfileDigest(run.contextSnapshot?.modelProfileBinding ?? null)
+      || receipt.taskType !== scope.profile.taskType || receipt.complexity !== scope.profile.complexity || receipt.promptFingerprint !== scope.profile.promptFingerprint
+      || receipt.candidate.id !== modelProfileCandidateId("codex_local", receipt.candidate.model, scope.profile.promptFingerprint, scope)
+      || !await matchesNativeModelLearningScope(db, run, scope, receipt.candidate.model, receipt.contextFingerprint)) {
+      throw conflict("The completed native session does not match this comparison's account, profile or runtime identity. It cannot train this profile.");
+    }
+  }
   const [attempts] = await db.select({ count: sql<number>`count(*)::int` }).from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, companyId), run.issueId ? eq(heartbeatRuns.issueId, run.issueId) : eq(heartbeatRuns.id, runId), lte(heartbeatRuns.createdAt, run.createdAt)));
   const evaluation = engine.evaluate({ namespace: companyId, id: runId, receiptId: runId, passed: input.passed, iterations: Math.max(1, attempts.count), latencyMs: run.finishedAt.getTime() - run.startedAt.getTime(), source: "human", evidenceRef: input.evidenceRef, evaluator: who.actorId });
   await logActivity(db, { ...who, companyId, action: "model_intelligence.evaluated", entityType: "heartbeat_run", entityId: runId, details: { passed: evaluation.passed, evidenceRef: evaluation.evidenceRef, source: evaluation.source } });

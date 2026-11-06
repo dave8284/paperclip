@@ -404,6 +404,14 @@ beforeEach(() => {
 });
 
 describe("first meaningful native agent event", () => {
+  it.each(["ssh", "sandbox"])("denies a locally qualified profile before any %s backend or database work", async transport => {
+    const db = { select: vi.fn(() => { throw new Error("Database must not be reached"); }) };
+    await expect(createRunnerdBackend({ db: db as never, runnerInstanceId: "fixture",
+      execution: { schema: "paperclip.native-execution-input.v9", expectedCodexIdentity: { cliVersion: "0.160.0", model: "qualified-model" } } as never,
+      runnerExecutionTarget: { kind: "remote", transport } as never,
+    })).rejects.toThrow("qualified_codex_identity_requires_local_execution");
+    expect(db.select).not.toHaveBeenCalled();
+  });
   const event = (eventType: string, payload: Record<string, unknown>) =>
     ({ eventType, payload }) as PrpEvent;
 

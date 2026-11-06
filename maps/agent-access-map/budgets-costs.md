@@ -97,10 +97,18 @@ Review: `baseline`.
 API: `present` — GET /api/admin/model-intelligence adds read-only task/model
 cohorts and recent run audit projections; GET /api/admin/model-intelligence/learning
 retains the independent selection/evaluation ledger.
+GET and POST /api/companies/{companyId}/friday/model-qualifications list bounded
+native evidence and register an immutable qualification. DELETE
+/api/companies/{companyId}/friday/model-qualifications/{id} revokes eligibility
+while retaining the evidence. Request bodies accept native references and expiry,
+never caller-authored model observations or quality scores.
 
 Agent access: `restricted` — these are instance-level board administrator reads.
 Company membership, an agent role or task execution does not grant this
 cross-company report. Ordinary task/run links still use their native access rules.
+Qualification management is also operator-only: current approved instance
+administrator plus active target-company membership, or local implicit board.
+An agent cannot certify its own account access or reviewed workflow.
 
 Policy: `assertAdministration` executes before queries. Actual usage joins both
 company and run; selection/triage receipts bind their recorded company/run, and
@@ -137,12 +145,16 @@ It does not qualify System One accuracy or independent reviewer isolation.
 Native interactive conversation identity skips local shadow inference before
 dispatch, recording `interactive_conversation` with no execution/timing claim.
 This does not change actor authority, selected profiles or ordinary task review.
-Current-account model entitlement qualification is not implemented. Native
-selection records the operator-configured attempt and explicitly marks account
-model access unverified; historical usage and global catalogs never admit an
-automatic alternative. Native connection authority checks still apply before
-dispatch. Existing resumed sessions remain untouched; legacy queued alternative
-requests fail for explicit review instead of silently changing model/account.
+Native qualification binds a fresh completed subscription execution, actual
+provider session observation, exact managed account/credential generation and
+employee profile. Access evidence and independently reviewed workflow evidence
+remain distinct. Routine-work alternatives additionally require routing-quality
+evidence and matching CLI identity, with current authority and receipt validity
+rechecked before dispatch and after waits. Historical usage and global catalogs
+never admit an automatic alternative. Existing resumed sessions remain untouched;
+stale queued alternatives fail for explicit review. The qualification API is
+bounded and on-demand; it never launches inference or acquires credentials.
+Production account qualification and the full operating journey remain unverified.
 
 ## `budgets`
 

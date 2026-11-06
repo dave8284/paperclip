@@ -1,3 +1,4 @@
+import { parseExpectedCodexIdentity, type ExpectedCodexIdentity, type ObservedCodexIdentity } from "../contracts/codex-identity.js";
 import { PRP_COMPLETION_TOOL_NAME, PRP_COMPLETION_RESULT_BRIDGE_INPUT_SCHEMA } from "../contracts/completion-result.js";
 import { EGM_PACKET_REVIEW_TOOL_NAMES, parseNativeExecutionPurpose, type NativeEgmPacketReviewPurpose } from "../contracts/native-execution.js";
 import { RunnerLaunchPreparationStore } from "./runner-launch-preparation-store.js";
@@ -1206,6 +1207,7 @@ export interface CapabilityRunnerdProcessEvidence {
   piThinkingLevel?: "off" | "low" | "high" | "max";
   claudeEffort?: "low" | "medium" | "high" | "xhigh" | "max";
   providerVersion: string | null;
+  observedCodexIdentity?: ObservedCodexIdentity;
   acpxAgent: QualifiedAcpxAgent | null;
   agentServerVersion: string | null;
   agentRuntimeVersion: string | null;
@@ -1222,6 +1224,7 @@ export interface CapabilityRunnerdProcessEvidence {
 
 export interface CapabilityRunnerdCodexTransportOptions extends RunnerExecutionDriver {
   executionPurpose?: NativeEgmPacketReviewPurpose;
+  expectedCodexIdentity?: ExpectedCodexIdentity;
   observability?: import("../drivers/agent-observability.js").ProviderObservabilityLaunch;
   homeMode?: "isolated" | "preconfigured";
   provider?: "codex" | "opencode" | "claude_managed" | "aws_agentcore" | "acpx";
@@ -3592,6 +3595,10 @@ class DurablePrpCodexTransport implements CodexAppServerTransport {
   readonly #bridgedRuntimeInputs = new Map<string, { durableTurnId: string; permission?: boolean }>();
 
   constructor(readonly options: CapabilityRunnerdCodexTransportOptions) {
+    if (options.expectedCodexIdentity) {
+      options.expectedCodexIdentity = parseExpectedCodexIdentity(options.expectedCodexIdentity);
+      if ((options.provider ?? "codex") !== "codex" || options.homeMode === "preconfigured" || options.lifecyclePolicy?.mode === "warm" || options.executionPurpose) throw new Error("runner_qualified_codex_authority_invalid");
+    }
     if (options.executionPurpose) {
       options.executionPurpose = parseNativeExecutionPurpose(options.executionPurpose);
       if ((options.provider ?? "codex") !== "codex" || options.homeMode === "preconfigured" || options.lifecyclePolicy?.mode === "warm") {
@@ -4100,6 +4107,7 @@ class DurablePrpCodexTransport implements CodexAppServerTransport {
     itemId: string;
     currentRunGrant?: NativeRunRuntimeGrant;
   }): Promise<void> {
+    if (this.options.expectedCodexIdentity) throw new Error("runner_qualified_codex_cross_run_reuse_forbidden");
     if (this.options.executionPurpose) throw new Error("runner_packet_review_cross_run_reuse_forbidden");
     if (this.#pendingWarmRecoveryCompletion !== null) {
       throw new Error("native_runner_warm_transition_completion_pending");
@@ -5137,6 +5145,7 @@ class DurablePrpCodexTransport implements CodexAppServerTransport {
     const acpxAgent = this.options.acpxAgent ?? "codex";
     return {
       model: this.#observedProviderModel,
+      ...(this.#evidence.observedCodexIdentity ? { observedCodexIdentity: structuredClone(this.#evidence.observedCodexIdentity) } : {}),
       ...this.#preparedThreadWorkingDirectory(),
       thread: {
         id: this.#threadId,
@@ -5305,6 +5314,10 @@ class DurablePrpCodexTransport implements CodexAppServerTransport {
       identity.normalizedSessionId === desiredIdentity.normalizedSessionId &&
       identity.turnId === desiredIdentity.turnId &&
       identity.itemId === desiredIdentity.itemId;
+    const recordedCodexIdentity = record(record(controlPlaneState?.runAttachTemplate).provider).expectedCodexIdentity;
+    if (this.options.expectedCodexIdentity || recordedCodexIdentity) {
+      if (!exactAuthority || JSON.stringify(recordedCodexIdentity) !== JSON.stringify(this.options.expectedCodexIdentity)) throw new Error("runner_qualified_codex_recovery_authority_changed");
+    }
     const recordedPurpose = record(record(controlPlaneState?.runAttachTemplate).provider).executionPurpose;
     if (this.options.executionPurpose || recordedPurpose) {
       if (!exactAuthority || JSON.stringify(recordedPurpose) !== JSON.stringify(this.options.executionPurpose)) {
@@ -6011,6 +6024,7 @@ class DurablePrpCodexTransport implements CodexAppServerTransport {
   async #startTurn(
     params: Record<string, unknown>,
   ): Promise<Record<string, unknown>> {
+    if (this.options.expectedCodexIdentity && (params.model !== undefined || params.collaborationMode !== undefined)) throw new Error("runner_qualified_codex_turn_model_override_forbidden");
     const turnStartTimeoutMs = this.options.turnStartTimeoutMs ?? 30_000;
     if (!Number.isSafeInteger(turnStartTimeoutMs) || turnStartTimeoutMs <= 0) {
       throw new Error("turnStartTimeoutMs must be a positive safe integer");
@@ -6707,6 +6721,15 @@ class DurablePrpCodexTransport implements CodexAppServerTransport {
       sessionId,
     } = resolveRunnerdSessionIdentity(started);
     const providerIdentity = record(started.providerIdentity);
+    if ((this.options.provider ?? "codex") === "codex") {
+      const observed = record(descriptor.observedCodexIdentity);
+      if (observed.source === "thread/start" || observed.source === "thread/resume") {
+        this.#evidence.observedCodexIdentity = { cliVersion: typeof observed.cliVersion === "string" ? observed.cliVersion : null,
+          model: typeof observed.model === "string" ? observed.model : null, reasoningEffort: typeof observed.reasoningEffort === "string" ? observed.reasoningEffort : null, source: observed.source };
+      } else delete this.#evidence.observedCodexIdentity;
+      const expected = this.options.expectedCodexIdentity;
+      if (expected && (this.#evidence.observedCodexIdentity?.cliVersion !== expected.cliVersion || this.#evidence.observedCodexIdentity?.model !== expected.model)) throw new Error("runner_qualified_codex_observed_identity_mismatch");
+    }
     const observedModel = this.options.provider === "acpx" ? providerIdentity.effectiveModel : descriptor.effectiveModel;
     if (typeof observedModel === "string" && observedModel.trim()) this.#observedProviderModel = observedModel;
     this.#confirmCheckpointProviderIdentity(started, event.eventType);

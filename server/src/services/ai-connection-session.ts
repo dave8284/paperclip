@@ -14,6 +14,12 @@ function record(value: unknown): Record<string, unknown> {
     ? value as Record<string, unknown> : {};
 }
 
+/** Stable grant/credential generation binding; refresh-token writeback does not
+ * change the epoch, while an explicit credential replacement does. */
+export function managedAiSessionIdentity(grantId: string, responsibleUserId: string | null, session: { secretId: string; epoch: number } | null) {
+  return `${grantId}:${responsibleUserId ?? "shared"}:${session ? `${session.secretId}:${session.epoch}` : "no-auth"}`;
+}
+
 export function managedAiSessionIdentityCompatible(
   stored: unknown,
   sessionIdentity: string,

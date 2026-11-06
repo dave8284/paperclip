@@ -852,6 +852,8 @@ export async function selectHeartbeatRuntime(db: Db, input: HeartbeatRuntimeSele
                     }
                   : null,
               ...nativeProvider,
+              ...(typeof parseObject(context.modelProfileQualification).cliVersion === "string" && typeof parseObject(context.modelProfileQualification).model === "string"
+                ? { expectedCodexIdentity: { cliVersion: String(parseObject(context.modelProfileQualification).cliVersion), model: String(parseObject(context.modelProfileQualification).model) } } : {}),
               ...(egmPacket ? { executionPurpose: egmPurposeForPacket(egmPacket), homeMode: "isolated" as const } : {}),
               lifecyclePolicy: effectiveLifecyclePolicy,
               interactionResponses: egmPacket ? [] : interactionResponses,

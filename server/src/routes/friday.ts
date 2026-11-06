@@ -16,6 +16,8 @@ import { assertCompanyAccess, assertBoard, getActorInfo } from "./authz.js";
 import { authorizationService } from "../services/authorization.js";
 import { platformChangeService } from "../services/platform-changes.js";
 import { requestPlatformChangeSchema } from "@paperclipai/shared";
+import { registerModelProfileQualificationSchema } from "@paperclipai/shared";
+import { modelProfileQualificationService } from "../services/model-profile-qualifications.js";
 
 export function fridayRoutes(db: Db) {
   const router = Router();
@@ -63,6 +65,19 @@ export function fridayRoutes(db: Db) {
     // the same instance-admin boundary as the evaluation ledger.
     const includeLearning = req.actor.type === "board" && (req.actor.source === "local_implicit" || req.actor.isInstanceAdmin === true);
     res.json(await modelCatalog(db, req.params.companyId as string, includeLearning));
+  });
+  router.get("/companies/:companyId/friday/model-qualifications", async (req, res) => {
+    assertBoard(req);
+    res.set("Cache-Control", "no-store").json(await modelProfileQualificationService(db).list(req.params.companyId as string, req.actor));
+  });
+  router.post("/companies/:companyId/friday/model-qualifications", async (req, res) => {
+    assertBoard(req);
+    const result = await modelProfileQualificationService(db).register(req.params.companyId as string, req.actor, registerModelProfileQualificationSchema.parse(req.body));
+    res.status(result.created ? 201 : 200).json(result);
+  });
+  router.delete("/companies/:companyId/friday/model-qualifications/:id", async (req, res) => {
+    assertBoard(req);
+    res.json(await modelProfileQualificationService(db).revoke(req.params.companyId as string, z.string().uuid().parse(req.params.id), req.actor));
   });
   router.get("/companies/:companyId/friday/voice", async (req, res) => { assertBoard(req); res.json(await fridayVoiceStatus()); });
   router.post("/companies/:companyId/friday/voice", json({ limit: "8mb" }), async (req, res) => {

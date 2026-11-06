@@ -2849,6 +2849,7 @@ export * from "./workflows.js";
 export * from "./managed-applications.js";
 export * from "./friday-workspace.js";
 export * from "./platform-changes.js";
+export * from "./model-profile-qualification.js";
 export * from "./employee-awareness.js";
 export * from "./operating-profile.js";
 export * from "./agentos-workforce.js";

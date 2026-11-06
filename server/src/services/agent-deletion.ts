@@ -1,7 +1,7 @@
 import { and, eq, isNull, or, sql } from "drizzle-orm";
 import { agents, agentApiKeys, agentRuntimeState, agentTaskSessions, agentWakeupRequests, activityLog,
   budgetReservations, heartbeatRunEvents, heartbeatRuns, issueExecutionDecisions, issues, issueComments,
-  caseHandoffs, agentosAssignments, agentosDepartments, principalPermissionGrants, aiExecutionCapacityClaims, type Db } from "@paperclipai/db";
+  caseHandoffs, agentosAssignments, agentosDepartments, principalPermissionGrants, aiExecutionCapacityClaims, modelProfileQualifications, type Db } from "@paperclipai/db";
 import { conflict } from "../errors.js";
 import { issueThreadInteractionService } from "./issue-thread-interactions.js";
 
@@ -50,6 +50,7 @@ export async function deleteAgentDependencies(tx: Db, companyId: string, id: str
     .set({ assigneeAgentId: null, createdByAgentId: null })
     .where(or(eq(issues.assigneeAgentId, id), eq(issues.createdByAgentId, id)));
   await tx.delete(heartbeatRunEvents).where(eq(heartbeatRunEvents.agentId, id));
+  await tx.delete(modelProfileQualifications).where(and(eq(modelProfileQualifications.companyId, companyId), eq(modelProfileQualifications.agentId, id)));
   await tx.delete(agentTaskSessions).where(eq(agentTaskSessions.agentId, id));
   await tx.delete(activityLog).where(
     or(

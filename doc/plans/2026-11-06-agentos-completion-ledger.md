@@ -18,7 +18,7 @@ Update those rows as work completes; do not create another backlog.
   navigation/style; local artifact history and scoped search; connector inventory;
   standalone model-service transport/persistence/isolation. Worksheet rows are
   authoritative and each carries its current binary status.
-- Source checkpoints `8d3f92b3d`, `d68507272`, `1bc35a4b9`, `496cf185b` and `26f90de27` are pushed to the AgentOS fork.
+- Source checkpoints `8d3f92b3d`, `d68507272`, `1bc35a4b9`, `496cf185b`, `26f90de27` and `472a2b9a1` are pushed to the AgentOS fork.
   Later active changes must be checked before starting another worker.
 - **Not fixed:** full operating delivery, owner Google account acceptance, physical
   voice conversation, provider workflows, model qualification and evaluated learning.
@@ -31,17 +31,28 @@ Update those rows as work completes; do not create another backlog.
   the landing to one prominent dashboard screenshot, then requested the rounded
   overlay from the 11.06.25 AM reference in AgentOS colours. The charcoal panel
   and translucent frame are live; desktop/mobile and three landing checks pass.
-- Active work: account-bound model qualification, provider observation and local
-  triage token-fit guards. The original 12-case diagnostic failures remain valid;
-  the audit found no parser defect that would turn them into successful routing.
-  OpenAPI discovery
-  drift is corrected; all 27 catalog checks and 70 remaining contract checks pass.
+- Account/profile qualification, actual provider identity, revocation/recovery
+  and Models controls are implemented. Native evidence, runtime and UI checks
+  pass; actual desktop/mobile Models empty-state acceptance passes. No production
+  account has been qualified or model run launched by these checks.
+  Comparative evidence is bound to its account/configuration/runtime and frozen
+  standard task; review-only work cannot train implementation comparisons.
+  Final checks: 42 host, 195 Runner, 13 UI; native identity metadata observed
+  without inference. Final integrated activation is the next checkpoint.
+- Local triage now rejects clipped questions before inference (11 checks pass).
+  The original 12-case diagnostic failures remain valid; they do not qualify routing.
+  OpenAPI discovery drift is corrected; all 27 catalog checks and 70 remaining
+  contract checks pass.
   Real account, physical audio and business workflow acceptance remain open.
-- Broader workspace regression was interrupted after failures during concurrent
-  builds. Preserve `/private/tmp/agentos-workspaces-{b,c}-regression-20261107.log`;
-  database and adapter failures need isolated verification before full sign-off.
+- Broader workspace regression remains incomplete. Initial concurrent failures
+  are retained in `/private/tmp/agentos-workspaces-{b,c}-regression-20261107.log`.
+  Isolated database checks (10) and the affected adapter cases pass except the
+  Claude MCP prerequisite: installed CLI 2.1.126, test requires at least 2.1.207.
+  Shared/skills checks passed 1,050 tests. Do not claim full backend regression.
 - Packet-only review source/protocol checks pass; real account review and accepted
   output remain open. Cross-company component publication is still unimplemented.
+  Its explicit owner-selected publication/import slice is the next active A04
+  worker; existing entry points remain held until model activation completes.
 - The designated owner’s interactive Google sign-in result has been requested;
   existing credentials are configured and must not be requested again.
 - Cloud/public hosting and Higgsfield sign-in remain deferred. Shared-seat starting
