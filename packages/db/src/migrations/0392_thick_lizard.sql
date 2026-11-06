@@ -1,0 +1,2 @@
+ALTER TABLE "model_profile_qualifications" ADD COLUMN "native_review_interaction_id" uuid;--> statement-breakpoint
+ALTER TABLE "model_profile_qualifications" ADD CONSTRAINT "model_profile_qualifications_native_review_interaction_id_issue_thread_interactions_id_fk" FOREIGN KEY ("native_review_interaction_id") REFERENCES "public"."issue_thread_interactions"("id") ON DELETE set null ON UPDATE no action;

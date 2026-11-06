@@ -15,6 +15,10 @@ They are not database backups or the executable migration history.
 
 ## Requirements
 
+- Treat generated SQL as immutable once a running instance can discover it,
+  even before commit. A user-triggered restart may already have applied it.
+  Add a successor migration for later schema changes; never regenerate an
+  existing migration on the assumption that an uncommitted file is unapplied.
 - Keep only the five newest `*_snapshot.json` files, ordered by their numeric
   migration prefix. If fewer than five exist, retain all of them. Always retain
   the newest snapshot.

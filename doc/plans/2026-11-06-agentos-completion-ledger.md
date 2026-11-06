@@ -24,7 +24,7 @@ Update those rows as work completes; do not create another backlog.
   voice conversation, provider workflows, model qualification and evaluated learning.
 - Local speech roundtrip and saved table/list/board refresh pass. Setup draft
   persistence/handoff passes in the actual browser, without sending a message.
-- Backend `1bc35a4b9` activated through guarded restart; matching recovery reports
+- Backend model checkpoint `846613d4e` activated; matching native recovery reports
   no lost runs. Employee configuration and typed deletion journeys pass on the
   disposable instance. Dock overlap is fixed and desktop/mobile clicks pass.
 - Full UI regression passes all 850 files / 9,440 checks. The owner corrected
@@ -38,7 +38,13 @@ Update those rows as work completes; do not create another backlog.
   Comparative evidence is bound to its account/configuration/runtime and frozen
   standard task; review-only work cannot train implementation comparisons.
   Final checks: 42 host, 195 Runner, 13 UI; native identity metadata observed
-  without inference. Final integrated activation is the next checkpoint.
+  without inference. Integrated server/UI builds and loaded health pass.
+- Activation exposed a regenerated migration that an earlier restart had already
+  applied. Exact original `0391` SQL/hash/timestamp restored; additive `0392`
+  applied normally. No data deletion or manual database-journal changes. Native
+  recovery request `2026-11-06T22:26:37.601Z` completed with no lost runs.
+  The old disposable 3199 instance applied the superseded draft migration;
+  replace that fixture before another restart, without treating it as production.
 - Local triage now rejects clipped questions before inference (11 checks pass).
   The original 12-case diagnostic failures remain valid; they do not qualify routing.
   OpenAPI discovery drift is corrected; all 27 catalog checks and 70 remaining
@@ -52,7 +58,7 @@ Update those rows as work completes; do not create another backlog.
 - Packet-only review source/protocol checks pass; real account review and accepted
   output remain open. Cross-company component publication is still unimplemented.
   Its explicit owner-selected publication/import slice is the next active A04
-  worker; existing entry points remain held until model activation completes.
+  worker; source is being integrated after model activation.
 - The designated owner’s interactive Google sign-in result has been requested;
   existing credentials are configured and must not be requested again.
 - Cloud/public hosting and Higgsfield sign-in remain deferred. Shared-seat starting

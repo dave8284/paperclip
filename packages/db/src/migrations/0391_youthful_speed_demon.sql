@@ -5,7 +5,6 @@ CREATE TABLE "model_profile_qualifications" (
 	"run_id" uuid NOT NULL,
 	"issue_id" uuid NOT NULL,
 	"review_decision_id" uuid,
-	"native_review_interaction_id" uuid,
 	"request_key" uuid NOT NULL,
 	"request_fingerprint" text NOT NULL,
 	"state" text NOT NULL,
@@ -29,6 +28,5 @@ ALTER TABLE "model_profile_qualifications" ADD CONSTRAINT "model_profile_qualifi
 ALTER TABLE "model_profile_qualifications" ADD CONSTRAINT "model_profile_qualifications_run_id_heartbeat_runs_id_fk" FOREIGN KEY ("run_id") REFERENCES "public"."heartbeat_runs"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "model_profile_qualifications" ADD CONSTRAINT "model_profile_qualifications_issue_id_issues_id_fk" FOREIGN KEY ("issue_id") REFERENCES "public"."issues"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "model_profile_qualifications" ADD CONSTRAINT "model_profile_qualifications_review_decision_id_issue_execution_decisions_id_fk" FOREIGN KEY ("review_decision_id") REFERENCES "public"."issue_execution_decisions"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "model_profile_qualifications" ADD CONSTRAINT "model_profile_qualifications_native_review_interaction_id_issue_thread_interactions_id_fk" FOREIGN KEY ("native_review_interaction_id") REFERENCES "public"."issue_thread_interactions"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 CREATE UNIQUE INDEX "model_profile_qualification_request_uq" ON "model_profile_qualifications" USING btree ("company_id","request_key");--> statement-breakpoint
 CREATE INDEX "model_profile_qualification_candidates_idx" ON "model_profile_qualifications" USING btree ("company_id","agent_id","account_fingerprint","valid_until");

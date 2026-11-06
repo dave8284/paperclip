@@ -44599,12 +44599,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "native_review_interaction_id": {
-          "name": "native_review_interaction_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
         "request_key": {
           "name": "request_key",
           "type": "uuid",
@@ -44812,19 +44806,6 @@
           "tableTo": "issue_execution_decisions",
           "columnsFrom": [
             "review_decision_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        },
-        "model_profile_qualifications_native_review_interaction_id_issue_thread_interactions_id_fk": {
-          "name": "model_profile_qualifications_native_review_interaction_id_issue_thread_interactions_id_fk",
-          "tableFrom": "model_profile_qualifications",
-          "tableTo": "issue_thread_interactions",
-          "columnsFrom": [
-            "native_review_interaction_id"
           ],
           "columnsTo": [
             "id"
