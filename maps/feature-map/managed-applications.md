@@ -116,6 +116,12 @@ interruptions still cancel pending synthesis, and late cancelled starts do not
 restore the speaking label. Focused UI checks cover these transitions; physical
 microphone, playback quality and room-noise acceptance remain separate.
 
+Before Friday connects, fallback typing uses the native tab-scoped draft store
+keyed to the confirmed account and coordinator company. A ready conversation
+offers an explicit append to its native composer, never sends automatically or
+overwrites an existing draft, and keeps the saved copy when a pending native
+submission or unavailable storage prevents a confirmed handoff.
+
 Verification: FridayWorkspace, TaskChatThread, FridayVoiceControls and existing HTML/attachment tests cover arrival, stale-access suppression, saved references, original sending, inline decision visibility and preview isolation attributes. `scripts/agentos-smoke.mjs` additionally checks authenticated agent upload/registration and revision-protected reusable-reference writes against an owned local instance. Real browser animation, microphone and model-driven generation require live qualification.
 
 Friday voice refinement: the light home folds the native composer behind “Type to Friday…”, while keeping its imperative voice sender mounted. Voice turns use native submission receipts and retain drafts on failure or pending review; new replies speak by default with a remembered mute preference and explicit browser-audio errors. Unbound profile-managed agents inherit a compatible coordinator connection choice, subject to the existing native grant and subscription checks. Personal credentials are not propagated; account pools require explicit assignment. Component integration and real-database policy tests cover these boundaries; physical microphone and audio playback remain unqualified.

@@ -6,11 +6,13 @@ import { MemoryRouter } from "react-router-dom";
 import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 import { Friday } from "./Friday";
 import { AgentOSNativeFrame } from "@/components/AgentOSNativeFrame";
+import { clearDraftSubmission, loadDraft, saveDraft, saveDraftSubmission } from "@/lib/composer-draft";
+(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const fixture = vi.hoisted(() => {
   const first = "00000000-0000-4000-8000-000000000001", second = "00000000-0000-4000-8000-000000000002";
   const project = "00000000-0000-4000-8000-000000000003", agent = "00000000-0000-4000-8000-000000000004";
-  return { first, second, project, agent, platformOnly: false,
+  return { first, second, project, agent, platformOnly: false, homeCompanyId: first, userId: "owner", identitySettled: true, chatEnabled: true,
     companies: [{ id: first, name: "Northstar", issuePrefix: "NOR", status: "active", description: "Useful tools." }, { id: second, name: "Forma", issuePrefix: "FOR", status: "active", description: "Creative work." }],
     work: vi.fn(), attention: vi.fn(), routines: vi.fn(), getProject: vi.fn(), transcript: vi.fn(), send: vi.fn(),
   };
@@ -18,9 +20,9 @@ const fixture = vi.hoisted(() => {
 vi.mock("@/lib/router", async () => ({ ...await import("react-router-dom"), CompanyRouteScope: ({ children }: { children: ReactNode }) => children }));
 vi.mock("@/context/CompanyContext", () => ({ useCompany: () => ({ selectedCompanyId: fixture.first, companies: fixture.platformOnly ? [] : fixture.companies, allCompanies: fixture.platformOnly ? [{ ...fixture.companies[0], purpose: "platform" }] : fixture.companies }), CompanyViewProvider: ({ children }: { children: ReactNode }) => children }));
 vi.mock("@/context/ThemeContext", () => ({ useTheme: () => ({ setTheme: () => {} }) }));
-vi.mock("@/api/companies-query", () => ({ useAccountIdentity: () => ({ userId: "owner" }) }));
+vi.mock("@/api/companies-query", () => ({ useAccountIdentity: () => ({ userId: fixture.userId, settled: fixture.identitySettled }) }));
 vi.mock("@/api/administration", () => ({ administrationApi: { registration: async () => ({ status: "approved", isInstanceAdmin: true }) }, registrationKey: () => ["registration"] }));
-vi.mock("@/api/operating-profile", () => ({ operatingProfileKey: () => ["profile"], operatingProfileApi: { get: async () => ({ fridayAgentId: fixture.agent, revision: 1 }) } }));
+vi.mock("@/api/operating-profile", () => ({ operatingProfileKey: (id: string) => ["profile", id], operatingProfileApi: { get: async () => ({ fridayAgentId: fixture.agent, revision: 1 }) } }));
 vi.mock("@/api/ai-connections", () => ({ aiConnectionsApi: { list: async () => ({ connections: [{ method: "subscription", status: "connected" }] }) } }));
 vi.mock("@/api/agents", () => ({ agentsApi: { list: async (companyId: string) => [{ id: fixture.agent, companyId, name: "Friday", role: "coordinator", status: "idle", adapterType: "codex_local", adapterConfig: { model: "test-model" }, capabilities: "Coordinate projects" }], skills: async () => ({ entries: [], warnings: [] }) } }));
 vi.mock("@/api/friday", () => ({ fridayApi: { work: fixture.work }, fridayKey: (id: string) => ["work", id] }));
@@ -28,18 +30,26 @@ vi.mock("@/api/attention", () => ({ attentionApi: { list: fixture.attention } })
 vi.mock("@/api/projects", () => ({ projectsApi: { get: fixture.getProject, list: async () => [{ id: fixture.project, companyId: fixture.first, name: "Customer portal", status: "in_progress" }] } }));
 vi.mock("@/api/departments", () => ({ departmentKey: (id: string) => ["departments", id], departmentsApi: { list: async () => [] } }));
 vi.mock("@/api/health", () => ({ healthApi: { get: async () => ({ deploymentMode: "local_trusted" }) } }));
-vi.mock("@/api/workforce", () => ({ workforceApi: { list: async () => [{ id: "portfolio", homeCompanyId: fixture.first }] }, workforceKeys: { list: () => ["portfolio"], detail: () => ["portfolio-detail"] } }));
+vi.mock("@/api/workforce", () => ({ workforceApi: { list: async () => [{ id: "portfolio", homeCompanyId: fixture.homeCompanyId }] }, workforceKeys: { list: (id: string) => ["portfolio", id], detail: () => ["portfolio-detail"] } }));
 vi.mock("@/api/routines", () => ({ routinesApi: { list: fixture.routines } }));
 vi.mock("@/api/heartbeats", () => ({ heartbeatsApi: { liveRunsForCompany: async () => [] } }));
 vi.mock("@/api/issues", () => ({ issuesApi: { listDocuments: async () => [] } }));
 vi.mock("@/api/auth", () => ({ authApi: { getSession: async () => ({ user: { id: "owner" } }) } }));
 vi.mock("@/api/activity", () => ({ activityApi: { list: async () => [] } }));
 vi.mock("@/hooks/useFridayUpdates", () => ({ useFridayUpdates: () => {} }));
-vi.mock("@/hooks/useAgentChatEnabled", () => ({ useAgentChatEnabled: () => ({ enabled: true, loaded: true }) }));
+vi.mock("@/hooks/useAgentChatEnabled", () => ({ useAgentChatEnabled: () => ({ enabled: fixture.chatEnabled, loaded: true }) }));
 vi.mock("@/components/FridayOrb", () => ({ FridayOrb: ({ decorative, label, onActivate, state }: any) => decorative ? <span data-orb="brand" /> : <button aria-label={label} data-orb={state} onClick={onActivate}>Orb</button> }));
 vi.mock("./AgentChat", async () => {
   const { FridayConversationPanel } = await import("@/components/FridayConversationPanel");
-  return { AgentChat: ({ focusView }: any) => <>{focusView.render({ issueId: "conversation", attachments: [], workProducts: [], runStatus: "idle", awaitingInput: false, unavailable: false, loading: false, voiceDisabled: false, onTranscript: fixture.transcript, onVoiceMessage: fixture.send })}<FridayConversationPanel focus={focusView} open={focusView.showTranscript || !focusView.composerCollapsed} required={false}><div>Persisted conversation</div><input aria-label="Message Friday" /></FridayConversationPanel></> };
+  const { useState } = await import("react");
+  const { loadDraft, saveDraft } = await import("@/lib/composer-draft");
+  function Conversation({ focusView }: any) {
+    const key = `paperclip:agent-chat-draft:${fixture.homeCompanyId}:${fixture.userId}:${fixture.agent}`;
+    const [body, setBody] = useState(() => loadDraft(key));
+    const restore = (text: string) => { fixture.transcript(text); const next = [body.trim(), text.trim()].filter(Boolean).join("\n\n"); saveDraft(key, next); setBody(next); };
+    return <>{focusView.render({ issueId: "conversation", companyId: fixture.homeCompanyId, attachments: [], workProducts: [], runStatus: "idle", awaitingInput: false, unavailable: false, loading: false, voiceDisabled: false, onTranscript: restore, onVoiceMessage: fixture.send })}<FridayConversationPanel focus={focusView} open={focusView.showTranscript || !focusView.composerCollapsed} required={false}><div>Persisted conversation</div><textarea aria-label="Message Friday" value={body} readOnly /></FridayConversationPanel></>;
+  }
+  return { AgentChat: (props: any) => <Conversation key={`${fixture.homeCompanyId}:${fixture.userId}`} {...props} /> };
 });
 
 class Recognition {
@@ -53,6 +63,7 @@ describe("AgentOS approved Friday experience", () => {
   let host: HTMLDivElement, root: Root, client: QueryClient;
   beforeEach(() => {
     vi.clearAllMocks(); localStorage.clear(); sessionStorage.clear(); fixture.platformOnly = false;
+    fixture.homeCompanyId = fixture.first; fixture.userId = "owner"; fixture.identitySettled = true; fixture.chatEnabled = true;
     Object.defineProperty(window, "SpeechRecognition", { configurable: true, value: Recognition });
     fixture.attention.mockResolvedValue({ items: [], totalCount: 0, generatedAt: new Date().toISOString(), nextCursor: null });
     fixture.routines.mockResolvedValue([]);
@@ -65,6 +76,80 @@ describe("AgentOS approved Friday experience", () => {
   async function render(path = "/friday", native = false) { await act(async () => root.render(<QueryClientProvider client={client}><MemoryRouter initialEntries={[path]}>{native ? <AgentOSNativeFrame><h1>Native record</h1></AgentOSNativeFrame> : <Friday />}</MemoryRouter></QueryClientProvider>)); await settle(); await settle(); }
   async function click(text: string, within: ParentNode = host) { const button = [...within.querySelectorAll("button")].find(node => node.textContent?.trim() === text || node.getAttribute("aria-label") === text); expect(button, text).toBeDefined(); await act(async () => button!.click()); await settle(); await settle(); }
   const navigation = () => host.querySelector('nav[aria-label="Main navigation"]')!;
+  async function enterFallback(text: string) {
+    await click("Prefer to type?");
+    const field = host.querySelector<HTMLTextAreaElement>('[aria-label="Draft for Friday"]')!;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(field, text);
+      field.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+  }
+
+  it("retains an unsent setup draft when navigating away from Friday and returning", async () => {
+    fixture.chatEnabled = false;
+    await render(); await enterFallback("Keep my launch idea");
+    await act(async () => root.render(<div>Native task page</div>));
+    await render(); await click("Prefer to type?");
+    expect(host.querySelector<HTMLTextAreaElement>('[aria-label="Draft for Friday"]')?.value).toBe("Keep my launch idea");
+    expect(fixture.send).not.toHaveBeenCalled();
+    expect(fixture.transcript).not.toHaveBeenCalled();
+  });
+
+  it("isolates setup drafts by confirmed account and home company without flashing a prior account's text", async () => {
+    fixture.chatEnabled = false;
+    await render(); await enterFallback("Owner private draft");
+    fixture.identitySettled = false; await render();
+    expect(host.querySelector<HTMLTextAreaElement>('[aria-label="Draft for Friday"]')?.value).toBe("");
+    expect(host.querySelector<HTMLTextAreaElement>('[aria-label="Draft for Friday"]')?.disabled).toBe(true);
+    fixture.userId = "other-owner"; fixture.identitySettled = true; await render();
+    expect(host.textContent).not.toContain("Owner private draft");
+    await click("Prefer to type?");
+    expect(host.querySelector<HTMLTextAreaElement>('[aria-label="Draft for Friday"]')?.value).toBe("");
+    await enterFallback("Other owner draft");
+    fixture.homeCompanyId = fixture.second;
+    await act(async () => { await client.invalidateQueries({ queryKey: ["portfolio", fixture.userId] }); }); await settle();
+    await click("Prefer to type?");
+    expect(host.querySelector<HTMLTextAreaElement>('[aria-label="Draft for Friday"]')?.value).toBe("");
+    fixture.homeCompanyId = fixture.first; fixture.userId = "owner"; await render(); await settle();
+    await click("Prefer to type?");
+    expect(host.querySelector<HTMLTextAreaElement>('[aria-label="Draft for Friday"]')?.value).toBe("Owner private draft");
+    expect(fixture.send).not.toHaveBeenCalled();
+  });
+
+  it("offers an explicit handoff after setup and appends to Friday's existing native draft without sending", async () => {
+    fixture.chatEnabled = false;
+    await render(); await enterFallback("My saved setup idea");
+    const nativeKey = `paperclip:agent-chat-draft:${fixture.first}:owner:${fixture.agent}`;
+    saveDraft(nativeKey, "An existing connected draft");
+    fixture.chatEnabled = true; await render();
+    expect(host.textContent).toContain("Your earlier draft is ready to continue");
+    expect(fixture.transcript).not.toHaveBeenCalled(); expect(fixture.send).not.toHaveBeenCalled();
+    await click("Add saved draft to Friday");
+    expect(host.querySelector<HTMLInputElement>('[aria-label="Message Friday"]')?.value).toBe("An existing connected draft\n\nMy saved setup idea");
+    expect(loadDraft(nativeKey)).toBe("An existing connected draft\n\nMy saved setup idea");
+    expect(host.querySelector('[aria-label="Saved Friday draft"]')).toBeNull();
+    expect(fixture.send).not.toHaveBeenCalled();
+    await act(async () => root.render(<div>Native task page</div>)); await render();
+    expect(host.querySelector('[aria-label="Saved Friday draft"]')).toBeNull();
+    expect(host.querySelector<HTMLInputElement>('[aria-label="Message Friday"]')?.value).toContain("My saved setup idea");
+  });
+
+  it("keeps the setup copy while a native submission is uncertain and restores it only after review", async () => {
+    fixture.chatEnabled = false;
+    await render(); await enterFallback("Preserve this unsent idea");
+    const nativeKey = `paperclip:agent-chat-draft:${fixture.first}:owner:${fixture.agent}`;
+    const attemptId = "9af8228f-0be7-45ae-a104-6fbe0af6f1d3";
+    saveDraft(nativeKey, "Pending native message"); saveDraftSubmission(nativeKey, { attemptId, reviewed: false });
+    fixture.chatEnabled = true; await render(); await click("Add saved draft to Friday");
+    expect(host.textContent).toContain("Review the pending message");
+    expect(fixture.transcript).not.toHaveBeenCalled();
+    expect(loadDraft(nativeKey)).toBe("Pending native message");
+    clearDraftSubmission(nativeKey, attemptId);
+    await click("Add saved draft to Friday");
+    expect(host.querySelector('[aria-label="Saved Friday draft"]')).toBeNull();
+    expect(loadDraft(nativeKey)).toBe("Pending native message\n\nPreserve this unsent idea");
+    expect(fixture.send).not.toHaveBeenCalled();
+  });
 
   it("opens real company and project cards in the canvas with scoped decisions and routines", async () => {
     await render();

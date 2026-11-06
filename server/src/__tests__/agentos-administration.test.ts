@@ -7,13 +7,14 @@ import request from "supertest";
 import { and, eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { agentosAdminEvents, agentosUserInvitations, authAccounts, authSessions, authUsers, boardApiKeys,
-  companies, companyMemberships, costEvents, createDb, instanceUserRoles, invites } from "@paperclipai/db";
+  agents, companies, companyMemberships, costEvents, createDb, heartbeatRuns, instanceUserRoles, invites, issueComments, issues } from "@paperclipai/db";
 import { startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
 import { errorHandler } from "../middleware/index.js";
 import { agentosAdministrationRoutes } from "../routes/agentos-administration.js";
 import { accessRoutes } from "../routes/access.js";
 import { initialRegistrationStatus, userApprovalGuard } from "../auth/agentos-registration.js";
 import { administrationService } from "../services/agentos-administration.js";
+import { modelIntelligenceAnalytics } from "../services/agentos-model-analytics.js";
 import { boardAuthService } from "../services/board-auth.js";
 import { claimFirstInstanceAdmin } from "../first-admin-claim.js";
 import { setupLiveEventsWebSocketServer } from "../realtime/live-events-ws.js";
@@ -199,11 +200,38 @@ describe("Agent OS registration and administration", () => {
     const admin = await user("approved", true);
     const [company] = await db.insert(companies).values({ name: "Model accounting", issuePrefix: `M${randomUUID().slice(0, 6)}` }).returning();
     await db.insert(costEvents).values({ companyId: company.id, usageKind: "decision", provider: "test", model: "seat-model", billingType: "subscription_included", inputTokens: 90, outputTokens: 10, costCents: "0", occurredAt: new Date() });
+    const analytics = await modelIntelligenceAnalytics(db, principal(admin.id));
+    expect(analytics.usage.find(row => row.model === "seat-model")).toMatchObject({ inputTokens: 90, outputTokens: 10, receipts: 1 });
     const response = await request(app(admin.id)).get("/api/admin/model-intelligence").expect(200);
     expect(response.body.usage.find((row: { model: string }) => row.model === "seat-model")).toMatchObject({ inputTokens: 90, outputTokens: 10, receipts: 1 });
     expect(response.body.learning).toMatchObject({ status: "not_connected", evaluations: null, policyReleases: null });
     const people = await request(app(admin.id)).get("/api/admin/people").expect(200);
     expect(JSON.stringify(people.body)).not.toContain("password");
     expect(JSON.stringify(people.body)).not.toContain("accessToken");
+  });
+
+  it("reads persisted model timing with exact cutoff and native comment attribution", async () => {
+    const admin = await user("approved", true);
+    const through = new Date("2026-11-07T00:00:00.000Z");
+    const [company] = await db.insert(companies).values({ name: "Bounded model audit", issuePrefix: `T${randomUUID().slice(0, 6)}` }).returning();
+    const [agent] = await db.insert(agents).values({ companyId: company.id, name: "Fixture employee" }).returning();
+    const [task] = await db.insert(issues).values({ companyId: company.id, title: "Fixture task" }).returning();
+    const [run] = await db.insert(heartbeatRuns).values({ companyId: company.id, agentId: agent.id, scopeKind: "issue", issueId: task.id, status: "succeeded",
+      createdAt: new Date(through.getTime() - 10_000), startedAt: new Date(through.getTime() - 9_000), finishedAt: new Date(through.getTime() - 1_000) }).returning();
+    await db.insert(issueComments).values([
+      { companyId: company.id, issueId: task.id, authorAgentId: agent.id, createdByRunId: run.id, body: "Private native comment", createdAt: new Date(through.getTime() - 7_000) },
+      { companyId: company.id, issueId: task.id, authorAgentId: agent.id, createdByRunId: run.id, origin: "fast_response", body: "Excluded fast response", createdAt: new Date(through.getTime() - 8_000) },
+    ]);
+    await db.insert(costEvents).values([
+      { companyId: company.id, agentId: agent.id, heartbeatRunId: run.id, usageKind: "agent", provider: "fixture", model: "at-cutoff", costCents: 0, inputTokens: 9, outputTokens: 1, occurredAt: through },
+      { companyId: company.id, agentId: agent.id, heartbeatRunId: run.id, usageKind: "agent", provider: "fixture", model: "after-cutoff", costCents: 0, occurredAt: new Date(through.getTime() + 1) },
+    ]);
+    const analytics = await modelIntelligenceAnalytics(db, principal(admin.id), through);
+    expect(analytics.activity.recentRuns.find(row => row.id === run.id)).toMatchObject({
+      taskId: task.id, queueDelayMs: 1000, firstAgentCommentMs: 2000, durationMs: 8000, actualModels: [{ provider: "fixture", model: "at-cutoff" }],
+    });
+    expect(analytics.activity.taskModels.filter(row => row.companyId === company.id)).toMatchObject([{ model: "at-cutoff", runs: 1, inputTokens: 9, outputTokens: 1 }]);
+    expect(JSON.stringify(analytics)).not.toContain("Private native comment");
+    expect(JSON.stringify(analytics)).not.toContain("after-cutoff");
   });
 });

@@ -11,6 +11,9 @@ const auditRowSchema = adminModelActivitySchema.shape.recentRuns.element;
 // Read only after the owning administrator endpoint authorizes the caller.
 // These projections never select prompts, transcripts, configuration or errors.
 export async function modelActivityAudit(db: Db, since: Date, through: Date, learning: Analytics | undefined): Promise<AdminModelActivity> {
+  // Raw SQL fragments have no timestamp column encoder for interpolated
+  // values. Bind the same instant as an ISO string for the PostgreSQL driver.
+  const throughTimestamp = through.toISOString();
   const selectionBound = sql`${heartbeatRuns.contextSnapshot} #>> '{modelIntelligence,id}' = ${heartbeatRuns.id}::text
     and ${heartbeatRuns.contextSnapshot} #>> '{modelIntelligence,namespace}' = ${heartbeatRuns.companyId}::text`;
   const triageBound = sql`${heartbeatRuns.contextSnapshot} #>> '{modelTriage,schema}' = 'agentos.model-triage.v1'
@@ -52,7 +55,7 @@ export async function modelActivityAudit(db: Db, since: Date, through: Date, lea
       id: heartbeatRuns.id, companyId: heartbeatRuns.companyId, companyName: companies.name, companyPrefix: companies.issuePrefix,
       agentId: heartbeatRuns.agentId, taskId: heartbeatRuns.issueId, createdAt: heartbeatRuns.createdAt,
       status: heartbeatRuns.status, taskType, durationMs: duration,
-      queueDelayMs: sql<number | null>`case when ${heartbeatRuns.startedAt} >= ${heartbeatRuns.createdAt} and ${heartbeatRuns.startedAt} <= ${through}
+      queueDelayMs: sql<number | null>`case when ${heartbeatRuns.startedAt} >= ${heartbeatRuns.createdAt} and ${heartbeatRuns.startedAt} <= ${throughTimestamp}
         then extract(epoch from (${heartbeatRuns.startedAt} - ${heartbeatRuns.createdAt}))::float8 * 1000 end`,
       // Use only native scope and persisted author/run attribution. Derived
       // attribution and fast-response comments cannot establish agent timing.
@@ -63,7 +66,7 @@ export async function modelActivityAudit(db: Db, since: Date, through: Date, lea
         where comment.company_id = ${heartbeatRuns.companyId} and comment.issue_id = ${heartbeatRuns.issueId}
           and comment.created_by_run_id = ${heartbeatRuns.id} and comment.author_agent_id = ${heartbeatRuns.agentId}
           and comment.origin = 'comment' and comment.deleted_at is null
-          and comment.created_at >= ${heartbeatRuns.startedAt} and comment.created_at <= ${through}
+          and comment.created_at >= ${heartbeatRuns.startedAt} and comment.created_at <= ${throughTimestamp}
       ) end`,
       selected: sql<AdminModelActivity["recentRuns"][number]["selected"]>`case when ${selectionBound} then jsonb_build_object(
         'provider', ${heartbeatRuns.contextSnapshot} #>> '{modelIntelligence,candidate,provider}',
@@ -82,7 +85,7 @@ export async function modelActivityAudit(db: Db, since: Date, through: Date, lea
       actualModels: sql<Array<{ provider: string; model: string }>>`coalesce((select jsonb_agg(observed_model) from (
         select distinct ce.provider, ce.model from cost_events ce
         where ce.company_id = ${heartbeatRuns.companyId} and ce.heartbeat_run_id = ${heartbeatRuns.id}
-          and ce.usage_kind = 'agent' and ce.occurred_at <= ${through}
+          and ce.usage_kind = 'agent' and ce.occurred_at <= ${throughTimestamp}
         order by ce.provider, ce.model limit ${ACTUAL_MODEL_LIMIT + 1}
       ) observed_model), '[]'::jsonb)`,
     }).from(heartbeatRuns).innerJoin(companies, eq(companies.id, heartbeatRuns.companyId))

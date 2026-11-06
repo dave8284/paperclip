@@ -7,7 +7,7 @@ import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 import { Administration } from "./Administration";
 import { PendingApproval } from "./PendingApproval";
 
-const mocks = vi.hoisted(() => ({ overview: vi.fn(), people: vi.fn(), update: vi.fn(), intelligence: vi.fn(), registration: vi.fn() }));
+const mocks = vi.hoisted(() => ({ overview: vi.fn(), people: vi.fn(), update: vi.fn(), intelligence: vi.fn(), registration: vi.fn(), invitations: vi.fn(), invite: vi.fn(), revokeInvitation: vi.fn(), events: vi.fn() }));
 vi.mock("@/api/administration", () => ({ administrationApi: mocks, adminKey: (id: string) => ["admin", id], registrationKey: (id: string) => ["registration", id] }));
 vi.mock("@/api/companies-query", () => ({ useAccountIdentity: () => ({ userId: "admin", settled: true, failed: false }), companyDirectoryQueryOptions: () => ({ queryKey: ["directory"], queryFn: async () => [] }) }));
 vi.mock("@/api/access", () => ({ accessApi: { getUserCompanyAccess: async () => ({ companyAccess: [] }) } }));
@@ -63,5 +63,27 @@ describe("AgentOS administration screens", () => {
     await click("Refresh approval status");
     expect(mocks.registration.mock.calls.length).toBeGreaterThan(1);
     expect(mocks.people).not.toHaveBeenCalled();
+  });
+  it.each(["preapprovals", "events"] as const)("hides cached %s after that read fails while overview remains available, then recovers", async dataset => {
+    const read = dataset === "preapprovals" ? mocks.invitations : mocks.events;
+    read.mockResolvedValue(dataset === "preapprovals"
+      ? [{ id: "invitation", name: "Private invitee", email: "private@example.com", expiresAt: "2026-11-08T00:00:00Z", revokedAt: null }]
+      : [{ id: "event", actorUserId: "private-actor", targetUserId: "private-target", action: "user.approve", createdAt: "2026-11-07T00:00:00Z", details: { reason: "Private audit reason" } }]);
+    await render(`/admin?tab=${dataset === "preapprovals" ? "add" : "audit"}`);
+    const sensitive = dataset === "preapprovals" ? "private@example.com" : "Private audit reason";
+    expect(host.textContent).toContain(sensitive);
+    read.mockRejectedValue(new Error("Administrative read denied"));
+    await act(async () => { await client.invalidateQueries({ queryKey: ["admin", "admin", dataset] }); }); await settle();
+    expect(host.querySelector('nav[aria-label="Administration"]')).not.toBeNull();
+    expect(host.textContent).toContain("Administrative read denied");
+    expect(host.textContent).not.toContain(sensitive);
+    if (dataset === "preapprovals") {
+      expect([...host.querySelectorAll("button")].find(node => node.textContent === "Preapprove person")?.disabled).toBe(true);
+      expect(mocks.invite).not.toHaveBeenCalled(); expect(mocks.revokeInvitation).not.toHaveBeenCalled();
+    }
+    read.mockResolvedValue([]);
+    await click(dataset === "preapprovals" ? "Retry preapprovals" : "Refresh");
+    expect(host.textContent).toContain(dataset === "preapprovals" ? "No preapprovals yet." : "No administration events recorded yet.");
+    expect(host.textContent).not.toContain(sensitive);
   });
 });

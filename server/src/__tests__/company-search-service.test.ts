@@ -99,6 +99,7 @@ describeEmbeddedPostgres("companySearchService", () => {
     await db.delete(labels);
     await db.delete(projects);
     await db.delete(agents);
+    await db.delete(companyMemberships);
     await db.delete(companies);
   });
 
