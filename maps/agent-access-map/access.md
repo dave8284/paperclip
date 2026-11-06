@@ -217,3 +217,9 @@ rename, approval, role, membership and delete endpoints; confirmation, self/last
 admin and outstanding ownership safeguards remain authoritative. The focused
 UI flow verifies rename, self-delete disabled and visible ownership-conflict
 feedback. No real account was deleted for acceptance.
+
+The generated OpenAPI catalog includes the existing Friday department, model and
+local-voice routes, administrator model evaluation/policy routes, shared execution
+capacity controls, and exact EGM packet resources. Discovery preserves each native
+board/administrator/company boundary; listing an operation grants no authority.
+The mounted-route coverage check includes the capacity and EGM child routers.

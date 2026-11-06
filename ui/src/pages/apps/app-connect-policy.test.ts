@@ -5,12 +5,40 @@ import {
   appSourceConnectHref,
   appSourceResumeHref,
   canEnterAppsConnect,
+  hasAppsConnectLinkIntent,
   isMcpDirectOAuthConnectSlug,
   resolveAppsConnectRouteKey,
   vercelConnectSourceHref,
 } from "./app-connect-policy";
 
 describe("app connect policy", () => {
+  it("retains explicit HTTP MCP link setup without reopening default catalog discovery", () => {
+    expect(canEnterAppsConnect(new URLSearchParams())).toBe(false);
+    for (const link of ["https://example.com/mcp", "http://127.0.0.1:8848/mcp"]) {
+      const params = new URLSearchParams({ link, name: "Existing app", applicationId: "app-1" });
+      expect(hasAppsConnectLinkIntent(params)).toBe(true);
+      expect(canEnterAppsConnect(params)).toBe(true);
+      params.set("source", "discord");
+      expect(canEnterAppsConnect(params)).toBe(false);
+      params.set("source", "unknown");
+      expect(canEnterAppsConnect(params)).toBe(false);
+    }
+    for (const link of ["", "https://", "https:example.com/mcp", "//example.com/mcp", "javascript:alert(1)", "data:text/html,hello", "file:///tmp/mcp", "https://user:password@example.com/mcp"]) {
+      const params = new URLSearchParams({ link });
+      expect(hasAppsConnectLinkIntent(params), link).toBe(false);
+      expect(canEnterAppsConnect(params), link).toBe(false);
+    }
+  });
+
+  it("retains the explicit Vercel entry while preserving provider and legacy BYO gates", () => {
+    const context = { credentialSource: "vercel_connect" as const };
+    expect(canEnterAppsConnect(new URLSearchParams(), context)).toBe(true);
+    expect(canEnterAppsConnect(new URLSearchParams("source=notion"), context)).toBe(true);
+    expect(canEnterAppsConnect(new URLSearchParams("source=discord"), context)).toBe(false);
+    expect(canEnterAppsConnect(new URLSearchParams("source=unknown"), context)).toBe(false);
+    expect(canEnterAppsConnect(new URLSearchParams("byo=1"), context)).toBe(false);
+  });
+
   it("derives automatic OAuth entry points from app capabilities", () => {
     expect(MCP_DIRECT_OAUTH_CONNECT_SLUGS).toEqual(expect.arrayContaining(["jira", "notion", "sentry"]));
     expect(isMcpDirectOAuthConnectSlug("notion")).toBe(true);

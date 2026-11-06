@@ -428,6 +428,28 @@ describe("AppsConnect — Connect with a link (M4 frame)", () => {
     return root;
   }
 
+  // Exercise the retained native setup owner directly; default AppsConnect now
+  // hosts AgentOS discovery. Provider/deep-link tests below keep the page host.
+  async function renderNativeGallery() {
+    return render(undefined, false, <ConnectionSetupFlow host="page" />);
+  }
+
+  it.each(["", "shell=classic", "link=javascript%3Aalert(1)"])("keeps default discovery limited to the initial AgentOS connectors (%s)", async (search) => {
+    mockSearch.value = search;
+    vi.spyOn(aiConnectionsApi, "list").mockResolvedValue({ currentUserId: "board-user", canManageConnections: false, connections: [] });
+    listGalleryMock.mockResolvedValue({ apps: ["openai", "anthropic", "stripe", "higgsfield", "supabase", "vercel", "google-workspace", "calendly", "slack"].map(slug => ({
+      slug, name: slug, description: "Fixture connector", availability: { available: false, reason: "Fixture requires setup" },
+    })) });
+    await render();
+
+    expect([...container.querySelectorAll(".agentos-project-grid h3")].map(heading => heading.textContent))
+      .toEqual(["OpenAI", "Anthropic", "Stripe", "Higgsfield", "Supabase", "Vercel", "Google", "Calendly"]);
+    expect(container.querySelector('input[aria-label="Search connectors"]')).not.toBeNull();
+    expect(container.querySelector('input[aria-label="MCP server URL"]')).toBeNull();
+    expect(connectAppMock).not.toHaveBeenCalled();
+    expect(startOAuthMock).not.toHaveBeenCalled();
+  });
+
   it("connects 1Password using only its service-account token and links official creation instructions", async () => {
     const app = CONNECTABLE_APP_DEFINITIONS.find(entry => entry.slug === "1password")!;
     listGalleryMock.mockResolvedValue({ apps: [app] });
@@ -945,7 +967,7 @@ describe("AppsConnect — Connect with a link (M4 frame)", () => {
   });
 
   it("an unrecognized URL routes to a minimal frame that asks nothing but the address", async () => {
-    await render();
+    await renderNativeGallery();
     await gotoLinkFrame(container, "https://www.example.com/actions");
 
     expect(container.textContent).toContain("Connect your own MCP server");
@@ -963,7 +985,7 @@ describe("AppsConnect — Connect with a link (M4 frame)", () => {
   });
 
   it("opens the shared Access step before configuring a pasted MCP server", async () => {
-    await render();
+    await renderNativeGallery();
 
     const linkInput = Array.from(
       container.querySelectorAll<HTMLInputElement>("input"),
@@ -987,7 +1009,7 @@ describe("AppsConnect — Connect with a link (M4 frame)", () => {
   it.each([false, true])("gates chat-only cards in the embedded tool gallery without hiding GitHub (%s)", async (enabled) => {
     experimentalMock.mockResolvedValue({ enableChatConnectors: enabled });
     listGalleryMock.mockResolvedValue({ apps: [GITHUB, getAppStoreDefinition("discord"), getAppStoreDefinition("telegram")] });
-    await render();
+    await renderNativeGallery();
     expect(container.textContent).toContain("GitHub");
     expect(container.textContent?.includes("Discord")).toBe(enabled);
     expect(container.textContent?.includes("Telegram")).toBe(enabled);
@@ -999,7 +1021,7 @@ describe("AppsConnect — Connect with a link (M4 frame)", () => {
     ["discord", "Discord", "https://discord.com/channels/example"],
   ])("does not reveal hidden %s setup from a pasted link or its generic follow-up", async (slug, name, url) => {
     listGalleryMock.mockResolvedValue({ apps: [GITHUB, getAppStoreDefinition(slug)] });
-    await render();
+    await renderNativeGallery();
     const input = container.querySelector<HTMLInputElement>('input[aria-label="MCP server URL"]')!;
     await act(async () => setInputValue(input, url));
     await flushReact();
@@ -1015,7 +1037,7 @@ describe("AppsConnect — Connect with a link (M4 frame)", () => {
   });
 
   it("matches GitHub tool URLs independently of gallery search while chat connectors are hidden", async () => {
-    await render();
+    await renderNativeGallery();
     await act(async () => setInputValue(container.querySelector<HTMLInputElement>('input[placeholder="Search apps…"]')!, "no matching cards"));
     await act(async () => setInputValue(container.querySelector<HTMLInputElement>('input[aria-label="MCP server URL"]')!, "https://github.com/example/repository"));
     await flushReact();
@@ -1328,7 +1350,7 @@ describe("AppsConnect — Connect with a link (M4 frame)", () => {
     listGalleryMock.mockResolvedValue({
       apps: [{ ...GMAIL, availability: { available: false, reason } }],
     });
-    await render();
+    await renderNativeGallery();
 
     const gmail = buttonContaining("Gmail");
     expect(gmail?.disabled).toBe(true);
@@ -3588,7 +3610,7 @@ describe("AppsConnect — Connect with a link (M4 frame)", () => {
 
   it("routes the enabled Notion gallery tile through the generic source deep link", async () => {
     listGalleryMock.mockResolvedValueOnce({ apps: [NOTION] });
-    await render();
+    await renderNativeGallery();
 
     const notionTile = buttonContaining("Notion");
     expect(notionTile?.disabled).toBe(false);
@@ -3601,7 +3623,7 @@ describe("AppsConnect — Connect with a link (M4 frame)", () => {
   });
 
   it("choosing No and clicking Check link connects with no credentials", async () => {
-    await render();
+    await renderNativeGallery();
     await gotoLinkFrame(container, "https://www.example.com/actions");
 
     await act(async () => {
@@ -3629,7 +3651,7 @@ describe("AppsConnect — Connect with a link (M4 frame)", () => {
         details: { code: "oauth_challenge" },
       }),
     );
-    await render();
+    await renderNativeGallery();
     await gotoLinkFrame(container, "https://www.example.com/actions");
 
     expect(
@@ -3665,7 +3687,7 @@ describe("AppsConnect — Connect with a link (M4 frame)", () => {
   });
 
   it("a Zapier MCP URL stays in the URL flow and includes its token in the submitted link", async () => {
-    await render();
+    await renderNativeGallery();
 
     const linkInput = Array.from(
       container.querySelectorAll<HTMLInputElement>("input"),
@@ -3812,7 +3834,7 @@ describe("AppsConnect — Connect with a link (M4 frame)", () => {
   // the UX re-review, the localhost example lives in the body copy (legible at
   // every viewport) rather than the placeholder, which truncated on mobile.
   it("advertises that remote/local MCP URLs work under 'Connect with a link'", async () => {
-    await render();
+    await renderNativeGallery();
 
     expect(container.textContent).toContain(
       "Any remote tool URL works here — including a local MCP server like",
@@ -3860,7 +3882,7 @@ describe("AppsConnect — Connect with a link (M4 frame)", () => {
         { ...GOOGLE_SHEETS, availability: { available: true, robotEmail: "robot@paperclip.iam.gserviceaccount.com" } },
       ],
     });
-    await render();
+    await renderNativeGallery();
 
     await act(async () => {
       buttonContaining("Google Sheets")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
@@ -3886,7 +3908,7 @@ describe("AppsConnect — Connect with a link (M4 frame)", () => {
         { ...GOOGLE_SHEETS, availability: { available: true, robotEmail: "robot@paperclip.iam.gserviceaccount.com" } },
       ],
     });
-    await render();
+    await renderNativeGallery();
 
     await act(async () => {
       buttonContaining("Google Sheets")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
@@ -3910,7 +3932,7 @@ describe("AppsConnect — Connect with a link (M4 frame)", () => {
   });
 
   it("gallery setup names the connection automatically", async () => {
-    await render();
+    await renderNativeGallery();
 
     await act(async () => {
       buttonContaining("GitHub")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
@@ -3926,7 +3948,7 @@ describe("AppsConnect — Connect with a link (M4 frame)", () => {
   it("keeps the originating connection intent in wizard URLs", async () => {
     const interactionId = "11111111-1111-4111-8111-111111111111";
     mockSearch.value = `intent=${interactionId}`;
-    await render();
+    await renderNativeGallery();
 
     await act(async () => {
       buttonContaining("GitHub")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
@@ -3959,7 +3981,7 @@ describe("AppsConnect — Connect with a link (M4 frame)", () => {
   });
 
   it("leaving the default name connects with the app name", async () => {
-    await render();
+    await renderNativeGallery();
 
     await act(async () => {
       buttonContaining("GitHub")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
@@ -4028,7 +4050,7 @@ describe("AppsConnect — Connect with a link (M4 frame)", () => {
         { ...GOOGLE_SHEETS, availability: { available: true, robotEmail: "robot@paperclip.iam.gserviceaccount.com" } },
       ],
     });
-    await render();
+    await renderNativeGallery();
 
     await act(async () => {
       buttonContaining("Google Sheets")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
@@ -4066,7 +4088,7 @@ describe("AppsConnect — Connect with a link (M4 frame)", () => {
         { ...GOOGLE_SHEETS, availability: { available: true, robotEmail: "robot@paperclip.iam.gserviceaccount.com" } },
       ],
     });
-    await render();
+    await renderNativeGallery();
 
     await act(async () => {
       buttonContaining("Google Sheets")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
@@ -4148,7 +4170,7 @@ describe("AppsConnect — guided generic MCP flow (PAP-17087)", () => {
     await act(async () => {
       root.render(
         <QueryClientProvider client={client}>
-          <AppsConnect />
+          <ConnectionSetupFlow host="page" />
         </QueryClientProvider>,
       );
     });

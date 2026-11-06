@@ -18,16 +18,19 @@ Update those rows as work completes; do not create another backlog.
   navigation/style; local artifact history and scoped search; connector inventory;
   standalone model-service transport/persistence/isolation. Worksheet rows are
   authoritative and each carries its current binary status.
-- Source checkpoints `8d3f92b3d` and `d68507272` are committed to the AgentOS fork.
+- Source checkpoints `8d3f92b3d`, `d68507272` and `1bc35a4b9` are pushed to the AgentOS fork.
   Later active changes must be checked before starting another worker.
 - **Not fixed:** full operating delivery, owner Google account acceptance, physical
   voice conversation, provider workflows, model qualification and evaluated learning.
 - Local speech roundtrip and saved table/list/board refresh pass. Setup draft
   persistence/handoff passes in the actual browser, without sending a message.
-- Active work: full UI regression (connector setup failures under investigation),
-  isolated platform-change admission, final backend activation, disposable native
-  employee/configuration and deletion journeys. Admin analytics timestamp failure
-  is repaired and all seventeen persisted/audit checks pass.
+- Backend `1bc35a4b9` activated through guarded restart; matching recovery reports
+  no lost runs. Employee configuration and typed deletion journeys pass on the
+  disposable instance. Dock overlap is fixed and desktop/mobile clicks pass.
+- Active work: final full UI regression after the connector-link correction,
+  account-bound model qualification and provider observation. OpenAPI discovery
+  drift is corrected; all 27 catalog checks and 70 remaining contract checks pass.
+  Real account, physical audio and business workflow acceptance remain open.
 - Packet-only review source/protocol checks pass; real account review and accepted
   output remain open. Cross-company component publication is still unimplemented.
 - The designated owner’s interactive Google sign-in result has been requested;

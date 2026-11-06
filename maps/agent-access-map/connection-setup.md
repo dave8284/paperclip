@@ -49,6 +49,14 @@ remaining operations before qualifying the whole capability.
 Gaps: Runtime tool broker searches available services without granting connection
 administration.
 
+AgentOS UI entry preservation: HTTP(S) MCP link prefills and the explicit Vercel
+host route delegate to the existing native setup owner. These route choices
+grant no connection, credential, company or agent access; provider feature gates
+and exact legacy custom reconnect requirements remain in force. Default human
+discovery remains the initial eight connectors, including under `shell=classic`.
+Component/policy fixtures cover routing and native setup; no live provider or
+agent execution is claimed by these checks.
+
 Notebook is internally gated by `enablePaperclipNotebook` (default off, no settings toggle). Disabled instances hide setup/discovery and deny curated Notebook dispatch and publishing; local removal and grant revocation remain available.
 
 The connector catalog declares the feature key. Shared availability checks use

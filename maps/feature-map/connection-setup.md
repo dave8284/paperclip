@@ -13,6 +13,14 @@ Feature ID: `connection-setup`.
 
 Agent access: [companion](../agent-access-map/connection-setup.md).
 
+AgentOS discovery keeps its initial eight connectors. Explicit HTTP(S) MCP link
+prefills and the dedicated `/apps/vercel-connect` entry retain native setup;
+source-specific routes still apply their provider feature gates. `shell=classic`
+restores the navigation frame without expanding discovery. Component and route
+policy checks cover these entries, rejected link schemes, native setup behaviors,
+and preserved application IDs. They do not prove provider authorization or live
+connection execution.
+
 Prompt Injection Prevention reuses shared OpenRouter API-key setup directly from
 Settings → Connections. It adds no Apps provider or transport. Credential ownership
 and audience rules are the existing connection rules; saving a connection alone

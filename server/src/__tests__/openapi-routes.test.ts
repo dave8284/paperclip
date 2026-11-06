@@ -32,6 +32,8 @@ const apiPrefixes: Record<string, string> = {
   "agent-profile-avatar.ts": "/api",
   "announcements.ts": "/api",
   "ai-connections.ts": "/api",
+  "ai-execution-capacity.ts": "/api",
+  "egm-review-packets.ts": "/api",
   "decision-models.ts": "/api",
   "agent-observability.ts": "/api",
   "fast-responses.ts": "/api",
@@ -267,7 +269,7 @@ function loadActualRoutes() {
     const variablePaths = file === "dot-runner.ts" ? ["path", "invitePath"]
       : file === "grok-bot.ts" ? ["path"]
       : file === "muse.ts" ? ["path", "invite"]
-      : file === "muse-qualification.ts" ? ["path"] : [];
+      : file === "muse-qualification.ts" || file === "egm-review-packets.ts" ? ["path"] : [];
     for (const name of variablePaths) {
       const basePath = new RegExp(`\\b${name}\\s*=\\s*"([^"]+)"`).exec(source)?.[1];
       if (!basePath) throw new Error(`${file} ${name} route prefix is missing`);
@@ -485,7 +487,7 @@ describe("openapi routes", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.openapi).toBe("3.0.0");
-    expect(res.body.info.title).toBe("Paperclip API");
+    expect(res.body.info.title).toBe("AgentOS API");
     expect(res.body.paths["/api/openapi.json"].get.summary).toBe(
       "Get the generated OpenAPI document",
     );

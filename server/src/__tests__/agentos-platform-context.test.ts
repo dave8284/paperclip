@@ -3,7 +3,7 @@ import express from "express";
 import request from "supertest";
 import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { activityLog, agents, agentosEmployees, agentosPortfolioCompanies, agentosPortfolios, companies, companyMemberships, createDb, issues, principalPermissionGrants, projects } from "@paperclipai/db";
+import { activityLog, agents, agentosEmployees, agentosPortfolioCompanies, agentosPortfolios, authUsers, companies, companyMemberships, createDb, issues, principalPermissionGrants, projects } from "@paperclipai/db";
 import { startEmbeddedPostgresTestDatabase } from "@paperclipai/db/test-embedded-postgres";
 import { errorHandler } from "../middleware/index.js";
 import { companyRoutes } from "../routes/companies.js";
@@ -22,6 +22,10 @@ describe("AgentOS platform context", () => {
   }
   async function seed() {
     const owner = randomUUID(), viewer = randomUUID();
+    // Workforce admission rechecks approved identities from durable state,
+    // independently of the middleware's admitted membership snapshot.
+    await db.insert(authUsers).values([owner, viewer].map(id => ({ id, name: "Platform context fixture", email: `${id}@example.com`,
+      approvalStatus: "approved", createdAt: new Date(), updatedAt: new Date() })));
     const [home, business, foreign] = await db.insert(companies).values(["Core context", "Customer venture", "Outside company"].map(name => ({ name, issuePrefix: `P${randomUUID().slice(0, 7)}` }))).returning();
     await db.insert(companyMemberships).values([home, business].flatMap(company => [
       { companyId: company.id, principalId: owner, principalType: "user", membershipRole: "owner", status: "active" },

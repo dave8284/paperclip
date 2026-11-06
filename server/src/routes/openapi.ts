@@ -7,7 +7,7 @@ import {
   experimentalApiQueries,
 } from "./experimental-api-paths.js";
 import { Router } from "express";
-import { requestPlatformChangeSchema } from "@paperclipai/shared";
+import { requestPlatformChangeSchema, createDepartmentSchema, updateDepartmentSchema, assignDepartmentProjectSchema, saveAiExecutionCapacitySchema } from "@paperclipai/shared";
 import { createAgentosPortfolioSchema, createAgentosEmployeeSchema, createAgentosAssignmentSchema, retireAgentosAssignmentSchema,
   publishAgentosCapabilitySchema, decideAgentosCapabilitySchema, savePortfolioReadMandateSchema, revokePortfolioReadMandateSchema } from "@paperclipai/shared";
 import { companyPerformanceQuerySchema, createPerformanceReportSchema } from "@paperclipai/shared";
@@ -5072,6 +5072,18 @@ for (const operation of [
   { method: "get", path: "/api/companies/{companyId}/friday/portfolio-work", summary: "Read bounded company-shared project and task summaries using this source agent's exact explicit portfolio mandate revision. Requires current responsible portfolio owner and external authorizer ceilings on every read. Private work, transcripts, agent configuration, secrets and foreign-company execution are excluded. Company ID in the URL remains your native source company; discover the mandate first, then paginate task and project offsets.", query: portfolioWorkQuerySchema },
   { method: "get", path: "/api/companies/{companyId}/friday/diagnostics", summary: "Diagnose currently readable blocked tasks and task-bound failed runs, local speech installation, local Laya triage readiness and administrator-only saved restart readiness. On-demand, read-only, bounded pages with checked/unknown results, observation time and native source paths. No model loading, inference, provider probes, raw run logs, credentials or complete-platform health claim.", query: fridayDiagnosticsQuerySchema },
   { method: "get", path: "/api/companies/{companyId}/friday/agents/{agentId}/awareness", summary: "Read a shared employee's current authorized assignments and work evidence. Agent callers may read only their own current-company assignment; board callers may read independently authorized company assignments. Shared identity grants no company or private-work access. Paginate assignments with offset/limit; use each company's friday/work agentId filter for further task/project pages.", query: employeeAwarenessQuerySchema },
+  { method: "get", path: "/api/companies/{companyId}/friday/departments", summary: "Read authorized departments and their project relationships" },
+  { method: "post", path: "/api/companies/{companyId}/friday/departments", summary: "Create a department with native company management authority", body: createDepartmentSchema },
+  { method: "patch", path: "/api/companies/{companyId}/friday/departments/{id}", summary: "Update a department and accountable head using its current revision", body: updateDepartmentSchema },
+  { method: "delete", path: "/api/companies/{companyId}/friday/departments/{id}", summary: "Delete a department using its current revision", query: z.object({ revision: z.coerce.number().int().positive() }) },
+  { method: "put", path: "/api/companies/{companyId}/friday/projects/{projectId}/department", summary: "Assign or remove a project's department under current native project authority", body: assignDepartmentProjectSchema },
+  { method: "get", path: "/api/companies/{companyId}/friday/models", summary: "Read the installed model catalog and company observations (board only); private company learning requires instance administration" },
+  { method: "get", path: "/api/companies/{companyId}/friday/voice", summary: "Inspect existing local speech installation readiness (board only); no provider or model request" },
+  { method: "post", path: "/api/companies/{companyId}/friday/voice", summary: "Prepare local speech workers, synthesize speech or transcribe supplied audio (board only; no paid fallback)", body: z.discriminatedUnion("op", [
+    z.object({ op: z.literal("prepare") }).strict(),
+    z.object({ op: z.literal("speak"), text: z.string().trim().min(1).max(1000) }).strict(),
+    z.object({ op: z.literal("transcribe"), audio: z.string().min(44).max(8_000_000).regex(/^[A-Za-z0-9+/=]+$/) }).strict(),
+  ]) },
   { method: "get", path: "/api/companies/{companyId}/friday/performance", summary: "Read source-backed report history for an authorized company, project or department scope; includes accessible unreported projects and explicit truncation", query: companyPerformanceQuerySchema },
   { method: "post", path: "/api/companies/{companyId}/friday/performance", summary: "Record an audited monthly performance revision (applications:manage and project access; expected report ID required)", body: createPerformanceReportSchema },
   { method: "get", path: "/api/companies/{companyId}/managed-applications", summary: "List accessible application portfolio with project and task counts", query: managedApplicationListSchema },
@@ -7398,6 +7410,16 @@ registry.registerPath({
   summary: "List all users (admin)",
   responses: { 200: r.ok(), 401: r.unauthorized, 403: r.forbidden },
 });
+
+for (const operation of [
+  { method: "get", path: "/api/instance/ai-execution-capacity", summary: "Read current shared subscription capacity groups (instance administrator; no credentials)" },
+  { method: "post", path: "/api/instance/ai-execution-capacity", summary: "Set explicit shared subscription capacity and company bindings with native authority and revision checks", body: saveAiExecutionCapacitySchema },
+  { method: "get", path: "/api/admin/model-intelligence/learning", summary: "Read recorded model-learning state (instance administrator); unavailable service returns null" },
+  { method: "post", path: "/api/admin/model-intelligence/evaluations", summary: "Record a native run evaluation with evidence under administrator and company access checks", body: z.object({ companyId: z.string().uuid(), runId: z.string().uuid(), passed: z.boolean(), evidenceRef: z.string().trim().min(10).max(300) }).strict() },
+  { method: "post", path: "/api/admin/model-intelligence/policy", summary: "Block or restore an exact company model candidate with audited reason (instance administrator); this does not grant account eligibility", body: z.object({ namespace: z.string().uuid(), candidateId: z.string().min(1).max(300), action: z.enum(["block", "restore"]), reason: z.string().trim().min(10).max(300) }).strict() },
+]) {
+  registerCurrentRoute({ ...operation, tags: ["admin"], responses: { 200: r.ok(), 400: r.badRequest, 401: r.unauthorized, 403: r.forbidden, 409: r.conflict } });
+}
 
 // ─── Auth / profile ──────────────────────────────────────────────────────────
 

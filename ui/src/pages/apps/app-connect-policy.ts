@@ -6,6 +6,7 @@ import {
   getAppStoreDefinition,
   getConnectableAppDefinition,
   type AppDefinition,
+  type ToolConnectionCredentialSource,
 } from "@paperclipai/shared";
 
 export function appSupportsToolCatalogSetup(entry: AppDefinition | null | undefined): boolean {
@@ -53,9 +54,26 @@ export function resolveAppsConnectRouteKey(input: {
   return input.serviceSlug ?? input.appKey ?? input.sourceSlug ?? undefined;
 }
 
+/** A native URL-prefilled setup is an explicit entry, not catalog discovery. */
+export function hasAppsConnectLinkIntent(searchParams: URLSearchParams): boolean {
+  const link = searchParams.get("link")?.trim() ?? "";
+  if (!/^https?:\/\//i.test(link)) return false;
+  try {
+    const url = new URL(link);
+    return ["http:", "https:"].includes(url.protocol) && Boolean(url.hostname)
+      && !url.username && !url.password;
+  } catch {
+    return false;
+  }
+}
+
 export function canEnterAppsConnect(
   searchParams: URLSearchParams,
-  { chatConnectorsEnabled = false, githubReviewBotsEnabled = false }: { chatConnectorsEnabled?: boolean; githubReviewBotsEnabled?: boolean } = {},
+  { chatConnectorsEnabled = false, githubReviewBotsEnabled = false, credentialSource = "paperclip_vault" }: {
+    chatConnectorsEnabled?: boolean;
+    githubReviewBotsEnabled?: boolean;
+    credentialSource?: ToolConnectionCredentialSource;
+  } = {},
 ): boolean {
   if (searchParams.get("byo") === "1") {
     // The old BYO discovery page has moved to the Connectors list. Keep only
@@ -67,6 +85,7 @@ export function canEnterAppsConnect(
     );
   }
   const source = searchParams.get("source") ?? "";
+  if (!source) return credentialSource === "vercel_connect" || hasAppsConnectLinkIntent(searchParams);
   if (["google-ai", "gateway"].includes(source)) return true;
   // Router connectors are registered by installed plugins, not the static
   // catalog. AppsConnect resolves this reserved slug against the host gallery

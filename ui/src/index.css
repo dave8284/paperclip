@@ -4947,6 +4947,7 @@ html:has(.design-proposal-theme) [data-canonical-toolbar] .collection-toolbar-ta
   --agentos-orb-size: clamp(15rem, 27vw, 20rem);
   --agentos-brand-orb-size: 2.4rem;
   --agentos-dock-orb-size: 4rem;
+  --agentos-native-dock-clearance: calc(8rem + env(safe-area-inset-bottom));
   --agentos-card-radius: 1rem;
   --agentos-conversation-width: 23rem;
   --agentos-conversation-height: min(37rem, calc(100dvh - 12rem));
@@ -5132,6 +5133,14 @@ html:has(.design-proposal-theme) [data-canonical-toolbar] .collection-toolbar-ta
 .agentos-native-friday > p { position: fixed; right: 1.5rem; bottom: 1.5rem; z-index: 35; padding: 1rem; max-width: 22rem; border: 1px solid var(--border); border-radius: 1rem; background: var(--background); }
 .agentos-native-context { width: 13rem; flex-shrink: 0; border-right: 1px solid var(--border); }
 .agentos-native-page { padding: var(--agentos-page-padding); flex: 1; min-width: 0; }
+/* The floating coordinator must leave native page actions reachable. Reserve
+   scroll space and raise sticky save rows together; padding alone cannot move
+   a footer pinned to the viewport bottom. Include the expanded voice transcript. */
+.agentos-native-frame { --agentos-native-bottom-space: 0rem; }
+.agentos-native-frame:has(.agentos-friday-presence[data-docked="true"]) { --agentos-native-bottom-space: var(--agentos-native-dock-clearance); }
+.agentos-native-frame:has(.agentos-friday-presence[data-docked="true"] .agentos-live-transcript) { --agentos-native-bottom-space: calc(var(--agentos-native-dock-clearance) + 5.5rem); }
+.agentos-native-frame .agentos-native-page { padding-bottom: calc(var(--agentos-page-padding) + var(--agentos-native-bottom-space)); }
+.agentos-native-frame .agentos-native-action-footer { bottom: var(--agentos-native-bottom-space); }
 .agentos-main-canvas [data-task-chat-shell] { height: auto; max-width: none; }
 .agentos-app .friday-work-graph { height: clamp(24rem, 60vh, 46rem); background: var(--background); border-color: var(--border); }
 .agentos-app .friday-graph-node[data-kind="company"] circle { r: 22px; fill: var(--agentos-map-company); }
@@ -5188,6 +5197,7 @@ html:has(.design-proposal-theme) [data-canonical-toolbar] .collection-toolbar-ta
   .agentos-native-content { display: block; }
   .agentos-native-context { width: 100%; max-height: 12rem; overflow: auto; border-bottom: 1px solid var(--border); }
   .agentos-native-page { padding: 1rem; }
+  .agentos-native-frame .agentos-native-page { padding-bottom: calc(1rem + var(--agentos-native-bottom-space)); }
 }
 @media (prefers-reduced-motion: reduce) { .agentos-app { --agentos-motion: 0ms; } }
 
