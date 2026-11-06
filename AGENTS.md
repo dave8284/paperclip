@@ -22,8 +22,10 @@ backlog, or ask the owner to repeat settled requirements:
 3. Follow the linked per-feature records only for the next affected requirement.
    Check Git status and any still-running workers before repeating or editing work.
 4. Continue the next unfinished, unblocked item. Update these existing records
-   with the requirement ID, changed files, actual checks and remaining acceptance.
-   Source implementation, loaded runtime and real user acceptance are separate.
+   with **Fixed** or **Not fixed** beside each requirement ID and a short next
+   action for unfinished items. Do not append detailed fix histories unless
+   needed to explain a blocker. Source implementation, loaded runtime and real
+   user acceptance are separate.
 5. Use saved conversation history to resolve a specific missing detail, rather
    than rebuilding the entire requirements inventory on every restart. Retain
    explicit deferrals and do not treat unanswered questions as approval.

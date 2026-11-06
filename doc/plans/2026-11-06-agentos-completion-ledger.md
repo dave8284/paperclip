@@ -7,6 +7,33 @@ questions instead of assumptions. This continues the full
 [latest implementation backlog](2026-11-05-agentos-navigation-response-model-backlog.md).
 Those requirements remain in scope; the rows below do not replace or erase them.
 
+## Resume here — 7 November 2026
+
+The owner requested simple **Fixed / Not fixed** tracking in the existing
+[93-item worksheet](2026-11-03-agentos-requirements-reconciliation.md).
+Update those rows as work completes; do not create another backlog.
+
+- **F06 / N01–N08 — Not fixed:** source checks pass; browser navigation,
+  task detail, tables and pinned Settings pass. Local account menu correction
+  and remaining rendered checks are active.
+- **O04 / O06 / O07 / O09 / R03 — Not fixed:** all 61 persisted PostgreSQL
+  checks pass. Remaining live operating acceptance and policy choices stay open.
+- **M01 — Fixed:** independently packaged HTTP service, persistence/upgrade and
+  local selection speed verified. **M08:** namespace/revocation checks pass. **M03 / M05 — Not fixed:** account observation remains
+  evidence only; qualified alternatives and evaluated learning remain open.
+- **R04 — Not fixed:** 50 local recovery/cancellation/continuity checks pass,
+  including five real subprocess restart cases. Actual delegated user flow remains.
+- **X02 — Not fixed:** real current-app screenshots captured with labelled
+  example data; landing placement and browser recheck active.
+- **G04 / A05 — Not fixed:** native tool/resource graph projection and genuinely
+  isolated packet-only review execution are being implemented by separate workers.
+- Local runtime activation is **Fixed**. The designated owner’s interactive Google
+  sign-in result has been requested; no credentials need supplying again.
+- Cloud/public hosting and Higgsfield sign-in remain deferred. Shared-seat starting
+  concurrency, portfolio private scope and Supabase storage scope remain unanswered.
+
+The detailed sections below are historical reference, not additional checklists.
+
 ## Execution and acceptance
 
 | Workstream | Required result | Current state |
