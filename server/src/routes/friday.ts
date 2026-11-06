@@ -38,6 +38,12 @@ export function fridayRoutes(db: Db) {
     const result = await platformChangeService(db).request(req.params.companyId as string, req.actor, requestPlatformChangeSchema.parse(req.body));
     res.status(result.created ? 201 : 200).json(result);
   });
+  router.get("/companies/:companyId/friday/platform-component-sources/:issueId/documents/:documentId/revisions/:revisionId", async (req, res) => {
+    assertBoard(req);
+    res.set("Cache-Control", "no-store").json(await platformChangeService(db).readPublicationSource(req.params.companyId as string, req.actor, {
+      kind: "document", issueId: z.string().uuid().parse(req.params.issueId), documentId: z.string().uuid().parse(req.params.documentId), revisionId: z.string().uuid().parse(req.params.revisionId),
+    }));
+  });
   router.get("/companies/:companyId/friday/portfolio-mandates", async (req, res) =>
     res.set("Cache-Control", "no-store").json(await agentosPortfolioMandateService(db).discover(req.actor, req.params.companyId as string)));
   router.get("/companies/:companyId/friday/portfolio-work", async (req, res) =>

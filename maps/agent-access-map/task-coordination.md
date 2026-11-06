@@ -93,9 +93,17 @@ API: `present` — representative operation IDs:
   current platform owner's request in a selected internal application. Agents
   cannot authorize it. Native tasks, managed isolated workspace selection,
   independent review stages, immutable document revisions and activity receipts
-  own the record and retries. Exact source references retain company/task access;
-  this endpoint does not copy source bytes, grant release authority or publish
-  reusable code across companies.
+  own the record and retries. Exact local sources retain company/task access.
+  Optional explicit publication copies owner-selected text into a locked native
+  destination document; it requires current source/destination owner authority,
+  source readability and the original hash, including after serialization waits
+  and on replay. Original private references remain in the source audit. It
+  grants no standing cross-company access, execution or release authority.
+- `GET /api/companies/{companyId}/friday/platform-component-sources/{issueId}/documents/{documentId}/revisions/{revisionId}`
+  returns only an exact authorized revision's literal text and SHA-256, bounded
+  to 256 KiB with no-store caching. This preview requires current platform-owner
+  and native source-task read authority. Agent and MCP OAuth identities are
+  denied; the existing native attachment endpoint owns attachment reads.
 
 Agent access: `partial` — Native paperclip_finish/paperclip_block and assigned
 resolve_review; legacy agent REST disposition.

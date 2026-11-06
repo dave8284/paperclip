@@ -16,10 +16,13 @@ fail closed; source and protocol checks are separate from real-account qualifica
 
 Internal platform applications also expose an owner request form that prepares
 a native backlog task, isolated repository selection, independent review stage
-and locked request document. Same-company source revisions or attachments can
-be pinned through the request API. Cross-company component publication and the
-release/recovery journey remain open; preparing a task does not grant deployment
-or permission changes.
+and locked request document. Artefact detail also lets the owner review and edit
+text from an exact saved document revision or text attachment, then explicitly
+publish that copy into an accessible company's internal platform task. Only the
+selected text crosses the boundary; original references stay in the source
+company's audit. The destination copy is locked and independent of the original.
+The release/recovery journey remains open; preparing a task does not start work
+or grant deployment or permission changes.
 
 Feature ID: `task-coordination`.
 

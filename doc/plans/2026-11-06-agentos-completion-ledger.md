@@ -58,9 +58,15 @@ Update those rows as work completes; do not create another backlog.
   Claude MCP prerequisite: installed CLI 2.1.126, test requires at least 2.1.207.
   Shared/skills checks passed 1,050 tests. Do not claim full backend regression.
 - Packet-only review source/protocol checks pass; real account review and accepted
-  output remain open. Cross-company component publication is still unimplemented.
-  Its explicit owner-selected publication/import slice is the next active A04
-  worker; source is being integrated after model activation.
+  output remain open. A04 owner-selected component publication is implemented:
+  only reviewed text is copied into a locked destination document; original
+  private references remain in the source audit. Source/destination authority,
+  exact revisions, bounded previews and retry checks pass. Final browser
+  acceptance and activation are in progress; release/recovery remains open.
+- M05 native observed-outcome delivery is the next active source slice. Existing
+  admin-submitted evaluations and standalone comparison receipts do not yet form
+  a native reviewed-outcome delivery path. Real quality evidence and M06 rollout
+  remain open; process success must not be treated as accepted quality.
 - The designated owner’s interactive Google sign-in result has been requested;
   existing credentials are configured and must not be requested again.
 - Cloud/public hosting and Higgsfield sign-in remain deferred. Shared-seat starting
