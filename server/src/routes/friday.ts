@@ -9,7 +9,8 @@ import { departmentService } from "../services/agentos-departments.js";
 import { fridayAwarenessService } from "../services/friday-awareness.js";
 import { employeeAwarenessService } from "../services/employee-awareness.js";
 import { fridayDiagnosticsService } from "../services/friday-diagnostics.js";
-import { employeeAwarenessQuerySchema } from "@paperclipai/shared";
+import { employeeAwarenessQuerySchema, portfolioWorkQuerySchema } from "@paperclipai/shared";
+import { agentosPortfolioMandateService } from "../services/agentos-portfolio-mandates.js";
 import { forbidden } from "../errors.js";
 import { assertCompanyAccess, assertBoard, getActorInfo } from "./authz.js";
 import { authorizationService } from "../services/authorization.js";
@@ -28,6 +29,10 @@ export function fridayRoutes(db: Db) {
     next();
   });
   router.get("/companies/:companyId/friday/work", async (req, res) => res.json(await service.work(req.params.companyId as string, req.actor, fridayWorkQuerySchema.parse(req.query))));
+  router.get("/companies/:companyId/friday/portfolio-mandates", async (req, res) =>
+    res.set("Cache-Control", "no-store").json(await agentosPortfolioMandateService(db).discover(req.actor, req.params.companyId as string)));
+  router.get("/companies/:companyId/friday/portfolio-work", async (req, res) =>
+    res.set("Cache-Control", "no-store").json(await agentosPortfolioMandateService(db).read(req.actor, getActorInfo(req), req.params.companyId as string, portfolioWorkQuerySchema.parse(req.query))));
   router.get("/companies/:companyId/friday/diagnostics", async (req, res) => {
     res.set("Cache-Control", "no-store").json(await fridayDiagnosticsService(db).read(req.params.companyId as string, req.actor, fridayDiagnosticsQuerySchema.parse(req.query)));
   });

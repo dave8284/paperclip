@@ -5,6 +5,7 @@ import { issues, projects, type Db } from "@paperclipai/db";
 import { companySearchQuerySchema } from "@paperclipai/shared";
 import { routineSearchBranch } from "../services/company-search-routines.js";
 import { companyArtifactsService } from "../services/company-artifacts.js";
+import { companySearchService } from "../services/company-search.js";
 
 // Exercise Drizzle's actual SQL construction without a socket or fake query
 // builder. Persisted authorization semantics are covered by the DB suite.
@@ -18,6 +19,22 @@ function recordingDatabase() {
 }
 
 describe("company search SQL boundaries", () => {
+  it("narrows conversation retrieval before matching, ranking and facets while retaining native task privacy", async () => {
+    const { db, statements } = recordingDatabase();
+    const result = await companySearchService(db).search("company-1", companySearchQuerySchema.parse({ q: "launch plan", scope: "conversations" }), {
+      issueReadCondition: eq(issues.title, "authorized-chat"),
+    });
+    expect(result.scope).toBe("conversations");
+    const search = statements.find(statement => statement.text.includes("search_flags AS MATERIALIZED"))!;
+    expect(search).toBeDefined();
+    expect(search.text).toContain('"issues"."conversation_agent_id" is not null');
+    expect(search.text).toContain('"issues"."conversation_user_id" is not null');
+    expect(search.text).toContain('"issues"."title" =');
+    expect(search.params).toContain("authorized-chat");
+    expect(search.text).toContain("comment_matches AS MATERIALIZED");
+    expect(search.text).toContain("type:issue");
+    expect(search.text).not.toContain('"agent_task_sessions"');
+  });
   it("binds project and task guards before routine rows, counts and facets", async () => {
     const { db, statements } = recordingDatabase();
     const branch = routineSearchBranch(db, {

@@ -35,6 +35,7 @@ import {
 } from "./status-arbiter.js";
 import { nativeSha256 } from "./canonical.js";
 import { getNativeReviewAssignment, type NativeReviewAssignmentContext } from "./native-review-participant.js";
+import { egmBindingForReviewer, bindEgmPacketInteraction } from "./egm-review-packets.js";
 import {
   readNativeBoardResponseWaitSource,
   readNativeBoardResponseWaitOrigin,
@@ -595,6 +596,9 @@ async function materializeDecisionEffect(input: {
   }
   if (effect.kind === "bind_reviewer") {
     failAt("interaction_materialization", input.failpoint);
+    const egmPacketPreparation = await egmBindingForReviewer(input.tx as unknown as Db, {
+      companyId: input.companyId, issueId: input.issue.id, sourceRunId: input.runId, reviewerAgentId: effect.ownerAgentId ?? null,
+    });
     const reviewInput: Extract<
       CreateIssueThreadInteraction,
       { kind: "request_confirmation" }
@@ -605,13 +609,14 @@ async function materializeDecisionEffect(input: {
       resolverPolicy: effect.ownerAgentId ? "anyone" : "human_only",
       addresseeAgentId: effect.ownerAgentId ?? null,
       addresseeUserId: effect.ownerUserId,
-      title: "Review requested",
+      title: egmPacketPreparation ? "EGM packet prepared" : "Review requested",
       summary:
-        effect.prompt,
+        egmPacketPreparation ? "The frozen packet is ready. Independent review execution is unavailable; inspect the packet or cancel this request." : effect.prompt,
       continuationPolicy: "wake_assignee",
       payload: {
         version: 1,
         prompt: effect.prompt,
+        ...(egmPacketPreparation ? { egmPacketPreparation } : {}),
         detailsMarkdown: effect.detailsMarkdown ?? null,
         acceptLabel: "Approve completion",
         rejectLabel: "Continue work",
@@ -631,6 +636,7 @@ async function materializeDecisionEffect(input: {
       reviewInput,
       { systemId: "native-status-committer", runId: input.runId },
     );
+    if (egmPacketPreparation) await bindEgmPacketInteraction(input.tx as unknown as Db, egmPacketPreparation, interaction.id, input.decisionId);
     // The card and its next actor commit together. The post-commit dispatcher
     // revalidates this exact review before granting a scoped reviewer run.
     const reviewContext = {

@@ -871,5 +871,12 @@ Friday coordinates an authorized portfolio, reusable employees have isolated
 company assignments, and company CEOs retain company-scoped authority. Existing
 routines, artefacts, company profiles, instructions, skills, harnesses, account
 connections and spend controls remain foundational capabilities. Central learning
-publication and company opt-in adoption are explicit planned extensions; shared
-identity alone does not implement them. The upstream long-horizon context is retained.
+publication and company opt-in adoption use an explicit reviewed capability
+lifecycle; the manual operator slice is implemented in source with live
+qualification pending. Autonomous evaluation and delegated publication remain
+planned extensions. Shared identity alone never changes company configuration.
+An explicit owner-managed native mandate can separately permit one unchanged
+source agent to read bounded company-shared work summaries in selected linked
+companies. It does not grant private reads, capability changes or foreign
+execution; current owner and external-authorizer ceilings apply to each read.
+The upstream long-horizon context is retained.

@@ -7,10 +7,11 @@ import {
   experimentalApiQueries,
 } from "./experimental-api-paths.js";
 import { Router } from "express";
-import { createAgentosPortfolioSchema, createAgentosEmployeeSchema, createAgentosAssignmentSchema, retireAgentosAssignmentSchema } from "@paperclipai/shared";
+import { createAgentosPortfolioSchema, createAgentosEmployeeSchema, createAgentosAssignmentSchema, retireAgentosAssignmentSchema,
+  publishAgentosCapabilitySchema, decideAgentosCapabilitySchema, savePortfolioReadMandateSchema, revokePortfolioReadMandateSchema } from "@paperclipai/shared";
 import { companyPerformanceQuerySchema, createPerformanceReportSchema } from "@paperclipai/shared";
 import { createManagedApplicationSchema, updateManagedApplicationSchema, managedApplicationListSchema, managedApplicationWorkQuerySchema, linkManagedApplicationProjectSchema, updateOperatingProfileSchema, fridayWorkQuerySchema } from "@paperclipai/shared";
-import { employeeAwarenessQuerySchema, fridayDiagnosticsQuerySchema } from "@paperclipai/shared";
+import { employeeAwarenessQuerySchema, fridayDiagnosticsQuerySchema, portfolioWorkQuerySchema } from "@paperclipai/shared";
 import { subscriptionPriceSchema, mergeSubscriptionsSchema } from "@paperclipai/shared";
 import { z } from "zod";
 import {
@@ -90,6 +91,8 @@ import {
   createIssueWorkProductSchema,
   updateIssueWorkProductSchema,
   upsertIssueDocumentSchema,
+  prepareEgmPacketSchema,
+  clearEgmPacketSchema,
   restoreIssueDocumentRevisionSchema,
   upsertIssueFeedbackVoteSchema,
   upsertIssueWatchdogSchema,
@@ -4620,6 +4623,18 @@ registry.registerPath({
   responses: { 200: r.ok(), 401: r.unauthorized },
 });
 
+for (const method of ["get", "put", "delete"] as const) registry.registerPath({
+  method,
+  path: "/api/issues/{id}/runs/{sourceRunId}/egm-packet",
+  tags: ["issues"],
+  summary: method === "put" ? "Prepare a frozen EGM review packet" : method === "delete" ? "Clear an unbound EGM packet by receipt" : "Inspect the exact prepared EGM packet",
+  description: "Native author-run preparation only; independent packet-only execution is unavailable. Current actor, responsible-user, task, named reviewer and exact source authority are rechecked. Preparation requires the active author before result admission. Receipt-bound clear permits explicit opt-out while that run still owns the active task and the packet is unbound, including after result submission. Bound packets use native review cancellation. No provider is started by these endpoints.",
+  request: { params: z.object({ id: z.string().uuid(), sourceRunId: z.string().uuid() }),
+    ...(method === "put" ? { body: jsonBody(prepareEgmPacketSchema) } : method === "delete" ? { body: jsonBody(clearEgmPacketSchema) } : {}),
+  },
+  responses: { 200: r.ok(), 400: r.badRequest, 401: r.unauthorized, 403: r.forbidden, 404: r.notFound, 409: r.conflict },
+});
+
 registry.registerPath({
   method: "post",
   path: "/api/issues/{id}/documents/{key}/revisions/{revisionId}/restore",
@@ -5031,13 +5046,19 @@ for (const operation of [
   { method: "get", path: "/api/agentos/portfolios", summary: "List the operator's accessible AgentOS portfolios (board only)" },
   { method: "post", path: "/api/agentos/portfolios", summary: "Create an owner-scoped portfolio and link its home company (permission administrator, idempotent)", body: createAgentosPortfolioSchema },
   { method: "get", path: "/api/agentos/portfolios/{portfolioId}", summary: "Read shared employees and company assignments, filtering revoked company access (portfolio owner only)" },
+  { method: "get", path: "/api/agentos/portfolios/{portfolioId}/read-mandates", summary: "List the owner's explicit, revisioned portfolio summary read mandates (board only)" },
+  { method: "post", path: "/api/agentos/portfolios/{portfolioId}/read-mandates", summary: "Explicitly grant or revise company-shared summary access for one source agent and selected linked companies; native permission-management authority in every company required, no private reads or execution grants", body: savePortfolioReadMandateSchema },
+  { method: "post", path: "/api/agentos/portfolios/{portfolioId}/read-mandates/{mandateId}/revoke", summary: "Revoke a portfolio read mandate and its exact matching native grant (owner, revision checked)", body: revokePortfolioReadMandateSchema },
   { method: "post", path: "/api/agentos/portfolios/{portfolioId}/companies", summary: "Link an authorized company to a portfolio (permission administrator in both companies)", body: z.object({ companyId: z.uuid() }).strict() },
   { method: "post", path: "/api/agentos/portfolios/{portfolioId}/employees", summary: "Create a reusable specialist identity (portfolio owner, idempotent)", body: createAgentosEmployeeSchema },
   { method: "post", path: "/api/agentos/portfolios/{portfolioId}/assignments", summary: "Bind a shared employee to an existing approved company agent (permission administrator, idempotent)", body: createAgentosAssignmentSchema },
   { method: "post", path: "/api/agentos/portfolios/{portfolioId}/assignments/{assignmentId}/retire", summary: "Retire only this company assignment and request native agent termination with durable audit (revision checked)", body: retireAgentosAssignmentSchema },
+  { method: "get", path: "/api/agentos/portfolios/{portfolioId}/employees/{employeeId}/capabilities", summary: "Read published skill releases, authorized company pins and decisions (portfolio owner only; private source evidence excluded)" },
+  { method: "post", path: "/api/agentos/portfolios/{portfolioId}/capabilities", summary: "Publish reviewed Markdown from an exact completed native skill test (portfolio owner only; no automatic adoption)", body: publishAgentosCapabilitySchema },
+  { method: "post", path: "/api/agentos/portfolios/{portfolioId}/assignments/{assignmentId}/capabilities", summary: "Adopt, refuse or roll back a reviewed capability in one company assignment (portfolio owner; native configuration authority and policy; atomic version pin and audit)", body: decideAgentosCapabilitySchema },
 ]) {
   registerCurrentRoute({ ...operation, tags: ["agentos-workforce"], responses: {
-    ...(operation.method === "post" && !operation.path.endsWith("/retire") ? { 201: r.ok() } : { 200: r.ok() }),
+    ...(operation.method === "post" && !operation.path.endsWith("/retire") && !operation.path.includes("/read-mandates") ? { 201: r.ok() } : { 200: r.ok() }),
     400: r.badRequest, 401: r.unauthorized, 403: r.forbidden, 404: r.notFound,
     409: { description: "Conflicting creation intent, binding or assignment revision" },
   } });
@@ -5045,6 +5066,8 @@ for (const operation of [
 
 for (const operation of [
   { method: "get", path: "/api/companies/{companyId}/friday/work", summary: "Read current authorized work: project assignments, paginated tasks and owners, department heads, project leads and bounded reporting chains, messages, artifacts and recorded case handoffs", query: fridayWorkQuerySchema },
+  { method: "get", path: "/api/companies/{companyId}/friday/portfolio-mandates", summary: "Discover this actual source agent's currently authorized owner-granted portfolio summary read mandate and allowed target company IDs. No mandate is inferred from role or shared employee identity. Empty when none is authorized." },
+  { method: "get", path: "/api/companies/{companyId}/friday/portfolio-work", summary: "Read bounded company-shared project and task summaries using this source agent's exact explicit portfolio mandate revision. Requires current responsible portfolio owner and external authorizer ceilings on every read. Private work, transcripts, agent configuration, secrets and foreign-company execution are excluded. Company ID in the URL remains your native source company; discover the mandate first, then paginate task and project offsets.", query: portfolioWorkQuerySchema },
   { method: "get", path: "/api/companies/{companyId}/friday/diagnostics", summary: "Diagnose currently readable blocked tasks and task-bound failed runs, local speech installation, local Laya triage readiness and administrator-only saved restart readiness. On-demand, read-only, bounded pages with checked/unknown results, observation time and native source paths. No model loading, inference, provider probes, raw run logs, credentials or complete-platform health claim.", query: fridayDiagnosticsQuerySchema },
   { method: "get", path: "/api/companies/{companyId}/friday/agents/{agentId}/awareness", summary: "Read a shared employee's current authorized assignments and work evidence. Agent callers may read only their own current-company assignment; board callers may read independently authorized company assignments. Shared identity grants no company or private-work access. Paginate assignments with offset/limit; use each company's friday/work agentId filter for further task/project pages.", query: employeeAwarenessQuerySchema },
   { method: "get", path: "/api/companies/{companyId}/friday/performance", summary: "Read source-backed report history for an authorized company, project or department scope; includes accessible unreported projects and explicit truncation", query: companyPerformanceQuerySchema },
@@ -10342,7 +10365,7 @@ registry.registerPath({
 });
 
 for (const route of [
-  ["get", "/api/companies/{companyId}/search", "Search authorized company tasks, comments, documents, artifacts, agents, projects and routines. q searches text; scope selects all/issues/comments/documents/artifacts/agents/projects/routines. Project and parent-task visibility precede routine counts and pagination; task visibility also governs artifacts. Use projectId, assigneeAgentId, priority or updatedWithin to narrow routines; task status, task labels and human-assignee filters do not apply to routines."],
+  ["get", "/api/companies/{companyId}/search", "Search authorized company tasks, conversations, comments, documents, artifacts, agents, projects and routines. q searches text; scope selects all/issues/conversations/comments/documents/artifacts/agents/projects/routines. Conversations narrows native task/comment/document search to persistent agent chats without changing task access. Project and parent-task visibility precede routine counts and pagination; task visibility also governs artifacts. Use projectId, assigneeAgentId, priority or updatedWithin to narrow routines; task status, task labels and human-assignee filters do not apply to routines."],
   [
     "get",
     "/api/companies/{companyId}/search/extract",

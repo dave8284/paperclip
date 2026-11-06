@@ -1,4 +1,5 @@
 import type { ChatProvider } from "./chat-channels.js";
+import type { EgmPacketBinding } from "../egm-review-packet.js";
 import type { TaskWorkspaceIntent, TaskWorkspacePendingSelection } from "./task-workspace.js";
 import type { ExecutionProjection, ExecutionBlocker, TaskInterruptionPresentation } from "./execution-projection.js";
 import type {
@@ -1497,6 +1498,8 @@ export interface RequestConfirmationPayload {
   toolAction?: RequestConfirmationToolActionPayload;
   secretProposal?: RequestConfirmationSecretProposalPayload;
   connectionAuthorization?: RequestConfirmationConnectionAuthorizationPayload;
+  /** Server-owned frozen packet binding; preparation is not provider delivery. */
+  egmPacketPreparation?: EgmPacketBinding;
 }
 
 export interface RequestCheckboxConfirmationOption {

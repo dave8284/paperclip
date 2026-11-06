@@ -21,6 +21,37 @@ for every task or repeatedly review until the reviewer agrees with the author.
 
 ## Packet
 
+### Native preparation API
+
+An active native author run can freeze its packet before submitting its result:
+`PUT /api/issues/{issueId}/runs/{sourceRunId}/egm-packet`. Supply
+`reviewerAgentId`, exact `{documentId, revisionId}` pairs in `packet` (the task's
+`context-packet` document), `target` (its `plan` document), and `sources`, plus
+`persona` (`zoom_out`, `comprehension`, `design_critic` or
+`implementation_readiness`) and `question`. All sources belong to the same task.
+At most eight supporting documents are allowed, each at most 64 KiB; total
+prepared content is bounded to 256 KiB. The native owner loads the selected
+packaged persona/standard and calculates the receipt. Do not supply hashes or
+claimed isolation evidence.
+
+`GET` on the same resource reauthorizes and returns the exact saved packet.
+Before binding, `DELETE` with `{ "requestSha256": "<receipt>" }` clears it while
+the exact author run still owns the active task. This explicit opt-out can also
+recover an unbound reviewer mismatch after result submission; it changes no
+submitted result. New preparation after submission is forbidden. Once bound, an authorized operator
+uses native review cancellation. Prepare while the author run is active, then
+name the same reviewer in its native completion request; another reviewer
+conflicts instead of silently running an ordinary review.
+
+This API currently returns `independent_review_unavailable`. It prepares and
+binds evidence but does not launch a packet-only review. The native reviewer run
+retains preparation references and refuses ordinary dispatch for this opt-in.
+Do not describe the packet as delivered, read, isolated or successfully reviewed.
+Use ordinary review explicitly only after clearing/cancelling this opt-in, and
+label it ordinary. The qualification requirements below still apply.
+
+### Review contents
+
 ```text
 Mode: REVIEW
 Owning task: <native task ID and authorized company/project>

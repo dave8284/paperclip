@@ -25,6 +25,16 @@ function answers(request: DecisionRequest, choices: Record<string, string> = {})
 const success = (request: DecisionRequest): LocalTriageResult => ({ status: "succeeded", requestId: "local-request", reason: "local_observation", answers: answers(request), elapsedMs: 12, inputTokens: 230, outputTokens: 0 });
 
 describe("bounded local triage shadow", () => {
+  it("does not wait for or start local shadow inference during an interactive conversation", async () => {
+    const { db, queries } = database();
+    const decide = vi.fn(() => new Promise<LocalTriageResult>(() => {}));
+    const receipt = await observeModelTriage(db, input, { local: { decide }, interactiveConversation: true });
+    expect(receipt).toMatchObject({ selectedCandidateId: "baseline", routeChangedByTriage: false,
+      decision: { status: "not_run", reason: "interactive_conversation", computationKind: "not_run",
+        resolvedModel: null, elapsedMs: null, costCents: null } });
+    expect(decide).not.toHaveBeenCalled();
+    expect(queries).toHaveLength(0);
+  });
   it("runs the local lane for subscription-only companies without paid authority or a model change", async () => {
     const { db, queries } = database(true); const decide = vi.fn(async (request: DecisionRequest) => success(request));
     const receipt = await observeModelTriage(db, input, { local: { decide } });

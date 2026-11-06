@@ -5,7 +5,9 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AgentOSRoutines } from "./AgentOSRoutines";
 const api = vi.hoisted(() => ({ list: vi.fn(), get: vi.fn(), create: vi.fn(), createTrigger: vi.fn(), run: vi.fn(), update: vi.fn(), updateTrigger: vi.fn(), listRevisions: vi.fn() }));
+const taskList = vi.hoisted(() => vi.fn());
 vi.mock("@/api/routines", () => ({ routinesApi: api }));
+vi.mock("@/api/issues", () => ({ issuesApi: { list: taskList } }));
 vi.mock("@/api/projects", () => ({ projectsApi: { list: () => Promise.resolve([{ id: "campaign", name: "Launch campaign" }, { id: "other-project", name: "Other project" }]) } }));
 vi.mock("@/lib/router", () => ({ Link: ({ children }: { children: React.ReactNode }) => <span>{children}</span> }));
 vi.mock("./MarkdownBody", () => ({ MarkdownBody: ({ children }: { children: React.ReactNode }) => <div>{children}</div> }));
@@ -16,6 +18,7 @@ describe("operating loop actions", () => {
   let client: QueryClient, host: HTMLDivElement, root: Root;
   beforeEach(() => {
     vi.clearAllMocks();
+    taskList.mockResolvedValue([{ id: "objective", identifier: "APP-1", title: "Launch objective" }]);
     api.list.mockResolvedValue([]); api.get.mockResolvedValue(routine); api.create.mockResolvedValue(routine);
     api.createTrigger.mockResolvedValue({}); api.update.mockResolvedValue(routine); api.updateTrigger.mockResolvedValue({}); api.listRevisions.mockResolvedValue([]);
     client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
@@ -79,6 +82,18 @@ describe("operating loop actions", () => {
     await change(document.querySelector('[role="dialog"] input')!, "Keep this draft"); await click("Save revision");
     expect(document.querySelector('[role="dialog"] [role="alert"]')?.textContent).toContain("Routine changed");
     expect((document.querySelector('[role="dialog"] input') as HTMLInputElement).value).toBe("Keep this draft");
+  });
+  it("saves project and parent-objective links through the same revision without running a cycle", async () => {
+    api.list.mockResolvedValue([routine]); await render();
+    await act(async () => (host.querySelector('.agentos-loop-card') as HTMLButtonElement).click()); await settle(); await click("Edit loop");
+    await settle();
+    const dialog = document.querySelector('[role="dialog"]')!;
+    const labeledSelect = (label: string) => [...dialog.querySelectorAll("label")].find(node => node.textContent?.startsWith(label))!.querySelector("select")!;
+    await change(labeledSelect("Project"), "other-project");
+    await change(labeledSelect("Parent objective"), "objective");
+    await click("Save revision");
+    expect(api.update).toHaveBeenCalledWith("loop", expect.objectContaining({ projectId: "other-project", parentIssueId: "objective", baseRevisionId: "revision-1" }));
+    expect(api.run).not.toHaveBeenCalled();
   });
   it("resets draft scope when navigation reuses the panel for another project", async () => {
     await render(); await fillCreation(); await render("other-project");

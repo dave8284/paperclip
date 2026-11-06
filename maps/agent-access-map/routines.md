@@ -27,8 +27,11 @@ API: `present` — representative operation IDs:
 Agent access: `available` — Agent REST / native `call_api` / CLI routine create/update;
 optional installed MCP generic request.
 
-Policy: Agents may read company routines but only create/manage routines assigned to
-themselves; trigger secrets need secure handling.
+Policy: Company admission and native project/parent-task read checks gate routine
+reads and changes. Agents may only create/manage routines assigned to themselves.
+New relationship references and historical restore targets are reauthorized;
+private cycle-task metadata is excluded. Trigger endpoints reuse the same guard;
+trigger secrets need secure handling.
 
 Evidence: `source-only` — [implementation](../../server/src/routes/routines.ts#L99) at
 the reviewed commit above.
@@ -37,6 +40,11 @@ Verification: `not-run` — exercise a listed permitted operation with actual ag
 credentials/run context; inspect its result and applicable persistence/attribution.
 Assert the relevant denied actor, owner, company or mode from Policy. Review the
 remaining operations before qualifying the whole capability.
+
+Historical annotation access additionally requires complete readable scope history:
+document anchors do not pin the routine's original project/parent revision.
+Creation, replies and reopening retain that gate; current routine edits remain
+available through current-scope authorization. No historical scope is guessed.
 
 Gaps: No dedicated production manage_routine binding; generic `call_api` provides
 the permitted REST path. Creation needs a responsible user resolved from the parent
@@ -56,8 +64,11 @@ API: `present` — representative operation IDs:
 Agent access: `available` — Owned-routine agent REST / native `call_api` / CLI trigger
 commands.
 
-Policy: Agents may read company routines but only create/manage routines assigned to
-themselves; trigger secrets need secure handling.
+Policy: Company admission and native project/parent-task read checks gate routine
+reads and changes. Agents may only create/manage routines assigned to themselves.
+New relationship references and historical restore targets are reauthorized;
+private cycle-task metadata is excluded. Trigger endpoints reuse the same guard;
+trigger secrets need secure handling.
 
 Evidence: `source-only` — [implementation](../../server/src/routes/routines.ts#L99) at
 the reviewed commit above.
@@ -92,8 +103,11 @@ API: `present` — representative operation IDs:
 Agent access: `partial` — Owned-routine agent REST / CLI run; native `call_api` from
 an authorized active run.
 
-Policy: Agents may read company routines but only create/manage routines assigned to
-themselves; trigger secrets need secure handling.
+Policy: Company admission and native project/parent-task read checks gate routine
+reads and changes. Agents may only create/manage routines assigned to themselves.
+New relationship references and historical restore targets are reauthorized;
+private cycle-task metadata is excluded. Trigger endpoints reuse the same guard;
+trigger secrets need secure handling.
 
 Evidence: `source-only` — [implementation](../../server/src/routes/routines.ts#L99) at
 the reviewed commit above.
@@ -123,8 +137,11 @@ API: `present` — representative operation IDs:
 
 Agent access: `available` — REST / native call_api / CLI routine.
 
-Policy: Agents may read company routines but only create/manage routines assigned to
-themselves; trigger secrets need secure handling.
+Policy: Company admission and native project/parent-task read checks gate routine
+reads and changes. Agents may only create/manage routines assigned to themselves.
+New relationship references and historical restore targets are reauthorized;
+private cycle-task metadata is excluded. Trigger endpoints reuse the same guard;
+trigger secrets need secure handling.
 
 Evidence: `source-only` — [implementation](../../server/src/routes/routines.ts#L99) at
 the reviewed commit above.
@@ -149,8 +166,11 @@ API: `present` — representative operation IDs:
 
 Agent access: `available` — Owned-routine agent REST / native `call_api` / CLI.
 
-Policy: Agents may read company routines but only create/manage routines assigned to
-themselves; trigger secrets need secure handling.
+Policy: Company admission and native project/parent-task read checks gate routine
+reads and changes. Agents may only create/manage routines assigned to themselves.
+New relationship references and historical restore targets are reauthorized;
+private cycle-task metadata is excluded. Trigger endpoints reuse the same guard;
+trigger secrets need secure handling.
 
 Evidence: `source-only` — [implementation](../../server/src/routes/routines.ts#L99) at
 the reviewed commit above.

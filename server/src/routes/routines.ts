@@ -14,10 +14,11 @@ import {
 import { trackRoutineCreated } from "@paperclipai/shared/telemetry";
 import { validate, validateIssueMutationBody } from "../middleware/validate.js";
 import { accessService, documentAnnotationService, logActivity, routineService } from "../services/index.js";
-import { assertCompanyAccess, getAccessibleResource, getActorInfo, hasCompanyAccess } from "./authz.js";
-import { badRequest, forbidden, unauthorized, unsupportedMediaType } from "../errors.js";
+import { assertCompanyAccess, getActorInfo, hasCompanyAccess } from "./authz.js";
+import { badRequest, forbidden, notFound, unauthorized, unsupportedMediaType } from "../errors.js";
 import { getTelemetryClient } from "../telemetry.js";
 import type { PluginWorkerManager } from "../services/plugin-worker-manager.js";
+import { routineAccessService } from "../services/routine-access.js";
 
 export function routineRoutes(
   db: Db,
@@ -29,6 +30,7 @@ export function routineRoutes(
   });
   const documentAnnotationsSvc = documentAnnotationService(db);
   const access = accessService(db);
+  const routineAccess = routineAccessService(db);
   const routineDocumentKey = "description";
 
   function parseBooleanQuery(value: unknown) {
@@ -105,15 +107,28 @@ export function routineRoutes(
     }
   }
 
-  async function assertCanManageExistingRoutine(req: Request, routineId: string) {
+  async function readRoutine(req: Request, routineId: string) {
     const routine = await svc.get(routineId);
     if (!routine || !hasCompanyAccess(req, routine.companyId)) return null;
     assertCompanyAccess(req, routine.companyId);
+    if (!(await routineAccess.canRead(req.actor, routine))) return null;
+    return routine;
+  }
+
+  async function assertCanManageExistingRoutine(req: Request, routineId: string) {
+    const routine = await readRoutine(req, routineId);
+    if (!routine) return null;
     if (req.actor.type === "board") return routine;
     if (req.actor.type !== "agent" || !req.actor.agentId) throw unauthorized();
     if (routine.assigneeAgentId !== req.actor.agentId) {
       throw forbidden("Agents can only manage routines assigned to themselves");
     }
+    return routine;
+  }
+
+  async function assertCanManageRoutineAnnotations(req: Request, routineId: string) {
+    const routine = await assertCanManageExistingRoutine(req, routineId);
+    if (!routine || !(await routineAccess.canReadAnnotationHistory(req.actor, routine))) return null;
     return routine;
   }
 
@@ -151,13 +166,14 @@ export function routineRoutes(
     assertCompanyAccess(req, companyId);
     const projectId = typeof req.query.projectId === "string" ? req.query.projectId : undefined;
     const result = await svc.list(companyId, { projectId });
-    res.json(result);
+    res.json(await routineAccess.filterList(req.actor, result));
   });
 
   router.post("/companies/:companyId/routines", validate(createRoutineSchema), async (req, res) => {
     const companyId = req.params.companyId as string;
     await assertBoardCanAssignTasks(req, companyId);
     assertCanManageCompanyRoutine(req, companyId, req.body.assigneeAgentId);
+    if (!(await routineAccess.canRead(req.actor, { ...req.body, companyId }))) throw notFound("Routine scope not found");
     const created = await svc.create(companyId, req.body, {
       agentId: req.actor.type === "agent" ? req.actor.agentId : null,
       userId: req.actor.type === "board" ? req.actor.userId ?? "board" : null,
@@ -192,9 +208,12 @@ export function routineRoutes(
   });
 
   router.get("/routines/:id", async (req, res) => {
-    const detail = await getAccessibleResource(req, res, svc.getDetail(req.params.id as string), "Routine not found");
-    if (!detail) return;
-    res.json(detail);
+    const routine = await readRoutine(req, req.params.id as string);
+    if (!routine) throw notFound("Routine not found");
+    const detail = await svc.getDetail(routine.id);
+    const visible = detail && await routineAccess.filterDetail(req.actor, detail);
+    if (!visible) throw notFound("Routine not found");
+    res.json(visible);
   });
 
   router.get("/routines/:id/revisions", async (req, res) => {
@@ -204,11 +223,11 @@ export function routineRoutes(
       return;
     }
     const revisions = await svc.listRevisions(routine.id);
-    res.json(revisions);
+    res.json(await routineAccess.filterRevisions(req.actor, revisions));
   });
 
   router.get("/routines/:id/description/annotations", async (req, res) => {
-    const routine = await assertCanManageExistingRoutine(req, req.params.id as string);
+    const routine = await assertCanManageRoutineAnnotations(req, req.params.id as string);
     if (!routine) {
       res.status(404).json({ error: "Routine not found" });
       return;
@@ -222,7 +241,7 @@ export function routineRoutes(
   });
 
   router.get("/routines/:id/description/annotations/:threadId", async (req, res) => {
-    const routine = await assertCanManageExistingRoutine(req, req.params.id as string);
+    const routine = await assertCanManageRoutineAnnotations(req, req.params.id as string);
     if (!routine) {
       res.status(404).json({ error: "Routine not found" });
       return;
@@ -243,7 +262,7 @@ export function routineRoutes(
     "/routines/:id/description/annotations",
     validate(createDocumentAnnotationThreadSchema),
     async (req, res) => {
-      const routine = await assertCanManageExistingRoutine(req, req.params.id as string);
+      const routine = await assertCanManageRoutineAnnotations(req, req.params.id as string);
       if (!routine) {
         res.status(404).json({ error: "Routine not found" });
         return;
@@ -284,7 +303,7 @@ export function routineRoutes(
     "/routines/:id/description/annotations/:threadId/comments",
     validate(createDocumentAnnotationCommentSchema),
     async (req, res) => {
-      const routine = await assertCanManageExistingRoutine(req, req.params.id as string);
+      const routine = await assertCanManageRoutineAnnotations(req, req.params.id as string);
       if (!routine) {
         res.status(404).json({ error: "Routine not found" });
         return;
@@ -323,7 +342,7 @@ export function routineRoutes(
     "/routines/:id/description/annotations/:threadId",
     validate(updateDocumentAnnotationThreadSchema),
     async (req, res) => {
-      const routine = await assertCanManageExistingRoutine(req, req.params.id as string);
+      const routine = await assertCanManageRoutineAnnotations(req, req.params.id as string);
       if (!routine) {
         res.status(404).json({ error: "Routine not found" });
         return;
@@ -386,6 +405,7 @@ export function routineRoutes(
     ) {
       throw forbidden("Agents can only assign routines to themselves");
     }
+    if (!(await routineAccess.canRead(req.actor, { ...routine, ...req.body, companyId: routine.companyId }))) throw notFound("Routine scope not found");
     const updated = await svc.update(routine.id, req.body, {
       agentId: req.actor.type === "agent" ? req.actor.agentId : null,
       userId: req.actor.type === "board" ? req.actor.userId ?? "board" : null,
@@ -425,6 +445,8 @@ export function routineRoutes(
       return;
     }
     await assertBoardCanAssignTasks(req, routine.companyId);
+    const target = await svc.getRevision(routine.id, req.params.revisionId as string);
+    if (!target || !(await routineAccess.canRead(req.actor, target.snapshot.routine))) throw notFound("Routine revision not found");
     const result = await svc.restoreRevision(routine.id, req.params.revisionId as string, {
       agentId: req.actor.type === "agent" ? req.actor.agentId : null,
       userId: req.actor.type === "board" ? req.actor.userId ?? "board" : null,
@@ -454,11 +476,11 @@ export function routineRoutes(
   });
 
   router.get("/routines/:id/runs", async (req, res) => {
-    const routine = await getAccessibleResource(req, res, svc.get(req.params.id as string), "Routine not found");
-    if (!routine) return;
+    const routine = await readRoutine(req, req.params.id as string);
+    if (!routine) throw notFound("Routine not found");
     const limit = Number(req.query.limit ?? 50);
     const result = await svc.listRuns(routine.id, Number.isFinite(limit) ? limit : 50);
-    res.json(result);
+    res.json(await routineAccess.filterRuns(req.actor, result));
   });
 
   router.post("/routines/:id/triggers", validate(createRoutineTriggerSchema), async (req, res) => {

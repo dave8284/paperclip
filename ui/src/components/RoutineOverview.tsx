@@ -181,7 +181,7 @@ export function RoutineOverview() {
         <OverviewFact
           icon={Play}
           label="Last run"
-          value={lastRun ? <StatusBadge status={lastRun.status} /> : "No runs yet"}
+          value={lastRun ? <StatusBadge status={lastRun.status} /> : "No visible runs"}
           detail={lastRun ? formatRoutineTimestamp(lastRun.triggeredAt) : "Run manually or wait for a trigger"}
         />
       </div>
@@ -221,7 +221,7 @@ export function RoutineOverview() {
         </div>
         {recentRuns.length === 0 ? (
           <p className="py-6 text-center text-sm text-muted-foreground">
-            No runs yet. Run the routine now or wait for its schedule.
+            No visible runs in this history. Run the routine now or wait for its schedule.
           </p>
         ) : (
           <div className="flex flex-col gap-0.5">

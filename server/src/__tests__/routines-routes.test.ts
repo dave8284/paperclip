@@ -105,6 +105,7 @@ const mockRoutineService = vi.hoisted(() => ({
   update: vi.fn(),
   create: vi.fn(),
   listRevisions: vi.fn(),
+  getRevision: vi.fn(),
   restoreRevision: vi.fn(),
   listRuns: vi.fn(),
   createTrigger: vi.fn(),
@@ -128,6 +129,8 @@ const mockAnnotationService = vi.hoisted(() => ({
 const mockAccessService = vi.hoisted(() => ({
   canUser: vi.fn(),
 }));
+const mockDecideReads = vi.hoisted(() => vi.fn());
+vi.mock("../services/authorization.js", async importOriginal => ({ ...await importOriginal<typeof import("../services/authorization.js")>(), authorizationService: () => ({ decideReads: mockDecideReads }) }));
 
 const mockLogActivity = vi.hoisted(() => vi.fn());
 const mockTrackRoutineCreated = vi.hoisted(() => vi.fn());
@@ -182,6 +185,40 @@ async function createApp(actor: Record<string, unknown>) {
 }
 
 describe("routine routes", () => {
+  it("hides private routine relationships across detail, history, mutation and trigger endpoints", async () => {
+    const app = await createApp({ type: "board", source: "local_implicit", userId: "board-user" });
+    mockDecideReads.mockImplementation(async (_actor, resources) => resources.map((resource: { type: string }) => ({ allowed: resource.type !== "project" })));
+    const paths = [`/api/routines/${routineId}`, `/api/routines/${routineId}/runs`, `/api/routines/${routineId}/revisions`];
+    for (const path of paths) expect((await request(app).get(path)).status).toBe(404);
+    expect((await request(app).patch(`/api/routines/${routineId}`).send({ title: "Hidden" })).status).toBe(404);
+    expect((await request(app).patch(`/api/routine-triggers/${trigger.id}`).send({ enabled: true })).status).toBe(404);
+    expect(mockRoutineService.getDetail).not.toHaveBeenCalled();
+    expect(mockRoutineService.update).not.toHaveBeenCalled();
+    expect(mockRoutineService.updateTrigger).not.toHaveBeenCalled();
+    const list = await request(app).get(`/api/companies/${companyId}/routines`);
+    expect(list.status).toBe(200); expect(list.body).toEqual([]);
+  });
+  it("rejects a hidden parent reference before creating or revising a routine", async () => {
+    const app = await createApp({ type: "board", source: "local_implicit", userId: "board-user" });
+    mockDecideReads.mockImplementation(async (_actor, resources) => resources.map((resource: { type: string }) => ({ allowed: resource.type !== "issue" })));
+    const parentIssueId = "88888888-8888-4888-8888-888888888888";
+    expect((await request(app).post(`/api/companies/${companyId}/routines`).send({ title: "New loop", parentIssueId })).status).toBe(404);
+    expect((await request(app).patch(`/api/routines/${routineId}`).send({ parentIssueId })).status).toBe(404);
+    expect(mockRoutineService.create).not.toHaveBeenCalled(); expect(mockRoutineService.update).not.toHaveBeenCalled();
+  });
+  it("filters inaccessible historical cycles and refuses restoring an inaccessible revision", async () => {
+    const app = await createApp({ type: "board", source: "local_implicit", userId: "board-user" });
+    const hiddenIssue = "88888888-8888-4888-8888-888888888888";
+    mockDecideReads.mockImplementation(async (_actor, resources) => resources.map((resource: { issueId?: string }) => ({ allowed: resource.issueId !== hiddenIssue })));
+    mockRoutineService.listRuns.mockResolvedValue([{ id: "private-run", companyId, linkedIssueId: hiddenIssue, linkedIssue: { title: "Secret" } }, { id: "visible-run", companyId, linkedIssueId: null }]);
+    const runs = await request(app).get(`/api/routines/${routineId}/runs`);
+    expect(runs.status).toBe(200); expect(runs.body.map((row: { id: string }) => row.id)).toEqual(["visible-run"]);
+    mockRoutineService.listRevisions.mockResolvedValue([{ ...revision, snapshot: { ...revision.snapshot, routine: { ...revision.snapshot.routine, parentIssueId: hiddenIssue } } }]);
+    mockRoutineService.getRevision.mockResolvedValue({ ...revision, snapshot: { ...revision.snapshot, routine: { ...revision.snapshot.routine, parentIssueId: hiddenIssue } } });
+    expect((await request(app).get(`/api/routines/${routineId}/revisions`)).body).toEqual([]);
+    expect((await request(app).post(`/api/routines/${routineId}/revisions/${revisionId}/restore`).send({})).status).toBe(404);
+    expect(mockRoutineService.restoreRevision).not.toHaveBeenCalled();
+  });
   it("forwards the Fireflies signature and exact raw JSON to the public handler", async () => {
     const app = await createApp({ type: "none" });
     const raw = '{ "event": "meeting.summarized", "meeting_id": "meeting-1", "timestamp": 1780000000000 }';
@@ -207,6 +244,7 @@ describe("routine routes", () => {
     vi.doUnmock("../middleware/index.js");
     registerModuleMocks();
     vi.clearAllMocks();
+    mockDecideReads.mockImplementation(async (_actor, resources) => resources.map(() => ({ allowed: true })));
     mockGetTelemetryClient.mockReturnValue({ track: vi.fn() });
     mockRoutineService.list.mockResolvedValue([routine]);
     mockRoutineService.create.mockResolvedValue(routine);
@@ -214,6 +252,7 @@ describe("routine routes", () => {
     mockRoutineService.getTrigger.mockResolvedValue(trigger);
     mockRoutineService.update.mockResolvedValue({ ...routine, assigneeAgentId: otherAgentId });
     mockRoutineService.listRevisions.mockResolvedValue([revision]);
+    mockRoutineService.getRevision.mockResolvedValue(revision);
     mockRoutineService.restoreRevision.mockResolvedValue({
       routine,
       revision: { ...revision, revisionNumber: 2, restoredFromRevisionId: revision.id },

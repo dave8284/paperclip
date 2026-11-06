@@ -26,6 +26,7 @@ that hold. See [accounting behavior](../../doc/prompt-injection-prevention.md).
 - `subscriptions`: `budgets-costs/subscriptions` — inspect subscription fees separately from API usage, edit owned prices, link duplicate accounts, and end or exclude tracking.
 - `accounting-recovery`: `budgets-costs/accounting-recovery` — inspect missing or unresolved run costs and retry saved cost recording without rerunning the agent.
 - `model-routing-audit`: `budgets-costs/model-routing-audit` — administrators compare recorded model/task usage and inspect selection, System One observations and reviewed outcomes per execution.
+- `shared-execution-capacity`: `budgets-costs/shared-execution-capacity` — explicitly group subscription connections across companies, limit simultaneous employee work and reserve conversation capacity.
 
 ## How to get to it (user POV)
 
@@ -51,6 +52,33 @@ Open Administration → Model Intelligence. Compare Models by task type, filter
 the displayed task/model groups, then expand and collapse a Routing audit trail
 row. Follow its owning-company execution/task links. Selection and evaluation
 controls remain in the existing learning ledger further down the page.
+New admissions record only the configured model until current-account model
+qualification is available. Historical subscription use and harness catalog
+support do not authorize automatic alternatives. Retained sessions keep their
+model; older queued requests containing unqualified alternatives require review.
+The [offline service checks](../../server/src/__tests__/agentos-model-intelligence-offline.test.ts)
+cover this boundary alongside execution-account feedback attribution.
+
+### `shared-execution-capacity`
+
+Open Administration → AI capacity. Create a named group, choose its provider,
+explicit simultaneous-work limit, conversation reserve, priority and warning
+threshold, then select the connections using the same seat. Saving does not
+infer provider entitlement, join credentials, or grant company access. Existing
+groups show active/waiting/delayed counts and can be edited with revision checks.
+Unbound managed connections and host sign-ins remain outside these limits.
+Changing bindings requires existing work on those connections to settle. The
+configuration fence includes unbound admission, so assigning a seat cannot
+overlook work already dispatched. Historical runs without native settlement
+evidence remain a visible conflict; no timeout fabricates their completion.
+
+Focused verification: [ordering and wait lifecycle](../../server/src/services/ai-execution-capacity.test.ts),
+[quiet idle facade](../../server/src/__tests__/heartbeat-capacity-idle.test.ts),
+[prepared authority](../../server/src/services/ai-runtime-authority-after-wait.test.ts)
+and [binding/authority boundary](../../server/src/services/ai-capacity-binding-boundary.test.ts)
+and [administrator form](../../ui/src/components/AdminAiCapacity.test.tsx).
+The PostgreSQL cases require a supported disposable database. They are distinct
+from the owner-approved live binding and actual dispatch/Stop/restart journey.
 
 ## Driving it with Playwright and the Paperclip CLI
 
@@ -106,6 +134,11 @@ browser acceptance claim.
 
 Manual: Compare a known run's actual usage with its selected profile and any
 shadow observation; inspect a mismatching/unrecorded model and absent review.
+New interactive conversations retain a `not_run / interactive_conversation`
+shadow receipt: native persisted conversation identity skips the local shadow
+inference wait. It does not report model execution, quality or a changed route.
+Ordinary task shadow evaluation remains. Focused native selection/triage checks
+cover this distinction; live response timing remains unverified.
 Use the company-owned execution link, collapse the row again and change the
 task/model filters. Completed execution is not reviewed quality. Run time includes
 tools/orchestration; a multi-model run appears once in each observed model group.

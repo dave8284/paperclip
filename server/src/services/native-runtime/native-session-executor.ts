@@ -162,6 +162,7 @@ import { nativeSha256 } from "./canonical.js";
 import { PaperclipRunnerToolAuthority } from "./paperclip-runner-tool-authority.js";
 import { createAssignedMcpTools, getAssignedMcpGateway } from "./assigned-mcp-tools.js";
 import { getNativeReviewAssignment, readNativeReviewAssignmentContext } from "./native-review-participant.js";
+import { assertOrdinaryNativeReviewExecution } from "./egm-review-packets.js";
 import { NativeChatAttachmentReadScope } from "./chat-attachment-read.js";
 import {
   assertCurrentWakeCommentsRead,
@@ -7698,6 +7699,7 @@ export async function executePaperclipNativeSession(input: {
   );
   const ownerToken = Symbol("native execution owner");
   try {
+    await assertOrdinaryNativeReviewExecution(input.db, input.execution.binding);
     // Reserve across session identities before retiring or staging anything.
     if (executingNativeOwnerScopes.has(ownerScope)) {
       throw new Error("native_session_supervisor_busy");
@@ -11737,9 +11739,12 @@ async function createRunnerdBackendWithinSessionClaim(
       eq(heartbeatRuns.companyId, input.execution.binding.companyId),
     )).limit(1).then((rows) => rows[0]);
   const nativeReview = readNativeReviewAssignmentContext(reviewRun?.contextSnapshot);
-  if (nativeReview && !await getNativeReviewAssignment(input.db, {
+  const nativeReviewAssignment = nativeReview ? await getNativeReviewAssignment(input.db, {
     ...input.execution.binding, contextSnapshot: nativeReview,
-  })) throw new Error("native_review_assignment_no_longer_available");
+  }) : null;
+  if (nativeReview && !nativeReviewAssignment) throw new Error("native_review_assignment_no_longer_available");
+  if (nativeReviewAssignment && ("egmPacketPreparation" in nativeReviewAssignment.interaction.payload || nativeReviewAssignment.sourceRun.runnerProfileJson?.nativeEgmPacketPreparation))
+    throw new Error("independent_review_unavailable: frozen EGM packets cannot use ordinary review execution");
   // Remote Codex already sends dynamic tool calls over authenticated PRP. Keep
   // the assigned gateway on the control plane instead of asking the sandbox to
   // reach the host's HTTP origin (which may be private or loopback-only).

@@ -115,6 +115,11 @@ const annotationComment = {
 };
 
 function registerModuleMocks() {
+  // Annotation lifecycle cases use a fully readable routine history. Separate
+  // routine-access contract checks exercise real history authorization.
+  vi.doMock("../services/routine-access.js", () => ({ routineAccessService: () => ({
+    canRead: async () => true, canReadAnnotationHistory: async () => true,
+  }) }));
   vi.doMock("../services/index.js", () => ({
     accessService: () => ({
       canUser: vi.fn(async () => true),

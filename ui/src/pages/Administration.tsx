@@ -9,10 +9,11 @@ import { Input } from "@/components/ui/input";
 import { AgentOSBrand } from "@/components/AgentOSBrand";
 import { AdminPeople } from "@/components/AdminPeople";
 import { AdminModelIntelligence } from "@/components/AdminModelIntelligence";
+import { AdminAiCapacity } from "@/components/AdminAiCapacity";
 
 const tabs = [
   ["overview", "Overview"], ["pending", "Pending approval"], ["users", "Users"],
-  ["add", "Add people"], ["intelligence", "Model Intelligence"], ["audit", "Audit trail"],
+  ["add", "Add people"], ["intelligence", "Model Intelligence"], ["capacity", "AI capacity"], ["audit", "Audit trail"],
 ] as const;
 
 export function Administration() {
@@ -33,6 +34,7 @@ export function Administration() {
         {(tab === "pending" || tab === "users") && <AdminPeople key={tab} userId={userId} pendingOnly={tab === "pending"} />}
         {tab === "add" && <AdminPreapprovals userId={userId} />}
         {tab === "intelligence" && <AdminModelIntelligence userId={userId} />}
+        {tab === "capacity" && <AdminAiCapacity key={userId} userId={userId} />}
         {tab === "audit" && <AdminAudit userId={userId} />}
       </main>
     </div>}

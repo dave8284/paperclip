@@ -5,6 +5,12 @@ context receipt are implemented. Live independent-review isolation, qualified
 packet dispatch and evaluated lesson promotion remain unqualified. No running employee, company,
 provider account or deployed runtime was changed by this work.
 
+6 November source update: [native frozen-packet preparation](2026-11-06-agentos-egm-dispatch-audit.md#implemented-preparation-boundary)
+now supplies exact document/persona/standard revisions, a reversible author-run
+API, immutable native interaction linkage and a reviewer-run preparation receipt.
+Marked reviews stop with `independent_review_unavailable`; packet-only provider
+execution, observed delivery/isolation and evaluated lesson promotion remain open.
+
 ## What EGM supplies
 
 Google's Elephant–Goldfish Model pairs an author with substantial context with

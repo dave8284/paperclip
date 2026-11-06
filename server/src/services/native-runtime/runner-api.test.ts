@@ -179,6 +179,16 @@ describe("runner API catalog", () => {
     expect(operation.summary).toContain("own current-company assignment");
     expect(operation.callPolicy).toBe("rest");
   });
+  it("discovers explicit portfolio read mandates through the source company gateway", () => {
+    const operationId = "GET /api/companies/{companyId}/friday/portfolio-work";
+    expect(searchRunnerApi({ query: "portfolio mandate summaries" }).results.map(entry => entry.operationId)).toContain(operationId);
+    const operation = runnerApiOperation(operationId);
+    expect(operation.allowedModes).toEqual(expect.arrayContaining(["standard", "ask", "planning"]));
+    expect(operation.parameters.find(parameter => parameter.name === "limit")?.schema.maximum).toBe(100);
+    expect(operation.parameters.find(parameter => parameter.name === "revision")?.required).toBe(true);
+    expect(operation.summary).toContain("source agent's exact explicit portfolio mandate revision");
+    expect(operation.callPolicy).toBe("rest");
+  });
 });
 
 describe("runner API request boundary", () => {

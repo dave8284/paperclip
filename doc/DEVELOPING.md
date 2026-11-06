@@ -3423,5 +3423,13 @@ truncated input and unsupported option counts, and records abstention. Local
 results are shadow evidence, not authorization or routing changes. Admin →
 Model Intelligence reports setup/readiness and actual task receipts; hosted
 usage, local hardware cost and generative subscription usage remain distinct.
+Interactive conversations omit shadow inference from their dispatch path and
+retain an explicit `interactive_conversation` skip receipt. To diagnose the
+installed checkpoint offline, run `scripts/evaluate-local-triage.ts` through the
+existing CLI TypeScript loader with absolute interpreter, model-directory and
+new output-report paths. It uses synthetic cases and never writes production
+learning or promotes routing. See the
+[completion ledger](plans/2026-11-06-agentos-completion-ledger.md) for exact command
+and measured limitations.
 For the guarded local launchd recovery command and final acceptance checklist,
 see [the platform fixes log](plans/2026-11-04-agentos-platform-fixes.md).

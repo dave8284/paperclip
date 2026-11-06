@@ -1,4 +1,5 @@
 import { taskInterruptionPresentation, taskInterruptionPresentations } from "../services/task-interruption-presentation.js";
+import { egmReviewPacketRoutes } from "./egm-review-packets.js";
 import { parseObject } from "../adapters/utils.js";
 import { prepareRestrictedWorkspaceRetry } from "../services/restricted-workspace-retry.js";
 import { issueSummariesQuerySchema, type IssueSummary } from "@paperclipai/shared";
@@ -3433,6 +3434,7 @@ export function issueRoutes(
   } = {},
 ) {
   const router = Router();
+  router.use(egmReviewPacketRoutes(db));
   const svc = issueService(db);
   const runRedactions = createRunSecretRedactionRegistry(db);
   const access = accessService(db);

@@ -3396,6 +3396,8 @@ export function issueThreadInteractionService(
       const data = normalizeCreateInteractionInput(
         createIssueThreadInteractionSchema.parse(input),
       );
+      if (data.kind === "request_confirmation" && data.payload.egmPacketPreparation && actor.systemId !== "native-status-committer")
+        throw unprocessable("EGM packet bindings are server-owned; use the native packet preparation API");
       // Chat ownership is server-owned and immutable. Ordinary human questions
       // must not depend on a model copying an opaque user identity correctly.
       let defaultAddresseeUserId: string | null = null;

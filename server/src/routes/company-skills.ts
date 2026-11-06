@@ -59,15 +59,13 @@ import { badRequest, conflict, forbidden, unauthorized, notFound, HttpError } fr
 import { assertAuthenticated, assertCompanyAccess, getActorInfo } from "./authz.js";
 import { getTelemetryClient } from "../telemetry.js";
 import {
-  companySkillPolicyService,
   normalizeSkillPolicySourceType,
-  type SkillPolicyPrincipal,
 } from "../services/company-skill-policy.js";
+import { assertCompanySkillMutation } from "../services/skill-mutation-authorization.js";
 import { authorizationDeniedDetails, type AuthorizationActor } from "../services/authorization.js";
 import {
   normalizeSkillPolicySourceLocator,
   type SkillPolicyAction,
-  type SkillPolicyDecision,
   type SkillPolicyEvaluationResource,
 } from "@paperclipai/shared";
 
@@ -77,12 +75,6 @@ type SkillTelemetryInput = {
   sourceType: string;
   sourceLocator: string | null;
   metadata: Record<string, unknown> | null;
-};
-
-type SkillPolicyDenialResponse = {
-  code: "skill_policy_denied";
-  reason: SkillPolicyDecision["reason"];
-  remediation?: string;
 };
 
 type SkillTestRunAssignmentAuthorizationScope = {
@@ -119,7 +111,6 @@ export function companySkillRoutes(db: Db) {
   const sourceSync = skillSourceSyncService(db);
   const issues = issueService(db);
   const heartbeat = heartbeatService(db);
-  const skillPolicies = companySkillPolicyService(db);
 
   function asString(value: unknown): string | null {
     if (typeof value !== "string") return null;
@@ -162,16 +153,6 @@ export function companySkillRoutes(db: Db) {
     return [];
   }
 
-  function toSkillPolicyDenialResponse(
-    decision: Pick<SkillPolicyDecision, "reason" | "remediation">,
-  ): SkillPolicyDenialResponse {
-    return {
-      code: "skill_policy_denied",
-      reason: decision.reason,
-      ...(typeof decision.remediation === "string" ? { remediation: decision.remediation } : {}),
-    };
-  }
-
   function skillActor(req: Request) {
     if (req.actor.type === "agent") {
       return { type: "agent" as const, agentId: req.actor.agentId ?? null };
@@ -180,16 +161,6 @@ export function companySkillRoutes(db: Db) {
       return { type: "user" as const, userId: req.actor.userId ?? null };
     }
     return { type: "system" as const };
-  }
-
-  async function skillPolicyPrincipal(req: Request, companyId: string): Promise<SkillPolicyPrincipal> {
-    if (req.actor.type === "agent" && req.actor.agentId) {
-      return skillPolicies.resolveAgentPrincipal(companyId, req.actor.agentId);
-    }
-    if (req.actor.type === "board") {
-      return { type: "board", id: req.actor.userId ?? "board", role: "board" };
-    }
-    throw unauthorized("Authentication required");
   }
 
   async function skillPolicyResource(input: {
@@ -235,35 +206,7 @@ export function companySkillRoutes(db: Db) {
       throw forbidden("Agent key cannot access another company", { code: "skill_company_boundary_denied" });
     }
     assertCompanyAccess(req, companyId);
-    const platformDecision = await access.decide({
-      actor: req.actor,
-      action: "skill_config:update",
-      resource: { type: "company", companyId },
-    });
-    // Legacy missing-grant and suggest-change-consent denials are not platform
-    // invariants for skills. The company skill policy is the governance layer;
-    // authentication, company boundaries, and safety checks still fail closed.
-    if (
-      !platformDecision.allowed
-      && !["deny_no_grant", "deny_missing_consent", "deny_missing_grant"].includes(platformDecision.reason)
-    ) {
-      throw forbidden(platformDecision.explanation, {
-        code: platformDecision.reason === "deny_company_boundary"
-          ? "skill_company_boundary_denied"
-          : "skill_actor_restricted",
-        reason: "platform_invariant",
-      });
-    }
-    const resolvedResource = typeof resource === "function" ? await resource() : await resource;
-    const policyDecision = await skillPolicies.evaluate({
-      companyId,
-      principal: await skillPolicyPrincipal(req, companyId),
-      action,
-      resource: resolvedResource,
-    });
-    if (!policyDecision.allowed) {
-      throw forbidden("Skill action denied by company policy", toSkillPolicyDenialResponse(policyDecision));
-    }
+    await assertCompanySkillMutation(db, req.actor, companyId, action, resource);
   }
 
   async function assertCanOrchestrateSkillTestHarness(

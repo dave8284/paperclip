@@ -115,8 +115,12 @@ agents deny access. A role label alone is insufficient.
 
 Cross-company Friday delegation needs an explicit portfolio mandate with an
 owner, authorized company set, permitted actions, revision/revocation and native
-target-company revalidation. The current company coordinator binding is not
-that mandate. The native termination endpoint remains board-only.
+target-company revalidation. The first shared-summary read slice now has source
+implementation and focused checks in the
+[6 November execution log](2026-11-06-agentos-portfolio-read-mandates.md); no live
+grant was created and database/runtime qualification remains pending. Private
+scope and portfolio work creation/delegation remain open. The current company
+coordinator binding is not that mandate. The native termination endpoint remains board-only.
 Company assignment retirement now has its separate explicit scoped grant contract
 below; hiring/configuration grants do not imply termination authority.
 

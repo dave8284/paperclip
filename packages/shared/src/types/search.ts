@@ -1,6 +1,6 @@
 import type { IssuePriority, IssueStatus } from "../constants.js";
 
-export const COMPANY_SEARCH_SCOPES = ["all", "issues", "comments", "documents", "artifacts", "agents", "projects", "routines"] as const;
+export const COMPANY_SEARCH_SCOPES = ["all", "issues", "conversations", "comments", "documents", "artifacts", "agents", "projects", "routines"] as const;
 export type CompanySearchScope = (typeof COMPANY_SEARCH_SCOPES)[number];
 
 export const COMPANY_SEARCH_SORTS = ["relevance", "updated", "created", "priority"] as const;

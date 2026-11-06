@@ -2,7 +2,7 @@ import { and, asc, desc, eq, inArray, isNotNull, isNull, notInArray, or, sql } f
 import { agents, cases, caseHandoffs, issueComments, issues,
   issueWorkProducts, managedApplications, managedApplicationProjects, projects, type Db } from "@paperclipai/db";
 import type { FridayWork, FridayWorkQuery } from "@paperclipai/shared";
-import { issueReadSqlCondition, projectReadSqlCondition, type AuthorizationActor } from "./authorization.js";
+import { issueReadSqlCondition, projectReadSqlCondition, companySharedIssueReadSqlCondition, companySharedProjectReadSqlCondition, type AuthorizationActor } from "./authorization.js";
 import { caseReadSqlCondition, filterCasesForActor } from "./case-access.js";
 import { executionIssueCondition } from "./issue-visibility.js";
 import { managedApplicationService } from "./managed-applications.js";
@@ -12,10 +12,10 @@ import { notFound } from "../errors.js";
 /** Rebuildable, request-driven views of native records. No model calls, timers,
  * credentials or independent work state. Permissions precede counts and paging. */
 export function fridayAwarenessService(db: Db) {
-  async function scope(companyId: string, actor: AuthorizationActor, query: FridayWorkQuery) {
-    const projectAccess = and(eq(projects.companyId, companyId), await projectReadSqlCondition(db, actor));
+  async function scope(companyId: string, actor: AuthorizationActor, query: FridayWorkQuery, companySharedSummary = false) {
+    const projectAccess = and(eq(projects.companyId, companyId), companySharedSummary ? companySharedProjectReadSqlCondition(actor) : await projectReadSqlCondition(db, actor));
     const visibleProjects = db.select({ id: projects.id }).from(projects).where(projectAccess);
-    const issueAccess = and(eq(issues.companyId, companyId), await issueReadSqlCondition(db, actor),
+    const issueAccess = and(eq(issues.companyId, companyId), companySharedSummary ? companySharedIssueReadSqlCondition(actor) : await issueReadSqlCondition(db, actor),
       or(isNull(issues.projectId), inArray(issues.projectId, visibleProjects)));
     if (query.projectId) {
       const [project] = await db.select({ id: projects.id }).from(projects).where(and(projectAccess, eq(projects.id, query.projectId))).limit(1);
@@ -39,8 +39,8 @@ export function fridayAwarenessService(db: Db) {
   }
 
   return {
-    async work(companyId: string, actor: AuthorizationActor, query: FridayWorkQuery): Promise<FridayWork> {
-      const { work, projectScope, visibleProjects } = await scope(companyId, actor, query);
+    async work(companyId: string, actor: AuthorizationActor, query: FridayWorkQuery, options?: { companySharedSummary: boolean }): Promise<FridayWork> {
+      const { work, projectScope, visibleProjects } = await scope(companyId, actor, query, options?.companySharedSummary);
       const predicate = and(work, executionIssueCondition());
       const taskPredicate = and(predicate, query.status === "active" ? notInArray(issues.status, ["done", "cancelled"])
         : query.status === "completed" ? inArray(issues.status, ["done", "cancelled"]) : undefined);
@@ -53,7 +53,7 @@ export function fridayAwarenessService(db: Db) {
           projectId: issues.projectId, assigneeAgentId: issues.assigneeAgentId, assigneeUserId: issues.assigneeUserId,
           parentId: issues.parentId, createdByAgentId: issues.createdByAgentId, updatedAt: issues.updatedAt })
           .from(issues).where(taskPredicate).orderBy(desc(issues.updatedAt), desc(issues.id)).offset(query.offset).limit(query.limit + 1),
-        db.select({ agentId: issues.assigneeAgentId, projectId: issues.projectId, status: issues.status, count: sql<number>`count(*)::int` })
+        options?.companySharedSummary ? [] : db.select({ agentId: issues.assigneeAgentId, projectId: issues.projectId, status: issues.status, count: sql<number>`count(*)::int` })
           .from(issues).where(and(predicate, isNotNull(issues.assigneeAgentId))).groupBy(issues.assigneeAgentId, issues.projectId, issues.status)
           .orderBy(asc(issues.assigneeAgentId), asc(issues.projectId), asc(issues.status)).limit(2001),
       ]);
@@ -62,6 +62,14 @@ export function fridayAwarenessService(db: Db) {
       // A parent outside this visible page is expanded through its native task,
       // never exposed as an unchecked relationship to a private record.
       const taskSet = new Set(taskIds);
+      if (options?.companySharedSummary) return {
+        observedAt: new Date().toISOString(), projects: projectRows.slice(0, 200), projectCount: totals[0].count,
+        nextProjectOffset: projectRows.length > 200 ? query.projectOffset + 200 : null,
+        tasks: tasks.map(task => ({ ...task, parentId: task.parentId && taskSet.has(task.parentId) ? task.parentId : null })),
+        counts: Object.fromEntries(counts.map(row => [row.status, Number(row.count)])),
+        nextOffset: taskRows.length > query.limit ? query.offset + query.limit : null,
+        applications: [], assignments: [], assignmentsTruncated: false, evidence: [], evidenceTruncated: false, handoffs: [], handoffsTruncated: false,
+      };
       const projectIds = [...new Set([...projectRows.slice(0, 200).map(project => project.id), ...tasks.flatMap(task => task.projectId ? [task.projectId] : [])])];
       const [applicationRows, comments, products, handoffs, accountability] = await Promise.all([
         projectIds.length ? db.select({ id: managedApplications.id, name: managedApplications.name, kind: managedApplications.kind, projectId: managedApplicationProjects.projectId })

@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, asc, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, sql } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import { documentRevisions, documents, issueDocuments, issues } from "@paperclipai/db";
 import { isSystemIssueDocumentKey, issueDocumentKeySchema } from "@paperclipai/shared";
@@ -113,6 +113,30 @@ export function documentService(db: Db) {
     includeSystem ? rows : rows.filter((row) => !isSystemIssueDocumentKey(row.key));
 
   return {
+    /** Exact native revision read for bounded review inputs. Callers still own
+     * current task authorization. Never substitutes the latest document body. */
+    getIssueDocumentRevision: async (input: {
+      companyId: string; issueId: string; documentId: string; revisionId: string; maxBodyBytes: number; lock?: boolean;
+    }) => {
+      if (!Number.isSafeInteger(input.maxBodyBytes) || input.maxBodyBytes < 1 || input.maxBodyBytes > 1_000_000)
+        throw unprocessable("Invalid document revision size bound");
+      const query = db.select({
+        companyId: documentRevisions.companyId, issueId: issueDocuments.issueId,
+        documentId: documents.id, revisionId: documentRevisions.id, key: issueDocuments.key,
+        revisionNumber: documentRevisions.revisionNumber, title: documentRevisions.title,
+        body: documentRevisions.body, format: documentRevisions.format,
+        latestRevisionId: documents.latestRevisionId, sourceTrust: documents.sourceTrust,
+      }).from(issueDocuments)
+        .innerJoin(documents, and(eq(documents.id, issueDocuments.documentId), eq(documents.companyId, issueDocuments.companyId)))
+        .innerJoin(documentRevisions, and(eq(documentRevisions.documentId, documents.id), eq(documentRevisions.companyId, documents.companyId)))
+        .where(and(eq(issueDocuments.companyId, input.companyId), eq(issueDocuments.issueId, input.issueId),
+          eq(documents.id, input.documentId), eq(documentRevisions.id, input.revisionId),
+          sql`octet_length(${documentRevisions.body}) <= ${input.maxBodyBytes}`)).limit(1);
+      // Used only inside the preparation transaction: revision-aware writers
+      // update this same document row, so "current" cannot race acceptance.
+      const [row] = await (input.lock ? query.for("share") : query);
+      return row ?? null;
+    },
     getIssueDocumentPayload: async (
       issue: { id: string; description: string | null },
       options: { includeSystem?: boolean } = {},

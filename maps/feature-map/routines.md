@@ -32,6 +32,11 @@ on a pan/zoom workflow. Select a node to inspect or triage its native record;
 Edit loop and Edit trigger use revision-checked native updates. Current definition
 nodes are labelled separately from past cycle results. Only recorded work animates.
 The graph bounds child tasks and outputs to 30; complete history stays on the task.
+The editor also changes the project and parent objective through the same native
+revision check. A bounded authorized task search finds parent objectives; related
+loops share that parent without becoming execution dependencies. List/detail,
+revision and cycle reads hide inaccessible project/task references, including
+historical cycles and restore targets. Trigger mutations share the same guard.
 Workflow interaction tests pass; visual browser acceptance remains outstanding.
 
 ### `trigger-history`

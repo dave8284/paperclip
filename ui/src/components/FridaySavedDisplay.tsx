@@ -26,9 +26,9 @@ function AuthorizedDisplay({ document, scope, companyNames, navigate }: Props) {
   if (current.error) return <p role="alert" className="text-sm text-destructive">Saved display unavailable: {current.error.message}</p>;
   const display = current.data && current.data.key === document.key ? scopedFridaySavedDisplay(current.data, scope) : null;
   if (!display) return <Unavailable />;
-  return <DisplayTable key={`${current.data!.latestRevisionId}:${JSON.stringify(display)}`} document={current.data!} display={display} companyName={companyNames[display.companyId] ?? "Company"} navigate={navigate} />;
+  return <DisplayContent key={`${current.data!.latestRevisionId}:${JSON.stringify(display)}`} document={current.data!} display={display} companyName={companyNames[display.companyId] ?? "Company"} navigate={navigate} />;
 }
-function DisplayTable({ document, display, companyName, navigate }: { document: IssueDocument; display: Display; companyName: string; navigate: Props["navigate"] }) {
+function DisplayContent({ document, display, companyName, navigate }: { document: IssueDocument; display: Display; companyName: string; navigate: Props["navigate"] }) {
   const [offset, setOffset] = useState(0);
   useEffect(() => {
     setFridayDisplaySelection(display.companyId, "canvas", { displayKey: document.key, source: display.source,
@@ -44,6 +44,9 @@ function DisplayTable({ document, display, companyName, navigate }: { document: 
   const projects = data?.projects.filter(project => !display.projectId || project.id === display.projectId) ?? [];
   const tasks = data?.tasks.filter(task => !display.projectId || task.projectId === display.projectId) ?? [];
   const rows = display.source === "tasks" ? tasks : projects;
+  const groupedTasks = new Map<string, typeof tasks>();
+  for (const task of tasks.slice(0, display.limit)) groupedTasks.set(task.status, [...(groupedTasks.get(task.status) ?? []), task]);
+  const taskGroups = [...groupedTasks];
   const next = data && (display.source === "tasks" ? data.nextOffset : projects.length > display.limit ? offset + display.limit : data.nextProjectOffset);
   const open = (projectId?: string | null, taskId?: string) => navigate({ panel: "work", scope: "company", companyId: display.companyId, projectId: projectId ?? undefined, taskId, mode: "combined" });
   return <div className="space-y-4">
@@ -51,10 +54,15 @@ function DisplayTable({ document, display, companyName, navigate }: { document: 
     {work.isFetching && <p role="status" className="text-sm text-muted-foreground">Reading current {display.source}…</p>}
     {work.error && <p role="alert" className="text-sm text-destructive">Current data unavailable: {work.error.message}</p>}
     {data && <>
-      <div className="agentos-employee-table-wrap"><table className="agentos-employee-table"><caption className="sr-only">{display.title}</caption><thead><tr><th>{display.source === "tasks" ? "Task" : "Project"}</th><th>Status</th>{display.source === "tasks" && <><th>Project</th><th>Priority</th></>}<th><span className="sr-only">Open record</span></th></tr></thead><tbody>
+      {display.kind === "table" && <div className="agentos-employee-table-wrap"><table className="agentos-employee-table"><caption className="sr-only">{display.title}</caption><thead><tr><th>{display.source === "tasks" ? "Task" : "Project"}</th><th>Status</th>{display.source === "tasks" && <><th>Project</th><th>Priority</th></>}<th><span className="sr-only">Open record</span></th></tr></thead><tbody>
         {display.source === "tasks" ? tasks.slice(0, display.limit).map(task => <tr key={task.id}><td>{task.title}<small>{task.identifier}</small></td><td>{task.status.replaceAll("_", " ")}</td><td>{projects.find(project => project.id === task.projectId)?.name ?? (task.projectId ? "Project" : "No project")}</td><td>{task.priority}</td><td><Button size="sm" variant="ghost" onClick={() => open(task.projectId, task.id)}>Open task</Button></td></tr>)
           : projects.slice(0, display.limit).map(project => <tr key={project.id}><td>{project.name}</td><td>{project.status.replaceAll("_", " ")}</td><td><Button size="sm" variant="ghost" onClick={() => open(project.id)}>Open project</Button></td></tr>)}
-      </tbody></table></div>
+      </tbody></table></div>}
+      {display.kind === "list" && <ul aria-label={display.title} className="space-y-2">
+        {display.source === "tasks" ? tasks.slice(0, display.limit).map(task => <li key={task.id}><button type="button" className="friday-work-task w-full text-left" onClick={() => open(task.projectId, task.id)}><span>{task.title}<small className="block text-muted-foreground">{task.identifier}</small></span><span className="text-xs text-muted-foreground">{task.status.replaceAll("_", " ")} · {task.priority}</span></button></li>)
+          : projects.slice(0, display.limit).map(project => <li key={project.id}><button type="button" className="friday-work-task w-full text-left" onClick={() => open(project.id)}><span>{project.name}</span><span className="text-xs text-muted-foreground">{project.status.replaceAll("_", " ")}</span></button></li>)}
+      </ul>}
+      {display.kind === "board" && <section aria-label={display.title} className="space-y-3"><p className="text-xs text-muted-foreground">Task board · statuses on this page. Open a task to change its status.</p><div className="grid gap-4 md:grid-cols-3">{taskGroups.map(([status, group]) => <section key={status} className="space-y-3 rounded-lg border p-4" aria-label={`${status.replaceAll("_", " ")} tasks`}><h3 className="text-sm font-medium">{status.replaceAll("_", " ")} · {group.length}</h3>{group.map(task => <button key={task.id} type="button" className="w-full rounded-lg border bg-background p-3 text-left text-sm" onClick={() => open(task.projectId, task.id)}><span className="block font-medium">{task.title}</span><span className="mt-2 block text-xs text-muted-foreground">{task.identifier} · {task.priority}</span></button>)}</section>)}</div></section>}
       {!rows.length && <p className="agentos-empty">No {display.source} in this saved display's scope.</p>}
       <div className="flex items-center justify-between gap-3"><Button size="sm" variant="outline" disabled={!offset} onClick={() => setOffset(Math.max(0, offset - display.limit))}>Previous page</Button><span className="text-xs text-muted-foreground">{Math.min(rows.length, display.limit)} {display.source} on this page</span><Button size="sm" variant="outline" disabled={next == null} onClick={() => setOffset(next!)}>Next page</Button></div>
       <p className="agentos-record-note">Observed {new Date(data.observedAt).toLocaleString()}. Current authorized data; each open or resume reads it again.</p>

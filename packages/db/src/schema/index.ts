@@ -270,3 +270,6 @@ export { companyOperatingProfiles } from "./company_operating_profiles.js";
 export { agentosPortfolios, agentosPortfolioCompanies, agentosEmployees, agentosAssignments } from "./agentos_workforce.js";
 export * from "./agentos_departments.js";
 export { companyPerformanceReports } from "./company_performance.js";
+export * from "./agentos_capabilities.js";
+export * from "./agentos_portfolio_mandates.js";
+export * from "./ai_execution_capacity.js";

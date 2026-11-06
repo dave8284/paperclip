@@ -17,6 +17,7 @@ import {
   readNativeReviewAssignmentContext,
 } from "../native-runtime/native-review-participant.js";
 import { buildNativeReviewRequest } from "../native-runtime/native-review-prompt.js";
+import { retainEgmReviewPreparation } from "../native-runtime/egm-review-packets.js";
 import { buildNativeReviewContextReceipt, restoreNativeReviewContextReceipt } from "../native-runtime/native-review-context-receipt.js";
 import type { CaseExecutionContext } from "../case-context.js";
 import type { buildExecutionContinuation } from "../execution-continuation.js";
@@ -284,6 +285,11 @@ export async function selectHeartbeatRuntime(db: Db, input: HeartbeatRuntimeSele
       contextSnapshot: nativeReviewContext,
     })) : null;
     if (nativeReviewContext && !nativeReview) throw new Error("native_review_assignment_no_longer_available");
+    if (nativeReview && await retainEgmReviewPreparation(db, run.id, nativeReview)) {
+      throw new ConfigurationIncompleteFailure("The frozen EGM packet is prepared. Independent review execution is unavailable until this runtime enforces packet-only context and tools.", {
+        configurationIncomplete: { reason: "independent_review_unavailable", actionUrl: `/issues/${issueRef.id}` },
+      });
+    }
     const nativeReviewRequest = nativeReview
       ? buildNativeReviewRequest({
           title: nativeReview.interaction.title,

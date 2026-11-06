@@ -1,4 +1,4 @@
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import { agents, companySkillPolicies, principalPermissionGrants } from "@paperclipai/db";
 import {
@@ -20,6 +20,12 @@ export type SkillPolicyPrincipal = {
   id: string;
   role: string | null;
 };
+
+// Callers that atomically import/select governed skills hold this same fence
+// through commit, including when no policy row exists yet.
+export async function lockCompanySkillPolicy(tx: Db, companyId: string) {
+  await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`company-skill-policy:${companyId}`}, 0))`);
+}
 
 const OPEN_DEFAULT_POLICY: EffectiveSkillPolicy = {
   schemaVersion: 1,
@@ -194,6 +200,7 @@ export function companySkillPolicyService(db: Db) {
   }) {
     return db.transaction(async (tx) => {
       const transactionDb = tx as unknown as Db;
+      await lockCompanySkillPolicy(transactionDb, input.companyId);
       const policy = skillPolicyDocumentSchema.parse(input.policy);
       const existing = await tx
         .select()

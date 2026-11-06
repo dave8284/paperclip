@@ -28,6 +28,39 @@ with user/agent/task/project attribution and no heartbeat receipt linkage. Unkno
 billing retains its reservation until correction; agent deletion cannot erase
 that hold. See [accounting behavior](../../doc/prompt-injection-prevention.md).
 
+## `shared-execution-capacity`
+
+Capability ID: `budgets-costs/shared-execution-capacity`.
+
+Review: `baseline`.
+
+API: `present` — `GET /api/instance/ai-execution-capacity` and
+`POST /api/instance/ai-execution-capacity`.
+
+Agent access: `restricted` — instance administrator board only. Current access
+to every old and new bound company is required for changes. An agent's name,
+role, subscription plan or task does not authorize configuration or membership.
+
+Policy: Groups are explicit private administrative configuration. Company
+billing identities remain unchanged. Admission uses durable run claims under a
+group lock before the normal budget/dispatch gate. Native AI selection rechecks
+the original responsible user, grant audience, installation, account, policy and
+prepared credential generation after waiting. Only verified execution cleanup
+releases admitted claims; elapsed time and terminal status alone cannot.
+Company-local task projections expose the wait without other companies' work.
+
+Evidence: `source-only` — [routes](../../server/src/routes/ai-execution-capacity.ts),
+[service](../../server/src/services/ai-execution-capacity.ts) and native heartbeat
+integration. No automatic grouping or production policy is installed.
+
+Verification: `not-run` for actual database/provider/board journeys. Focused
+component and controlled lifecycle tests are separate from live concurrency,
+revocation, Stop and restart qualification.
+
+Gaps: Host credential paths without a managed connection and unbound managed
+connections are outside these configured groups. Operational concurrency does
+not establish the provider's actual quota or entitlement.
+
 ## `cost-reporting`
 
 Capability ID: `budgets-costs/cost-reporting`.
@@ -96,6 +129,15 @@ quality pass.
 Gaps: The report limits the last 30 days to 100 model/task groups and 50 recent
 runs. Review lookup uses the latest 100 evaluation records; no match is unknown.
 It does not qualify System One accuracy or independent reviewer isolation.
+Native interactive conversation identity skips local shadow inference before
+dispatch, recording `interactive_conversation` with no execution/timing claim.
+This does not change actor authority, selected profiles or ordinary task review.
+Current-account model entitlement qualification is not implemented. Native
+selection records the operator-configured attempt and explicitly marks account
+model access unverified; historical usage and global catalogs never admit an
+automatic alternative. Native connection authority checks still apply before
+dispatch. Existing resumed sessions remain untouched; legacy queued alternative
+requests fail for explicit review instead of silently changing model/account.
 
 ## `budgets`
 

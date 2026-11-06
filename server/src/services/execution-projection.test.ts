@@ -39,6 +39,10 @@ const project = (
 ) => projectExecution(r, c, pending, undefined, now);
 
 describe("execution truth projection", () => {
+  it("distinguishes a saved capacity wait from provider execution", () => {
+    expect(projectExecution(run({ contextSnapshot: { aiCapacityWait: { warningAt: now.toISOString() } } }), undefined, [], undefined, now))
+      .toMatchObject({ phase: "queued", label: "Waiting for AI capacity", nextAction: expect.stringContaining("provider work has not started") });
+  });
   it("keeps cleanup quarantine visible without a coordinator or recovery row", () => {
     const stopped = run({ id: "stopped", status: "failed", errorCode: "native_session_cleanup_quarantined" });
     expect(projectExecution(stopped, undefined, [], undefined, now)).toMatchObject({

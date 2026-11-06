@@ -12,6 +12,18 @@ import { logger } from "../middleware/logger.js";
 type Who = Pick<LogActivityInput, "actorType" | "actorId" | "agentId" | "runId">;
 type Portfolio = typeof agentosPortfolios.$inferSelect;
 
+/** A request can wait behind an accounting/agent lock after authentication.
+ * Re-read local account state; attested cloud elevation retains its native
+ * source semantics, while local database elevation must still exist. */
+export async function refreshWorkforceBoardActor(db: Db, actor: AuthorizationActor): Promise<AuthorizationActor> {
+  if (actor.type !== "board" || actor.source === "local_implicit") return actor;
+  const [user] = await db.select({ approvalStatus: authUsers.approvalStatus }).from(authUsers).where(eq(authUsers.id, actor.userId ?? ""));
+  if (user?.approvalStatus !== "approved") throw forbidden("An approved portfolio owner is required");
+  const [admin] = actor.source === "cloud_tenant" || actor.source === "mcp_oauth" ? []
+    : await db.select({ id: instanceUserRoles.id }).from(instanceUserRoles).where(and(eq(instanceUserRoles.userId, actor.userId ?? ""), eq(instanceUserRoles.role, "instance_admin")));
+  return { ...actor, memberships: undefined, isInstanceAdmin: actor.source === "cloud_tenant" ? actor.isInstanceAdmin : !!admin };
+}
+
 export function agentosWorkforceService(db: Db) {
   function ownerId(actor: AuthorizationActor) {
     if (actor.type !== "board") throw forbidden("Portfolio ownership requires an operator");
@@ -21,6 +33,7 @@ export function agentosWorkforceService(db: Db) {
   }
 
   async function companyAccess(connection: Db, actor: AuthorizationActor, companyId: string, manage = false) {
+    actor = await refreshWorkforceBoardActor(connection, actor);
     let effectiveActor = actor;
     if (actor.type === "none" || (actor.type === "agent" && (actor.companyId !== companyId || (actor.keyScope && actor.keyScope.kind !== "standard")))) return false;
     // Recheck membership from durable state. Portfolio links are not grants.
@@ -46,6 +59,7 @@ export function agentosWorkforceService(db: Db) {
   }
 
   async function companyStaffingAuthority(connection: Db, actor: AuthorizationActor, companyId: string) {
+    actor = await refreshWorkforceBoardActor(connection, actor);
     // A request may already have resolved a responsible-user snapshot before
     // waiting for a database lock. Staffing always uses the current rows.
     actor = { ...actor, onBehalfOfMemberships: undefined };
@@ -204,6 +218,26 @@ export function agentosWorkforceService(db: Db) {
   }
 
   return {
+    // Capability publication/adoption uses the same owner and live company
+    // grants as workforce administration. The callback stays inside the lock
+    // and accounting transaction; it cannot substitute a portfolio identity
+    // for a native target-company principal.
+    async mutateCapabilities<T>(actor: AuthorizationActor, portfolioId: string, companyId: string, targetAgentId: string,
+      operation: (tx: Db, publications: ActivityPublication[], owner: Portfolio) => Promise<T>) {
+      ownerId(actor);
+      return withAccountingTransaction(db, companyId, async (tx, publications) => {
+        await lockCompanyStaffingAuthority(tx, actor, companyId, portfolioId, targetAgentId);
+        const owner = await portfolio(tx, actor, portfolioId, true);
+        if (!(await companyAccess(tx, actor, companyId, true))) throw notFound("Company workforce not found");
+        const [linked] = await tx.select({ id: agentosPortfolioCompanies.id }).from(agentosPortfolioCompanies)
+          .where(and(eq(agentosPortfolioCompanies.portfolioId, portfolioId), eq(agentosPortfolioCompanies.companyId, companyId)));
+        if (!linked) throw notFound("Company workforce not found");
+        return operation(tx, publications, owner);
+      }).catch(error => {
+        if ((error?.cause?.code ?? error?.code) === "55P03") throw conflict("Capability authority is changing. Retry the request.", { retryable: true });
+        throw error;
+      });
+    },
     async readCompany(actor: AuthorizationActor, companyId: string) {
       const authorized = await companyStaffingAuthority(db, actor, companyId);
       const rows = await db.select({ assignment: agentosAssignments, employee: {

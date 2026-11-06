@@ -9,6 +9,25 @@ The current implementation target is V1 and is defined in `doc/SPEC-implementati
 
 ## 2. Read This First
 
+### AgentOS continuation after a new session or interruption
+
+For AgentOS build/fix work, use the existing feature worksheet and execution
+records as the continuation reference. Do not restart discovery, replace the
+backlog, or ask the owner to repeat settled requirements:
+
+1. Read [`doc/plans/2026-11-03-agentos-requirements-reconciliation.md`](doc/plans/2026-11-03-agentos-requirements-reconciliation.md)
+   for the stable requirement IDs, accepted choices and original chat references.
+2. Read [`doc/plans/2026-11-06-agentos-completion-ledger.md`](doc/plans/2026-11-06-agentos-completion-ledger.md)
+   for the current execution checkpoint, unfinished work, evidence and unresolved inputs.
+3. Follow the linked per-feature records only for the next affected requirement.
+   Check Git status and any still-running workers before repeating or editing work.
+4. Continue the next unfinished, unblocked item. Update these existing records
+   with the requirement ID, changed files, actual checks and remaining acceptance.
+   Source implementation, loaded runtime and real user acceptance are separate.
+5. Use saved conversation history to resolve a specific missing detail, rather
+   than rebuilding the entire requirements inventory on every restart. Retain
+   explicit deferrals and do not treat unanswered questions as approval.
+
 Before making changes, read in this order:
 
 1. `doc/GOAL.md`

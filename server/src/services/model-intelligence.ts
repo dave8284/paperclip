@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
-import { and, desc, eq, gte, lte, sql } from "drizzle-orm";
+import { and, desc, eq, lte, sql } from "drizzle-orm";
 import { agents, agentInstructionHeads, companyOperatingProfiles, costEvents, heartbeatRuns, issues, type Db } from "@paperclipai/db";
 import { agentHarnessType, type AiConnectionAttribution, type AiConnectionBinding, type ModelTriageReceipt } from "@paperclipai/shared";
 import { models as codexModels } from "@paperclipai/adapter-codex-local";
@@ -23,10 +23,10 @@ export function modelIntelligenceProduct() {
 const fingerprint = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
 export const classifyModelWork = classifyWork;
 
-/** Local product integration at execution-configuration admission. Only observed
- * subscription models in the current harness qualify as alternative candidates.
- * Managed account admission rechecks credential access and configuration;
- * it does not reserve subscription capacity or prove model entitlement. */
+/** Local product integration at execution-configuration admission. Record the
+ * operator-configured profile, subject to native managed-account admission.
+ * Historical usage and the harness catalog do not prove current-account model
+ * access. Automatic alternatives require a qualification owner not yet present. */
 export async function selectCompanyModelProfile(db: Db, input: {
   runId: string; issueId: string | null; agent: typeof agents.$inferSelect;
   config: Record<string, unknown>; binding?: AiConnectionBinding; resumed: boolean;
@@ -38,25 +38,27 @@ export async function selectCompanyModelProfile(db: Db, input: {
   if (!["codex_local", "claude_local"].includes(harness) || typeof config.model !== "string" || !config.model) return { config };
   const [profile] = await db.select().from(companyOperatingProfiles).where(eq(companyOperatingProfiles.companyId, agent.companyId)).limit(1);
   if (!profile) return { config };
-  const [task] = await db.select({ title: issues.title, description: issues.description }).from(issues).where(and(eq(issues.id, input.issueId), eq(issues.companyId, agent.companyId))).limit(1);
+  const [task] = await db.select({ title: issues.title, description: issues.description,
+    conversationAgentId: issues.conversationAgentId, conversationUserId: issues.conversationUserId,
+  }).from(issues).where(and(eq(issues.id, input.issueId), eq(issues.companyId, agent.companyId))).limit(1);
   if (!task) throw notFound("Model routing task not found");
   const provider = harness === "codex_local" ? "openai" : "anthropic";
   if (binding.provider !== provider || binding.method !== "subscription") return { config };
-  const supported = harness === "codex_local" ? codexModels : claudeModels;
-  const observations = await db.selectDistinct({ model: costEvents.model }).from(costEvents)
-    .where(and(eq(costEvents.companyId, agent.companyId), eq(costEvents.agentId, agent.id), eq(costEvents.provider, provider), eq(costEvents.billingType, "subscription_included"), gte(costEvents.occurredAt, new Date(Date.now() - 30 * 86400000)))).limit(100);
   const instructionHeads = await db.select({ file: agentInstructionHeads.entryFile, revisionId: agentInstructionHeads.revisionId }).from(agentInstructionHeads).where(and(eq(agentInstructionHeads.companyId, agent.companyId), eq(agentInstructionHeads.agentId, agent.id))).orderBy(agentInstructionHeads.entryFile).limit(100);
   // Match the effective effort used by the native Codex and Claude profiles.
   const instructionHash = fingerprint({ revisions: instructionHeads, instructions: agent.adapterConfig.instructionsFilePath ?? null, prompt: agent.adapterConfig.promptTemplate ?? null, effort: config.modelReasoningEffort ?? config.reasoningEffort ?? config.effort ?? null });
   const id = (model: string) => `${harness}:${model}:${instructionHash.slice(0, 16)}`;
   const explicitOverride = typeof agent.adapterConfig.model === "string" && agent.adapterConfig.model !== config.model;
-  const candidates = [...new Set([config.model, ...(!explicitOverride && instructionHeads.length ? observations.map(row => row.model).filter(model => supported.some(entry => entry.id === model)) : [])])].map(model => ({ id: id(model), provider, model, method: "subscription" as const, available: true as const }));
+  // The independent engine's available flag admits this configured attempt; it
+  // is not a provider entitlement assertion. Until an account-bound qualification
+  // receipt exists, learning cannot replace the configured model automatically.
+  const candidates = [{ id: id(config.model), provider, model: config.model, method: "subscription" as const, available: true as const }];
   const request: SelectionInput = { namespace: agent.companyId, requestId: input.runId,
     taskKey: `${input.issueId}:${agent.id}${explicitOverride ? `:override:${config.model}` : ""}`, ...classifyModelWork(task.title, task.description),
-    defaultCandidateId: id(config.model), candidates, contextFingerprint: fingerprint(task), promptFingerprint: instructionHash };
+    defaultCandidateId: id(config.model), candidates, contextFingerprint: fingerprint({ title: task.title, description: task.description }), promptFingerprint: instructionHash };
   // Freeze the request before calling the independent store. A credential-wait retry
-  // must replay the same candidate/context snapshot, even when new model usage
-  // is observed meanwhile. The native row also bridges a crash between stores.
+  // must replay the same candidate/context snapshot. The native row also bridges
+  // a crash between stores. Legacy alternative candidates require explicit review.
   const [admission] = await db.update(heartbeatRuns).set({ contextSnapshot: sql`
     coalesce(${heartbeatRuns.contextSnapshot}, '{}'::jsonb) || case
       when ${heartbeatRuns.contextSnapshot} #>> '{modelIntelligenceRequest,requestId}' = ${input.runId} then '{}'::jsonb
@@ -72,10 +74,12 @@ export async function selectCompanyModelProfile(db: Db, input: {
     runId: input.runId, taskId: input.issueId, agentId: agent.id, title: task.title, description: task.description,
     candidates: frozen.candidates.map(candidate => ({ id: candidate.id, label: `${candidate.provider} / ${candidate.model}` })),
     selectedCandidateId: receipt.candidate.id,
-  });
+  }, { interactiveConversation: Boolean(task.conversationAgentId && task.conversationUserId) });
   // Selection and shadow observations are retained together before execution.
   // Triage never changes the selected profile or claims an independent review.
-  await db.update(heartbeatRuns).set({ contextSnapshot: sql`coalesce(${heartbeatRuns.contextSnapshot}, '{}'::jsonb) || ${JSON.stringify({ modelIntelligence: receipt, modelTriage: triage })}::jsonb` }).where(and(eq(heartbeatRuns.id, input.runId), eq(heartbeatRuns.companyId, agent.companyId)));
+  await db.update(heartbeatRuns).set({ contextSnapshot: sql`coalesce(${heartbeatRuns.contextSnapshot}, '{}'::jsonb) || ${JSON.stringify({ modelIntelligence: receipt, modelTriage: triage,
+    modelIntelligenceQualification: { mode: "configured_only", source: "operator_configuration", accountModelAccess: "not_verified", automaticAlternatives: "current_account_qualification_required" },
+  })}::jsonb` }).where(and(eq(heartbeatRuns.id, input.runId), eq(heartbeatRuns.companyId, agent.companyId)));
   return { config: { ...config, model: receipt.candidate.model }, receipt, request: frozen, triage };
 }
 

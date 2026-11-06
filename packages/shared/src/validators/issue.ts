@@ -1,6 +1,7 @@
 import { CHAT_PROVIDERS } from "../types/chat-channels.js";
 import { taskWorkspaceSelectionSchema } from "./task-workspace.js";
 import { z } from "zod";
+import { egmPacketBindingSchema } from "../egm-review-packet.js";
 import { ISSUE_SUMMARIES_MAX_IDS } from "../constants.js";
 
 import {
@@ -1628,6 +1629,7 @@ export const requestConfirmationPayloadSchema = z.object({
   target: requestConfirmationTargetSchema.nullable().optional(),
   toolAction: requestConfirmationToolActionPayloadSchema.optional(),
   secretProposal: requestConfirmationSecretProposalPayloadSchema.optional(),
+  egmPacketPreparation: egmPacketBindingSchema.optional(),
 });
 
 export const requestCheckboxConfirmationOptionSchema = z.object({

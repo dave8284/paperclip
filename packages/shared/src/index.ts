@@ -2856,3 +2856,7 @@ export * from "./agentos-departments.js";
 export * from "./company-performance.js";
 export * from "./model-triage.js";
 export * from "./friday-diagnostics.js";
+export * from "./agentos-capabilities.js";
+export * from "./agentos-portfolio-mandates.js";
+export * from "./ai-execution-capacity.js";
+export * from "./egm-review-packet.js";

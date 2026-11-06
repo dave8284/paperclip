@@ -14,6 +14,9 @@ const configurationTransactionCallers = new Set([
   "modules/external-agents/muse.ts", "modules/external-agents/dot.ts",
   "services/secret-proposals.ts", "services/connection-intents.ts", "services/dot-runner-broker.ts",
   "services/public-mcp/oauth.ts", "services/agent-profile-avatar.ts", "services/agent-instruction-revisions.ts", "services/company-skills.ts",
+  // Reviewed adoption/rollback atomically commits the native skill version pin,
+  // configuration revision and company decision/audit in its caller-owned tx.
+  "services/agentos-capabilities.ts",
 ]);
 
 function normalizedRelative(from, to) {

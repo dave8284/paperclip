@@ -32,12 +32,14 @@ Open `/decisions`, then a queue at `/decisions/queues/:key` and its source item.
 
 ### `search`
 
-Open `/search` or the navigation search entry. Search across tasks, comments,
+Open `/search` or the navigation search entry. Search across tasks, conversations, comments,
 documents, artifacts, employees, projects and routines; the Routines tab opens
 matching native routine definitions. Routine search accepts project, employee
 assignee, priority and updated-time filters. Task statuses, human assignees and
 task labels do not match routine definitions. An empty routine query does not
-list the whole company.
+list the whole company. The Conversations scope narrows the native task/comment/document
+search to persistent agent chats with the same authorization, snippets and source links.
+It does not index provider sessions or copy transcripts.
 
 ### `toasts`
 

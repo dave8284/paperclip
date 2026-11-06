@@ -1668,6 +1668,7 @@ async function startServerWithDatabaseTeardown(
         }
 
         const promotion = await timeStartupRecovery("scheduled_retries", () => heartbeat.promoteDueScheduledRetries());
+        await timeStartupRecovery("ai_execution_capacity", () => heartbeat.reconcileAiExecutionCapacity());
         await timeStartupRecovery("queued_runs", () => heartbeat.resumeQueuedRuns());
         const recoveredGoalActions = await timeStartupRecovery("goal_actions", () => heartbeat.recoverPendingSessionGoalActions());
         if (

@@ -131,7 +131,9 @@ broader search. The existing company search now includes `scope=routines` and
 routine results in `scope=all`; result links identify the native routine record.
 This does not add an API proxy or broaden the actor's admission.
 
-Policy: Company access and `company_scope:read` admission precede search. Existing
+Policy: Company access and `company_scope:read` admission precede search.
+`scope=conversations` narrows that existing task/comment/document search to
+persistent agent chats; it retains native task privacy and grants no new access. Existing
 native issue/project SQL uses the actual actor and its responsible/authorizing
 user intersection. Routine discovery is company-scoped and additionally requires
 readability of an attached project and parent task before ranking, counts, facets

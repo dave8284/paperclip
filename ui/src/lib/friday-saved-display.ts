@@ -3,7 +3,7 @@ import { fridayViewSchema, type IssueDocument } from "@paperclipai/shared";
 /** Presentation data only. Native APIs retain authorization and query ownership. */
 export interface FridaySavedDisplay {
   version: 1;
-  kind: "table";
+  kind: "table" | "list" | "board";
   title: string;
   source: "tasks" | "projects";
   companyId: string;
@@ -25,7 +25,8 @@ export function parseFridaySavedDisplay(body: string): FridaySavedDisplay | null
   try {
     const value = JSON.parse(body);
     if (!value || typeof value !== "object" || Array.isArray(value) || Object.keys(value).some(key => !fields.has(key))) return null;
-    if (value.version !== 1 || value.kind !== "table" || !["tasks", "projects"].includes(value.source)) return null;
+    if (value.version !== 1 || !["table", "list", "board"].includes(value.kind) || !["tasks", "projects"].includes(value.source)) return null;
+    if (value.kind === "board" && value.source !== "tasks") return null;
     if (typeof value.title !== "string" || !value.title.trim() || value.title.length > 120) return null;
     if (typeof value.companyId !== "string" || !fridayViewSchema.shape.companyId.safeParse(value.companyId).success) return null;
     if (value.projectId !== undefined && (typeof value.projectId !== "string" || !fridayViewSchema.shape.projectId.safeParse(value.projectId).success)) return null;

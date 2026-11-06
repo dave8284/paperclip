@@ -180,3 +180,13 @@ view. Saving research uses existing revision-protected task documents and the
 same company/task/project authorization; tagging a record grants no access.
 The focused folder/pagination/detail UI check passed; browser and real stored
 record acceptance remain separate.
+
+After an access refresh fails, Friday's file browser hides cached project/file
+names and any selected detail. Selection resolves against the current authorized
+list, so a file removed by a successful refresh is no longer displayed. Document
+and attachment detail reads also withhold cached content, history and links after
+failure; Retry restores only successfully reread content. The
+[access-refresh regressions](../../ui/src/components/AgentOSArtifactAccess.test.tsx)
+and existing folder behavior check pass (seven checks, 6 November). These use
+controlled query responses; real stored authorization and browser acceptance
+remain separate.

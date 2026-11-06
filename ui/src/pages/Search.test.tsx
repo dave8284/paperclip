@@ -496,6 +496,16 @@ describe("Search page", () => {
     flushSync(() => root.unmount());
   });
 
+  it("opens a conversation search without widening it back to all company work", async () => {
+    searchApiMock.search.mockResolvedValue(emptyResponse({ query: "followup", normalizedQuery: "followup", scope: "conversations" }));
+    const { root } = renderSearch("/search?q=followup&scope=conversations", container);
+    await waitForAssertion(() => {
+      expect(searchApiMock.search).toHaveBeenCalledWith("company-1", expect.objectContaining({ q: "followup", scope: "conversations" }));
+      expect(container.textContent).toContain("Conversations");
+    });
+    flushSync(() => root.unmount());
+  });
+
   it("hides cached results and counts after a refresh loses search access", async () => {
     searchApiMock.search.mockResolvedValue({ query: "weekly", normalizedQuery: "weekly", scope: "routines", limit: 20, offset: 0,
       sort: "relevance", countsByType: { issue: 0, comment: 0, document: 0, artifact: 0, agent: 0, project: 0, routine: 1 },

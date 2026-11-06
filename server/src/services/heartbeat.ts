@@ -1,4 +1,5 @@
 import { DELIVERY_QUEUES } from "./delivery-work-notifications.js";
+import { aiExecutionCapacityService } from "./ai-execution-capacity.js";
 import { writeExecutionControl } from "./execution-control-notifications.js";
 import { readFreshWorkspaceReadiness } from "./fresh-workspace-continuation.js";
 import { promptInjectionPreventionService } from "./prompt-injection-prevention.js";
@@ -2762,6 +2763,7 @@ export function heartbeatService(
         { dispatched: true; resultPromise: Promise<T> } | { dispatched: false }
       > => {
         await controllerLease.assertOwned("dispatching");
+        if (managedAiRuntime) await managedAiRuntime.assertCurrent();
         // Recheck after preparation. The final locked gate commits a dispatch
         // claim before entering adapter bootstrap or contacting a provider.
         await authorizeFailedChatRetryExecution();
@@ -2820,6 +2822,12 @@ export function heartbeatService(
       const dispatchResolvedInteractionContinuationWithAtomicGate = async <T>(
         dispatch: (markDispatchStarted: () => void) => Promise<T>,
       ) => {
+        if (managedAiRuntime) {
+          await measureRunPhase("execution.capacity_wait", () => aiExecutionCapacityService(db).acquire({
+            runId: run.id, companyId: run.companyId, attribution: managedAiRuntime!.attribution,
+            interactive: Boolean(issueContext?.conversationAgentId === agent.id), signal: executionControl.controller.signal,
+          }));
+        }
         // Admission can wait for accounting locks. Finish that wait before the
         // final ownership gate, whose callback must enter the adapter directly.
         const reservation = await measureRunPhase("execution.budget_reservation", () =>
@@ -3890,9 +3898,15 @@ export function heartbeatService(
       }
       if (caseHandoffCleanupSettled && latestRun && !nativeSessionResumeScheduled && !nativeWorkspaceFinalizeScheduled &&
           !nativeOwnershipHeld && isHeartbeatRunTerminalStatus(latestRun.status)) {
+        await aiExecutionCapacityService(db).releaseSettled(run.id, run.companyId, true).catch(error =>
+          logger.warn({ runId: run.id, error }, "Settled AI capacity release remains pending"));
         const handoff = await pendingCaseHandoffForRun(db, run.id);
         if (handoff) await recordCaseHandoffExecutionReleased(db, run.id, handoff.issueId);
       }
+      // A cancelled waiter never entered a provider. Admitted reservations are
+      // deliberately retained by this call until the settled boundary above.
+      await aiExecutionCapacityService(db).releaseSettled(run.id, run.companyId, false).catch(error =>
+        logger.warn({ runId: run.id, error }, "AI capacity waiter cleanup remains pending"));
       // Terminalization precedes lease and adapter cleanup. Only now is the
       // owner gone; retry pending input for ordinary completions as well as Stop.
       if (latestRun?.runtimeMode === "legacy" && ["failed", "timed_out"].includes(latestRun.status) &&
@@ -4083,6 +4097,7 @@ export function heartbeatService(
     retryScheduledRetryNow,
 
     resumeQueuedRuns,
+    reconcileAiExecutionCapacity: () => aiExecutionCapacityService(db).reconcile(),
 
     resumeQueuedRunsForAgent: async (companyId: string, agentId: string) => {
       const agent = await getAgent(agentId);

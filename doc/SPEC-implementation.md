@@ -1,5 +1,28 @@
 # Paperclip V1 Implementation Spec
 
+AgentOS knowledge/routine refinement (2026-11-06): the loop editor saves project
+and parent-objective relationships through existing revision checks. Direct
+routine reads and mutations retain native project/task authorization; historical
+cycles also authorize their recorded definition and linked task. Hidden history
+does not contribute visible aggregate timestamps. Since annotation anchors lack
+an original routine-scope revision, annotation access requires complete readable
+scope history rather than guessed provenance. `scope=conversations` narrows the
+existing company-search pipeline to persistent native chats. Version-1 saved
+display descriptors accept registered `table`, `list` and task-only `board`
+presentations; source access, fresh reads and cancellation remain native. These
+data-only views do not authorize generated code or privileged component release.
+
+The native EGM packet endpoint prepares exact same-task document revisions for a
+named reviewer before author result admission, with bounded content, server
+digests, native assignment linkage and a reviewer-run preparation receipt.
+Initial revision checks share document locks; preparation/clear share native
+finalization and run locks. Current creator/run/responsible-user/authorizer
+ceilings and document access are rechecked; original company/key limits are
+retained without cached grants. Clear requires its receipt before binding;
+bound requests use native cancellation. Marked requests stop before provider
+dispatch with `independent_review_unavailable`. No isolated execution, observed
+delivery or automatic lesson promotion is claimed.
+
 Status: Implementation contract for first release (V1)
 Date: 2026-04-28
 Audience: Product, engineering, and agent-integration authors
@@ -2608,3 +2631,30 @@ in their own company. Retirement affects one assignment and uses native lifecycl
 controls. Portfolio links never grant access. See the [workforce access contract](../maps/agent-access-map/workforce.md)
 for the implemented operator surface and outstanding agent delegation work.
 The upstream implementation contract otherwise remains in force.
+
+Manual capability releases now extend that operator surface: a portfolio owner
+publishes deliberately sanitized Markdown from an exact tested native skill
+version with explicit reviewed acceptance. Each company separately adopts,
+refuses or rolls back; native company policy/configuration authority remains
+required. Adoption imports a local immutable version and commits its exact
+selection, configuration revision, decision and audit atomically. Refusal changes
+no selection. Rollback selects a previously adopted immutable version. Shared
+release views omit originating private evidence. Existing run snapshots remain
+unchanged and adopted pins survive experimental UI setting changes. This source
+slice supports skills-capable Paperclip Runner agents; automatic learning and
+delegated portfolio decisions remain separate, unimplemented work. See the
+[capability implementation and evidence](plans/2026-11-04-agentos-capability-adoption.md)
+for pending database/runtime acceptance.
+
+The fork's explicit portfolio read mandate is a separate source-company gateway,
+not a widened native company-key boundary. Owner controls require the current
+native permission-management authority in each selected linked company. A native
+workforce:portfolio_read grant must exactly match the stored owner, source agent,
+company set, action, revision, scope and expiry. Every gateway read revalidates
+the real actor and current responsible/external-authorizer ceilings under locks.
+Native Friday SQL projection excludes private ancestry/projects before counts
+even during privacy shadow mode; only bounded project/task summaries are returned.
+There are no automatic grants or supported private scope. Native source-company
+audit records retain grant revisions, revocations and successful read events.
+Migration 0390 is source-only until explicitly activated; see the
+[mandate implementation log](plans/2026-11-06-agentos-portfolio-read-mandates.md).

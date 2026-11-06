@@ -62,6 +62,7 @@ const SCOPE_LABELS: Record<CompanySearchScope, string> = {
   issues: "Tasks",
   comments: "Comments",
   documents: "Documents",
+  conversations: "Conversations",
   artifacts: "Artifacts",
   agents: "Agents",
   projects: "Projects",
@@ -480,6 +481,7 @@ export function Search() {
       else if (value === "agents") count = counts.agent ?? 0;
       else if (value === "projects") count = counts.project ?? 0;
       else if (value === "routines") count = counts.routine ?? 0;
+      else if (value === "conversations" && data?.scope === "conversations") count = counts.issue ?? 0;
       // Issue-only filters don't constrain agents/projects, so show a dash there
       // rather than an unfiltered count that would misrepresent the result set.
       const dashOut = filtersActive && (value === "agents" || value === "projects");
@@ -571,7 +573,7 @@ export function Search() {
                 }
               }
             }}
-            placeholder="Search tasks, comments, documents, artifacts, agents, projects…"
+            placeholder="Search tasks, conversations, documents, artifacts, agents, projects…"
             aria-label="Search query"
             className="h-10 pl-9 pr-20 text-sm"
           />

@@ -3,8 +3,8 @@ import type { AgentConversationFocusData } from "@/lib/conversation-focus";
 import { FridayOrb } from "./FridayOrb";
 import { FridayVoiceControls } from "./FridayVoiceControls";
 
-export function FridayPresence({ data, connected, docked = false, assistantName = "Friday", onConversation, onType }: {
-  data: AgentConversationFocusData; connected: boolean; docked?: boolean; assistantName?: string; onConversation?: () => void; onType?: () => void;
+export function FridayPresence({ data, connected, docked = false, assistantName = "Friday", onConversation, onType, onInteraction }: {
+  data: AgentConversationFocusData; connected: boolean; docked?: boolean; assistantName?: string; onConversation?: () => void; onType?: () => void; onInteraction?: () => void;
 }) {
   return <div className="agentos-friday-presence" data-docked={docked}>
     <FridayVoiceControls sessionKey={data.voiceSessionKey} companyId={data.companyId} busy={data.runStatus !== "idle"} question={data.clarification} minimal compact speakReplies assistantName={assistantName} reply={data.reply ? { ...data.reply, committed: true } : undefined} onTranscript={data.onTranscript} onVoiceMessage={data.onVoiceMessage} disabled={data.voiceDisabled || data.loading || data.unavailable}
@@ -14,7 +14,7 @@ export function FridayPresence({ data, connected, docked = false, assistantName 
         return <div className="agentos-presence-controls" data-voice-state={state}>
           <div className="agentos-presence-orb">
             <FridayOrb state={state} compact={docked} label={`Toggle ${assistantName} conversation history`} onActivate={onConversation} />
-            <button type="button" className="agentos-orb-microphone" data-enabled={voice.enabled} data-listening={voice.listening} disabled={!voice.canListen} onClick={voice.toggleListening} aria-pressed={voice.enabled} aria-label={voice.enabled ? "Pause microphone" : `Talk to ${assistantName}`} title={voice.enabled ? "Microphone enabled · click to mute" : `Microphone muted · talk to ${assistantName}`}>
+            <button type="button" className="agentos-orb-microphone" data-enabled={voice.enabled} data-listening={voice.listening} disabled={!voice.canListen} onClick={() => { if (!voice.enabled) onInteraction?.(); voice.toggleListening(); }} aria-pressed={voice.enabled} aria-label={voice.enabled ? "Pause microphone" : `Talk to ${assistantName}`} title={voice.enabled ? "Microphone enabled · click to mute" : `Microphone muted · talk to ${assistantName}`}>
               {voice.enabled ? <Mic data-testid="friday-mic-listening" /> : <MicOff data-testid="friday-mic-paused" />}
             </button>
           </div>

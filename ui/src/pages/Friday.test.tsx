@@ -107,6 +107,8 @@ describe("AgentOS approved Friday experience", () => {
     expect(host.querySelector('.agentos-presence-orb .agentos-orb-microphone')?.getAttribute("data-enabled")).toBe("false");
     await click("Talk to Friday");
     expect(host.querySelector('.agentos-orb-microphone')?.getAttribute("data-enabled")).toBe("true");
+    expect(host.querySelector('.agentos-home-intro')).toBeNull();
+    expect(host.querySelector('.agentos-company-strip')).toBeNull();
     await act(async () => Recognition.latest.onresult?.({ resultIndex: 0, results: [{ isFinal: false, 0: { transcript: "Show my projects" } }] }));
     const preview = host.querySelector('.agentos-live-transcript')!;
     expect(preview.textContent).toBe("Show my projects");
@@ -120,6 +122,7 @@ describe("AgentOS approved Friday experience", () => {
     expect(history.hidden).toBe(false);
     await click("Toggle Friday conversation history");
     expect(history.hidden).toBe(true);
+    expect(host.querySelector('.agentos-home-intro')).toBeNull();
     expect(host.querySelector('.agentos-orb-microphone')?.getAttribute("data-enabled")).toBe("true");
     await act(async () => {
       Recognition.latest.onresult?.({ resultIndex: 0, results: [{ isFinal: true, 0: { transcript: "Show my projects" } }] });

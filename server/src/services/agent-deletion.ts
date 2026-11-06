@@ -1,11 +1,16 @@
-import { and, eq, or, sql } from "drizzle-orm";
+import { and, eq, isNull, or, sql } from "drizzle-orm";
 import { agents, agentApiKeys, agentRuntimeState, agentTaskSessions, agentWakeupRequests, activityLog,
   budgetReservations, heartbeatRunEvents, heartbeatRuns, issueExecutionDecisions, issues, issueComments,
-  caseHandoffs, agentosAssignments, agentosDepartments, principalPermissionGrants, type Db } from "@paperclipai/db";
+  caseHandoffs, agentosAssignments, agentosDepartments, principalPermissionGrants, aiExecutionCapacityClaims, type Db } from "@paperclipai/db";
 import { conflict } from "../errors.js";
 import { issueThreadInteractionService } from "./issue-thread-interactions.js";
 
 export async function deleteAgentDependencies(tx: Db, companyId: string, id: string) {
+  const capacityRuns = sql`${aiExecutionCapacityClaims.runId} in (select ${heartbeatRuns.id} from ${heartbeatRuns} where ${heartbeatRuns.companyId} = ${companyId} and ${heartbeatRuns.agentId} = ${id})`;
+  const [capacityHold] = await tx.select({ id: aiExecutionCapacityClaims.runId }).from(aiExecutionCapacityClaims)
+    .where(and(eq(aiExecutionCapacityClaims.companyId, companyId), capacityRuns, isNull(aiExecutionCapacityClaims.releasedAt))).limit(1);
+  if (capacityHold) throw conflict("Wait for this agent's AI capacity reservations to settle before deleting it", { code: "agent_ai_capacity_pending" });
+  await tx.delete(aiExecutionCapacityClaims).where(and(eq(aiExecutionCapacityClaims.companyId, companyId), capacityRuns));
   const [department] = await tx.select({ id: agentosDepartments.id }).from(agentosDepartments).where(and(
     eq(agentosDepartments.companyId, companyId), eq(agentosDepartments.leadAgentId, id),
   )).limit(1);

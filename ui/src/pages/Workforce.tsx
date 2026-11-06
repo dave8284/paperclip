@@ -15,6 +15,8 @@ import { NativeSelect } from "@/components/ui/select";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { formatDateTime } from "@/lib/utils";
+import { WorkforceCapabilities } from "@/components/WorkforceCapabilities";
+import { WorkforceMandates } from "@/components/WorkforceMandates";
 
 // Reuse a request ID after uncertain delivery. Changing the submitted payload
 // is a new intent; a retry of the same payload remains idempotent.
@@ -114,6 +116,7 @@ function PortfolioWorkforce({ userId, data }: { userId: string | null; data: Age
         <Failure error={link.error} /><div className="flex justify-end"><Button type="submit" variant="outline" disabled={link.isPending || !companyId}>Add company</Button></div>
       </form>}
     </section>
+    <WorkforceMandates userId={userId} workforce={data} />
     <section aria-label="Shared employees" className="flex flex-col gap-4">
       <div className="flex items-center justify-between gap-3"><h2 className="text-lg font-medium">Shared employees</h2>{data.canManage && !adding && <Button variant="outline" onClick={() => setAdding(true)}>Add specialist</Button>}</div>
       {adding && <Card className="p-4"><form className="flex flex-col gap-3" onSubmit={event => { event.preventDefault(); create.mutate(); }}>
@@ -128,6 +131,7 @@ function PortfolioWorkforce({ userId, data }: { userId: string | null; data: Age
           <div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="font-medium">{employee.name}</h3><p className="text-sm text-muted-foreground">{employee.specialty || "Specialist"}</p></div>{data.canManage && <Button size="sm" variant="outline" onClick={() => setAssigning(employee.id)}>Assign to company</Button>}</div>
           {assignments.length === 0 && <p className="text-sm text-muted-foreground">No company assignments yet.</p>}
           {assignments.map(assignment => <Assignment key={assignment.id} assignment={assignment} data={data} refresh={refresh} />)}
+          <WorkforceCapabilities userId={userId} employeeId={employee.id} workforce={data} />
           {assigning === employee.id && <AssignmentForm userId={userId} employeeId={employee.id} data={data} close={() => setAssigning(null)} refresh={refresh} />}
         </Card>;
       })}

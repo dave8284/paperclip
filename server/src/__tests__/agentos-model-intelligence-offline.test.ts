@@ -14,6 +14,7 @@ vi.mock("@agentos/model-intelligence", async (importOriginal) => ({
 }));
 vi.mock("../services/activity-log.js", () => ({ logActivity: learning.audit }));
 import { evaluateModelRun, selectCompanyModelProfile } from "../services/model-intelligence.js";
+import { localTriageRuntime } from "../services/local-triage.js";
 
 // Real service functions and Drizzle SQL/row decoding, controlled query results
 // and learning writes. This proves ordering and contract wiring, not PostgreSQL
@@ -125,17 +126,19 @@ describe("native subscription learning receipt gate", () => {
   });
 });
 
-function selectionDatabase() {
+function selectionDatabase(conversation = false, options: { statements?: Statement[]; freeze?: (request: SelectionInput) => SelectionInput } = {}) {
   let frozen: SelectionInput | undefined;
   const db = drizzle(async (text, params) => {
+    options.statements?.push({ text, params });
     if (text.includes('from "company_operating_profiles"')) return { rows: [[]] };
-    if (text.includes('from "issues"')) return { rows: [["Implement a task list", null]] };
-    if (text.includes('from "cost_events"')) return { rows: [] };
+    if (text.includes('from "issues"')) return { rows: [["Implement a task list", null,
+      conversation ? agentId : null, conversation ? "owner-1" : null]] };
+    if (text.includes('from "cost_events"')) return { rows: [["gpt-6.1-sol"]] };
     if (text.includes('from "agent_instruction_heads"')) return { rows: [["AGENTS.md", "revision-1"]] };
     if (text.startsWith('update "heartbeat_runs"')) {
       if (!text.includes(" returning ")) return { rows: [] };
       const proposed = params.find(value => typeof value === "string" && value.startsWith('{"modelIntelligenceRequest":')) as string;
-      frozen ??= JSON.parse(proposed).modelIntelligenceRequest;
+      frozen ??= options.freeze?.(JSON.parse(proposed).modelIntelligenceRequest) ?? JSON.parse(proposed).modelIntelligenceRequest;
       return { rows: [[{ modelIntelligenceRequest: frozen }]] };
     }
     throw new Error(`Unexpected database query: ${text}`);
@@ -147,6 +150,38 @@ const binding = { mode: "responsible_user" as const, method: "subscription" as c
 function select(db: Db, effort: Record<string, unknown>) {
   return selectCompanyModelProfile(db, { runId, issueId: "issue-1", agent, binding, config: { model, ...effort }, resumed: false });
 }
+
+describe("current-account model qualification boundary", () => {
+  it("records only the configured attempt without treating historical use as current account access", async () => {
+    const statements: Statement[] = [];
+    const selected = await select(selectionDatabase(false, { statements }), {});
+    expect(selected.request!.candidates).toEqual([{ id: selected.request!.defaultCandidateId,
+      model, provider: "openai", method: "subscription", available: true }]);
+    expect(statements.some(statement => statement.text.includes('from "cost_events"'))).toBe(false);
+    const projection = statements.flatMap(statement => statement.params)
+      .find(value => typeof value === "string" && value.startsWith('{"modelIntelligence":')) as string;
+    expect(JSON.parse(projection).modelIntelligenceQualification).toEqual({ mode: "configured_only",
+      source: "operator_configuration", accountModelAccess: "not_verified",
+      automaticAlternatives: "current_account_qualification_required" });
+  });
+
+  it("requires review of a legacy queued request with an unqualified alternative before calling learning", async () => {
+    const db = selectionDatabase(false, { freeze: request => ({ ...request, candidates: [...request.candidates,
+      { ...request.candidates[0], id: "legacy-other-model", model: "gpt-6.1-sol" }] }) });
+    await expect(select(db, {})).rejects.toThrow("queued execution profile changed");
+    expect(learning.select).not.toHaveBeenCalled();
+  });
+
+  it("preserves resumed sessions without reading account history or changing their profile", async () => {
+    const statements: Statement[] = [], config = { model: "retained-session-model" };
+    const selected = await selectCompanyModelProfile(selectionDatabase(false, { statements }), {
+      runId, issueId: "issue-1", agent, binding, config, resumed: true,
+    });
+    expect(selected).toEqual({ config });
+    expect(statements).toEqual([]);
+    expect(learning.select).not.toHaveBeenCalled();
+  });
+});
 
 describe("native model profile effort identity", () => {
   it("gives equivalent aliases the same profile, using native nullish precedence", async () => {
@@ -192,4 +227,19 @@ it("records native shadow triage alongside the selected model without inventing 
     decision: { status: "not_run", reason: "local_disabled", invocationId: null, costCents: null, costStatus: null },
   });
   expect(selected.triage?.selectedCandidateId).toBe(selected.receipt?.candidate.id);
+});
+
+it("uses persisted conversation identity to omit shadow delay while retaining model admission and audit", async () => {
+  const decide = vi.spyOn(localTriageRuntime, "decide").mockImplementation(() => new Promise(() => {}));
+  try {
+    const selected = await select(selectionDatabase(true), {});
+    expect(selected.config.model).toBe(model);
+    expect(learning.select).toHaveBeenCalledOnce();
+    expect(selected.triage).toMatchObject({ selectedCandidateId: selected.receipt!.candidate.id,
+      routeChangedByTriage: false, decision: { status: "not_run", reason: "interactive_conversation", elapsedMs: null } });
+    expect(decide).not.toHaveBeenCalled();
+    decide.mockRestore();
+    const regular = await select(selectionDatabase(), {});
+    expect(regular.request!.contextFingerprint).toBe(selected.request!.contextFingerprint);
+  } finally { decide.mockRestore(); }
 });

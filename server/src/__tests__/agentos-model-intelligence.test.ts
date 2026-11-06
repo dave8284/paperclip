@@ -44,8 +44,8 @@ it("records the configured subscription baseline before execution and requires a
   expect(selected.receipt?.evidence.evaluations).toBe(0);
   const [saved] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, run.id));
   expect(saved.contextSnapshot?.modelIntelligence).toMatchObject({ id: run.id, namespace: companyId, taskType: "engineering.building" });
-  // A new observed candidate may appear while a run waits for a subscription
-  // slot. Retrying that run must replay its original selection request.
+  // Historical use never qualifies an alternative for today's execution account.
+  // A queued retry must also preserve its original configured selection request.
   await db.insert(costEvents).values({ companyId, agentId, model: "gpt-6.1-sol", provider: "openai", billingType: "subscription_included", costCents: 0, occurredAt: new Date() });
   const retried = await selectCompanyModelProfile(db, { runId: run.id, issueId, agent, config, binding, resumed: false });
   expect(retried.receipt).toEqual(selected.receipt);
@@ -53,6 +53,7 @@ it("records the configured subscription baseline before execution and requires a
   await db.update(heartbeatRuns).set({ contextSnapshot: saved.contextSnapshot }).where(eq(heartbeatRuns.id, nextRun.id));
   const next = await selectCompanyModelProfile(db, { runId: nextRun.id, issueId, agent, config, binding, resumed: false });
   expect(next.request?.requestId).toBe(nextRun.id);
+  expect(next.request?.candidates.map(candidate => candidate.model)).toEqual([config.model]);
   expect(next.receipt?.id).toBe(nextRun.id);
   expect(next.receipt?.candidate).toEqual(selected.receipt?.candidate);
   await expect(evaluateModelRun(db, companyId, run.id, { passed: true, evidenceRef: "review:fixture" }, who)).rejects.toThrow("Actual model receipts");

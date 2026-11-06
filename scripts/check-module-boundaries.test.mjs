@@ -119,10 +119,14 @@ test("configuration integration is limited to its composition and workflow calle
     const workflow = 'import { update } from "./agent-configuration-transaction.js";';
     writeFileSync(join(serverSrc, "services", "agent-configuration-transaction.ts"), integration);
     writeFileSync(join(serverSrc, "services", "secret-proposals.ts"), workflow);
+    writeFileSync(join(serverSrc, "services", "agentos-capabilities.ts"), workflow);
+    writeFileSync(join(serverSrc, "services", "agentos-workforce.ts"), workflow);
     writeFileSync(join(serverSrc, "services", "other.ts"), workflow);
     writeFileSync(join(serverSrc, "routes", "agents.ts"), integration);
     const violations = scanModuleBoundaries({ serverSrc, modulesRoot });
-    assert.equal(violations.length, 2);
+    assert.equal(violations.length, 3);
+    assert(!violations.some(({ file }) => file.endsWith("services/agentos-capabilities.ts")));
+    assert(violations.some(({ file }) => file.endsWith("services/agentos-workforce.ts")));
     assert(violations.some(({ file }) => file.endsWith("services/other.ts")));
     assert(violations.some(({ file }) => file.endsWith("routes/agents.ts")));
   } finally {

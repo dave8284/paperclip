@@ -6,6 +6,12 @@ navigation: {"section":"Tasks and conversations","sectionOrder":20,"order":20}
 
 A larger task can coordinate child work, dependencies, reviewers, and execution controls while preserving a clear owner and a traceable completion decision.
 
+The native EGM preparation API freezes same-task document revisions and a named
+persona/standard before author completion. Prepared packets are inspectable and
+can be cleared by receipt before binding; bound requests use native cancellation.
+Independent provider execution remains explicitly unavailable. Preparation is
+not isolation or a completed review.
+
 Feature ID: `task-coordination`.
 
 Implementation: [task thread](../../ui/src/pages/IssueDetail.tsx), [execution policy](../../server/src/services/issues.ts).

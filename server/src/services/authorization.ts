@@ -636,6 +636,16 @@ function issuePrivacyCondition(actor: AuthorizationActor): SQL<boolean> {
     and exists (select 1 from ${companyMemberships} m where m.company_id = ${issues.companyId}
       and m.principal_type = 'user' and m.principal_id = ${userId} and m.status = 'active'))`, own);
 }
+
+/** Portfolio summary delegation deliberately excludes every private record,
+ * including open tasks beneath a private privacy ancestor. It retains the
+ * original actor and both user ceilings, regardless of rollout shadow mode. */
+export function companySharedIssueReadSqlCondition(actor: AuthorizationActor): SQL<boolean> {
+  return sql<boolean>`(${issuePrivacyCondition(actor)} and ${issuePrivacyPrincipalCondition({ type: "none" })})`;
+}
+export function companySharedProjectReadSqlCondition(actor: AuthorizationActor): SQL<boolean> {
+  return sql<boolean>`(${projectPrivacyCondition(actor)} and ${projects.visibility} = 'open')`;
+}
 export async function canActorReadIssuePrivacy(db: Db | DbTransaction, actor: AuthorizationActor, issue: IssuePrivacyRow) {
   return db.select({ id: issues.id }).from(issues)
     .where(and(eq(issues.id, issue.id), eq(issues.companyId, issue.companyId), issuePrivacyCondition(actor)))

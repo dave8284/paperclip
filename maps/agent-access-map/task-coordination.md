@@ -79,6 +79,11 @@ API: `present` — representative operation IDs:
 
 - `PATCH /api/issues/{id}`.
 - `POST /api/issues/{id}/interactions`.
+- `PUT|GET|DELETE /api/issues/{id}/runs/{sourceRunId}/egm-packet` prepares,
+  inspects or clears exact native document revisions before review admission.
+  Current creator/run/responsible-user/reviewer ceilings and source access are
+  rechecked; clear requires its receipt. Bound packets use native cancellation.
+  Provider execution is unavailable; preparation grants no new task access.
 
 Agent access: `partial` — Native paperclip_finish/paperclip_block and assigned
 resolve_review; legacy agent REST disposition.

@@ -1,5 +1,21 @@
 # Paperclip — Product Definition
 
+AgentOS operating-loop edits retain native revision history and can change the
+project and parent objective for future cycles. Routine reads, historical cycles,
+restores and trigger management inherit project/task access. Historical annotation
+access additionally requires readable scope history because document anchors do
+not record the routine's original project scope. Company search can narrow native
+task/comment/document retrieval to persistent Conversations. Saved Friday views
+include data-only tables, lists and task boards using fresh authorized records;
+board counts describe the current page, and edits open the native task.
+
+Native authors can prepare and inspect a frozen Elephant–Goldfish review packet
+from exact task document revisions and bundled review criteria. Preparation is
+reversible before review binding and retains native creator, reviewer and user
+authority. Independent packet-only execution is explicitly unavailable until
+the runtime enforces and qualifies that boundary; a prepared packet is not a
+completed review.
+
 Reusable workflows stay inside the Cases experiment. A workflow is a company-shared
 name and Markdown prompt; a case may adopt, leave and revisit workflows without
 changing its primary task. The task's workflow document is the effective copy,

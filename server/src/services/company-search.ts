@@ -381,7 +381,7 @@ function compareSearchResults(sort: CompanySearchSort) {
 }
 
 function scopeIncludesIssues(scope: CompanySearchScope) {
-  return scope === "all" || scope === "issues" || scope === "comments" || scope === "documents";
+  return scope === "all" || scope === "issues" || scope === "conversations" || scope === "comments" || scope === "documents";
 }
 
 function scopeIncludesAgents(scope: CompanySearchScope) {
@@ -579,6 +579,11 @@ export function companySearchService(db: Db) {
       const tokenCount = tokens.length;
 
       const issueFilters = issueFilterConditions(companyId, query);
+      // Persistent chats use native task comments/documents. Keep their existing
+      // read predicates and search pipeline; the scope only narrows visibility.
+      const issueReadCondition = scope === "conversations"
+        ? sql<boolean>`(${options?.issueReadCondition ?? sql`true`}) and ${isNotNull(issues.conversationAgentId)} and ${isNotNull(issues.conversationUserId)}`
+        : options?.issueReadCondition;
       const hasIssueOnlyFilters = issueOnlyFiltersActive(query);
 
       // Scope conditions over precomputed flag columns (alias-qualified).
@@ -669,8 +674,8 @@ export function companySearchService(db: Db) {
           )`);
         }
 
-        if (scope === "all" || scope === "issues") {
-          branches.push(sql`SELECT 'type:issue' AS kind, NULL::text AS value, count(*)::int AS count ${countTail} FROM matched m ${branchWhere([...facetsAll, titleCond])}`);
+        if (scope === "all" || scope === "issues" || scope === "conversations") {
+          branches.push(sql`SELECT 'type:issue' AS kind, NULL::text AS value, count(*)::int AS count ${countTail} FROM matched m ${branchWhere([...facetsAll, scope === "conversations" ? scopeCond : titleCond])}`);
         }
         if (hasSearchText && (scope === "all" || scope === "comments")) {
           branches.push(sql`SELECT 'type:comment' AS kind, NULL::text AS value, count(*)::int AS count ${countTail} FROM matched m ${branchWhere([...facetsAll, flagScopeCondition("m", "comments")])}`);
@@ -727,7 +732,7 @@ export function companySearchService(db: Db) {
         }
 
         const resultRows = await db.execute(sql`
-          ${taskSearchCtes(companyId, taskSearch, scope !== "issues", and(...issueFilters), options?.issueReadCondition)}
+          ${taskSearchCtes(companyId, taskSearch, scope !== "issues", and(...issueFilters), issueReadCondition)}
           ${sql.join(branches, sql` UNION ALL `)}
         `) as unknown as Array<SearchAggregateRow & Omit<IssueSearchRow, "commentSnippet" | "commentId" | "documentSnippet" | "documentTitle" | "documentKey">>;
 

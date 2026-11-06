@@ -2,7 +2,7 @@ import { DELIVERY_QUEUES, notifyDeliveryWork } from "./delivery-work-notificatio
 import { agentObservabilityService } from "./agent-observability.js";
 import { withAccountHomeSecretMutationLock } from "@paperclipai/adapter-codex-local/server";
 import type { Db } from "@paperclipai/db";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import { createAgentLifecycle, processAgentLifecycle } from "./agent-lifecycle.js";
 import { requestRestorePointDeletion } from "./git-restore-point-ledger.js";
 import { agentLifecycleCompanyDeletion } from "../modules/agent-lifecycle/company-deletion.js";
@@ -12,6 +12,7 @@ import {
   agentosPortfolios,
   agentosAssignments,
   agentosPortfolioCompanies,
+  agentosCapabilityReleases,
   agentosDepartments,
   agents,
   companyLogos,
@@ -26,6 +27,7 @@ import {
   executionWorkspaces,
   goals,
   heartbeatRuns,
+  aiExecutionCapacityClaims,
   runIdentityContexts,
   heartbeatRunEvents,
   costEvents,
@@ -54,6 +56,8 @@ import {
 export async function deleteCompany(db: Db, id: string) {
   const [portfolio] = await db.select({ id: agentosPortfolios.id }).from(agentosPortfolios).where(eq(agentosPortfolios.homeCompanyId, id)).limit(1);
   if (portfolio) throw conflict("This company holds a portfolio's administration and audit history. Archive it instead of permanently deleting it", { code: "portfolio_home_company_retained" });
+  const [published] = await db.select({ id: agentosCapabilityReleases.id }).from(agentosCapabilityReleases).where(eq(agentosCapabilityReleases.sourceCompanyId, id)).limit(1);
+  if (published) throw conflict("This company holds evidence for published employee capabilities. Archive it instead of permanently deleting it", { code: "capability_source_company_retained" });
   const lifecycle = createAgentLifecycle(db);
   const companyAgents = await db.select({ id: agents.id }).from(agents).where(eq(agents.companyId, id));
   for (const agent of companyAgents) {
@@ -67,8 +71,14 @@ export async function deleteCompany(db: Db, id: string) {
         const [existing] = await tx.select({ id: companies.id }).from(companies)
           .where(eq(companies.id, id)).for("no key update");
         if (!existing) return null;
+        const [capacityHold] = await tx.select({ id: aiExecutionCapacityClaims.runId }).from(aiExecutionCapacityClaims)
+          .where(and(eq(aiExecutionCapacityClaims.companyId, id), isNull(aiExecutionCapacityClaims.releasedAt))).limit(1);
+        if (capacityHold) throw conflict("Wait for this company's AI capacity reservations to settle before deleting it", { code: "company_ai_capacity_pending" });
+        await tx.delete(aiExecutionCapacityClaims).where(eq(aiExecutionCapacityClaims.companyId, id));
         const [portfolio] = await tx.select({ id: agentosPortfolios.id }).from(agentosPortfolios).where(eq(agentosPortfolios.homeCompanyId, id)).limit(1);
         if (portfolio) throw conflict("This company holds a portfolio's administration and audit history. Archive it instead of permanently deleting it", { code: "portfolio_home_company_retained" });
+        const [published] = await tx.select({ id: agentosCapabilityReleases.id }).from(agentosCapabilityReleases).where(eq(agentosCapabilityReleases.sourceCompanyId, id)).limit(1);
+        if (published) throw conflict("This company holds evidence for published employee capabilities. Archive it instead of permanently deleting it", { code: "capability_source_company_retained" });
         // Explicit company deletion removes only that company's engagements.
         // Shared identities and every other company's agents remain intact.
         await tx.delete(agentosAssignments).where(eq(agentosAssignments.companyId, id));

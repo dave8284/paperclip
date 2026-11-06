@@ -38,7 +38,7 @@ export type RoutineListRowItem = {
 };
 
 export function formatLastRunTimestamp(value: Date | string | null | undefined) {
-  if (!value) return "Never";
+  if (!value) return "Not available";
   return new Date(value).toLocaleString();
 }
 

@@ -2750,6 +2750,15 @@ export function routineService(
       };
     },
 
+    getRevision: async (routineId: string, revisionId: string): Promise<RoutineRevision | null> => {
+      const routine = await getRoutineById(routineId);
+      if (!routine) return null;
+      const [row] = await db.select().from(routineRevisions).where(and(
+        eq(routineRevisions.id, revisionId), eq(routineRevisions.routineId, routine.id), eq(routineRevisions.companyId, routine.companyId),
+      )).limit(1);
+      return row ? mapRoutineRevision(row) : null;
+    },
+
     listRevisions: async (routineId: string): Promise<RoutineRevision[]> => {
       const routine = await getRoutineById(routineId);
       if (!routine) throw notFound("Routine not found");

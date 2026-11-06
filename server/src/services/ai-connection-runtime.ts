@@ -397,6 +397,23 @@ export async function prepareManagedAiRuntime(
     const sessionIdentity = `${selection.grant.id}:${input.responsibleUserId ?? "shared"}:${noAuth ? "no-auth" : `${credentialRef!.secretId}:${freshness!.epoch}`}`;
     return {
       sessionIdentity,
+      // Capacity/budget waits may outlive the authority and credentials used
+      // to prepare this home. Reuse the native selector, then verify the exact
+      // prepared identity; never switch defaults or copy new credentials here.
+      assertCurrent: async () => {
+        const current = await service.select({ ...input, userId: input.responsibleUserId,
+          model: input.config.model, runnerProvider: input.config.provider, acpxAgent: input.config.acpxAgent });
+        if (current.grant.id !== selection.grant.id || current.connection.id !== selection.connection.id ||
+            current.attribution.provider !== attribution.provider || current.attribution.method !== attribution.method ||
+            current.attribution.responsibleUserId !== attribution.responsibleUserId ||
+            JSON.stringify(current.connection.config.ai) !== JSON.stringify(selection.connection.config.ai)) {
+          throw unprocessable("The selected AI account changed while this execution waited. Start a fresh execution.", { code: "ai_connection_changed_during_wait" });
+        }
+        const currentFreshness = await readFreshness();
+        if (!noAuth && (!currentFreshness || currentFreshness.epoch !== freshness?.epoch || currentFreshness.version !== freshness?.version)) {
+          throw unprocessable("The selected AI credential changed while this execution waited. Start a fresh execution.", { code: "ai_connection_changed_during_wait" });
+        }
+      },
       ...(subscriptionFile && input.binding.provider === "openai" && credentialRef && freshness ? {
         credentialWriteback: { grantId: selection.grant.id, secretId: credentialRef.secretId, sessionEpoch: freshness.epoch,
           versionSelector: credentialRef.versionSelector ?? "latest" } satisfies PluginTaskCredentialWritebackBinding,

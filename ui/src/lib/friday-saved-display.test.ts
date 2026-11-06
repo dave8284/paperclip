@@ -11,6 +11,11 @@ describe("saved live display contract", () => {
     expect(parseFridaySavedDisplay(document.body)).toEqual({ ...body, status: "all", limit: 50 });
     expect(parseFridaySavedDisplay(JSON.stringify({ ...body, source: "projects", limit: 100 }))).toMatchObject({ source: "projects", limit: 100 });
   });
+  it("accepts registered lists and task boards while rejecting unsupported board sources", () => {
+    expect(parseFridaySavedDisplay(JSON.stringify({ ...body, kind: "list", source: "projects" }))).toMatchObject({ kind: "list", source: "projects" });
+    expect(parseFridaySavedDisplay(JSON.stringify({ ...body, kind: "board" }))).toMatchObject({ kind: "board", source: "tasks" });
+    expect(parseFridaySavedDisplay(JSON.stringify({ ...body, kind: "board", source: "projects" }))).toBeNull();
+  });
   it.each([{ version: 2 }, { kind: "html" }, { source: "credentials" }, { companyId: "all" }, { projectId: null }, { status: "deleted" }, { status: null }, { limit: 0 }, { limit: 101 }, { limit: "50" }, { limit: null }, { url: "https://other.invalid" }, { code: "fetch('/api/secrets')" }, { title: " " }, { title: "x".repeat(121) }, { source: "projects", status: "active" }])("rejects unsupported or executable fields: %j", patch => {
     expect(parseFridaySavedDisplay(JSON.stringify({ ...body, ...patch }))).toBeNull();
   });

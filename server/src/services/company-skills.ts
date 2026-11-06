@@ -24,6 +24,8 @@ import {
   companySkillTestRuns,
   companySkillVersions, companySkillRepositorySnapshots,
   companySkills,
+  agentosCapabilityReleases,
+  agentosCapabilityDecisions,
   costEvents,
   documents,
   issueAttachments,
@@ -36,6 +38,25 @@ import { readPaperclipSkillSyncPreference, writePaperclipSkillSyncPreference, re
   resolveLegacyPaperclipDesiredSkillNames } from "@paperclipai/adapter-utils/server-utils";
 import { REPOSITORY_CONTENT_DIR, repositorySkillProjection } from "./skill-repository-package.js";
 import { runVersionSnapshotFlight } from "./skill-version-retention.js";
+
+async function skillHasCapabilityHistory(database: Db | DbTransaction, companyId: string, skillId: string) {
+  const [source] = await database.select({ id: agentosCapabilityReleases.id }).from(agentosCapabilityReleases)
+    .where(and(eq(agentosCapabilityReleases.sourceCompanyId, companyId), eq(agentosCapabilityReleases.sourceSkillId, skillId))).limit(1);
+  if (source) return true;
+  const [adopted] = await database.select({ id: agentosCapabilityDecisions.id }).from(agentosCapabilityDecisions)
+    .where(and(eq(agentosCapabilityDecisions.companyId, companyId), eq(agentosCapabilityDecisions.importedSkillId, skillId))).limit(1);
+  return !!adopted;
+}
+export async function assertSkillCapabilityRetention(database: Db | DbTransaction, companyId: string, skillId: string) {
+  if (await skillHasCapabilityHistory(database, companyId, skillId)) throw conflict(
+    "This skill retains published capability evidence or a company's adoption history. Keep the skill and its immutable versions; you can change the agent's selected skills without deleting that history.",
+    { code: "capability_skill_history_retained" });
+}
+export async function assertSkillTestCapabilityRetention(database: Db | DbTransaction, companyId: string, runId: string) {
+  const [source] = await database.select({ id: agentosCapabilityReleases.id }).from(agentosCapabilityReleases)
+    .where(and(eq(agentosCapabilityReleases.sourceCompanyId, companyId), eq(agentosCapabilityReleases.sourceTestRunId, runId))).limit(1);
+  if (source) throw conflict("This test is retained as evidence for a published employee capability and cannot be deleted.", { code: "capability_test_evidence_retained" });
+}
 import type { PaperclipDesiredSkillEntry, PaperclipSkillEntry } from "@paperclipai/adapter-utils/server-utils";
 import type {
   AgentDesiredSkillEntry,
@@ -104,6 +125,7 @@ import type {
   IssueDocument,
 } from "@paperclipai/shared";
 import {
+  AGENTOS_CAPABILITY_SKILL_PREFIX,
   isUuidLike,
   joinFrontmatterBlock,
   normalizeAgentUrlKey,
@@ -3218,7 +3240,7 @@ export function companySkillService(db: Db, options: { actor?: AuthorizationActo
       }
 
       const usedByAgents = await usage(companyId, skill.key);
-      if (usedByAgents.length > 0) {
+      if (usedByAgents.length > 0 || await skillHasCapabilityHistory(db, companyId, skill.id)) {
         const metadata = withMissingSourceMarker(
           skill.metadata,
           buildMissingLocalSourceMarker(skill),
@@ -3233,8 +3255,14 @@ export function companySkillService(db: Db, options: { actor?: AuthorizationActo
       }
 
       await removeRuntimeSkillCache(resolveManagedSkillsRoot(companyId), skill.id, async () => {
-        await fs.rm(resolveRuntimeSkillMaterializedPath(companyId, skill), { recursive: true, force: true });
-        await db.delete(companySkills).where(eq(companySkills.id, skill.id));
+        await db.transaction(async tx => {
+          await tx.select({ id: companySkills.id }).from(companySkills).where(eq(companySkills.id, skill.id)).for("update");
+          // Lazy inventory reconciliation retains published evidence even
+          // after its original local source disappears.
+          if (await skillHasCapabilityHistory(tx, companyId, skill.id)) return;
+          await fs.rm(resolveRuntimeSkillMaterializedPath(companyId, skill), { recursive: true, force: true });
+          await tx.delete(companySkills).where(eq(companySkills.id, skill.id));
+        });
       });
     }
   }
@@ -3999,6 +4027,8 @@ export function companySkillService(db: Db, options: { actor?: AuthorizationActo
 
   async function cleanupFailedFork(companyId: string, sourceSkillId: string, forkSkillId: string, forkDir: string) {
     await db.transaction(async (tx) => {
+      await tx.select({ id: companySkills.id }).from(companySkills).where(and(eq(companySkills.id, forkSkillId), eq(companySkills.companyId, companyId))).for("update");
+      await assertSkillCapabilityRetention(tx, companyId, forkSkillId);
       await tx
         .update(companySkills)
         .set({ currentVersionId: null, updatedAt: new Date() })
@@ -7235,6 +7265,8 @@ export function companySkillService(db: Db, options: { actor?: AuthorizationActo
     }
     const now = new Date();
     const updated = await db.transaction(async (tx) => {
+      await tx.select({ id: companySkillTestRuns.id }).from(companySkillTestRuns).where(and(eq(companySkillTestRuns.companyId, companyId), eq(companySkillTestRuns.id, runId))).for("update");
+      await assertSkillTestCapabilityRetention(tx, companyId, runId);
       return await tx
         .update(companySkillTestRuns)
         .set({ deletedAt: now, harnessIssueDeletedAt: existing.harnessIssueDeletedAt ?? now, updatedAt: now })
@@ -7338,7 +7370,7 @@ export function companySkillService(db: Db, options: { actor?: AuthorizationActo
         { skillId: skill.id, skillKey: skill.key, usedByAgents: usedByAgents.map(({ id, name, urlKey, adapterType }) => ({ id, name, urlKey, adapterType })) },
       );
     }
-    for (const skill of initial) await assertUnused(skill);
+    for (const skill of initial) { await assertSkillCapabilityRetention(db, companyId, skill.id); await assertUnused(skill); }
     const managedRoot = resolveManagedSkillsRoot(companyId);
     const moved: Array<{ source: string; quarantine: string }> = [];
     async function restoreSources() {
@@ -7357,9 +7389,11 @@ export function companySkillService(db: Db, options: { actor?: AuthorizationActo
           const deleted: CompanySkill[] = [];
           for (const before of initial) {
             await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`${companyId}:${before.slug}`}, 0))`);
+            await tx.select({ id: companySkills.id }).from(companySkills).where(and(eq(companySkills.id, before.id), eq(companySkills.companyId, companyId))).for("update");
             const skill = await getById(companyId, before.id, tx);
             if (!skill) continue;
             if (skill.slug !== before.slug) throw conflict("Skill changed during deletion. Retry the request.");
+            await assertSkillCapabilityRetention(tx, companyId, skill.id);
             await assertUnused(skill);
             await fs.rm(resolveRuntimeSkillMaterializedPath(companyId, skill), { recursive: true, force: true });
             if (isPaperclipManagedRenameTarget(skill)) {
@@ -7404,7 +7438,43 @@ export function companySkillService(db: Db, options: { actor?: AuthorizationActo
     return (await deleteSkills(companyId, [skillId]))[0] ?? null;
   }
 
+  // Database-only import for a deliberately published Markdown release. The
+  // caller owns admission, transaction, cache lock and audit; native version
+  // materialization still happens through the existing runtime skill owner.
+  async function importReviewedMarkdownRelease(database: Db, companyId: string, input: {
+    employeeId: string; capabilityKey: string; releaseId: string; name: string; markdown: string;
+  }, actor: SkillActor) {
+    const key = `${AGENTOS_CAPABILITY_SKILL_PREFIX}${input.employeeId}:${input.capabilityKey}`;
+    let [row] = await database.select().from(companySkills).where(and(eq(companySkills.companyId, companyId), eq(companySkills.key, key))).for("update");
+    const fileInventory = [snapshotFile("SKILL.md", "markdown", Buffer.from(input.markdown))];
+    if (!row) {
+      [row] = await database.insert(companySkills).values({
+        companyId, key, slug: `capability-${input.employeeId}-${input.capabilityKey}`, name: input.name,
+        markdown: input.markdown, sourceType: "generated", trustLevel: "markdown_only", compatibility: "compatible",
+        fileInventory: fileInventory.map(file => ({ ...file })), metadata: { agentosCapabilityEmployeeId: input.employeeId, agentosCapabilityKey: input.capabilityKey },
+      }).returning();
+    } else if (row.metadata?.agentosCapabilityEmployeeId !== input.employeeId || row.metadata?.agentosCapabilityKey !== input.capabilityKey) {
+      throw conflict("The capability skill key is already used by another skill");
+    }
+    const [existingVersion] = await database.select().from(companySkillVersions).where(and(
+      eq(companySkillVersions.companyId, companyId), eq(companySkillVersions.companySkillId, row.id),
+      eq(companySkillVersions.releaseId, input.releaseId),
+    ));
+    if (existingVersion) {
+      if (JSON.stringify(existingVersion.fileInventory) !== JSON.stringify(fileInventory)) throw conflict("Published capability bytes changed");
+      return { skillId: row.id, key, versionId: existingVersion.id };
+    }
+    const version = await createVersion(companyId, row.id, { label: input.name }, actor, {
+      database, skill: toCompanySkill(row), fileInventory, skipInventoryRefresh: true,
+      release: { id: input.releaseId, name: input.name, releasedAt: new Date() },
+    });
+    await database.update(companySkills).set({ markdown: input.markdown, fileInventory: fileInventory.map(file => ({ ...file })), updatedAt: new Date() })
+      .where(and(eq(companySkills.companyId, companyId), eq(companySkills.id, row.id)));
+    return { skillId: row.id, key, versionId: version.id };
+  }
+
   return {
+    importReviewedMarkdownRelease,
     list,
     listFull,
     getById,

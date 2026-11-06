@@ -20,7 +20,7 @@ Evidence: `verified` — the prior board-only isolated PostgreSQL checkpoint exe
 
 Verification: `passed` — [tests](../../server/src/__tests__/agentos-workforce.test.ts), [routes](../../server/src/routes/agentos-workforce.ts), [OpenAPI](../../server/src/routes/openapi.ts). Identity replay, narrow returned fields and revoked-company filtering were exercised at that earlier checkpoint; current database reruns remain blocked.
 
-Gaps: explicit cross-company Friday portfolio delegation remains to implement. Company-scoped staffing has its separate endpoints below; agent identity is never elevated to board implicitly.
+Gaps: portfolio work creation/delegation remains to implement. Explicit shared-summary read delegation has its separate gateway below; agent identity is never elevated to board implicitly.
 
 Ownership transition: the existing native board-claim ceremony transfers only
 `local-board` portfolios to the authenticated claimant, with an activity record
@@ -50,7 +50,7 @@ Verification: `blocked` — PostgreSQL setup failed on 2026-11-03 with `listen E
 
 Delegated retirement verification (2026-11-04): source-only; new cases cover default denial, current CEO/Friday identity, exact target scope on both principals, home administration, role changes, company isolation, report reassignment, concurrent replay, grant revocation before authorization and through audit commit, plus SQL audit-failure rollback. The prior PostgreSQL listener failure was not repeated; these cases have not run. Native PERMISSION_KEYS/shared SDK and grant validators expose workforce:retire; the core Members page delegates advanced permission editing to an installed extension.
 
-Gaps: cross-company delegation, opt-in capability versions, centrally evaluated learning and cross-company chat remain planned. Delegated retirement needs runtime qualification. Binding does not create a model subscription or execute work. Agent-authored reports are not treated as qualification evidence.
+Gaps: cross-company delegation, centrally evaluated learning and cross-company chat remain planned. Manual opt-in capability versions have their separate contract below. Delegated retirement needs runtime qualification. Binding does not create a model subscription or execute work. Agent-authored reports are not treated as qualification evidence.
 
 ## `awareness`
 
@@ -68,4 +68,40 @@ Evidence: `source-only` — [service](../../server/src/services/employee-awarene
 
 Verification: `passed` — eight controlled-dependency awareness cases and 2,058 native API/discovery cases pass on 2026-11-04 without listeners. This proves those bounded contracts only; full PostgreSQL route/privacy integration and live direct-chat acceptance require an environment that permits them. No database listener or model execution was attempted for this slice.
 
-Gaps: cross-company employee agent queries need an explicit delegated read contract. This endpoint does not grant that authority and does not complete the broader cross-company chat requirement.
+Gaps: this endpoint grants no cross-company authority. Explicit shared-summary reads use the separate read-mandate gateway below; private reads and broader cross-company chat/work delegation remain pending.
+
+## `capabilities`
+
+Capability ID: `workforce/capabilities`.
+
+Review: `baseline`.
+
+API: `present` — GET /api/agentos/portfolios/{portfolioId}/employees/{employeeId}/capabilities (offset pages); POST /api/agentos/portfolios/{portfolioId}/capabilities; POST /api/agentos/portfolios/{portfolioId}/assignments/{assignmentId}/capabilities (adopt, refuse, rollback).
+
+Agent access: `operator-only` — the existing portfolio board-only guard and OpenAPI discovery classification apply. Standard company agents cannot publish or mutate a portfolio capability. A company agent may propose a source skill/evaluation through native Skill Studio, then request its owner's manual review and decision; no agent inherits board identity.
+
+Policy: portfolio owner, fresh current home/target company administration and consented company scope. Adoption also requires native target-agent configuration authority and company skill policy. Native authority/agent/policy locks span the transaction; expected assignment revision and selection hash fence stale intent. Publication accepts only an exact immutable Markdown-only source version and matching completed readable native test with retained output, plus explicit human reviewed/sanitized acceptance. It shares only deliberate bytes/evaluation summary. Company import, native selection revision, immutable decision and audit commit atomically. Exact adopted pins persist across Beta UI settings; refusal preserves configuration and rollback requires earlier company adoption. Existing run snapshots are unchanged. No paid execution or automatic adoption is triggered.
+
+Evidence: `source-only` — [owner service](../../server/src/services/agentos-capabilities.ts), [native skill owner](../../server/src/services/company-skills.ts), [routes](../../server/src/routes/agentos-workforce.ts) and [UI](../../ui/src/components/WorkforceCapabilities.tsx).
+
+Verification: `passed` — eleven focused content/privacy/native selection/mutation-authorization cases and eight new/existing component cases passed on 6 November 2026. Five additional real PostgreSQL/HTTP cases were authored but not run because the session cannot create an isolated listener. The existing 63-case native skill route suite was attempted and failed at Supertest listener setup (`listen EPERM`), before route behavior. Passing pure/UI checks does not certify transaction concurrency or delivered runtime skill bytes.
+
+Gaps: backend migration/activation, real two-company execution and revocation/rollback qualification, browser review, and delegated/automated capability evaluation remain open. The manual slice supports native Paperclip Runner skill delivery only. Release pages are bounded to 100 plus active pins; decision history shows the latest 100 receipts.
+
+## `portfolio-read`
+
+Capability ID: `workforce/portfolio-read`.
+
+Review: `baseline`.
+
+API: `present` — owner GET/POST /api/agentos/portfolios/{portfolioId}/read-mandates and POST /api/agentos/portfolios/{portfolioId}/read-mandates/{mandateId}/revoke; actual agent GET /api/companies/{companyId}/friday/portfolio-mandates and GET /api/companies/{companyId}/friday/portfolio-work.
+
+Agent access: `available` — actual source agent with explicit matching workforce:portfolio_read native grant and mandate. No role default, shared identity or source coordinator binding implies a mandate. Discover and read keep the source-company URL; ordinary target-company routes remain denied. Board principals cannot impersonate an agent through the read gateway.
+
+Policy: mandatory company_shared_only scope, portfolio_work:read action, selected target set, exact source agent/company, owner, revision, revocation and expiry. Native grant ID, owner and complete structured scope must match the row. Every read locks/rechecks current portfolio links, approved accounts, source agent readiness/membership, owner permission-management grants in home/source/target and external-authorizer target read ceiling. Original actor and both user identities reach strict native SQL privacy predicates regardless of rollout shadow mode; private ancestry and projects are excluded before counts/pages. Maximum 100 tasks and 200 projects per response; no transcript, config, secret, evidence body or unchecked relationship projection. Mutations and successful reads append native audit records. Grant changes cannot commit halfway through the guarded read transaction.
+
+Evidence: `source-only` — [service](../../server/src/services/agentos-portfolio-mandates.ts), [UI](../../ui/src/components/WorkforceMandates.tsx), [strict native projection](../../server/src/services/friday-awareness.ts), [execution log](../../doc/plans/2026-11-06-agentos-portfolio-read-mandates.md).
+
+Verification: `passed` — six focused mandate/authority/SQL construction cases, five component cases and one native discovery case pass without listeners. Source-only PostgreSQL/HTTP cases cover actual privacy, owner/native revocation, company denial and revision replay; these were authored but not run in the sandbox. SQL construction tests do not prove database transaction or privacy execution.
+
+Gaps: migration/activation, real PostgreSQL concurrency/privacy/audit proof, browser and actual agent acceptance. Private scope awaits the user's answer; no private scope control or live grant exists. Portfolio task creation, delegation and cross-company operating proof remain open.

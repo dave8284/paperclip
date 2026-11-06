@@ -3,10 +3,15 @@ import express from "express";
 import request from "supertest";
 import { and, eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { agents, agentApiKeys, authUsers, companies, companyMemberships, companyOperatingProfiles, principalPermissionGrants, activityLog, agentosAssignments, agentosEmployees, createDb } from "@paperclipai/db";
+import { agents, agentApiKeys, authUsers, companies, companyMemberships, companyOperatingProfiles, principalPermissionGrants, activityLog, agentosAssignments, agentosEmployees,
+  companySkills, companySkillVersions, companySkillTestRuns, companySkillPolicies, issues, projects, agentosCapabilityDecisions, agentosPortfolioMandates, createDb } from "@paperclipai/db";
+import { readPaperclipSkillSyncPreference } from "@paperclipai/adapter-utils/server-utils";
+import { capabilitySelectionHash } from "../services/agentos-capabilities.js";
+import { companySkillService } from "../services/company-skills.js";
 import { startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
 import { errorHandler } from "../middleware/index.js";
 import { agentosWorkforceRoutes } from "../routes/agentos-workforce.js";
+import { fridayRoutes } from "../routes/friday.js";
 import { deleteCompany } from "../services/company-deletion.js";
 import { deleteAgentDependencies } from "../services/agent-deletion.js";
 import { accessService } from "../services/access.js";
@@ -19,10 +24,11 @@ describe("Agent OS shared workforce", () => {
   function app(actor: Express.Request["actor"]) {
     const result = express(); result.use(express.json());
     result.use((req, _res, next) => { req.actor = actor; next(); });
-    result.use("/api", agentosWorkforceRoutes(db)); result.use(errorHandler); return result;
+    result.use("/api", agentosWorkforceRoutes(db)); result.use("/api", fridayRoutes(db)); result.use(errorHandler); return result;
   }
   async function seed() {
     const owner = randomUUID();
+    await db.insert(authUsers).values({ id: owner, name: "Portfolio owner", email: `${owner}@example.test`, createdAt: new Date(), updatedAt: new Date() });
     const [one, two] = await db.insert(companies).values(["One", "Two"].map(name => ({ name, issuePrefix: `W${randomUUID().slice(0, 6)}` }))).returning();
     await db.insert(companyMemberships).values([one, two].map(company => ({ companyId: company.id, principalId: owner, principalType: "user", membershipRole: "owner", status: "active" })));
     await db.insert(principalPermissionGrants).values([one, two].map(company => ({ companyId: company.id, principalId: owner, principalType: "user", permissionKey: "users:manage_permissions" })));
@@ -40,8 +46,7 @@ describe("Agent OS shared workforce", () => {
     return { one, two, first, second, owner, actor, api, root, base, portfolioInput, employeeInput, assignments };
   }
   async function delegatedSeed(coordinator = false) {
-    const f = await seed(), now = new Date();
-    await db.insert(authUsers).values({ id: f.owner, name: "Portfolio owner", email: `${f.owner}@example.test`, createdAt: now, updatedAt: now });
+    const f = await seed();
     const [manager] = await db.insert(agents).values({ companyId: f.two.id, name: coordinator ? "Friday" : "CEO", role: coordinator ? "general" : "ceo" }).returning();
     await db.insert(companyMemberships).values({ companyId: f.two.id, principalType: "agent", principalId: manager.id, membershipRole: "member", status: "active" });
     for (const principal of [{ principalType: "agent" as const, principalId: manager.id }, { principalType: "user" as const, principalId: f.owner }]) {
@@ -56,6 +61,176 @@ describe("Agent OS shared workforce", () => {
     return { ...f, manager, delegate, delegated: app(delegate), target, employee, companyPath: `/api/companies/${f.two.id}/workforce`,
       binding: { id: randomUUID(), employeeId: employee.id, agentId: target.id } };
   }
+  async function capabilityFixture(f: Awaited<ReturnType<typeof seed>>, expectedLatestRevision = 0) {
+    await db.insert(principalPermissionGrants).values([f.one, f.two].map(company => ({ companyId: company.id,
+      principalType: "user", principalId: f.owner, permissionKey: "agents:configure" }))).onConflictDoNothing();
+    const markdown = `---\nname: reviewed-method\ndescription: Reviewed release method\n---\n\nExact method ${expectedLatestRevision + 1}\n`;
+    const [skill] = await db.insert(companySkills).values({ companyId: f.one.id, key: `company/${f.one.id}/${randomUUID()}`,
+      slug: `review-${randomUUID()}`, name: "Reviewed method", markdown, sourceType: "generated" }).returning();
+    const [version] = await db.insert(companySkillVersions).values({ companyId: f.one.id, companySkillId: skill.id,
+      revisionNumber: 1, fileInventory: [{ path: "SKILL.md", kind: "skill", content: markdown }] }).returning();
+    const [issue] = await db.insert(issues).values({ companyId: f.one.id, title: "Private capability test", description: "Private source context", status: "done" }).returning();
+    const [test] = await db.insert(companySkillTestRuns).values({ companyId: f.one.id, skillId: skill.id, skillVersionId: version.id,
+      agentId: f.first.id, issueId: issue.id, inputSnapshot: "Private evaluation task", outputSnapshot: "Private test evidence", status: "succeeded" }).returning();
+    const intent = { id: randomUUID(), employeeId: f.employeeInput.id, capabilityKey: "review", name: "Reviewed method",
+      expectedLatestRevision, sourceCompanyId: f.one.id, sourceSkillId: skill.id, sourceVersionId: version.id, sourceTestRunId: test.id,
+      evaluationSummary: "The owner accepted the exact method for release review", reviewedAndSanitized: true };
+    return { skill, version, test, issue, markdown, intent };
+  }
+  async function decisionIntent(f: Awaited<ReturnType<typeof seed>>, assignmentIndex: number, releaseId: string, action = "adopt") {
+    const assignment = f.assignments[assignmentIndex];
+    const [row] = await db.select().from(agentosAssignments).where(eq(agentosAssignments.id, assignment.id));
+    const [agent] = await db.select().from(agents).where(eq(agents.id, assignment.agentId));
+    return { id: randomUUID(), releaseId, action, reason: "Reviewed company decision", expectedAssignmentRevision: row.revision,
+      expectedSelectionHash: capabilitySelectionHash(agent.adapterConfig) };
+  }
+  async function mandateFixture() {
+    const f = await seed();
+    await db.insert(companyMemberships).values({ companyId: f.one.id, principalType: "agent", principalId: f.first.id, status: "active", membershipRole: "member" });
+    const intent = { id: randomUUID(), expectedRevision: 0, sourceCompanyId: f.one.id, sourceAgentId: f.first.id,
+      targetCompanyIds: [f.two.id], action: "portfolio_work:read", readScope: "company_shared_only", expiresAt: null };
+    await request(f.api).post(`${f.base}/read-mandates`).send(intent).expect(200);
+    const runtimeActor: Express.Request["actor"] = { type: "agent", source: "agent_jwt", companyId: f.one.id, agentId: f.first.id, onBehalfOfUserId: f.owner };
+    const query = { mandateId: intent.id, revision: 1, targetCompanyId: f.two.id };
+    return { ...f, intent, runtimeActor, runtime: app(runtimeActor), query, path: `/api/companies/${f.one.id}/friday/portfolio-work` };
+  }
+  it("delegates only shared summaries with the unchanged source actor and excludes private ancestry even when the owner can read it", async () => {
+    const f = await mandateFixture();
+    const [open, privateProject] = await db.insert(projects).values([
+      { companyId: f.two.id, name: "Shared project", visibility: "open" }, { companyId: f.two.id, name: "Private project", visibility: "private" },
+    ]).returning();
+    const [shared, parent] = await db.insert(issues).values([
+      { companyId: f.two.id, title: "Shared task", projectId: open.id },
+      { companyId: f.two.id, title: "Private parent", visibility: "private", responsibleUserId: f.owner },
+      { companyId: f.two.id, title: "Private project task", projectId: privateProject.id },
+    ]).returning();
+    await db.insert(issues).values({ companyId: f.two.id, title: "Private descendant", visibility: "open", privacyParentIssueId: parent.id });
+    const response = await request(f.runtime).get(f.path).query(f.query).expect(200);
+    expect(response.body.projects.map((row: { id: string }) => row.id)).toEqual([open.id]);
+    expect(response.body.tasks.map((row: { id: string }) => row.id)).toEqual([shared.id]);
+    expect(response.body).not.toHaveProperty("evidence"); expect(response.body).not.toHaveProperty("assignments");
+    await request(f.runtime).get(`/api/companies/${f.two.id}/friday/work`).expect(403);
+    const [receipt] = await db.select().from(activityLog).where(and(eq(activityLog.entityId, f.intent.id), eq(activityLog.action, "agentos.portfolio_work_read")));
+    expect(receipt.actorId).toBe(f.first.id); expect(receipt.companyId).toBe(f.one.id);
+  });
+  it("revalidates native grant, owner approval and external authorizer for each portfolio read", async () => {
+    const f = await mandateFixture();
+    await request(app({ ...f.runtimeActor, authorizingUserId: randomUUID() })).get(f.path).query(f.query).expect(403);
+    await db.update(authUsers).set({ approvalStatus: "suspended" }).where(eq(authUsers.id, f.owner));
+    await request(f.runtime).get(f.path).query(f.query).expect(403);
+    await db.update(authUsers).set({ approvalStatus: "approved" }).where(eq(authUsers.id, f.owner));
+    await accessService(db).setPrincipalPermission(f.one.id, "agent", f.first.id, "workforce:portfolio_read", false, f.owner);
+    await request(f.runtime).get(f.path).query(f.query).expect(403);
+  });
+  it("serializes duplicate mandate intent, fences stale revisions and revokes both records", async () => {
+    const f = await mandateFixture();
+    const edit = { ...f.intent, expectedRevision: 1, targetCompanyIds: [f.one.id, f.two.id] };
+    const results = await Promise.all([request(f.api).post(`${f.base}/read-mandates`).send(edit), request(f.api).post(`${f.base}/read-mandates`).send(edit)]);
+    expect(results.map(result => result.status)).toEqual([200, 200]);
+    await request(f.runtime).get(f.path).query(f.query).expect(403);
+    await request(f.api).post(`${f.base}/read-mandates/${f.intent.id}/revoke`).send({ expectedRevision: 2 }).expect(200);
+    await request(f.runtime).get(f.path).query({ ...f.query, revision: 3 }).expect(403);
+    const [row] = await db.select().from(agentosPortfolioMandates).where(eq(agentosPortfolioMandates.id, f.intent.id));
+    expect(row.grantId).toBeNull(); expect(row.revokedAt).not.toBeNull();
+    expect(await db.select().from(principalPermissionGrants).where(and(eq(principalPermissionGrants.principalId, f.first.id), eq(principalPermissionGrants.permissionKey, "workforce:portfolio_read")))).toHaveLength(0);
+  });
+  it("retains published skill/test evidence with clear conflicts and cascades target decisions before native company skill deletion", async () => {
+    const f = await seed(), evidence = await capabilityFixture(f);
+    const published = await request(f.api).post(`${f.base}/capabilities`).send(evidence.intent).expect(201);
+    const skills = companySkillService(db, { actor: f.actor });
+    await expect(skills.deleteSkill(f.one.id, evidence.skill.id)).rejects.toMatchObject({ status: 409, details: { code: "capability_skill_history_retained" } });
+    await expect(skills.deleteTestRun(f.one.id, evidence.skill.id, evidence.test.id, { hideHarnessIssue: async () => { throw new Error("Retained evidence must not be hidden"); } }))
+      .rejects.toMatchObject({ status: 409, details: { code: "capability_test_evidence_retained" } });
+    await request(f.api).post(`${f.base}/assignments/${f.assignments[1].id}/capabilities`).send(await decisionIntent(f, 1, published.body.id)).expect(200);
+    const [adoption] = await db.select().from(agentosCapabilityDecisions).where(eq(agentosCapabilityDecisions.companyId, f.two.id));
+    await expect(skills.deleteSkill(f.two.id, adoption.importedSkillId!)).rejects.toMatchObject({ status: 409 });
+    await deleteCompany(db, f.two.id);
+    expect(await db.select().from(agentosCapabilityDecisions).where(eq(agentosCapabilityDecisions.companyId, f.two.id))).toHaveLength(0);
+    expect(await db.select().from(companySkillVersions).where(eq(companySkillVersions.id, evidence.version.id))).toHaveLength(1);
+    expect(await db.select().from(companySkillTestRuns).where(eq(companySkillTestRuns.id, evidence.test.id))).toHaveLength(1);
+  });
+  it("publishes exact reviewed bytes and independently adopts, refuses and rolls back company pins", async () => {
+    const f = await seed(), first = await capabilityFixture(f);
+    const publish = await request(f.api).post(`${f.base}/capabilities`).send(first.intent).expect(201);
+    expect(publish.body.markdown).toBe(first.markdown);
+    expect(JSON.stringify(publish.body)).not.toContain(first.issue.id);
+    expect(JSON.stringify(publish.body)).not.toContain("Private");
+    const companyOne = `${f.base}/assignments/${f.assignments[0].id}/capabilities`;
+    const companyTwo = `${f.base}/assignments/${f.assignments[1].id}/capabilities`;
+    const adoptOne = await decisionIntent(f, 0, first.intent.id);
+    await request(f.api).post(companyOne).send(adoptOne).expect(200);
+    await request(f.api).post(companyTwo).send(await decisionIntent(f, 1, first.intent.id)).expect(200);
+    const [original] = await db.select().from(agents).where(eq(agents.id, f.first.id));
+    const previous = readPaperclipSkillSyncPreference(original.adapterConfig).desiredSkillEntries;
+    const second = await capabilityFixture(f, 1);
+    await request(f.api).post(`${f.base}/capabilities`).send(second.intent).expect(201);
+    await request(f.api).post(companyOne).send(await decisionIntent(f, 0, second.intent.id)).expect(200);
+    const [otherBefore] = await db.select().from(agents).where(eq(agents.id, f.second.id));
+    await request(f.api).post(companyTwo).send(await decisionIntent(f, 1, second.intent.id, "refuse")).expect(200);
+    expect((await db.select().from(agents).where(eq(agents.id, f.second.id)))[0].adapterConfig).toEqual(otherBefore.adapterConfig);
+    await request(f.api).post(companyOne).send(await decisionIntent(f, 0, first.intent.id, "rollback")).expect(200);
+    const [rolledBack] = await db.select().from(agents).where(eq(agents.id, f.first.id));
+    expect(readPaperclipSkillSyncPreference(rolledBack.adapterConfig).desiredSkillEntries).toEqual(previous);
+    const [version] = await db.select().from(companySkillVersions).where(eq(companySkillVersions.id, previous[0].versionId!));
+    expect(version.fileInventory[0].content).toBe(first.markdown);
+    const view = await request(f.api).get(`${f.base}/employees/${f.employeeInput.id}/capabilities`).expect(200);
+    expect(view.body.assignments.every((assignment: { selected: Array<{ releaseId: string }> }) => assignment.selected[0]?.releaseId === first.intent.id)).toBe(true);
+    expect(view.body.latestRevisions.review).toBe(2);
+  });
+  it("deduplicates concurrent capability decisions and rejects stale or changed intent", async () => {
+    const f = await seed(), source = await capabilityFixture(f);
+    await request(f.api).post(`${f.base}/capabilities`).send(source.intent).expect(201);
+    const path = `${f.base}/assignments/${f.assignments[0].id}/capabilities`, intent = await decisionIntent(f, 0, source.intent.id);
+    const both = await Promise.all([request(f.api).post(path).send(intent), request(f.api).post(path).send(intent)]);
+    expect(both.map(result => result.status)).toEqual([200, 200]);
+    expect(await db.select().from(agentosCapabilityDecisions).where(eq(agentosCapabilityDecisions.id, intent.id))).toHaveLength(1);
+    await request(f.api).post(path).send({ ...intent, reason: "Changed intent" }).expect(409);
+    await request(f.api).post(path).send({ ...intent, id: randomUUID() }).expect(409);
+  });
+  it("denies revoked company authority, missing exact evidence and company skill policy refusal", async () => {
+    const f = await seed(), source = await capabilityFixture(f);
+    await request(f.api).post(`${f.base}/capabilities`).send({ ...source.intent, sourceVersionId: randomUUID() }).expect(404);
+    await request(f.api).post(`${f.base}/capabilities`).send({ ...source.intent, reviewedAndSanitized: false }).expect(400);
+    await request(f.api).post(`${f.base}/capabilities`).send(source.intent).expect(201);
+    const path = `${f.base}/assignments/${f.assignments[1].id}/capabilities`, intent = await decisionIntent(f, 1, source.intent.id);
+    await db.insert(companySkillPolicies).values({ companyId: f.two.id, schemaVersion: 1, revision: 1, defaultEffect: "deny", rules: [] });
+    await request(f.api).post(path).send(intent).expect(403);
+    await db.delete(companySkillPolicies).where(eq(companySkillPolicies.companyId, f.two.id));
+    await db.update(companyMemberships).set({ status: "inactive" }).where(and(eq(companyMemberships.companyId, f.two.id), eq(companyMemberships.principalId, f.owner)));
+    await request(f.api).post(path).send(intent).expect(404);
+    await request(app({ type: "agent", source: "agent_key", companyId: f.one.id, agentId: f.first.id })).post(path).send(intent).expect(403);
+    expect(await db.select().from(agentosCapabilityDecisions).where(eq(agentosCapabilityDecisions.id, intent.id))).toHaveLength(0);
+  });
+  it("rolls imported capability bytes, selection, revision and decision back when durable audit fails", async () => {
+    const f = await seed(), source = await capabilityFixture(f);
+    await request(f.api).post(`${f.base}/capabilities`).send(source.intent).expect(201);
+    const path = `${f.base}/assignments/${f.assignments[0].id}/capabilities`, intent = await decisionIntent(f, 0, source.intent.id);
+    const [before] = await db.select().from(agents).where(eq(agents.id, f.first.id));
+    await db.execute(sql`CREATE FUNCTION fail_capability_audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.action = 'agentos.capability_adopt' THEN RAISE EXCEPTION 'capability audit failed'; END IF; RETURN NEW; END $$`);
+    await db.execute(sql`CREATE TRIGGER fail_capability_audit BEFORE INSERT ON activity_log FOR EACH ROW EXECUTE FUNCTION fail_capability_audit()`);
+    try { await request(f.api).post(path).send(intent).expect(500); }
+    finally { await db.execute(sql`DROP TRIGGER fail_capability_audit ON activity_log`); await db.execute(sql`DROP FUNCTION fail_capability_audit()`); }
+    expect((await db.select().from(agents).where(eq(agents.id, f.first.id)))[0].adapterConfig).toEqual(before.adapterConfig);
+    expect((await db.select().from(agentosAssignments).where(eq(agentosAssignments.id, f.assignments[0].id)))[0].revision).toBe(1);
+    expect(await db.select().from(agentosCapabilityDecisions).where(eq(agentosCapabilityDecisions.id, intent.id))).toHaveLength(0);
+    expect((await db.select().from(companySkills).where(eq(companySkills.companyId, f.one.id))).map(row => row.id)).toEqual([source.skill.id]);
+  });
+  it("does not use create permission to bypass an existing capability skill's update/edit policy", async () => {
+    const f = await seed(), first = await capabilityFixture(f);
+    await request(f.api).post(`${f.base}/capabilities`).send(first.intent).expect(201);
+    const path = `${f.base}/assignments/${f.assignments[0].id}/capabilities`;
+    await request(f.api).post(path).send(await decisionIntent(f, 0, first.intent.id)).expect(200);
+    const [previous] = await db.select().from(agents).where(eq(agents.id, f.first.id));
+    const [adoption] = await db.select().from(agentosCapabilityDecisions).where(eq(agentosCapabilityDecisions.releaseId, first.intent.id));
+    const second = await capabilityFixture(f, 1);
+    await request(f.api).post(`${f.base}/capabilities`).send(second.intent).expect(201);
+    await db.insert(companySkillPolicies).values({ companyId: f.one.id, schemaVersion: 1, revision: 1, defaultEffect: "allow",
+      rules: [{ id: "protect-existing-capability", priority: 1, effect: "deny", subject: { type: "roles", roles: ["board"] },
+        actions: ["skills.update", "skills.edit"], resources: { skillIds: [adoption.importedSkillId!] } }] });
+    await request(f.api).post(path).send(await decisionIntent(f, 0, second.intent.id)).expect(403);
+    expect((await db.select().from(agents).where(eq(agents.id, f.first.id)))[0].adapterConfig).toEqual(previous.adapterConfig);
+    expect(await db.select().from(agentosCapabilityDecisions).where(eq(agentosCapabilityDecisions.releaseId, second.intent.id))).toHaveLength(0);
+  });
   async function grantRetirement(f: Awaited<ReturnType<typeof delegatedSeed>>, targetAgentId = f.second.id) {
     for (const principal of [{ type: "agent" as const, id: f.manager.id }, { type: "user" as const, id: f.owner }]) {
       await accessService(db).setPrincipalPermission(f.two.id, principal.type, principal.id, "workforce:retire", true, f.owner, { agentIds: [targetAgentId] });

@@ -1,6 +1,7 @@
 import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import {
   heartbeatRuns,
+  aiExecutionCapacityClaims,
   dotAgentBindings,
   dotRunnerAssignments,
   museAgentBindings,
@@ -34,6 +35,9 @@ const executionRunColumns = {
   startedAt: heartbeatRuns.startedAt,
   status: heartbeatRuns.status,
   contextSnapshot: sql<Record<string, unknown>>`jsonb_build_object(
+    'aiCapacityWait', (select jsonb_build_object('warningAt', capacity.warning_at)
+      from ${aiExecutionCapacityClaims} capacity where capacity.run_id = ${heartbeatRuns.id}
+        and capacity.company_id = ${heartbeatRuns.companyId} and capacity.admitted_at is null and capacity.released_at is null),
     'issueId', ${heartbeatRuns.contextSnapshot}->'issueId',
     'executionRetryAccounting', ${heartbeatRuns.contextSnapshot}->'executionRetryAccounting',
     'failureRetriesBeforeAiConnectionWait', ${heartbeatRuns.contextSnapshot}->'failureRetriesBeforeAiConnectionWait',
@@ -293,6 +297,10 @@ export function projectExecution(
   )
     return set("finishing", "Finishing");
   if (successorRunId) return set("completed", "Continued in another run");
+  if (run.status === "running" && run.contextSnapshot?.aiCapacityWait) {
+    projection.nextAction = "Waiting for shared AI capacity. This request is saved; provider work has not started.";
+    return set("queued", "Waiting for AI capacity");
+  }
   if (run.status === "scheduled_retry" && run.scheduledRetryReason === "ai_connection_busy") {
     projection.nextAction = "Waiting for AI credential synchronization; the scheduled check will revalidate access before retrying.";
     return set("retry_scheduled", "Waiting for AI credentials");

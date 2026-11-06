@@ -39,6 +39,20 @@ it("reads scoped current data with company/project/time labels and native task n
   await act(async () => [...host.querySelectorAll("button")].find(button => button.textContent === "Open task")!.click());
   expect(navigate).toHaveBeenCalledWith(expect.objectContaining({ companyId, projectId, taskId: "task", panel: "work" }));
 });
+it.each(["list", "board"])("renders the registered %s with scoped current records and hides it after access loss", async kind => {
+  const document = { ...saved, body: JSON.stringify({ ...descriptor, kind }) };
+  api.getDocument.mockResolvedValue(document);
+  await render(document); await settled("Prepare launch");
+  expect(host.textContent).not.toContain("Other project secret");
+  expect(host.querySelector("table")).toBeNull();
+  const record = [...host.querySelectorAll("button")].find(button => button.textContent?.includes("Prepare launch"))!;
+  await act(async () => record.click());
+  expect(navigate).toHaveBeenCalledWith(expect.objectContaining({ companyId, projectId, taskId: "task" }));
+  api.work.mockRejectedValue(new Error("Access denied"));
+  await act(async () => { await client.invalidateQueries({ queryKey: fridayKey(companyId) }); });
+  await settled("Current data unavailable: Access denied");
+  expect(host.textContent).not.toContain("Prepare launch");
+});
 it("refetches on reopen despite a fresh cache and never shows cached rows after access failure", async () => {
   await render(); await settled("Prepare launch"); await render(null);
   api.work.mockResolvedValue(work("Launch shipped"));

@@ -6,7 +6,7 @@ import type { DecisionContext } from "./decision-models.js";
 import { localTriageRuntime, localTriageModelId, type LocalTriageResult } from "./local-triage.js";
 
 const questionVersion = "atomic-triage-v1";
-const policyVersion = "local-shadow-only-v2";
+const policyVersion = "local-shadow-only-v3";
 const digest = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
 // This checkpoint has an invalid 11+ choice calibration entry. Keep every head at ten options or fewer.
 const families = {
@@ -74,6 +74,8 @@ export function readModelTriageObservation(request: DecisionRequest, candidates:
 export async function observeModelTriage(_db: Db, input: ModelTriageInput, options: {
   local?: { decide: (request: DecisionRequest, signal?: AbortSignal) => Promise<LocalTriageResult> };
   signal?: AbortSignal;
+  /** Native persisted conversation identity, supplied by the execution owner. */
+  interactiveConversation?: boolean;
 } = {}): Promise<ModelTriageReceipt> {
   if (input.context.companyId.length === 0 || input.context.issueId !== input.taskId
     || input.context.actor.type === "system" || (input.context.actor.type === "agent" && (
@@ -90,6 +92,12 @@ export async function observeModelTriage(_db: Db, input: ModelTriageInput, optio
     routeChangedByTriage: false, revalidationRequired: true,
     decision: { status: "not_run", reason: "local_disabled", invocationId: null, provider: null, requestedModel: null, resolvedModel: null, elapsedMs: null,
       costCents: null, costStatus: null, proposedCandidateId: null, proposedTaskType: null },
+  };
+  // Shadow inference cannot improve this turn's selected route. Keep it off the
+  // interactive response path instead of spending up to two seconds waiting for
+  // an observation. Retain a receipt so analytics does not imply it ran.
+  if (options.interactiveConversation) return {
+    ...base, decision: { ...base.decision, reason: "interactive_conversation", computationKind: "not_run" },
   };
   let request: DecisionRequest;
   try { request = buildModelTriageQuestions(input); }

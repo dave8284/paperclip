@@ -2710,6 +2710,20 @@
       "when": 1793098889786,
       "tag": "0388_lowly_fixer",
       "breakpoints": true
+    },
+    {
+      "idx": 389,
+      "version": "7",
+      "when": 1793959485525,
+      "tag": "0389_secret_scrambler",
+      "breakpoints": true
+    },
+    {
+      "idx": 390,
+      "version": "7",
+      "when": 1793962067436,
+      "tag": "0390_tough_virginia_dare",
+      "breakpoints": true
     }
   ]
 }

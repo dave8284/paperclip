@@ -96,7 +96,7 @@ export type ExecutionPhase =
   | "execution.workspace_ownership_wait" | "execution.realtime"
   | "execution.usage" | "execution.native_finalize"
   | "execution.plugin_prepare" | "execution.plugin_project_auth" | "execution.plugin_submit" | "execution.plugin_connection"
-  | "execution.usage_startup" | "execution.mcp_handoff" | "execution.dispatch_admission" | "execution.budget_reservation"
+  | "execution.usage_startup" | "execution.mcp_handoff" | "execution.dispatch_admission" | "execution.budget_reservation" | "execution.capacity_wait"
   | "completion.run" | "completion.output" | "completion.terminal_write" | "completion.cost" | "completion.liveness" | "completion.summary"
   | "response.transaction" | "response.transaction.entry" | "response.transaction.commit" | "response.transaction.rollback" | "response.row_lock" | "response.write"
   | "response.resolve" | "response.authorize" | "response.add_comment" | "response.activity" | "response.publish";
