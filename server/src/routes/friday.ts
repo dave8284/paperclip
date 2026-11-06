@@ -14,6 +14,8 @@ import { agentosPortfolioMandateService } from "../services/agentos-portfolio-ma
 import { forbidden } from "../errors.js";
 import { assertCompanyAccess, assertBoard, getActorInfo } from "./authz.js";
 import { authorizationService } from "../services/authorization.js";
+import { platformChangeService } from "../services/platform-changes.js";
+import { requestPlatformChangeSchema } from "@paperclipai/shared";
 
 export function fridayRoutes(db: Db) {
   const router = Router();
@@ -29,6 +31,11 @@ export function fridayRoutes(db: Db) {
     next();
   });
   router.get("/companies/:companyId/friday/work", async (req, res) => res.json(await service.work(req.params.companyId as string, req.actor, fridayWorkQuerySchema.parse(req.query))));
+  router.post("/companies/:companyId/friday/platform-changes", async (req, res) => {
+    assertBoard(req);
+    const result = await platformChangeService(db).request(req.params.companyId as string, req.actor, requestPlatformChangeSchema.parse(req.body));
+    res.status(result.created ? 201 : 200).json(result);
+  });
   router.get("/companies/:companyId/friday/portfolio-mandates", async (req, res) =>
     res.set("Cache-Control", "no-store").json(await agentosPortfolioMandateService(db).discover(req.actor, req.params.companyId as string)));
   router.get("/companies/:companyId/friday/portfolio-work", async (req, res) =>

@@ -20,6 +20,7 @@ import { PageSkeleton } from "../components/PageSkeleton";
 import { ApplicationWorkMap } from "../components/ApplicationWorkMap";
 import { ApplicationTaskInspector } from "../components/ApplicationTaskInspector";
 import { StatusBadge } from "../components/StatusBadge";
+import { PlatformChangeRequest } from "../components/PlatformChangeRequest";
 
 const lanes = ["backlog", "todo", "in_progress", "in_review", "blocked", "done", "cancelled"];
 const label = (value: string) => value.replaceAll("_", " ");
@@ -77,6 +78,7 @@ export function ApplicationDetail() {
       <label className="space-y-1 text-sm"><span className="block text-muted-foreground">Lifecycle</span><select aria-label="Application lifecycle" className="rounded-md border bg-background px-3 py-2" value={application!.stage} disabled={stage.isPending} onChange={event => stage.mutate(event.target.value as ManagedApplication["stage"])}>{MANAGED_APPLICATION_STAGES.map(value => <option key={value} value={value}>{label(value)}</option>)}</select></label>
     </div>
     {errors.map((error, index) => <p key={index} role="alert" className="text-sm text-destructive">{error!.message}</p>)}
+    {application!.kind === "platform" && <PlatformChangeRequest key={application!.id} companyId={selectedCompanyId} application={application!} />}
     <Card><CardContent className="space-y-4 pt-6"><p className="whitespace-pre-wrap text-sm">{application!.brief}</p>
       <div className="flex flex-wrap items-center gap-3"><select aria-label="Planning lead" className="rounded-md border bg-background px-3 py-2 text-sm" value={coordinatorId} onChange={event => setCoordinatorId(event.target.value)}><option value="">Choose a planning lead</option>{eligibleAgents.map(agent => <option key={agent.id} value={agent.id}>{agent.name} · {agent.title ?? agent.role}</option>)}</select><Button disabled={!coordinatorId || kickoff.isPending} onClick={() => kickoff.mutate()}>{kickoff.isPending ? "Assigning…" : "Start planning"}</Button><Link to="/agents" className="text-sm text-primary">Manage agent pool</Link></div>
       <p className="text-xs text-muted-foreground">Assigns a planning task to a lead in this company. Friday remains your portfolio coordinator. The task retains its plan, execution, approvals and outputs; native setup and budget limits still apply.</p>

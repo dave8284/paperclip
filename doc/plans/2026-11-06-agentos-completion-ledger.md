@@ -13,19 +13,23 @@ The owner requested simple **Fixed / Not fixed** tracking in the existing
 [93-item worksheet](2026-11-03-agentos-requirements-reconciliation.md).
 Update those rows as work completes; do not create another backlog.
 
-- **Fixed:** retained native features, navigation/table/layout corrections, home
-  transcript/drafts/suggestions, actual landing screenshots, graph navigation,
-  standalone model-service transport/persistence/isolation. See each worksheet row.
-- **Not fixed:** full operating delivery, actual owner Google account acceptance,
-  physical voice conversation, provider workflows and evaluated learning. Keep
-  fixture/source checks separate from those results.
-- Current combined server and UI builds pass. Native packet-only review and
-  bounded tool/resource graph are implemented; real provider journeys remain.
-- Installed local Whisper/Kokoro audio roundtrip passes (0.56s synthesis, 0.06s
-  recognition after warmup); this does not prove physical microphone behavior.
-- Active work: artifact/saved-display browser acceptance; connector/performance
-  persisted checks; bounded owner-requested platform-change admission. Then load
-  the checked backend through the guarded local restart and update statuses.
+- **Fixed:** retained native features; company hierarchy/navigation; transcript,
+  connected/setup drafts and home suggestions; landing screenshots/icons; graph
+  navigation/style; local artifact history and scoped search; connector inventory;
+  standalone model-service transport/persistence/isolation. Worksheet rows are
+  authoritative and each carries its current binary status.
+- Source checkpoints `8d3f92b3d` and `d68507272` are committed to the AgentOS fork.
+  Later active changes must be checked before starting another worker.
+- **Not fixed:** full operating delivery, owner Google account acceptance, physical
+  voice conversation, provider workflows, model qualification and evaluated learning.
+- Local speech roundtrip and saved table/list/board refresh pass. Setup draft
+  persistence/handoff passes in the actual browser, without sending a message.
+- Active work: full UI regression (connector setup failures under investigation),
+  isolated platform-change admission, final backend activation, disposable native
+  employee/configuration and deletion journeys. Admin analytics timestamp failure
+  is repaired and all seventeen persisted/audit checks pass.
+- Packet-only review source/protocol checks pass; real account review and accepted
+  output remain open. Cross-company component publication is still unimplemented.
 - The designated owner’s interactive Google sign-in result has been requested;
   existing credentials are configured and must not be requested again.
 - Cloud/public hosting and Higgsfield sign-in remain deferred. Shared-seat starting

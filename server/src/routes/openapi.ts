@@ -7,6 +7,7 @@ import {
   experimentalApiQueries,
 } from "./experimental-api-paths.js";
 import { Router } from "express";
+import { requestPlatformChangeSchema } from "@paperclipai/shared";
 import { createAgentosPortfolioSchema, createAgentosEmployeeSchema, createAgentosAssignmentSchema, retireAgentosAssignmentSchema,
   publishAgentosCapabilitySchema, decideAgentosCapabilitySchema, savePortfolioReadMandateSchema, revokePortfolioReadMandateSchema } from "@paperclipai/shared";
 import { companyPerformanceQuerySchema, createPerformanceReportSchema } from "@paperclipai/shared";
@@ -5066,6 +5067,7 @@ for (const operation of [
 
 for (const operation of [
   { method: "get", path: "/api/companies/{companyId}/friday/work", summary: "Read current authorized work: project assignments, paginated tasks and owners, department heads, project leads and bounded reporting chains, messages, artifacts and recorded case handoffs", query: fridayWorkQuerySchema },
+  { method: "post", path: "/api/companies/{companyId}/friday/platform-changes", summary: "Current platform owner prepares a native internal engineering task with an isolated repository selection, independent reviewer and immutable source references. Agents cannot authorize the request; it grants no deployment or permission changes. Sources remain company scoped.", body: requestPlatformChangeSchema },
   { method: "get", path: "/api/companies/{companyId}/friday/portfolio-mandates", summary: "Discover this actual source agent's currently authorized owner-granted portfolio summary read mandate and allowed target company IDs. No mandate is inferred from role or shared employee identity. Empty when none is authorized." },
   { method: "get", path: "/api/companies/{companyId}/friday/portfolio-work", summary: "Read bounded company-shared project and task summaries using this source agent's exact explicit portfolio mandate revision. Requires current responsible portfolio owner and external authorizer ceilings on every read. Private work, transcripts, agent configuration, secrets and foreign-company execution are excluded. Company ID in the URL remains your native source company; discover the mandate first, then paginate task and project offsets.", query: portfolioWorkQuerySchema },
   { method: "get", path: "/api/companies/{companyId}/friday/diagnostics", summary: "Diagnose currently readable blocked tasks and task-bound failed runs, local speech installation, local Laya triage readiness and administrator-only saved restart readiness. On-demand, read-only, bounded pages with checked/unknown results, observation time and native source paths. No model loading, inference, provider probes, raw run logs, credentials or complete-platform health claim.", query: fridayDiagnosticsQuerySchema },

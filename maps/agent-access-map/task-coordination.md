@@ -89,6 +89,13 @@ API: `present` — representative operation IDs:
   saves one revisioned findings document after complete source coverage. History,
   current-document reads, ordinary writes and `resolve_review` are denied in
   packet mode. The task stays in review for separate accountable-owner resolution.
+- `POST /api/companies/{companyId}/friday/platform-changes` prepares an explicit
+  current platform owner's request in a selected internal application. Agents
+  cannot authorize it. Native tasks, managed isolated workspace selection,
+  independent review stages, immutable document revisions and activity receipts
+  own the record and retries. Exact source references retain company/task access;
+  this endpoint does not copy source bytes, grant release authority or publish
+  reusable code across companies.
 
 Agent access: `partial` — Native paperclip_finish/paperclip_block and assigned
 resolve_review; legacy agent REST disposition.

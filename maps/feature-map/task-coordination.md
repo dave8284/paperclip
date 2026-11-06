@@ -14,6 +14,13 @@ with frozen-source reads and structured findings. Findings remain separate from
 the owner's resolution and task approval. Other provider/runtime combinations
 fail closed; source and protocol checks are separate from real-account qualification.
 
+Internal platform applications also expose an owner request form that prepares
+a native backlog task, isolated repository selection, independent review stage
+and locked request document. Same-company source revisions or attachments can
+be pinned through the request API. Cross-company component publication and the
+release/recovery journey remain open; preparing a task does not grant deployment
+or permission changes.
+
 Feature ID: `task-coordination`.
 
 Implementation: [task thread](../../ui/src/pages/IssueDetail.tsx), [execution policy](../../server/src/services/issues.ts).
