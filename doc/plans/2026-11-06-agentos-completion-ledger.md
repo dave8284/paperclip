@@ -18,7 +18,8 @@ Update those rows as work completes; do not create another backlog.
   navigation/style; local artifact history and scoped search; connector inventory;
   standalone model-service transport/persistence/isolation. Worksheet rows are
   authoritative and each carries its current binary status.
-- Source checkpoints `8d3f92b3d`, `d68507272`, `1bc35a4b9`, `496cf185b`, `26f90de27` and `472a2b9a1` are pushed to the AgentOS fork.
+- Source checkpoints through model qualification `846613d4e` and migration
+  repair `651e0b23a` are pushed to the AgentOS fork.
   Later active changes must be checked before starting another worker.
 - **Not fixed:** full operating delivery, owner Google account acceptance, physical
   voice conversation, provider workflows, model qualification and evaluated learning.
@@ -43,8 +44,9 @@ Update those rows as work completes; do not create another backlog.
   applied. Exact original `0391` SQL/hash/timestamp restored; additive `0392`
   applied normally. No data deletion or manual database-journal changes. Native
   recovery request `2026-11-06T22:26:37.601Z` completed with no lost runs.
-  The old disposable 3199 instance applied the superseded draft migration;
-  replace that fixture before another restart, without treating it as production.
+  The disposable 3199 instance's superseded draft was reconciled through the
+  existing native migration command; its fixture records are retained. Fresh
+  migration/qualification checks pass all 11 cases; recovered landing checks pass.
 - Local triage now rejects clipped questions before inference (11 checks pass).
   The original 12-case diagnostic failures remain valid; they do not qualify routing.
   OpenAPI discovery drift is corrected; all 27 catalog checks and 70 remaining
