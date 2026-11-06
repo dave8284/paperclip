@@ -13,10 +13,10 @@ Explicit deferrals stay **Not fixed**, with the deferral retained in the row.
 Older detail is reference material; new updates need only status and the next
 required action. Do not recreate this list or ask the owner to repeat it.
 
-Current work: finish actual browser acceptance and landing screenshots, add
-recorded tool/resource activity to the graph, and implement native packet-only
-independent review. PostgreSQL workforce/capacity and native recovery checks pass.
-Next: remaining voice and complete delegated operating-workflow acceptance.
+Current work: account-bound model qualification and durable provider observations.
+All 9,440 UI checks pass after the native connector fixes. The owner’s latest
+landing choice is one prominent dashboard image, not multiple feature captures.
+Next: local triage qualification, physical voice and real delegated workflows.
 The [execution checkpoint](2026-11-06-agentos-completion-ledger.md) records active
 ownership and blockers. No item is closed merely because its source compiles.
 
@@ -89,11 +89,11 @@ the current conversation, not invented additions to its historical numbering.
 | ID | Status | Requested outcome | Current disposition |
 | --- | --- | --- | --- |
 | X01 | **Not fixed** | Fix Google `redirect_uri_mismatch`; use Google sign-in only, without email/password login. | Google-only UI and disabled password policy are active. Owner has been asked to complete Google sign-out/sign-in; awaiting the actual account result. |
-| X02 | **Fixed** | Use Wispr Flow's landing page as a design reference and add several actual dashboard screenshots alongside key features. The user explicitly rejected the mistaken “Whisper-powered voice flow” interpretation. Latest layout correction: large sphere on the right, vertically centered text on the left. | Three actual current-app feature screenshots added and inspected, with labelled Northstar example data and full-size links. Desktop/mobile rendering and image loading pass. |
+| X02 | **Fixed** | Use Wispr Flow as the landing design reference. Latest owner correction (7 November): one prominent actual dashboard screenshot, not multiple feature screenshots. Keep the large sphere right and centered copy left. | Single framed dashboard preview below the hero; feature sections use text. Current desktop/mobile browser checks pass. |
 | X03 | **Fixed** | Replace “A little clarity, a lot in motion” with a meaningful tagline. | “Turn ideas into coordinated action.” now replaces the old wording across landing, footer, sign-in and Friday workspace. |
 | X04 | **Fixed** | Make the landing sphere visibly grow and shrink on hover and vary its rotation as the pointer moves. | Real-browser stationary hover visibly grows the sphere; pointer rotation and finite/reduced-motion lifecycle checks pass. |
 | X05 | **Not fixed** | Automatically approve the owner's explicitly designated Google account and make it the instance administrator. | Owner provisioning is active. Actual designated-owner Google sign-in/admin acceptance awaits the owner’s interactive login; credentials are already configured. |
-| X06 | **Not fixed** | Replace “You're on the list” with a waiting-list thank-you, show confetti, and explain the status button. | The running UI serves “Thank you for joining the waiting list”, finite reduced-motion-aware confetti, and “Refresh approval status” with explicit pending feedback. The action only refetches approval; it does not approve an account or change its priority. Auth/waitlist/confetti checks pass; browser visual acceptance remains open. |
+| X06 | **Fixed** | Replace “You're on the list” with a waiting-list thank-you, show confetti, and explain the status button. | Thank-you copy, finite reduced-motion-aware confetti and refresh-only status feedback pass component and pending-state browser presentation checks. Real Google registration remains S01/S02. |
 | X07 | **Not fixed** | Implement a triage layer choosing System One decisions versus qualified generative/open LLMs alongside Elephant–Goldfish. The owner clarified “GEP” to Jev, then requested an open-source alternative. | Local Laya is installed with bounded shadow classification, abstention and audit. A real 12-case offline diagnostic rejected every profile suggestion for contradictory answers; no routing promotion is justified. Interactive conversations now skip the non-routing shadow wait. App activation, representative evaluation and current-account qualification remain open; no paid fallback. |
 
 ## Foundation and delivery method
@@ -138,7 +138,7 @@ the current conversation, not invented additions to its historical numbering.
 | V08 | **Fixed** | Keep durable conversation/history and drafts through navigation. Avoid unnecessary New chat flows and a second central typing modal. | U52, U63, U82–U83 | Native history and connected/setup drafts persist across navigation and reload. Browser confirms explicit setup-draft handoff appends to the existing composer without sending. |
 | V09 | **Not fixed** | Ordinary clarification happens in conversation, not command-palette or multiple-choice pop-ups. Preserve real action approval effects. | U121–U123, U134 | Implemented/pending shell changes; verify actual runtime questions. |
 | V10 | **Fixed** | Introductory copy disappears after interaction; useful suggestions adapt to current work and user activity. | U123 | Browser verifies intro dismissal and current work suggestions; both home blocker entry points open the real task. Sixteen focused checks pass. |
-| V11 | **Not fixed** | Voice preferences belong in Settings. Friday is fixed; remove the ordinary coordinator selector. | U123, U136 | Recorded refinements; verify all entry points. |
+| V11 | **Fixed** | Voice preferences belong in Settings. Friday is fixed; remove the ordinary coordinator selector. | U123, U136 | Current browser verifies consolidated Voice settings; Friday stays fixed and ordinary coordinator selectors are removed. |
 
 ## Navigation, branding and visual work
 
@@ -230,7 +230,7 @@ the current conversation, not invented additions to its historical numbering.
 | L01 | **Fixed** | Keep local deployment until the concept works flawlessly; do not restart the tunnel or provision billable cloud hosting from older instructions. | U108–U114 | Constraint; public hosting deferred. |
 | L02 | **Not fixed** | Eventual cloud-native operation continues while the laptop is off, with durable data/workers, backups, restore, monitoring and release/rollback. | U22, U39–U40, U92, U113–U114 | Deferred release phase; local-first does not remove the eventual requirement. |
 | L03 | **Not fixed** | Mobile-responsive, fast, usable phone/tablet flows; minimise infrastructure cost without losing functionality or speed. Measure before promising performance/cost. | U89, U92, U113–U114 | Responsive foundation; device/audio/load/cost acceptance outstanding. |
-| L04 | **Not fixed** | Validate the current full revision: relevant backend/UI checks, full regression completion, build/typecheck, migrations, actual browser/voice and operating journeys. | U26, U76, U80, U98, U114–U115, U139, U145 | Full UI run: 9,387 passed, 48 connector setup failures being corrected. Targeted PostgreSQL, protocol, build and browser checks pass; full backend/current runtime, physical audio and real operating acceptance remain open. |
+| L04 | **Not fixed** | Validate the current full revision: relevant backend/UI checks, full regression completion, build/typecheck, migrations, actual browser/voice and operating journeys. | U26, U76, U80, U98, U114–U115, U139, U145 | Full UI regression passes all 850 files/9,440 checks. Relevant native database, protocol and browser checks pass; guarded backend restart reports no lost runs. Real account, physical audio, full backend and delegated operating acceptance remain. |
 
 ## Evidence pointers and immediate closure order
 

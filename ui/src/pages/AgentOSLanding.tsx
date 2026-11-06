@@ -32,10 +32,19 @@ export function AgentOSLanding({ preview = false }: { preview?: boolean }) {
           <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">Your companies. One conversation.</p>
           <h1 className="text-5xl font-medium tracking-tight md:text-6xl xl:text-7xl">Turn ideas into coordinated action.</h1>
           <p className="max-w-xl text-lg leading-relaxed text-muted-foreground">Meet Friday. One place to talk through your ideas, bring your digital team together, and keep your companies moving.</p>
-          <div className="flex flex-wrap items-center gap-4"><Button asChild size="lg"><Link to="/auth?mode=sign_up">Join the waiting list <ArrowRight className="size-4" /></Link></Button><a href="#how-it-works" className="inline-flex items-center gap-2 text-sm">Take a look around <ArrowDown className="size-4" /></a></div>
+          <div className="flex flex-wrap items-center gap-4"><Button asChild size="lg"><Link to="/auth?mode=sign_up">Join the waiting list <ArrowRight className="size-4" /></Link></Button><a href="#dashboard-preview" className="inline-flex items-center gap-2 text-sm">Take a look around <ArrowDown className="size-4" /></a></div>
           <p className="text-xs text-muted-foreground">Sign up with Google. We’re welcoming new members as access opens.</p>
         </div>
         <div className="flex min-w-0 flex-col items-center justify-center gap-2"><div className="agentos-landing-orb-stage"><FridayOrb state="idle" label="Friday, your portfolio coordinator" decorative pointerReactive /></div><p className="text-center text-sm text-muted-foreground">Friday, your portfolio coordinator.</p></div>
+      </section>
+
+      <section id="dashboard-preview" aria-label="AgentOS dashboard preview" className="scroll-mt-8 pb-16 md:pb-24">
+        <figure className="rounded-3xl bg-muted p-3 md:p-8">
+          <a href="/images/agentos/dashboard.png" target="_blank" rel="noreferrer" aria-label="View the AgentOS dashboard at full size" className="block overflow-hidden rounded-2xl border border-border bg-background shadow-2xl shadow-foreground/10 focus-visible:outline focus-visible:outline-ring">
+            <img src="/images/agentos/dashboard.png" alt="AgentOS dashboard with company navigation, work totals and the connected project and employee map" width={1440} height={1200} loading="lazy" decoding="async" className="h-auto w-full" />
+          </a>
+          <figcaption className="px-2 pt-4 text-center text-xs text-muted-foreground">Your workspace, with Friday alongside. Shown with illustrative company data.</figcaption>
+        </figure>
       </section>
 
       <section id="meet-friday" aria-labelledby="friday-heading" className="grid scroll-mt-8 gap-10 rounded-3xl bg-muted p-6 md:grid-cols-2 md:p-12">
@@ -57,16 +66,15 @@ export function AgentOSLanding({ preview = false }: { preview?: boolean }) {
         <div className="flex max-w-2xl flex-col gap-4">
           <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">From conversation to context</p>
           <h2 id="features-heading" className="text-3xl font-medium tracking-tight md:text-4xl">See the work. Know where you’re needed.</h2>
-          <p className="text-base leading-relaxed text-muted-foreground">Friday brings the conversation together. Your workspace keeps the people, projects and decisions behind it within reach.</p><p className="text-sm text-muted-foreground">Screens from AgentOS with illustrative company data. Select an image to take a closer look.</p>
+          <p className="text-base leading-relaxed text-muted-foreground">Friday brings the conversation together. Your workspace keeps the people, projects and decisions behind it within reach.</p>
         </div>
-        <div className="flex flex-col divide-y divide-border">
+        <div className="grid gap-10 md:grid-cols-3 md:gap-8">
           {[
-            { Icon: Layers3, title: "Every company, in context", screenshot: "work-map", imageWidth: 1162, imageHeight: 1111, imageAlt: "AgentOS Agent Map showing the Northstar example company’s projects, employees and tasks", caption: "Agent Map · Northstar example", text: "Move from your portfolio into a company, project or task. Follow progress in the work map, board or activity view.", details: ["Projects and tasks in one place", "Routines for recurring work", "Files and results attached to the work"] },
-            { Icon: Network, title: "A workforce you can shape", screenshot: "workforce", imageWidth: 1248, imageHeight: 652, imageAlt: "AgentOS workforce table showing example employees and their company assignments", caption: "Workforce · Northstar example", text: "Bring digital employees and their skills together, then open a direct conversation with the specialist you need.", details: ["Shared employee identities", "Company-specific assignments", "Individual conversations and history"] },
-            { Icon: ShieldCheck, title: "Decisions stay with you", screenshot: "decisions", imageWidth: 1248, imageHeight: 795, imageAlt: "AgentOS Decisions showing an example launch proposal with review and approval actions", caption: "Decisions · Northstar example", text: "See proposals that need your attention. Review the context, discuss an alternative with Friday, and choose what happens next.", details: ["Visible approval requests", "Company and project access controls", "A record of actions and decisions"] },
-          ].map(({ Icon, title, text, details, screenshot, imageWidth, imageHeight, imageAlt, caption }) => <article key={title} className="grid items-center gap-8 py-10 md:grid-cols-2 md:gap-12">
+            { Icon: Layers3, title: "Every company, in context", text: "Move from your portfolio into a company, project or task. Follow progress in the work map, board or activity view.", details: ["Projects and tasks in one place", "Routines for recurring work", "Files and results attached to the work"] },
+            { Icon: Network, title: "A workforce you can shape", text: "Bring digital employees and their skills together, then open a direct conversation with the specialist you need.", details: ["Shared employee identities", "Company-specific assignments", "Individual conversations and history"] },
+            { Icon: ShieldCheck, title: "Decisions stay with you", text: "See proposals that need your attention. Review the context, discuss an alternative with Friday, and choose what happens next.", details: ["Visible approval requests", "Company and project access controls", "A record of actions and decisions"] },
+          ].map(({ Icon, title, text, details }) => <article key={title} className="border-t border-border pt-8">
             <div className="flex flex-col items-start gap-5"><Icon className="size-6 text-muted-foreground" aria-hidden="true" /><h3 className="text-2xl font-medium tracking-tight md:text-3xl">{title}</h3><p className="max-w-lg text-base leading-relaxed text-muted-foreground">{text}</p><ul className="flex flex-col gap-3">{details.map(detail => <li key={detail} className="flex items-center gap-3 text-sm"><Check className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" /><span>{detail}</span></li>)}</ul></div>
-            <figure className="flex min-w-0 flex-col gap-3"><a href={`/images/agentos/${screenshot}.png`} target="_blank" rel="noreferrer" aria-label={`View larger: ${caption}`} className="block overflow-hidden rounded-xl border border-border focus-visible:outline focus-visible:outline-ring"><img src={`/images/agentos/${screenshot}.png`} alt={imageAlt} width={imageWidth} height={imageHeight} loading="lazy" decoding="async" className="h-auto w-full" /></a><figcaption className="text-center text-xs text-muted-foreground">{caption}</figcaption></figure>
           </article>)}
         </div>
       </section>

@@ -39,11 +39,11 @@ landing does not open the microphone or start agent work. Sign-in, sign-up and
 approved/pending redirects retain the existing registration flow.
 `AgentOSLanding.test.tsx` and `FridayOrb.test.tsx` cover DOM routing and motion
 lifecycle; `Friday.test.tsx` and `FridayWorkspace.test.tsx` retain workspace
-coverage. The feature rows include actual Agent Map, Workforce and Decisions
-captures from the current local app, using isolated Northstar example records.
-The public images in `ui/public/images/agentos/` contain illustrative data, no
-personal account details or claimed business execution. Images link to their
-full-size capture and load lazily with intrinsic dimensions. Physical voice
+coverage. The owner’s current design uses one prominent dashboard capture below
+the hero, with a rounded frame and shadow; the feature sections contain text.
+`ui/public/images/agentos/dashboard.png` shows the current local app with isolated
+Northstar example data, no personal account details or claimed business execution.
+The single preview links to its full-size capture and loads lazily with intrinsic dimensions. Physical voice
 input/output and interactive Google login remain separate qualifications.
 
 In local-trusted mode the profile menu identifies the local workspace and omits
