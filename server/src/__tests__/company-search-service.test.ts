@@ -879,6 +879,51 @@ describeEmbeddedPostgres("companySearchService", () => {
     }
   });
 
+  it("retrieves persisted conversations and their current evidence without leaking private chats through results, counts or facets", async () => {
+    const previousMode = process.env.PAPERCLIP_ISSUE_PRIVACY_MODE;
+    process.env.PAPERCLIP_ISSUE_PRIVACY_MODE = "enforce";
+    try {
+      const companyId = await createCompany(), foreignCompanyId = await createCompany(), readerId = randomUUID(), otherUserId = randomUUID();
+      const agent = await createAgent(companyId), secondAgent = await createAgent(companyId), foreignAgent = await createAgent(foreignCompanyId);
+      const projectId = await createProject(companyId);
+      const chat = async (company: string, employee: string, user: string, title: string) => {
+        const id = randomUUID();
+        return createIssue(company, { id, projectId: company === companyId ? projectId : null, title, status: "todo", visibility: "private", privacyRootIssueId: id,
+          responsibleUserId: user, conversationAgentId: employee, assigneeAgentId: employee, conversationUserId: user, conversationState: "active" });
+      };
+      const first = await chat(companyId, agent, readerId, "Planning conversation");
+      const second = await chat(companyId, secondAgent, readerId, "Review conversation");
+      const privateChat = await chat(companyId, agent, otherUserId, "Secret orbital signal");
+      await chat(foreignCompanyId, foreignAgent, readerId, "Foreign orbital signal");
+      await createIssue(companyId, { projectId, title: "Ordinary orbital signal task", assigneeAgentId: agent });
+      const [comment] = await db.insert(issueComments).values({ companyId, issueId: first, authorUserId: readerId, body: "orbital signal in the live conversation" }).returning();
+      await db.insert(issueComments).values({ companyId, issueId: privateChat, authorUserId: otherUserId, body: "Secret orbital signal body" });
+      const [document] = await db.insert(documents).values({ companyId, title: "orbital signal knowledge", latestBody: "Evidence preserved from the review", latestRevisionNumber: 1 }).returning();
+      await db.insert(issueDocuments).values({ companyId, issueId: second, documentId: document.id, key: "review" });
+      const actor = { type: "board" as const, source: "session" as const, userId: readerId };
+      const options = { issueReadCondition: await issueReadSqlCondition(db, actor), projectReadCondition: await projectReadSqlCondition(db, actor) };
+      const query = companySearchQuerySchema.parse({ q: "orbital signal", scope: "conversations", limit: 1 });
+      const page = await svc.search(companyId, query, options), next = await svc.search(companyId, { ...query, offset: 1 }, options);
+      expect([...page.results, ...next.results].map(row => row.id).sort()).toEqual([first, second].sort());
+      expect(page.countsByType.issue).toBe(2);
+      expect(page.hasMore).toBe(true); expect(next.hasMore).toBe(false);
+      expect(JSON.stringify(page)).not.toMatch(/Secret|Foreign|Ordinary/);
+      expect(JSON.stringify(next)).not.toContain(privateChat);
+      const employee = await svc.search(companyId, { ...query, projectId, assigneeAgentId: agent }, options);
+      expect(employee.results.map(row => row.id)).toEqual([first]);
+      const noDone = await svc.search(companyId, { ...query, status: ["done"] }, options);
+      expect(noDone.zeroResults?.unfilteredTotal).toBe(2);
+      await db.update(issueComments).set({ deletedAt: new Date() }).where(eq(issueComments.id, comment.id));
+      const updated = await svc.search(companyId, query, options);
+      expect(updated.results.map(row => row.id)).toEqual([second]);
+      expect(updated.countsByType.issue).toBe(1);
+      expect(updated.hasMore).toBe(false);
+    } finally {
+      if (previousMode === undefined) delete process.env.PAPERCLIP_ISSUE_PRIVACY_MODE;
+      else process.env.PAPERCLIP_ISSUE_PRIVACY_MODE = previousMode;
+    }
+  });
+
   it("searches routines with project and parent-task privacy before counts and pagination", async () => {
     const previousMode = process.env.PAPERCLIP_ISSUE_PRIVACY_MODE;
     process.env.PAPERCLIP_ISSUE_PRIVACY_MODE = "enforce";

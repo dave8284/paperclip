@@ -777,6 +777,42 @@ describe("native task context ownership", () => {
 });
 
 
+describe("frozen EGM packet review input", () => {
+  const digest = "0".repeat(64);
+  const purpose = { kind: "egm_packet_review", packetSha256: "a".repeat(64),
+    sourceDigests: ["packet", "target", "persona", "standard"].map(id => ({ id, sha256: digest })) };
+  const context = { prompt: { revision: PAPERCLIP_EXECUTION_PROMPT_REVISION, text: PAPERCLIP_EXECUTION_PROMPT, digest: nativeRuntimePromptDigest() },
+    instructions: { entryPath: "AGENTS.md", bundle: { schema: NATIVE_RUNTIME_ASSET_SCHEMA, digest, manifestDigest: digest, rootPath: "/runtime/review", fileCount: 1, totalBytes: 1 } },
+    skills: [], mcp: { assignmentSetId: "none", digest, bindingId: null } };
+  const current = { ...input, schema: NATIVE_EXECUTION_INPUT_SCHEMA_V9, homeMode: "isolated", executionMode: "default", planningContext: null,
+    runtimeContext: { ...context, aggregateDigest: canonicalNativeRuntimeContextDigest(context) },
+    provider: { kind: "codex", model: null, approvalPolicy: "never" }, credentialBindings: [], executionPurpose: purpose };
+
+  it("round trips distinct packet envelope and body digests with one mandatory instruction asset", () => {
+    const parsed = parseNativeExecutionInput(current);
+    expect(parsed).toMatchObject({ executionPurpose: purpose });
+    expect(parseNativeExecutionInput(parsed)).toEqual(parsed);
+  });
+  it.each([
+    { homeMode: "preconfigured" }, { credentialBindings: input.credentialBindings },
+    { workspace: { ...input.workspace, repoUrl: "https://example.com/repo" } },
+    { session: { ...input.session, lifecyclePolicy: { mode: "warm", idleTimeoutMs: 60_000 } } },
+    { executionPurpose: { ...purpose, unrestricted: true } },
+    { executionPurpose: { ...purpose, packetSha256: "bad" } },
+    { executionPurpose: { ...purpose, sourceDigests: purpose.sourceDigests.slice(1) } },
+    { executionPurpose: { ...purpose, sourceDigests: [...purpose.sourceDigests, purpose.sourceDigests[0]] } },
+    { executionPurpose: { ...purpose, sourceDigests: [...purpose.sourceDigests, { id: "file:/private/file", sha256: digest }] } },
+  ])("rejects expanded or malformed review authority %#", change => {
+    expect(() => parseNativeExecutionInput({ ...current, ...change })).toThrow();
+  });
+  it("rejects MCP authority even when its context digest is valid", () => {
+    const changed = { ...context, mcp: { ...context.mcp, bindingId: "employee-tools" } };
+    expect(() => parseNativeExecutionInput({ ...current, runtimeContext: {
+      ...changed, aggregateDigest: canonicalNativeRuntimeContextDigest(changed),
+    } })).toThrow("Packet reviews require isolated Codex");
+  });
+});
+
 describe("Claude effort input v9", () => {
   const { permissionPolicy: _permission, qualificationModel: _model, reportedModelId: _reported, ...profile } = QUALIFIED_ACPX_PROFILES.claude;
   const digest = "0".repeat(64);

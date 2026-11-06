@@ -38,6 +38,42 @@ native triggers while hidden. No background job is disabled just because its
 navigation link is hidden. Native cases/handoffs already provide delegation
 evidence and must not be removed as apparent UI clutter.
 
+### Current AgentOS navigation and restoration
+
+AgentOS now supplies the default application frame. Friday owns its canvas;
+native detail and configuration pages retain the AgentOS header/sidebar around
+their original content and controls. Departments appear above Projects, Settings
+is below Saved displays, and advanced tools are reached through their native
+routes or company settings instead of additional top-level navigation. This is
+navigation simplification: the hidden entries do not remove the native APIs,
+records, execution owners or feature/access controls listed above.
+
+Use the selected company's URL prefix in these retained routes:
+
+| Retained capability | Native entry point |
+| --- | --- |
+| Skills and sources | `/:companyPrefix/skills`, `/:companyPrefix/skills/sources` |
+| Employee profiles and configuration | `/:companyPrefix/agents/:agentId`, `/:companyPrefix/agents/:agentId/configuration` |
+| Direct chat, routines and artefacts | `/:companyPrefix/chats`, `/:companyPrefix/routines`, `/:companyPrefix/artifacts` |
+| Audit, applications and company controls | `/:companyPrefix/activity`, `/:companyPrefix/applications`, `/:companyPrefix/company/settings` |
+| Advanced connections and instance controls | `/:companyPrefix/apps/advanced`, `/:companyPrefix/company/settings/instance/*` |
+| Native cases/delegation | `/:companyPrefix/cases`, subject to the existing feature configuration |
+
+For an explicit compatibility check, append `?shell=classic` to a native route
+(or `&shell=classic` when it already has a query). This restores the retained
+upstream navigation frame for that URL; removing the parameter returns to
+AgentOS. It is not a saved preference and later navigation may omit it. Both
+frames keep the same route authorization and feature gates. The parameter does
+not restore deleted data or a historical source revision; use the separate code
+and backup procedure below for those operations.
+
+The Layout component checks exercise AgentOS as the default, Friday's canvas,
+native settings in the canvas, and the explicit legacy shell with configuration
+and Skills navigation. Sidebar checks cover hierarchy, company switches,
+archived-project omission, and hiding cached company structure after a failed
+read until a successful retry. Visual/browser acceptance remains recorded in
+the existing requirements worksheet and completion ledger.
+
 ## Trigger inventory
 
 The new workforce layer has **no timer, scheduler or periodic worker**. Its reads

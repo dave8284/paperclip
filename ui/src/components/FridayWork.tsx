@@ -22,7 +22,7 @@ export function FridayWork({ companyId, agents, view, navigate }: { companyId: s
   const [projectOffset, setProjectOffset] = useState(0);
   const [status, setStatus] = useState<"active" | "completed" | "all">("all");
   const mode = view.mode ?? "combined";
-  const query = { projectId: view.projectId, applicationId: view.applicationId, agentId: view.agentId, offset, projectOffset, status };
+  const query = { projectId: view.projectId, applicationId: view.applicationId, agentId: view.agentId, offset, projectOffset, status, dataAccess: mode === "graph" ? "tools" as const : undefined };
   const work = useQuery({ queryKey: [...fridayKey(companyId), "work", query], queryFn: () => fridayApi.work(companyId, query) });
   const runs = useQuery({ queryKey: queryKeys.liveRuns(companyId), queryFn: () => heartbeatsApi.liveRunsForCompany(companyId) });
   const detail = useQuery({ queryKey: queryKeys.issues.detail(view.taskId ?? ""), queryFn: () => issuesApi.get(view.taskId!), enabled: !!view.taskId });

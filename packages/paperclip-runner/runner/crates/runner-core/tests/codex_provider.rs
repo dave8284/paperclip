@@ -71,6 +71,7 @@ fn provider_config(directory: &Path, switches: &[&str]) -> CodexProviderConfig {
         read_only: false,
         include_skill_instructions: None,
         conversation_mode: None,
+        execution_purpose: None,
     }
 }
 
@@ -6678,6 +6679,194 @@ fn runtime_instructions_are_additive_for_codex_on_start_and_resume() {
             "{method}"
         );
     }
+    fs::remove_dir_all(directory).unwrap();
+}
+
+fn packet_review_config(directory: &Path, switches: &[&str]) -> CodexProviderConfig {
+    let mut config = provider_config(directory, switches);
+    config.read_only = true;
+    config.include_skill_instructions = Some(false);
+    config.conversation_mode = Some("egm_packet_review".to_owned());
+    config.execution_purpose = Some(serde_json::from_value(json!({
+        "kind": "egm_packet_review", "packetSha256": "a".repeat(64),
+        "sourceDigests": (["packet", "target", "persona", "standard"].map(|id| json!({"id":id,"sha256":"b".repeat(64)})))
+    })).unwrap());
+    config
+}
+
+fn packet_review_tools() -> Vec<AuthorizedTool> {
+    ["read_egm_source", "submit_egm_findings", "paperclip_finish"]
+        .into_iter()
+        .map(|name| AuthorizedTool {
+            operation_id: name.to_owned(),
+            version: 1,
+            description: "Frozen review operation".to_owned(),
+            input_schema: json!({"type":"object"}),
+            response_schema: json!({"type":"object"}),
+        })
+        .collect()
+}
+
+#[test]
+fn packet_review_cold_restore_keeps_zero_environments_and_frozen_tool_scope() {
+    let directory = temporary_directory("packet-review-restore");
+    let log = directory.join("requests.ndjson");
+    let config = packet_review_config(&directory, &["--request-log", log.to_str().unwrap()]);
+    let operations = packet_review_tools();
+    let tools = AuthorizedToolSet {
+        schema: TOOL_SET_SCHEMA.to_owned(),
+        schema_version: 1,
+        catalog_digest: authorized_tool_catalog_digest(&operations).unwrap(),
+        operations,
+    };
+    let runner_config = durable_config(&directory);
+    let mut executor = CodexCommandExecutor::with_runner_config(&directory, &runner_config);
+    executor
+        .execute(&command(
+            "prepare",
+            1,
+            "run.prepare",
+            json!({"provider":config,"authorizedTools":tools}),
+        ))
+        .unwrap();
+    executor
+        .execute(&command("open", 2, "session.open", json!({})))
+        .unwrap();
+    executor.shutdown().unwrap();
+    drop(executor);
+    let mut restored = CodexCommandExecutor::with_runner_config(&directory, &runner_config);
+    restored
+        .execute(&command(
+            "turn",
+            3,
+            "turn.start",
+            json!({"text":"Review only the frozen packet."}),
+        ))
+        .unwrap();
+    restored.shutdown().unwrap();
+    let frames = skill_wire_requests(&directory);
+    for method in ["thread/start", "thread/resume"] {
+        let frame = frames
+            .iter()
+            .find(|f| f["method"] == method)
+            .expect("start and recovery both observed");
+        assert!(frame["params"].get("cwd").is_none());
+        assert!(frame["params"].get("runtimeWorkspaceRoots").is_none());
+        let names = frame["params"]["dynamicTools"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|tool| tool["name"].as_str().unwrap())
+            .collect::<std::collections::BTreeSet<_>>();
+        assert_eq!(
+            names,
+            ["read_egm_source", "submit_egm_findings", "paperclip_finish"]
+                .into_iter()
+                .collect()
+        );
+        let policy = &frame["params"]["config"];
+        assert_eq!(policy["project_doc_max_bytes"], 0);
+        assert_eq!(policy["web_search"], "disabled");
+        for key in [
+            "skills.include_instructions",
+            "features.shell_tool",
+            "features.view_image",
+            "features.apps",
+            "features.plugins",
+            "features.multi_agent",
+            "features.memories",
+            "features.image_generation",
+        ] {
+            assert_eq!(policy[key], false, "{method}: {key}");
+        }
+        if method == "thread/start" {
+            assert_eq!(frame["params"]["environments"], json!([]));
+        }
+    }
+    let turn = frames.iter().find(|f| f["method"] == "turn/start").unwrap();
+    assert_eq!(turn["params"]["environments"], json!([]));
+    assert!(turn["params"].get("cwd").is_none());
+    assert_eq!(turn["params"]["input"].as_array().unwrap().len(), 1);
+    fs::remove_dir_all(directory).unwrap();
+}
+
+#[test]
+fn packet_review_rejects_expanded_sources_and_tools_before_spawn() {
+    let directory = temporary_directory("packet-review-invalid");
+    let config = packet_review_config(&directory, &[]);
+    assert!(CodexProvider::start_with_tools(&config, [task_context_tool()], None).is_err());
+    let mut invalid = config.clone();
+    invalid.execution_purpose.as_mut().unwrap().source_digests[0].id =
+        "file:/private/file".to_owned();
+    assert!(invalid.validate().is_err());
+    let mut invalid = config.clone();
+    invalid.read_only = false;
+    assert!(invalid.validate().is_err());
+    let mut invalid = config;
+    invalid.include_skill_instructions = Some(true);
+    assert!(invalid.validate().is_err());
+    invalid.include_skill_instructions = Some(false);
+    invalid.execution_purpose = None;
+    assert!(invalid.validate().is_err());
+    assert!(
+        !directory.join("calls.log").exists(),
+        "invalid authority must not start the provider"
+    );
+    fs::remove_dir_all(directory).unwrap();
+}
+
+#[test]
+fn packet_review_denies_provider_questions_without_exposing_runtime_input() {
+    let directory = temporary_directory("packet-review-question");
+    let config = packet_review_config(&directory, &["--emit-question"]);
+    let mut provider =
+        CodexProvider::start_with_tools(&config, packet_review_tools(), None).unwrap();
+    assert!(provider
+        .set_goal(Some("Unbounded extra work"), None, None)
+        .is_err());
+    provider
+        .start_turn("Review the frozen packet.", &config.cwd)
+        .unwrap();
+    assert!(provider
+        .steer_turn("Read an unapproved new source")
+        .is_err());
+    let mut terminal = false;
+    for _ in 0..100 {
+        match provider.poll().unwrap() {
+            Some(
+                CodexProviderEvent::RuntimeRequest { .. }
+                | CodexProviderEvent::McpPermissionRequest { .. },
+            ) => panic!("packet review exposed new input authority"),
+            Some(CodexProviderEvent::Notification { method, .. }) if method == "turn/completed" => {
+                terminal = true;
+                break;
+            }
+            _ => {}
+        }
+    }
+    assert!(
+        terminal,
+        "provider must receive the denial and complete without human input"
+    );
+    provider.shutdown().unwrap();
+    fs::remove_dir_all(directory).unwrap();
+}
+
+#[test]
+#[cfg(unix)]
+fn packet_review_rejects_an_older_executable_before_opening_a_session() {
+    use std::os::unix::fs::PermissionsExt;
+    let directory = temporary_directory("packet-review-old-provider");
+    let executable = directory.join("old-codex");
+    fs::write(&executable, "#!/bin/sh\nif [ \"$1\" = --version ]; then echo 'codex-cli 0.159.0'; exit 0; fi\nexit 99\n").unwrap();
+    fs::set_permissions(&executable, fs::Permissions::from_mode(0o700)).unwrap();
+    let mut config = packet_review_config(&directory, &[]);
+    config.command = executable;
+    let error = CodexProvider::start_with_tools(&config, packet_review_tools(), None)
+        .err()
+        .expect("older provider is not qualified");
+    assert!(error.to_string().contains("qualified Codex CLI 0.160.0"));
+    assert!(!directory.join("fake-state.json").exists());
     fs::remove_dir_all(directory).unwrap();
 }
 

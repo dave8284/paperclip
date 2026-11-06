@@ -19,6 +19,7 @@ import { secretService } from "../services/secrets.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
 import { aiConnectionService } from "../services/ai-connections.js";
 import * as aiRuntime from "../services/ai-connection-runtime.js";
+import * as modelProfiles from "../services/model-intelligence.js";
 import * as sentry from "../sentry.js";
 import { waitForPendingRunFailureReports } from "../services/run-failure-report.js";
 import { getEmbeddedPostgresTestSupport, startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
@@ -181,6 +182,49 @@ describePostgres("heartbeat execution configuration through adapter dispatch", (
       expect(prepare).not.toHaveBeenCalled();
     }
     if (managed && saved === "isolated") expect(prepare).toHaveBeenCalledOnce();
+  });
+
+  it("records selected-model access only after the native account owner prepares the exact account", async () => {
+    const f = await seed();
+    const config = { provider: "codex", model: "fixture-model", homeMode: "isolated" };
+    const [agent] = await db.update(agents).set({ adapterType: "paperclip_runner", adapterConfig: config }).where(eq(agents.id, f.agentId)).returning();
+    const [run] = await db.insert(heartbeatRuns).values({ companyId: f.companyId, agentId: f.agentId,
+      issueId: f.issueId, status: "running", runtimeMode: "native" }).returning();
+    const attribution = { provider: "openai" as const, method: "subscription" as const, mode: "responsible_user" as const,
+      subscriptionId: randomUUID(), connectionId: randomUUID(), grantId: randomUUID(), responsibleUserId: f.userId };
+    const sessionIdentity = `${attribution.grantId}:${f.userId}:fixture-secret:0`;
+    vi.spyOn(aiRuntime, "prepareManagedAiRuntime").mockResolvedValue({
+      attribution, sessionIdentity, identity: "fixture-credential-identity", config, home: undefined,
+      accountName: "Fixture subscription", accountOwnerUserId: f.userId, assertCurrent: async () => {}, cleanup: async () => {},
+    });
+    vi.spyOn(modelProfiles, "selectCompanyModelProfile").mockResolvedValue({ config, receipt: {
+      id: run.id, namespace: f.companyId, taskKey: f.issueId, taskType: "analysis", complexity: "routine",
+      candidate: { id: "baseline", provider: "openai", model: config.model, method: "subscription" },
+      policyVersion: "fixture", reason: "Configured baseline", createdAt: new Date().toISOString(),
+      promptFingerprint: null, contextFingerprint: null,
+      evidence: { evaluations: 0, passed: 0, lowerBound: 0, medianLatencyMs: null, medianIterations: null, recentFailures: 0 },
+    } });
+    const observe = vi.spyOn(modelProfiles, "observeSelectedModelAccountAccess");
+    const context: Record<string, unknown> = { modelAccountAccess: { state: "forged" }, aiConnection: { sessionIdentity: "caller-supplied" } };
+    const prepared = await prepareHeartbeatExecutionConfiguration(db, {
+      run, agent, task: { issueId: f.issueId, context, responsibleUserId: f.userId,
+        acceptedPlanContinuationWake: false, acceptedPlanWakeRoutingDecision: null, taskProjectContext: null,
+        routineEnvContext: { routineId: null, env: null, responsibleUserId: null } },
+      config: { sourceWorkspaceConfig: config, aiBinding: { provider: "openai", method: "subscription", mode: "responsible_user" } },
+      policy: { trustPreset: { kind: "standard", preset: "standard", boundary: null, sourcePresets: {} },
+        useIsolatedTaskDirectory: false, explicitTaskDirectory: false, requestedExecutionWorkspaceMode: "shared_workspace" },
+      environment: { selectedEnvironmentId: null, selectedEnvironmentForConfig: null,
+        resolvedInstanceSettings: await instanceSettingsService(db).get(), persistedNativeExecutionInput: null },
+      services: { secretsSvc: secretService(db), companySkills: companySkillService(db), appendRunEvent: vi.fn(), finalizeAiConnectionBusyDeferral: vi.fn() },
+      onFailureSecretsResolved: vi.fn(), onManagedAiRuntimeAcquired: vi.fn(), onIdentityRedactorPrepared: vi.fn(),
+    });
+    expect(prepared.prepared).toBe(true);
+    expect(observe).toHaveBeenCalledWith(db, { companyId: f.companyId, agentId: f.agentId, runId: run.id,
+      model: config.model, account: { ...attribution, sessionIdentity } });
+    const [saved] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, run.id));
+    expect(saved.contextSnapshot?.modelAccountAccess).toEqual(context.modelAccountAccess);
+    expect(saved.contextSnapshot?.modelAccountAccess).toMatchObject({ state: "not_observed", reason: "no_matching_native_execution",
+      currentEntitlementVerified: false, automaticAlternatives: "current_account_qualification_required" });
   });
 
   it.each(["agent", "stored task override"] as const)("uses operator preconfigured mode despite %s configuration", async source => {

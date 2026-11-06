@@ -13,7 +13,7 @@ vi.mock("@/api/artifacts", () => ({ artifactsApi: { list: mocks.list } }));
 vi.mock("@/api/issues", () => ({ issuesApi: { listDocuments: mocks.documents, listDocumentRevisions: mocks.revisions, listAttachments: mocks.attachments } }));
 vi.mock("@/lib/router", () => ({ Link: ({ to, children }: any) => <a href={to}>{children}</a> }));
 vi.mock("./MarkdownBody", () => ({ MarkdownBody: ({ children }: any) => <div>{children}</div> }));
-vi.mock("./task-side-panel/TaskAttachmentPanel", () => ({ TaskAttachmentPanel: () => <div>File preview</div> }));
+vi.mock("./task-side-panel/TaskAttachmentPanel", () => ({ TaskAttachmentPanel: ({ attachmentId }: { attachmentId: string }) => <div data-attachment-id={attachmentId}>File preview</div> }));
 
 const artifact = {
   id: "document:private-doc", source: "document", mediaKind: "document", title: "Confidential plan",
@@ -104,5 +104,28 @@ describe("artefact access refresh", () => {
     expect(host.textContent).not.toContain("File preview");
     expect(host.textContent).not.toContain("Private output");
     expect(host.querySelector("a")).toBeNull();
+  });
+  it("opens a work product's own authorized backing file and removes its links if that file disappears", async () => {
+    mocks.attachments.mockResolvedValue([
+      { id: "older", originalFilename: "Earlier output", contentPath: "/api/attachments/older/content", createdAt: "2026-11-01T00:00:00Z" },
+      { id: "published", originalFilename: "Published output", contentPath: "/api/attachments/published/content", createdAt: "2026-11-02T00:00:00Z" },
+    ]);
+    await render(<AgentOSArtifactDetail artifact={{ ...artifact, id: "work_product:report", source: "work_product", contentPath: "/api/attachments/published/content", openPath: "/api/attachments/published/content", downloadPath: "/api/attachments/published/content?download=1" }} onClose={() => {}} />);
+    expect(host.querySelector('[data-attachment-id="published"]')).not.toBeNull();
+    expect(host.textContent).toContain("Earlier output");
+    mocks.attachments.mockResolvedValue([{ id: "older", originalFilename: "Earlier output", contentPath: "/api/attachments/older/content" }]);
+    await act(async () => { await client.invalidateQueries({ queryKey: queryKeys.issues.attachments("task") }); }); await settle();
+    expect(host.textContent).toContain("linked file is no longer available");
+    expect(host.querySelector("[data-attachment-id]")).toBeNull();
+    expect(host.querySelector('a[href*="/attachments/published"]')).toBeNull();
+    expect(host.querySelector('a[href="/issues/task"]')).not.toBeNull();
+  });
+  it("does not preview a work product's stored attachment URL unless the task currently authorizes that file", async () => {
+    mocks.attachments.mockResolvedValue([{ id: "own", contentPath: "/api/attachments/own/content" }]);
+    await render(<AgentOSArtifactDetail artifact={{ ...artifact, id: "work_product:forged", source: "work_product", contentPath: "/api/attachments/foreign/content", openPath: "/api/attachments/foreign/content", downloadPath: "/api/attachments/foreign/content?download=1" }} onClose={() => {}} />);
+    expect(host.querySelector("[data-attachment-id]")).toBeNull();
+    expect(host.querySelector('a[href*="/attachments/foreign"]')).toBeNull();
+    expect(host.textContent).not.toContain("Confidential plan");
+    expect(host.textContent).toContain("linked file is no longer available");
   });
 });

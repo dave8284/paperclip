@@ -199,7 +199,7 @@ export class CodexAppServerDriver implements HarnessDriver {
           text(tool.name) === "read_chat_attachment",
       );
     }
-    return [...supplied, ...codexSemanticToolSpecs()];
+    return [...supplied, ...codexSemanticToolSpecs().filter(tool => !this.#options.executionPurpose || tool.name === "paperclip_finish")];
   }
 
   #baseInstructions(): string {

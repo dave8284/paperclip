@@ -46,6 +46,7 @@ describe("application registration recovery", () => {
   it("replays the same project intent after a lost response and reload", async () => {
     mocks.project.mockRejectedValueOnce(new Error("Connection lost after submission")).mockResolvedValue({ id: "home" });
     await open();
+    expect(host.querySelector('a[href="/operating-connections"]')).toBeNull();
     await submit();
     await vi.waitFor(() => expect(host.textContent).toContain("Connection lost"));
     await reload();

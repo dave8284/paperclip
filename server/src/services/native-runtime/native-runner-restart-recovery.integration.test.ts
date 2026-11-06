@@ -86,12 +86,19 @@ const describeEmbeddedPostgres = embeddedPostgresSupport.supported
   ? describe
   : describe.skip;
 
-const fakeCodexAppServer = resolve(
+// Local acceptance may use a release fixture build. Never substitute a real
+// provider command when the fake app-server binary is unavailable.
+const fakeCodexCandidates = ["debug", "release"].map(profile => resolve(
   import.meta.dirname,
-  "../../../../packages/paperclip-runner/runner/target/debug/fake-codex-app-server",
-);
+  `../../../../packages/paperclip-runner/runner/target/${profile}/fake-codex-app-server`,
+));
+const fakeCodexAppServer = fakeCodexCandidates.find(candidate => existsSync(candidate)) ?? fakeCodexCandidates[0]!;
 const binariesAvailable =
   existsSync(defaultCapabilityRunnerdBinary()) && existsSync(fakeCodexAppServer);
+if (process.env.PAPERCLIP_REQUIRE_NATIVE_RESTART_INTEGRATION === "1"
+  && (!embeddedPostgresSupport.supported || !binariesAvailable)) {
+  throw new Error("Native restart acceptance requires embedded PostgreSQL, runnerd and the fake Codex app-server fixture; refusing a skipped acceptance run");
+}
 const realProcessIt = binariesAvailable ? it : it.skip;
 
 async function closeServer(server: Server | null): Promise<void> {

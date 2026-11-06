@@ -2,7 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { agents, companies, completionContracts, createDb, EMBEDDED_POSTGRES_TEST_TIMEOUT_MS, heartbeatRuns, issues, issueThreadInteractions, nativeRunFinalizations, nativeRunResults, statusDecisions, workAssessments, type Db } from "@paperclipai/db";
+import { agents, authUsers, companyMemberships, companies, completionContracts, createDb, EMBEDDED_POSTGRES_TEST_TIMEOUT_MS, heartbeatRuns, issues, issueThreadInteractions, nativeRunFinalizations, nativeRunResults, statusDecisions, workAssessments, type Db } from "@paperclipai/db";
 import { eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { getEmbeddedPostgresTestSupport, startEmbeddedPostgresTestDatabase } from "../../__tests__/helpers/embedded-postgres.js";
@@ -12,6 +12,12 @@ import { nativeRuntimeContextFixture } from "../native-runtime/runtime-context.t
 import { prepareNativeWorkspaceSync } from "../native-runtime/native-workspace-sync.js";
 import { resolveHeartbeatNativeRuntimeMode } from "../native-runtime/runtime-mode.js";
 import { canonicalNativeRuntimeContextDigest } from "../../vendor/paperclip-runner/index.js";
+import { documentService } from "../documents.js";
+import { prepareEgmPacketContent } from "../native-runtime/egm-packet-content.js";
+import { egmCreatorAuthority } from "../native-runtime/egm-packet-authority.js";
+import { assertEgmNativeExecution, egmPurposeForPacket, executeEgmReviewTool, hasEgmFindings } from "../native-runtime/egm-review-execution.js";
+import { nativeCompletionFeedback } from "../native-runtime/native-completion-feedback.js";
+import { PaperclipRunnerToolAuthority } from "../native-runtime/paperclip-runner-tool-authority.js";
 import { selectHeartbeatRuntime, type HeartbeatRuntimeSelectionInput } from "./runtime-selection.js";
 
 // Keep the real contract, session, and runtime-selection transactions. Replace only
@@ -30,6 +36,7 @@ describe.skipIf(!support.supported)("heartbeat runtime selection boundary", () =
   let database: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>;
   let db: Db;
   let instructionRoot: string;
+  const reviewWorkspaces: string[] = [];
   beforeAll(async () => {
     instructionRoot = await mkdtemp(join(tmpdir(), "paperclip-selection-instructions-"));
     await writeFile(join(instructionRoot, "AGENTS.md"), "Complete the assigned task.\n");
@@ -37,7 +44,7 @@ describe.skipIf(!support.supported)("heartbeat runtime selection boundary", () =
     db = createDb(database.connectionString);
     await db.execute(sql`set client_min_messages = warning`);
   }, EMBEDDED_POSTGRES_TEST_TIMEOUT_MS);
-  afterAll(async () => { await db?.$client.end(); await database?.cleanup(); if (instructionRoot) await rm(instructionRoot, { recursive: true, force: true }); });
+  afterAll(async () => { await db?.$client.end(); await database?.cleanup(); if (instructionRoot) await rm(instructionRoot, { recursive: true, force: true }); for (const cwd of reviewWorkspaces) await rm(cwd, { recursive: true, force: true }); });
   beforeEach(async () => {
     await db.execute(sql`truncate table companies restart identity cascade`);
     vi.clearAllMocks();
@@ -174,6 +181,80 @@ describe.skipIf(!support.supported)("heartbeat runtime selection boundary", () =
     input.session.persistedRunnerProfile = input.run.runnerProfileJson ?? {};
     expect((await selectHeartbeatRuntime(db, input)).selected).toBe(true);
     expect((await read(run.id)).runnerProfileJson?.nativeReviewContextReceipt).toBeNull();
+  });
+
+  it("admits a frozen-only native review and persists exact source coverage/findings without resolving the owner's review", async () => {
+    const { input, run, issue, agent, sourceRun, interaction, decision } = await reviewFixture();
+    const userId = randomUUID(), companyId = agent.companyId;
+    await db.insert(authUsers).values({ id: userId, name: "Packet owner", email: `${userId}@example.test`, approvalStatus: "approved", createdAt: new Date(), updatedAt: new Date() });
+    await db.insert(companyMemberships).values({ companyId, principalType: "user", principalId: userId, status: "active", membershipRole: "owner" });
+    await db.update(issues).set({ responsibleUserId: userId, executionRunId: run.id }).where(eq(issues.id, issue.id));
+    await db.update(heartbeatRuns).set({ responsibleUserId: userId, contextSnapshot: { issueId: issue.id } }).where(eq(heartbeatRuns.id, sourceRun.id));
+    await db.update(heartbeatRuns).set({ responsibleUserId: userId, runtimeMode: "native", nativeIssueId: issue.id }).where(eq(heartbeatRuns.id, run.id));
+    const documents = documentService(db);
+    const packetDoc = await documents.upsertIssueDocument({ issueId: issue.id, key: "context-packet", format: "markdown", body: "Review only the frozen target against the selected standard.", createdByUserId: userId });
+    const target = await documents.upsertIssueDocument({ issueId: issue.id, key: "plan", format: "markdown", body: "The plan omits a rollback decision.", createdByUserId: userId });
+    const packet = await prepareEgmPacketContent(db, { companyId, issueId: issue.id, sourceRunId: sourceRun.id, authorAgentId: sourceRun.agentId,
+      preparedBy: { type: "user", id: userId }, creatorAuthority: egmCreatorAuthority({ type: "board", userId, source: "local_implicit" }),
+      request: { reviewerAgentId: agent.id, packet: { documentId: packetDoc.document.id, revisionId: packetDoc.document.latestRevisionId! },
+        target: { documentId: target.document.id, revisionId: target.document.latestRevisionId! }, sources: [], persona: "comprehension", question: "Can the plan be implemented without its author?" },
+    });
+    await db.update(heartbeatRuns).set({ runnerProfileJson: { nativeEgmPacketPreparation: packet, nativeEgmPacketBinding: {
+      interactionId: interaction.id, decisionId: decision.id, requestSha256: packet.requestSha256,
+    } } }).where(eq(heartbeatRuns.id, sourceRun.id));
+    await db.update(issueThreadInteractions).set({ payload: { ...interaction.payload, egmPacketPreparation: {
+      schema: "agentos.egm-review-binding.v1", sourceRunId: sourceRun.id, requestSha256: packet.requestSha256,
+    } } }).where(eq(issueThreadInteractions.id, interaction.id));
+    input.run = await read(run.id);
+    input.task.context = { ...input.task.context, paperclipWake: { privateHistory: "EXCLUDED_PARENT_MARKER" }, paperclipCase: { privateMemory: "EXCLUDED_MEMORY_MARKER" } };
+    input.config.runtimeConfig = { paperclipConnectionInstructions: { text: "EXCLUDED_CONNECTION_MARKER", digest: "0".repeat(64) } };
+    input.config.managedAiRuntime = { attribution: { method: "subscription", provider: "openai" } } as never;
+    input.workspace.projectRepositoryPaths = ["EXCLUDED_REPOSITORY_MARKER"];
+    const selected = await selectHeartbeatRuntime(db, input);
+    if (!selected.selected || !selected.nativeExecution) throw new Error("Expected packet execution selection");
+    const execution = selected.nativeExecution;
+    reviewWorkspaces.push(execution.workspace.cwd!);
+    expect(execution.workspace.cwd).not.toBe(input.workspace.executionWorkspace.cwd);
+    expect(execution).toMatchObject({ schema: "paperclip.native-execution-input.v9", executionPurpose: egmPurposeForPacket(packet),
+      homeMode: "isolated", session: { lifecyclePolicy: { mode: "per_turn" } },
+      runtimeContext: { skills: [], mcp: { bindingId: null } } });
+    expect(JSON.stringify(execution)).not.toContain("EXCLUDED_");
+    expect(selected.getNativeFreshSessionHandoff).toBeUndefined();
+    expect(await assertEgmNativeExecution(db, execution)).toEqual(packet);
+    input.run = await read(run.id);
+    input.session.persistedNativeExecutionInput = execution;
+    input.session.persistedRunnerProfile = input.run.runnerProfileJson ?? {};
+    input.task.context.paperclipTaskMarkdown = "EXCLUDED_RECOVERY_MARKER";
+    const recovered = await selectHeartbeatRuntime(db, input);
+    expect(recovered.selected && recovered.nativeExecution).toEqual(execution);
+    const purpose = egmPurposeForPacket(packet);
+    const toolAuthority = new PaperclipRunnerToolAuthority(db, { ...execution.binding, egmPurpose: purpose,
+      nativeReview: { nativeReviewInteractionId: interaction.id, nativeReviewDecisionId: decision.id } });
+    const execute = (tool: string, args: unknown) => toolAuthority.execute({ tool, callId: randomUUID(), arguments: args });
+    expect(toolAuthority.definitions().map(tool => tool.name)).toEqual(["read_egm_source", "submit_egm_findings"]);
+    for (const source of purpose.sourceDigests) await execute("read_egm_source", { sourceId: source.id });
+    await expect(execute("get_task_history", {})).rejects.toMatchObject({ status: 403 });
+    await execute("submit_egm_findings", {
+      packetSha256: packet.requestSha256, targetRevisionId: packet.target.revisionId, summary: "Rollback is not decided", uncertainties: [],
+      findings: [{ id: "rollback", severity: "major", sourceId: "target", sourceQuote: "omits a rollback decision", explanation: "Rollback cannot be implemented", recommendation: "Specify the rollback decision" }],
+    });
+    expect(hasEgmFindings(await read(run.id))).toBe(true);
+    const finished = { schema: "paperclip.run_result.v1" as const, reportedWorkDisposition: "done" as const, summary: "Findings recorded",
+      completionClaim: { contractRevision: execution.completionContract.contract.revision, objectiveSatisfied: true, criteria: [], remainingWork: [] },
+      evidence: [], verification: [], attentionRequests: [], artifacts: [] };
+    await expect(nativeCompletionFeedback(db, run.id, finished)).resolves.toContain("task remains in review");
+    expect((await documents.getIssueDocumentByKey(issue.id, `egm-review-${run.id}`))?.body).toContain("Rollback is not decided");
+    expect((await db.select().from(issueThreadInteractions).where(eq(issueThreadInteractions.id, interaction.id)))[0].status).toBe("pending");
+    // Frozen exact revisions remain readable after an owner edits the current plan.
+    await documents.upsertIssueDocument({ issueId: issue.id, key: "plan", format: "markdown", body: "A newer plan", baseRevisionId: target.document.latestRevisionId, createdByUserId: userId });
+    expect(await executeEgmReviewTool(db, execution.binding, purpose, "read_egm_source", { sourceId: "target" })).toMatchObject({ body: packet.target.body, revisionId: packet.target.revisionId });
+    await db.update(authUsers).set({ approvalStatus: "suspended" }).where(eq(authUsers.id, userId));
+    await expect(executeEgmReviewTool(db, execution.binding, purpose, "read_egm_source", { sourceId: "target" })).rejects.toMatchObject({ status: 403 });
+    await expect(nativeCompletionFeedback(db, run.id, finished)).rejects.toMatchObject({ status: 403 });
+    await db.update(authUsers).set({ approvalStatus: "approved" }).where(eq(authUsers.id, userId));
+    await db.update(heartbeatRuns).set({ status: "cancelled" }).where(eq(heartbeatRuns.id, run.id));
+    await expect(executeEgmReviewTool(db, execution.binding, purpose, "read_egm_source", { sourceId: "target" })).rejects.toMatchObject({ status: 403 });
+    await expect(nativeCompletionFeedback(db, run.id, finished)).rejects.toMatchObject({ status: 403 });
   });
 
   it("persists the native input, completion contract, and coordinator before transferring cleanup ownership", async () => {

@@ -2447,6 +2447,11 @@ impl CodexCommandExecutor {
             .state
             .clone()
             .ok_or_else(|| DurableRunnerError::invalid("Codex provider has not been prepared"))?;
+        if next_state.config.execution_purpose.is_some() {
+            return Err(DurableRunnerError::invalid(
+                "EGM packet review cannot attach another run",
+            ));
+        }
         // execute() restores the durable provider before dispatching run.attach.
         // An exact, settled restore can emit one session.resumed notice about
         // the prior provider session before the new run authority is attached.
@@ -5095,6 +5100,7 @@ mod tests {
                 read_only: false,
                 include_skill_instructions: None,
                 conversation_mode: None,
+                execution_purpose: None,
             },
             Some(CompletionContractBinding {
                 revision: "revision-1".to_owned(),
@@ -5508,6 +5514,7 @@ mod tests {
                 read_only: false,
                 include_skill_instructions: None,
                 conversation_mode: None,
+                execution_purpose: None,
             },
             Some(CompletionContractBinding {
                 revision: "revision-1".to_owned(),
@@ -5600,6 +5607,7 @@ mod tests {
                 read_only: false,
                 include_skill_instructions: None,
                 conversation_mode: None,
+                execution_purpose: None,
             },
             opencode_launch_profile_digest: None,
             completion_contract: None,
@@ -5654,6 +5662,7 @@ mod tests {
                 read_only: false,
                 include_skill_instructions: None,
                 conversation_mode: None,
+                execution_purpose: None,
             },
             None,
             ProviderToolBridge::default(),
@@ -5698,6 +5707,7 @@ mod tests {
                 read_only: false,
                 include_skill_instructions: None,
                 conversation_mode: None,
+                execution_purpose: None,
             },
             Some(CompletionContractBinding {
                 revision: "1".to_owned(),
@@ -5791,6 +5801,7 @@ mod tests {
                 read_only: false,
                 include_skill_instructions: None,
                 conversation_mode: None,
+                execution_purpose: None,
             },
             None,
             ProviderToolBridge::default(),
@@ -5859,6 +5870,7 @@ mod tests {
                 read_only: false,
                 include_skill_instructions: None,
                 conversation_mode: None,
+                execution_purpose: None,
             },
             None,
             ProviderToolBridge::default(),
@@ -5910,6 +5922,7 @@ mod tests {
                 read_only: false,
                 include_skill_instructions: None,
                 conversation_mode: None,
+                execution_purpose: None,
             },
             None,
             ProviderToolBridge::default(),
@@ -6035,6 +6048,7 @@ mod tests {
                 read_only: false,
                 include_skill_instructions: None,
                 conversation_mode: None,
+                execution_purpose: None,
             },
             None,
             bridge,
@@ -6148,6 +6162,7 @@ mod tests {
                 read_only: false,
                 include_skill_instructions: None,
                 conversation_mode: None,
+                execution_purpose: None,
             },
             None,
             bridge,
@@ -6206,6 +6221,7 @@ mod tests {
                 read_only: false,
                 include_skill_instructions: None,
                 conversation_mode: None,
+                execution_purpose: None,
             },
             None,
             ProviderToolBridge::default(),
@@ -6349,6 +6365,7 @@ mod tests {
                 read_only: false,
                 include_skill_instructions: None,
                 conversation_mode: None,
+                execution_purpose: None,
             },
             None,
             bridge,
@@ -6391,6 +6408,7 @@ mod tests {
                 read_only: false,
                 include_skill_instructions: None,
                 conversation_mode: None,
+                execution_purpose: None,
             },
             None,
             ProviderToolBridge::default(),
@@ -6430,6 +6448,7 @@ mod tests {
                 read_only: false,
                 include_skill_instructions: None,
                 conversation_mode: None,
+                execution_purpose: None,
             },
             None,
             ProviderToolBridge::default(),
@@ -6508,6 +6527,7 @@ mod tests {
                 read_only: false,
                 include_skill_instructions: None,
                 conversation_mode: None,
+                execution_purpose: None,
             },
             None,
             ProviderToolBridge::default(),

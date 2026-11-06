@@ -107,6 +107,11 @@ company and run; selection/triage receipts bind their recorded company/run, and
 evaluation links match both namespace and receipt ID. No prompts, transcripts,
 credentials or full configurations are returned. This projection does not mutate
 model policy, evaluation, review requirements or permissions.
+The native model owner also records `modelAccountAccess` after managed-account
+preparation, scoped to that employee/company and exact account/credential epoch.
+It reads at most 100 indexed execution projections and the matching usage ledger.
+No new API, provider probe, credential access or model-admission authority is
+granted; prior access remains distinct from current entitlement and quality.
 
 Queue timing uses native run timestamps. First-comment timing requires native
 issue scope, exact company/issue/run/author matching, ordinary comment origin,

@@ -53,10 +53,11 @@ export function buildNativeReviewContextReceipt(input: {
   const runtime = "runtimeContext" in execution ? execution.runtimeContext : null;
   const continuation = "continuationPrompt" in execution ? execution.continuationPrompt : null;
   const guidance = "initialCommunicationGuidance" in execution ? execution.initialCommunicationGuidance : null;
+  const purpose = "executionPurpose" in execution ? execution.executionPurpose : undefined;
   return {
     schema: "agentos.native-review-context-receipt.v1",
     stage: "server_prepared",
-    method: "native_completion_review",
+    method: purpose ? "egm_packet_review" : "native_completion_review",
     companyId: binding.companyId,
     issueId: binding.issueId,
     reviewerAgentId: binding.agentId,
@@ -89,6 +90,7 @@ export function buildNativeReviewContextReceipt(input: {
       driverKind: execution.session.driverKind,
       normalizedSessionId: execution.session.normalizedSessionId,
       homeMode: "homeMode" in execution ? execution.homeMode : null,
+      ...(purpose ? { packetSha256: purpose.packetSha256, sourceDigests: purpose.sourceDigests } : {}),
     },
     qualification: {
       providerDelivery: "not_observed",

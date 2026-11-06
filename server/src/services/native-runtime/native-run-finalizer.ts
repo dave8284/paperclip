@@ -13,6 +13,7 @@ import { readPersistedNativeFailureEvidence } from "./native-provider-failure-ev
 import { dismissAutomaticCompletionReviews } from "./automatic-completion-reviews.js";
 import { findSupersededExternalReviewRequests } from "./superseded-external-review-requests.js";
 import { getNativeReviewAssignment, readNativeReviewAssignmentContext } from "./native-review-participant.js";
+import { hasEgmFindings } from "./egm-review-execution.js";
 import { conversationNativeDecision, isConversation } from "../agent-conversations.js";
 import { issueTreeControlService } from "../issue-tree-control.js";
 import { randomUUID } from "node:crypto";
@@ -1408,6 +1409,7 @@ export async function finalizeNativeRun(input: {
       ...(reviewContext ? { nativeReviewOutcome: nativeReview
         ? nativeReview.interaction.status === "pending" ? "pending" as const : "resolved" as const
         : "stale" as const } : {}),
+      nativeReviewFindingsSubmitted: nativeReview?.interaction.status === "pending" && terminalState === "succeeded" && hasEgmFindings(run),
       assessment,
       terminalState: terminalState as "succeeded" | "failed" | "cancelled",
       workspaceFinalizeStatus: input.workspaceFinalizeStatus,

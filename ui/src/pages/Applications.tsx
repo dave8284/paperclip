@@ -116,7 +116,7 @@ export function Applications() {
       <div><h1 className="text-2xl font-semibold">Application portfolio</h1><p className="text-sm text-muted-foreground">Your products, projects, and the work moving them forward.</p></div>
       <Button onClick={() => setCreating(true)}><Plus className="size-4" />Add application</Button>
     </div>
-    <div className="flex flex-wrap gap-4 text-sm"><Link to="/dashboard/live" className="text-primary">Live agents</Link><Link to="/agents" className="text-primary">Agent pool</Link><Link to="/teams-catalog?search=AgentOS" className="text-primary">Install operating team</Link><Link to="/routines" className="text-primary">Recurring work</Link><Link to="/operating-connections" className="text-primary">Operating connections</Link></div>
+    <div className="flex flex-wrap gap-4 text-sm"><Link to="/dashboard/live" className="text-primary">Live agents</Link><Link to="/agents" className="text-primary">Agent pool</Link><Link to="/teams-catalog?search=AgentOS" className="text-primary">Install operating team</Link><Link to="/routines" className="text-primary">Recurring work</Link></div>
     {creating && <ApplicationForm key={selectedCompanyId} companyId={selectedCompanyId} onCancel={() => setCreating(false)} />}
     {query.isLoading && <PageSkeleton variant="list" />}
     {query.error && <p role="alert" className="text-sm text-destructive">{query.error.message} <Button variant="ghost" onClick={() => void query.refetch()}>Retry</Button></p>}

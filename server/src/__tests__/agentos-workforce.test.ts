@@ -90,7 +90,10 @@ describe("Agent OS shared workforce", () => {
     const intent = { id: randomUUID(), expectedRevision: 0, sourceCompanyId: f.one.id, sourceAgentId: f.first.id,
       targetCompanyIds: [f.two.id], action: "portfolio_work:read", readScope: "company_shared_only", expiresAt: null };
     await request(f.api).post(`${f.base}/read-mandates`).send(intent).expect(200);
-    const runtimeActor: Express.Request["actor"] = { type: "agent", source: "agent_jwt", companyId: f.one.id, agentId: f.first.id, onBehalfOfUserId: f.owner };
+    // Authentication supplies this source-company snapshot; the mandate owner
+    // must still recheck current account, membership and grant rows per read.
+    const runtimeActor: Express.Request["actor"] = { type: "agent", source: "agent_jwt", companyId: f.one.id, agentId: f.first.id, onBehalfOfUserId: f.owner,
+      onBehalfOfMemberships: [{ companyId: f.one.id, membershipRole: "owner", status: "active" }] };
     const query = { mandateId: intent.id, revision: 1, targetCompanyId: f.two.id };
     return { ...f, intent, runtimeActor, runtime: app(runtimeActor), query, path: `/api/companies/${f.one.id}/friday/portfolio-work` };
   }
@@ -144,6 +147,11 @@ describe("Agent OS shared workforce", () => {
     await request(f.api).post(`${f.base}/assignments/${f.assignments[1].id}/capabilities`).send(await decisionIntent(f, 1, published.body.id)).expect(200);
     const [adoption] = await db.select().from(agentosCapabilityDecisions).where(eq(agentosCapabilityDecisions.companyId, f.two.id));
     await expect(skills.deleteSkill(f.two.id, adoption.importedSkillId!)).rejects.toMatchObject({ status: 409 });
+    await expect(deleteCompany(db, f.two.id)).rejects.toThrow("Complete termination before deleting the agent");
+    expect(await db.select().from(agentosCapabilityDecisions).where(eq(agentosCapabilityDecisions.companyId, f.two.id))).toHaveLength(1);
+    // No runner host is attached to this fixture. Model the native worker's
+    // confirmed terminal state before testing permanent-delete dependencies.
+    await db.update(agents).set({ lifecycleState: "terminated", status: "terminated", lifecycleOperation: null }).where(eq(agents.id, f.second.id));
     await deleteCompany(db, f.two.id);
     expect(await db.select().from(agentosCapabilityDecisions).where(eq(agentosCapabilityDecisions.companyId, f.two.id))).toHaveLength(0);
     expect(await db.select().from(companySkillVersions).where(eq(companySkillVersions.id, evidence.version.id))).toHaveLength(1);
@@ -414,6 +422,11 @@ describe("Agent OS shared workforce", () => {
       const [row] = await tx.execute<{ pid: number }>(sql`select pg_backend_pid() as pid`);
       locked(row.pid);
       await releaseLock;
+      // Native grant invalidation also locks company agents. Revoke from the
+      // transaction already holding the target, so the grant deletion commits
+      // before the waiting mutation can acquire that target and reauthorize.
+      await accessService(tx as unknown as typeof db).setPrincipalPermission(f.two.id, "agent", f.manager.id,
+        retiring ? "workforce:retire" : "applications:manage", false, f.owner);
     });
     const holderPid = await targetLocked;
     const binding = request(f.delegated).post(path).send(intent).then(response => response);
@@ -423,7 +436,6 @@ describe("Agent OS shared workforce", () => {
           where waiter.datname=current_database() and ${holderPid}=any(pg_blocking_pids(waiter.pid))) as waiting`);
         return row.waiting;
       }, { timeout: 5000, interval: 25 }).toBe(true);
-      await accessService(db).setPrincipalPermission(f.two.id, "agent", f.manager.id, retiring ? "workforce:retire" : "applications:manage", false, f.owner);
       release(); await holder;
       expect((await binding).status).toBe(403);
       const assignments = await db.select().from(agentosAssignments).where(eq(agentosAssignments.id, f.binding.id));
@@ -497,6 +509,64 @@ describe("Agent OS shared workforce", () => {
     const rows = await db.select().from(activityLog).where(and(eq(activityLog.companyId, f.one.id), eq(activityLog.action, "agentos.assignment_created")));
     expect(rows).toHaveLength(1);
     expect(rows[0].actorId).toBe(f.owner);
+  });
+  it("reads an employee's persisted work only across currently authorized assignments", async () => {
+    const f = await seed(), readerId = randomUUID();
+    await db.insert(authUsers).values({ id: readerId, name: "Employee reader", email: `${readerId}@example.test`,
+      approvalStatus: "approved", createdAt: new Date(), updatedAt: new Date() });
+    await db.insert(companyMemberships).values([f.one, f.two].map(company => ({ companyId: company.id,
+      principalType: "user" as const, principalId: readerId, membershipRole: "operator", status: "active" })));
+    const [firstProject, secondProject, privateProject] = await db.insert(projects).values([
+      { companyId: f.one.id, name: "First assignment project", visibility: "open" },
+      { companyId: f.two.id, name: "Second assignment project", visibility: "open" },
+      { companyId: f.two.id, name: "Unshared private project", visibility: "private" },
+    ]).returning();
+    const [firstTask, secondTask, privateTask] = await db.insert(issues).values([
+      { companyId: f.one.id, projectId: firstProject.id, title: "First assignment work", status: "in_progress", assigneeAgentId: f.first.id },
+      { companyId: f.two.id, projectId: secondProject.id, title: "Second assignment work", status: "in_progress", assigneeAgentId: f.second.id },
+      { companyId: f.two.id, projectId: privateProject.id, title: "Unshared private work", assigneeAgentId: f.second.id, responsibleUserId: f.owner },
+    ]).returning();
+    const reader: Express.Request["actor"] = { type: "board", source: "session", userId: readerId,
+      companyIds: [f.one.id, f.two.id], memberships: [f.one, f.two].map(company => ({ companyId: company.id, membershipRole: "operator", status: "active" })) };
+    const api = app(reader), path = `/api/companies/${f.one.id}/friday/agents/${f.first.id}/awareness`;
+    const initial = await request(api).get(path).expect(200);
+    expect(initial.headers["cache-control"]).toBe("no-store");
+    expect(initial.body.scope).toBe("authorized_companies");
+    expect(initial.body.assignments.map((row: { company: { id: string } }) => row.company.id)).toEqual([f.one.id, f.two.id]);
+    expect(initial.body.assignments.flatMap((row: { work: { tasks: Array<{ id: string }> } }) => row.work.tasks.map(task => task.id)).sort())
+      .toEqual([firstTask.id, secondTask.id].sort());
+    expect(JSON.stringify(initial.body)).not.toContain(privateProject.id);
+    expect(JSON.stringify(initial.body)).not.toContain(privateTask.id);
+    expect(JSON.stringify(initial.body)).not.toContain("never-in-the-portfolio");
+    await db.update(issues).set({ title: "Updated assignment work", status: "done" }).where(eq(issues.id, firstTask.id));
+    await db.update(companyMemberships).set({ status: "inactive" }).where(and(eq(companyMemberships.principalId, readerId), eq(companyMemberships.companyId, f.two.id)));
+    const refreshed = await request(api).get(path).query({ limit: 1 }).expect(200);
+    expect(refreshed.body.nextOffset).toBeNull();
+    expect(refreshed.body.assignments).toHaveLength(1);
+    expect(refreshed.body.assignments[0].work.tasks).toEqual(expect.arrayContaining([expect.objectContaining({ id: firstTask.id, title: "Updated assignment work", status: "done" })]));
+    expect(JSON.stringify(refreshed.body)).not.toContain(f.two.id);
+    expect(JSON.stringify(refreshed.body)).not.toContain("Second assignment");
+  });
+  it("keeps employee awareness on the runtime agent's own company despite an owner's wider membership", async () => {
+    const f = await seed();
+    await db.insert(companyMemberships).values({ companyId: f.one.id, principalType: "agent", principalId: f.first.id, membershipRole: "member", status: "active" });
+    const actor: Express.Request["actor"] = { type: "agent", source: "agent_jwt", agentId: f.first.id,
+      companyId: f.one.id, onBehalfOfUserId: f.owner, keyScope: { kind: "standard" },
+      onBehalfOfMemberships: [{ companyId: f.one.id, membershipRole: "owner", status: "active" }] };
+    const api = app(actor), path = `/api/companies/${f.one.id}/friday/agents/${f.first.id}/awareness`;
+    const response = await request(api).get(path).expect(200);
+    expect(response.body.scope).toBe("current_company");
+    expect(response.body.assignments.map((row: { company: { id: string } }) => row.company.id)).toEqual([f.one.id]);
+    expect(response.body.nextOffset).toBeNull();
+    expect(JSON.stringify(response.body)).not.toContain(f.two.id);
+    await request(api).get(`/api/companies/${f.two.id}/friday/agents/${f.second.id}/awareness`).expect(403);
+    await db.update(companyMemberships).set({ status: "inactive" }).where(and(eq(companyMemberships.principalId, f.owner), eq(companyMemberships.companyId, f.one.id)));
+    // Even a previously admitted actor snapshot cannot retain route access
+    // after the responsible user's current membership is revoked.
+    const denied = await request(api).get(path).expect(403);
+    expect(denied.body).not.toHaveProperty("assignments");
+    expect(JSON.stringify(denied.body)).not.toContain(f.employeeInput.id);
+    expect(JSON.stringify(denied.body)).not.toContain(f.first.id);
   });
   it("retires only one company assignment, revokes its key and records native termination atomically", async () => {
     const f = await seed();

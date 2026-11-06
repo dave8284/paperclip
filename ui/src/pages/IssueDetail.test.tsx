@@ -1562,6 +1562,9 @@ describe("IssueDetail", () => {
     await flushReact();
     expect(ensureIssue).not.toHaveBeenCalled();
     expect(mockIssuesApi.markRead).not.toHaveBeenCalled();
+    expect(mockIssuesApi.list.mock.calls.some(([, filters]) =>
+      typeof filters?.createdFromIssueId === "string" && filters.createdFromIssueId.startsWith("chat:"),
+    )).toBe(false);
     const props = mockIssueChatThreadRender.mock.calls.at(-1)?.[0] as {
       onAdd: (body: string) => Promise<void>;
       onAttachImage: (file: File) => Promise<IssueAttachment>;

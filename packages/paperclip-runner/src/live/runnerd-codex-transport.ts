@@ -1,4 +1,5 @@
 import { PRP_COMPLETION_TOOL_NAME, PRP_COMPLETION_RESULT_BRIDGE_INPUT_SCHEMA } from "../contracts/completion-result.js";
+import { EGM_PACKET_REVIEW_TOOL_NAMES, parseNativeExecutionPurpose, type NativeEgmPacketReviewPurpose } from "../contracts/native-execution.js";
 import { RunnerLaunchPreparationStore } from "./runner-launch-preparation-store.js";
 import type { PreparedRunnerProviderLaunch, RunnerProviderLaunchRequirements } from "./runner-provider-launch.js";
 import { preparedRunnerLaunchWorkingDirectory, validatePreparedRunnerLaunch, runnerProviderLaunchRequirements, createRunnerProviderLaunch, createRunnerdCodexAppServerArgs, trustedRuntimeReadOnlyRoots } from "./runner-provider-launch.js";
@@ -1220,6 +1221,7 @@ export interface CapabilityRunnerdProcessEvidence {
 }
 
 export interface CapabilityRunnerdCodexTransportOptions extends RunnerExecutionDriver {
+  executionPurpose?: NativeEgmPacketReviewPurpose;
   observability?: import("../drivers/agent-observability.js").ProviderObservabilityLaunch;
   homeMode?: "isolated" | "preconfigured";
   provider?: "codex" | "opencode" | "claude_managed" | "aws_agentcore" | "acpx";
@@ -3241,6 +3243,14 @@ export function authorizedToolSetForProvider(
   return authorizedToolSet(tools);
 }
 
+function assertPacketReviewTools(purpose: NativeEgmPacketReviewPurpose | undefined, tools: readonly Readonly<Record<string, unknown>>[]) {
+  if (!purpose) return;
+  const names = tools.map(tool => tool.name);
+  if (names.length !== EGM_PACKET_REVIEW_TOOL_NAMES.length || EGM_PACKET_REVIEW_TOOL_NAMES.some(name => !names.includes(name))) {
+    throw new Error("runner_packet_review_tool_authority_invalid");
+  }
+}
+
 /** Include the completion tools that the Codex driver adds at session startup. */
 export function runnerCodexDynamicToolsFit(
   tools: readonly Readonly<Record<string, unknown>>[],
@@ -3582,6 +3592,12 @@ class DurablePrpCodexTransport implements CodexAppServerTransport {
   readonly #bridgedRuntimeInputs = new Map<string, { durableTurnId: string; permission?: boolean }>();
 
   constructor(readonly options: CapabilityRunnerdCodexTransportOptions) {
+    if (options.executionPurpose) {
+      options.executionPurpose = parseNativeExecutionPurpose(options.executionPurpose);
+      if ((options.provider ?? "codex") !== "codex" || options.homeMode === "preconfigured" || options.lifecyclePolicy?.mode === "warm") {
+        throw new Error("runner_packet_review_authority_invalid");
+      }
+    }
     if (options.prepareLaunch && (!options.runnerProcessLauncher || !options.controlPlaneRegistration || !options.runnerArtifact)) {
       throw new Error("runner_launch_preparation_requires_process_owner_and_artifact");
     }
@@ -3635,10 +3651,12 @@ class DurablePrpCodexTransport implements CodexAppServerTransport {
       options.stateDirectory ??
       mkdtempSync(resolve(tmpdir(), "paperclip-runner-lab-prp-"));
     if (options.resumeDynamicTools !== undefined) {
-      this.#authorizedTools = authorizedToolSetForProvider(options.provider, [
+      const resumedTools = [
         ...options.resumeDynamicTools,
-        ...codexSemanticToolSpecs(),
-      ]);
+        ...codexSemanticToolSpecs().filter(tool => !options.executionPurpose || tool.name === "paperclip_finish"),
+      ];
+      assertPacketReviewTools(options.executionPurpose, resumedTools);
+      this.#authorizedTools = authorizedToolSetForProvider(options.provider, resumedTools);
     }
     mkdirSync(this.#root, { recursive: true, mode: 0o700 });
     this.#evidence = {
@@ -4082,6 +4100,7 @@ class DurablePrpCodexTransport implements CodexAppServerTransport {
     itemId: string;
     currentRunGrant?: NativeRunRuntimeGrant;
   }): Promise<void> {
+    if (this.options.executionPurpose) throw new Error("runner_packet_review_cross_run_reuse_forbidden");
     if (this.#pendingWarmRecoveryCompletion !== null) {
       throw new Error("native_runner_warm_transition_completion_pending");
     }
@@ -4793,6 +4812,7 @@ class DurablePrpCodexTransport implements CodexAppServerTransport {
     params: Record<string, unknown>, identity: DurableRecoveryIdentity,
     dynamicTools: Record<string, unknown>[],
   ) {
+    assertPacketReviewTools(this.options.executionPurpose, dynamicTools);
     if (this.options.prepareLaunch) {
       const provider = this.options.provider ?? "codex";
       this.#authorizedTools = authorizedToolSetForProvider(provider, dynamicTools);
@@ -5285,6 +5305,12 @@ class DurablePrpCodexTransport implements CodexAppServerTransport {
       identity.normalizedSessionId === desiredIdentity.normalizedSessionId &&
       identity.turnId === desiredIdentity.turnId &&
       identity.itemId === desiredIdentity.itemId;
+    const recordedPurpose = record(record(controlPlaneState?.runAttachTemplate).provider).executionPurpose;
+    if (this.options.executionPurpose || recordedPurpose) {
+      if (!exactAuthority || JSON.stringify(recordedPurpose) !== JSON.stringify(this.options.executionPurpose)) {
+        throw new Error("runner_packet_review_recovery_authority_changed");
+      }
+    }
     let rotatedAuthority = false;
     if (controlPlaneState === null) {
       if (!localProvider) {

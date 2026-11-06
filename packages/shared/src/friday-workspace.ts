@@ -9,6 +9,7 @@ export const fridayWorkQuerySchema = z.object({
   projectOffset: z.coerce.number().int().min(0).max(100000).default(0),
   limit: z.coerce.number().int().min(1).max(200).default(100),
   status: z.enum(["active", "completed", "all"]).default("all"),
+  dataAccess: z.literal("tools").optional(),
 }).strict();
 export type FridayWorkQuery = z.infer<typeof fridayWorkQuerySchema>;
 export const fridayViewSchema = z.object({
@@ -31,6 +32,18 @@ export interface FridayAccountability {
   people: Array<{ id: string; name: string; role: string; title: string | null; status: string; reportsTo: string | null }>;
   reportingChainTruncated: boolean;
 }
+/** Operator-only projections of native profile configuration and tool receipts.
+ * A configured tool is not proof of execution or provider dataset access. */
+export interface FridayDataAccess {
+  configuredAccess: "available" | "restricted";
+  observedAccess: "available" | "restricted";
+  resources: Array<{ id: string; companyId: string; name: string; kind: "catalog" | "connection" }>;
+  permissions: Array<{ agentId: string; resourceId: string }>;
+  actions: Array<{ id: string; taskId: string; agentId: string | null; resourceId: string | null; toolName: string;
+    operation: "read" | "write" | "destructive" | "unknown"; status: string; completedAt: string | null; observedAt: string }>;
+  permissionsTruncated: boolean;
+  actionsTruncated: boolean;
+}
 export interface FridayWork {
   observedAt: string;
   projects: Array<{ id: string; name: string; status: string; leadAgentId: string | null }>;
@@ -49,4 +62,5 @@ export interface FridayWork {
   /** Authorized leaders for the projects/tasks on this page; task owners stay
    * on tasks[].assigneeAgentId. Optional for older awareness clients. */
   accountability?: FridayAccountability;
+  dataAccess?: FridayDataAccess;
 }

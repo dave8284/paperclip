@@ -82,6 +82,35 @@ The existing registry/work/coordination capabilities now include `/friday`, GET/
 
 The galaxy projects native records through the same project/task ACLs before counting or pagination. `kind=application` is the default; `kind=platform` separates internal development and `kind=all` supports cross-portfolio awareness. Dots are bounded and truncation is explicit. Select application/project/task to drill down while Friday stays alongside it. Native conversations own persistence, handoffs and revision-bound approvals.
 
+`GET /api/companies/{companyId}/friday/work?dataAccess=tools` adds a bounded
+operator projection to the existing `work` capability; ordinary work reads do
+not load it. Native effective-profile configuration remains board/company-only.
+Stored actions independently require the same board, company and
+`tools:view_audit` authority as native gateway audit, including its existing
+local-operator/instance-admin exceptions. A Friday/standard agent's work-read
+authority never admits either management projection. Company-shared portfolio
+mandate summaries omit it entirely.
+
+The [projection](../../server/src/services/friday-data-access.ts) delegates
+configured selection to the native tool-profile resolver, for up to eight
+authorized in-scope employees and 100 links. Stored `tool_invocations` are
+company-filtered and restricted to the already-authorized loaded task IDs before
+their 100-row cap. Unlinked/private/foreign task actions and their counts are
+not included. Related agent/catalog/connection IDs are joined to the same
+company. Only identity, tool classification, status and observation times are
+projected; arguments/results, provider schemas and credentials are omitted.
+Configured permissions and observed actions have separate access/cap flags.
+Profile inclusion is not proof of effective credential/policy admission, nor of
+an executed data read/write. Only explicit recorded read/write/destructive
+classifications receive those labels; other risk classes stay unknown. Exact
+provider dataset/file identity is outside this native evidence contract.
+
+[PostgreSQL route checks](../../server/src/__tests__/friday-awareness.test.ts)
+cover these authority boundaries, loaded-task paging, private/foreign/unlinked
+exclusion, output minimization, outcomes and caps. UI checks use the actual
+graph component for action-to-source-task navigation and failed-refresh
+suppression. They do not certify an external provider operation.
+
 Voice is a browser capability: explicit microphone activation writes final transcripts to the existing draft, playback is stoppable, and automatic new-reply speech is opt-in. There is no paid speech API fallback. Component tests cover transcript/permission/cleanup behavior; a real microphone and audible playback are not yet qualified. Live model coordination, account-wide quota queuing and self-deployment remain separate qualification gates.
 
 
@@ -90,6 +119,16 @@ Friday is now the company landing view, mobile Home and company-switch destinati
 The existing `work` and `coordination` capabilities also include on-demand generated displays. Agent publication uses native HTML attachment/artifact work products, resolved against the same conversation's authorized attachment list. The workspace reuses the opaque-origin HTML preview and its bounded text loader. Save for reuse creates a native revision-controlled document `friday-canvas-{attachmentId}` with JSON `{version:1,attachmentId,workProductId}`; it does not modify the published file or the agent's privileges. Reusing a display means reading the saved source and publishing a new attachment. Platform component promotion remains a reviewed engineering change. No new API or permission key is added.
 
 Native live-table publication uses the existing task-document read/upsert tool or `GET/PUT /api/issues/{conversationIssueId}/documents/friday-display-{slug}`, with normal document ownership and baseRevisionId conflict checks. A strict version-1 descriptor contains a table title, tasks/projects source, target company UUID, optional project UUID, bounded page size and supported status filter. The source document must match the current authorized conversation/company; target scope must match the selected accessible company/project. The UI then reauthorizes the document and reads `GET /api/companies/{companyId}/friday/work` under the viewing actor. This is data-only presentation: it grants no company/project permission or agent access to the viewer's response, introduces no query/URL/code proxy, and changes no mutations or approval gates. Stop unmounts the reader; errors suppress cached rows. UI/parser tests establish bounded rendering behavior, not agent publication or live-browser proof. Arbitrary generated-component promotion remains open.
+
+The descriptor's registered `kind` may be `table`, `list` or `board`; boards require
+task data. If the saved definition read fails, Retry saved display reauthorizes
+the document and uses its current revision before requesting any source data. It
+does not reuse a cached descriptor or rows after a failed read.
+
+Friday's visible speaking state follows the existing observed playback timing,
+not the synthesis request. This changes no speech endpoint or actor authority.
+The operator/company voice API still owns local speech preparation, transcription
+and synthesis; UI transition checks do not establish physical audio acceptance.
 
 Verification: FridayWorkspace, TaskChatThread, FridayVoiceControls and existing HTML/attachment tests cover arrival, stale-access suppression, saved references, original sending, inline decision visibility and preview isolation attributes. `scripts/agentos-smoke.mjs` additionally checks authenticated agent upload/registration and revision-protected reusable-reference writes against an owned local instance. Real browser animation, microphone and model-driven generation require live qualification.
 

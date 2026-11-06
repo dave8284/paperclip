@@ -299,10 +299,11 @@ export class FridayVoiceSession {
   };
   async speak(body: string) {
     const text = spokenReply(body); if (!text || this.binding?.disabled || (this.state.enabled && this.state.hearingSpeech)) return;
-    this.stopSpeaking(false); this.patch({ speaking: true, error: "" }); this.resume();
+    this.stopSpeaking(false);
     const generation = this.speechGeneration;
     const startedAt = this.monotonicNow();
     this.timing("playback", "pending");
+    this.patch({ speaking: true, error: "" }); this.resume();
     const started = () => {
       if (generation === this.speechGeneration && this.state.timings.playback.status === "pending") {
         this.timing("playback", "measured", Math.max(0, this.monotonicNow() - startedAt));

@@ -110,6 +110,11 @@ describe("native status authority", () => {
     expect(decision.effects.some((effect) => ["enqueue_continuation", "schedule_retry"].includes(effect.kind))).toBe(false);
   });
 
+  it("preserves owner review after packet findings without approving or automatically repeating the review", () => {
+    expect(arbitrate({ priorIssueStatus: "in_review", nativeReviewOutcome: "pending", nativeReviewFindingsSubmitted: true }))
+      .toMatchObject({ statusAction: "preserve", toStatus: "in_review", reasonCode: "native_review_findings_recorded", effects: [{ kind: "release_checkout" }] });
+  });
+
   it("treats only the authorized Board response_wake as passive and preserves governance", () => {
     const passive = assessment({
       reportedDisposition: "yielded",

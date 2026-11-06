@@ -58,6 +58,10 @@ support do not authorize automatic alternatives. Retained sessions keep their
 model; older queued requests containing unqualified alternatives require review.
 The [offline service checks](../../server/src/__tests__/agentos-model-intelligence-offline.test.ts)
 cover this boundary alongside execution-account feedback attribution.
+Selected native executions also retain `modelAccountAccess` in their run context
+after managed-account preparation: a bounded observation of prior work using
+that exact account/credential epoch. Its evidence run and time remain explicit;
+it does not establish current entitlement or unlock alternative models.
 
 ### `shared-execution-capacity`
 

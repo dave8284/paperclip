@@ -163,6 +163,7 @@ import { PaperclipRunnerToolAuthority } from "./paperclip-runner-tool-authority.
 import { createAssignedMcpTools, getAssignedMcpGateway } from "./assigned-mcp-tools.js";
 import { getNativeReviewAssignment, readNativeReviewAssignmentContext } from "./native-review-participant.js";
 import { assertOrdinaryNativeReviewExecution } from "./egm-review-packets.js";
+import { assertEgmNativeExecution, egmExecutionPurpose } from "./egm-review-execution.js";
 import { NativeChatAttachmentReadScope } from "./chat-attachment-read.js";
 import {
   assertCurrentWakeCommentsRead,
@@ -7699,7 +7700,13 @@ export async function executePaperclipNativeSession(input: {
   );
   const ownerToken = Symbol("native execution owner");
   try {
-    await assertOrdinaryNativeReviewExecution(input.db, input.execution.binding);
+    if (egmExecutionPurpose(input.execution)) {
+      if (!input.useRunnerd || input.backend) throw new Error("independent_review_unavailable: packet review requires the native Runner provider boundary");
+      if (input.runnerExecutionTarget?.kind === "remote" || input.billingIdentity?.billingType !== "subscription_included") {
+        throw new Error("independent_review_unavailable: packet review requires the local subscription-backed native provider");
+      }
+      await assertEgmNativeExecution(input.db, input.execution);
+    } else await assertOrdinaryNativeReviewExecution(input.db, input.execution.binding);
     // Reserve across session identities before retiring or staging anything.
     if (executingNativeOwnerScopes.has(ownerScope)) {
       throw new Error("native_session_supervisor_busy");
@@ -8872,7 +8879,7 @@ async function executePaperclipNativeSessionWithinScope(
   try {
     const usesPluginTask = input.runnerExecutionTarget?.kind === "remote" && input.runnerExecutionTarget.transport === "sandbox" && !!input.runnerExecutionTarget.runnerTask;
     const prepareRunnerEnvironment = async () => {
-      if (needsCoreGitHubAccess(input) && input.execution.schema !== "paperclip.native-execution-input.v6" && input.execution.schema !== "paperclip.native-execution-input.v8") {
+      if (!egmExecutionPurpose(input.execution) && needsCoreGitHubAccess(input) && input.execution.schema !== "paperclip.native-execution-input.v6" && input.execution.schema !== "paperclip.native-execution-input.v8") {
         if (!input.execution.workspace.cwd) throw new Error("native_workspace_required");
         githubAccess ??= await timeController("github_access", () => createNativeGitHubAccess({
           scope: input.execution.binding,
@@ -11743,7 +11750,9 @@ async function createRunnerdBackendWithinSessionClaim(
     ...input.execution.binding, contextSnapshot: nativeReview,
   }) : null;
   if (nativeReview && !nativeReviewAssignment) throw new Error("native_review_assignment_no_longer_available");
-  if (nativeReviewAssignment && ("egmPacketPreparation" in nativeReviewAssignment.interaction.payload || nativeReviewAssignment.sourceRun.runnerProfileJson?.nativeEgmPacketPreparation))
+  const egmPurpose = egmExecutionPurpose(input.execution);
+  if (egmPurpose) await assertEgmNativeExecution(input.db, input.execution);
+  if (!egmPurpose && nativeReviewAssignment && ("egmPacketPreparation" in nativeReviewAssignment.interaction.payload || nativeReviewAssignment.sourceRun.runnerProfileJson?.nativeEgmPacketPreparation))
     throw new Error("independent_review_unavailable: frozen EGM packets cannot use ordinary review execution");
   // Remote Codex already sends dynamic tool calls over authenticated PRP. Keep
   // the assigned gateway on the control plane instead of asking the sandbox to
@@ -11775,13 +11784,15 @@ async function createRunnerdBackendWithinSessionClaim(
   ]);
   if (preparedEnvironment.status === "rejected") throw preparedEnvironment.reason;
   if (preparedAssignedMcp.status === "rejected") throw preparedAssignedMcp.reason;
-  const runnerEnvironment = preparedEnvironment.value;
+  const runnerEnvironment = egmPurpose ? { ...preparedEnvironment.value } : preparedEnvironment.value;
+  if (egmPurpose && runnerEnvironment) for (const key of ["PAPERCLIP_NATIVE_MCP_URL", "PAPERCLIP_NATIVE_MCP_TOKEN", "PAPERCLIP_NATIVE_MCP_NAME"]) delete runnerEnvironment[key];
   const assignedMcpTools = preparedAssignedMcp.value;
   const dotAttachmentActor = input.execution.schema === "paperclip.native-execution-input.v6"
     ? await input.db.select({ config: agents.adapterConfig }).from(agents).where(and(
         eq(agents.id, input.execution.binding.agentId), eq(agents.companyId, input.execution.binding.companyId),
       )).limit(1).then(rows => rows[0]) : undefined;
   const authority = new PaperclipRunnerToolAuthority(input.db, {
+    ...(egmPurpose ? { egmPurpose } : {}),
     casesEnabled: input.casesEnabled === true,
     ...(nativeReview ? { nativeReview } : {}),
     connectorAssignments,
@@ -13480,6 +13491,7 @@ async function createRunnerdBackendWithinSessionClaim(
             : null,
         runnerRuntimeContext: remoteRuntimeContext,
         baseInstructions: recoveryContext?.baseInstructions,
+        executionPurpose: recoveryContext?.executionPurpose ?? egmExecutionPurpose(runnerExecution),
         runnerFilesystemRoot: remoteRunnerFilesystemRoot ?? undefined,
         resumeWorkingDirectory: runnerExecution.workspace.cwd,
         externallySandboxed: remoteTarget?.transport === "sandbox",

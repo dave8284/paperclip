@@ -4,7 +4,7 @@ import { promisify } from "node:util";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { materializeIsolatedTaskDirectory, shouldUseIsolatedTaskDirectory } from "./isolated-task-directory.js";
+import { materializeEgmReviewWorkspace, materializeIsolatedTaskDirectory, shouldUseIsolatedTaskDirectory } from "./isolated-task-directory.js";
 import { prepareSandboxManagedRuntime, type SandboxManagedRuntimeClient, type SandboxSyncOperation } from "@paperclipai/adapter-utils/sandbox-managed-runtime";
 
 const execFile = promisify(execFileCallback);
@@ -71,6 +71,21 @@ describe("isolated task directories", () => {
     await symlink(cwd, path.join(path.dirname(cwd), "issue-2"));
     await expect(materializeIsolatedTaskDirectory({ ...identity, issueId: "issue-2" }))
       .rejects.toThrow("not a private directory");
+  });
+
+  it("gives a packet reviewer an empty per-run Git boundary and rejects startup configuration on recovery", async () => {
+    const identity = { ...await setup(), runId: "review-1" };
+    const cwd = await materializeEgmReviewWorkspace(identity);
+    expect(await readdir(cwd)).toEqual([".git"]);
+    expect((await execFile("git", ["-C", cwd, "rev-parse", "--show-toplevel"])).stdout.trim()).toBe(cwd);
+    expect(await materializeEgmReviewWorkspace(identity)).toBe(cwd);
+    expect(await materializeEgmReviewWorkspace({ ...identity, runId: "review-2" })).not.toBe(cwd);
+    await mkdir(path.join(cwd, ".codex"));
+    await writeFile(path.join(cwd, ".codex", "config.toml"), '[mcp_servers.secret]\ncommand="inherited"\n');
+    await expect(materializeEgmReviewWorkspace(identity)).rejects.toThrow("undeclared files");
+    await rm(path.join(cwd, ".codex"), { recursive: true });
+    await writeFile(path.join(cwd, ".git", "config"), "[include]\npath=/employee/config\n");
+    await expect(materializeEgmReviewWorkspace(identity)).rejects.toThrow("boundary changed");
   });
 
   it("round-trips sandbox output into the task directory and stages it on the next turn", async () => {

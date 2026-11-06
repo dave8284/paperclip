@@ -1,6 +1,13 @@
-import { fridayViewSchema, type FridayView } from "@paperclipai/shared";
+import { fridayViewSchema, isAttentionProposal, type AttentionItem, type FridayView } from "@paperclipai/shared";
 
 export type FridayNavigation = Omit<FridayView, "version" | "panel"> & { panel: FridayView["panel"] | "library" | "canvas" | null; speakerId?: string; speakerCompanyId?: string };
+/** Proposals belong in Decisions; work blockers retain their native task. */
+export function fridayAttentionNavigation(companyId: string, item: AttentionItem): FridayNavigation {
+  const projectId = item.project?.id;
+  if (isAttentionProposal(item)) return { panel: "attention", companyId, projectId, decisionId: item.id };
+  const taskId = item.relatedIssue?.id ?? (item.subject.kind === "issue" ? item.subject.id : undefined);
+  return { panel: "work", companyId, projectId, ...(taskId ? { taskId } : {}), mode: "combined" };
+}
 export function readFridayNavigation(search: string): FridayNavigation {
   const params = new URLSearchParams(search);
   const panel = params.get("panel");

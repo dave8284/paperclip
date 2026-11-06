@@ -6,7 +6,7 @@ import { afterAll, beforeAll, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { agents, companies, companyOperatingProfiles, costEvents, createDb, heartbeatRuns, issues, activityLog, projects, agentInstructionHeads, agentInstructionRevisions, aiSubscriptions } from "@paperclipai/db";
 import { startEmbeddedPostgresTestDatabase } from "@paperclipai/db/test-embedded-postgres";
-import { evaluateModelRun, modelIntelligenceProduct, selectCompanyModelProfile } from "../services/model-intelligence.js";
+import { evaluateModelRun, modelIntelligenceProduct, observeSelectedModelAccountAccess, selectCompanyModelProfile } from "../services/model-intelligence.js";
 import { activityService } from "../services/activity.js";
 
 let database: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>;
@@ -78,4 +78,54 @@ it("scopes project audit history before applying the result limit", async () => 
   const rows = await activityService(db).list({ companyId, projectId });
   expect(rows.map(row => row.entityId)).toEqual(expect.arrayContaining([projectId, issueId]));
   expect(rows.every(row => row.entityType === "issue" || row.entityType === "project")).toBe(true);
+});
+
+it("observes only completed native inference for the exact prepared account and credential epoch", async () => {
+  const run = await newRun();
+  const priorId = randomUUID(), sessionIdentity = "fixture-grant:fixture-user:fixture-secret:0";
+  const account = { provider: "openai", method: "subscription", subscriptionId, sessionIdentity };
+  const input = { companyId, agentId, runId: run.id, model: config.model, account };
+  const nativeInput = { binding: { companyId, agentId, runId: priorId }, provider: { kind: "codex", model: config.model } };
+  await db.insert(heartbeatRuns).values({ id: priorId, companyId, agentId, issueId,
+    status: "succeeded", runtimeMode: "native", startedAt: new Date(Date.now() - 5000), finishedAt: new Date(Date.now() - 1000),
+    contextSnapshot: { aiConnection: account }, runnerProfileJson: { nativeExecutionInput: nativeInput },
+    usageJson: { accountingReceiptReady: true }, costAccountingPending: false, costAccountedAt: new Date(),
+  });
+  expect(await observeSelectedModelAccountAccess(db, input)).toMatchObject({ state: "not_observed", reason: "latest_execution_not_confirmed" });
+  const [usage] = await db.insert(costEvents).values({ companyId, agentId, heartbeatRunId: priorId, subscriptionId,
+    model: config.model, provider: "openai", billingType: "subscription_included", costCents: 0, outputTokens: 10, occurredAt: new Date(),
+  }).returning();
+  const observed = await observeSelectedModelAccountAccess(db, input);
+  expect(observed).toMatchObject({ state: "observed_same_account", evidenceRunId: priorId,
+    currentEntitlementVerified: false, actualProviderModelVerified: false,
+    automaticAlternatives: "current_account_qualification_required" });
+  expect(JSON.stringify(observed)).not.toContain(sessionIdentity);
+  for (const accountChange of [
+    { sessionIdentity: "fixture-grant:fixture-user:fixture-secret:1" },
+    { sessionIdentity: "other-grant:fixture-user:fixture-secret:0" },
+    { subscriptionId: randomUUID() }, { method: "api_key" }, { provider: "anthropic" },
+  ]) {
+    expect(await observeSelectedModelAccountAccess(db, { ...input, account: { ...account, ...accountChange } })).toMatchObject({ state: "not_observed" });
+  }
+  expect(await observeSelectedModelAccountAccess(db, { ...input, companyId: otherCompanyId })).toMatchObject({ state: "not_observed" });
+  expect(await observeSelectedModelAccountAccess(db, { ...input, model: "other-model" })).toMatchObject({ state: "not_observed" });
+  await db.update(costEvents).set({ billingType: "api" }).where(eq(costEvents.id, usage.id));
+  expect(await observeSelectedModelAccountAccess(db, input)).toMatchObject({ state: "not_observed" });
+  await db.update(costEvents).set({ billingType: "subscription_included" }).where(eq(costEvents.id, usage.id));
+  await db.update(heartbeatRuns).set({ runnerProfileJson: { nativeExecutionInput: { ...nativeInput, binding: { ...nativeInput.binding, runId: randomUUID() } } } }).where(eq(heartbeatRuns.id, priorId));
+  expect(await observeSelectedModelAccountAccess(db, input)).toMatchObject({ state: "not_observed" });
+  await db.update(heartbeatRuns).set({ runnerProfileJson: { nativeExecutionInput: nativeInput } }).where(eq(heartbeatRuns.id, priorId));
+
+  const failedId = randomUUID();
+  await db.insert(heartbeatRuns).values({ id: failedId, companyId, agentId, issueId,
+    status: "failed", runtimeMode: "native", startedAt: new Date(Date.now() - 500), finishedAt: new Date(), errorCode: "model_not_found",
+    contextSnapshot: { aiConnection: account }, runnerProfileJson: { nativeExecutionInput: { ...nativeInput, binding: { ...nativeInput.binding, runId: failedId } } },
+  });
+  expect(await observeSelectedModelAccountAccess(db, input)).toMatchObject({ state: "not_observed",
+    reason: "latest_execution_not_confirmed", evidenceRunId: failedId });
+  await db.insert(heartbeatRuns).values(Array.from({ length: 100 }, () => ({
+    companyId, agentId, issueId, status: "succeeded", startedAt: new Date(Date.now() - 100), finishedAt: new Date(),
+  })));
+  expect(await observeSelectedModelAccountAccess(db, input)).toMatchObject({ state: "not_observed",
+    reason: "no_matching_native_execution", lookbackExecutions: 100 });
 });

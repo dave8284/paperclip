@@ -14,9 +14,13 @@ import { queryKeys } from "@/lib/queryKeys";
 
 export const TEXT_PREVIEW_MAX_BYTES = 512 * 1024;
 
+class AttachmentReadError extends Error {
+  constructor(readonly status: number) { super(`Could not load file (${status}).`); }
+}
+
 /** Bound the actual response, not just producer-supplied attachment metadata. */
 export async function readTextPreview(response: Response) {
-  if (!response.ok) throw new Error(`Could not load file (${response.status}).`);
+  if (!response.ok) throw new AttachmentReadError(response.status);
   if (!response.body) throw new Error("The file response is empty.");
   const reader = response.body.getReader();
   const decoder = new TextDecoder("utf-8", { fatal: true });
@@ -74,23 +78,31 @@ export function TextAttachmentPreview({ title, text, markdown, html = false, csv
 export function TaskAttachmentPanel({ issueId, attachmentId }: { issueId: string; attachmentId: string }) {
   const attachments = useQuery({
     queryKey: queryKeys.issues.attachments(issueId),
-    queryFn: () => issuesApi.listAttachments(issueId),
+    queryFn: ({ signal }) => issuesApi.listAttachments(issueId, { signal, cache: "no-store" }),
+    staleTime: 0,
+    refetchOnMount: "always",
+    retry: false,
   });
   // Re-resolve against this task's authorized attachment list; never trust persisted URLs.
-  const attachment = attachments.data?.find((item) => item.id === attachmentId);
+  const attachment = attachments.isSuccess && !attachments.isFetching
+    ? attachments.data.find((item) => item.id === attachmentId) : undefined;
   const eligible = attachment && isTextAttachment(attachment) && attachment.byteSize <= TEXT_PREVIEW_MAX_BYTES;
   const content = useQuery({
     queryKey: ["task-text-attachment", issueId, attachmentId],
     queryFn: async ({ signal }) => readTextPreview(await fetch(
       `/api/attachments/${encodeURIComponent(attachmentId)}/content`,
-      { signal, credentials: "same-origin" },
+      { signal, credentials: "same-origin", cache: "no-store" },
     )),
     enabled: Boolean(eligible),
+    staleTime: 0,
+    refetchOnMount: "always",
     retry: false,
   });
-  if (attachments.isLoading) return <p className="p-4 text-sm" role="status">Loading file…</p>;
+  if (attachments.isPending || attachments.isFetching) return <p className="p-4 text-sm" role="status">Loading file…</p>;
   if (attachments.isError) return <div className="p-4" role="alert">Could not load attachment details. <Button onClick={() => void attachments.refetch()}>Retry</Button></div>;
   if (!attachment) return <p className="p-4 text-sm" role="status">File no longer available. Close this tab or choose another file.</p>;
+  if (eligible && (content.isPending || content.isFetching)) return <p className="p-4 text-sm" role="status">Loading file…</p>;
+  if (content.error instanceof AttachmentReadError && [401, 403, 404].includes(content.error.status)) return <div className="space-y-3 p-4" role="alert"><p className="text-sm">This file is no longer available.</p><Button onClick={() => void attachments.refetch()}>Retry</Button></div>;
   const downloadUrl = attachmentDownloadPath(attachment);
   if (!eligible || content.isError) {
     return (

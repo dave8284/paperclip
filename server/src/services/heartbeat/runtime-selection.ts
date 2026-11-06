@@ -18,6 +18,10 @@ import {
 } from "../native-runtime/native-review-participant.js";
 import { buildNativeReviewRequest } from "../native-runtime/native-review-prompt.js";
 import { retainEgmReviewPreparation } from "../native-runtime/egm-review-packets.js";
+import { parseRetainedEgmPacket } from "../native-runtime/egm-packet-content.js";
+import { buildEgmReviewRequest, egmPurposeForPacket } from "../native-runtime/egm-review-execution.js";
+import { buildEgmRuntimeContext } from "../native-runtime/runtime-context.js";
+import { materializeEgmReviewWorkspace } from "../isolated-task-directory.js";
 import { buildNativeReviewContextReceipt, restoreNativeReviewContextReceipt } from "../native-runtime/native-review-context-receipt.js";
 import type { CaseExecutionContext } from "../case-context.js";
 import type { buildExecutionContinuation } from "../execution-continuation.js";
@@ -285,12 +289,18 @@ export async function selectHeartbeatRuntime(db: Db, input: HeartbeatRuntimeSele
       contextSnapshot: nativeReviewContext,
     })) : null;
     if (nativeReviewContext && !nativeReview) throw new Error("native_review_assignment_no_longer_available");
-    if (nativeReview && await retainEgmReviewPreparation(db, run.id, nativeReview)) {
+    const packetRuntimeSupported = nativeRuntimeResolution.profile.backend === "codex_app_server"
+      && executionTarget?.kind !== "remote"
+      && runtimeConfig.homeMode !== "preconfigured" && managedAiRuntime?.attribution.method === "subscription";
+    const hasEgmPacket = nativeReview && await retainEgmReviewPreparation(db, run.id, nativeReview, packetRuntimeSupported);
+    if (hasEgmPacket && !packetRuntimeSupported) {
       throw new ConfigurationIncompleteFailure("The frozen EGM packet is prepared. Independent review execution is unavailable until this runtime enforces packet-only context and tools.", {
         configurationIncomplete: { reason: "independent_review_unavailable", actionUrl: `/issues/${issueRef.id}` },
       });
     }
-    const nativeReviewRequest = nativeReview
+    const egmPacket = hasEgmPacket ? parseRetainedEgmPacket(nativeReview!.sourceRun.runnerProfileJson?.nativeEgmPacketPreparation) : null;
+    const egmWorkspace = egmPacket ? await materializeEgmReviewWorkspace({ companyId: agent.companyId, issueId: issueRef.id, runId: run.id }) : null;
+    const nativeReviewRequest = egmPacket ? buildEgmReviewRequest(egmPacket) : nativeReview
       ? buildNativeReviewRequest({
           title: nativeReview.interaction.title,
           summary: nativeReview.interaction.summary,
@@ -393,7 +403,7 @@ export async function selectHeartbeatRuntime(db: Db, input: HeartbeatRuntimeSele
             immediateRequests: immediateCompletion.requests,
             immediateRequestSources: immediateCompletion.sources,
           }));
-    const taskNativeSessionId = !taskSessionCredentialCompatible ? null : readNonEmptyString(
+    const taskNativeSessionId = egmPacket || !taskSessionCredentialCompatible ? null : readNonEmptyString(
       taskSessionDecodedParams?.sessionId,
     );
     // Compatibility for native retry rows created before same-run restart
@@ -401,7 +411,7 @@ export async function selectHeartbeatRuntime(db: Db, input: HeartbeatRuntimeSele
     // inherit its source checkpoint; any process/provider evidence on the
     // replacement makes the ownership ambiguous and therefore ineligible.
     const legacyRetrySource =
-      run.retryOfRunId && !isFailedChatRunRetry
+      !egmPacket && run.retryOfRunId && !isFailedChatRunRetry
         ? await measureRunPhase("runtime_selection.resume", () => db
             .select({
               id: heartbeatRuns.id,
@@ -474,7 +484,7 @@ export async function selectHeartbeatRuntime(db: Db, input: HeartbeatRuntimeSele
     // Rows that already acquired provider authority are progress barriers,
     // even when they do not contain a usable checkpoint.
     const previousNativeRun =
-      requestedNativeSessionId &&
+      !egmPacket && requestedNativeSessionId &&
       isUnusedNativeSessionBootstrap(
         run,
         nativeBootstrapHasProviderEvidence,
@@ -518,7 +528,7 @@ export async function selectHeartbeatRuntime(db: Db, input: HeartbeatRuntimeSele
     // changes. Other managed harnesses require per-turn cleanup.
     const supportsManagedWarmSession = agent.adapterType === "paperclip_runner" &&
       supportsManagedNativeWarmSession({ ...nativeRuntimeResolution.profile, acpxAgent: parseObject(agent.adapterConfig).acpxAgent }, managedAiRuntime?.attribution);
-    const effectiveLifecyclePolicy = persistedNativeExecutionInput?.session.lifecyclePolicy ??
+    const effectiveLifecyclePolicy = egmPacket ? { mode: "per_turn" as const, idleTimeoutMs: null } : persistedNativeExecutionInput?.session.lifecyclePolicy ??
       (["openai_dot_mcp", "grok_bot_mcp", "muse_external"].includes(nativeRuntimeResolution.profile.backend) || managedAiRuntime && !supportsManagedWarmSession
         ? { mode: "per_turn" as const, idleTimeoutMs: null }
         : environmentLifecyclePolicy ?? agentLifecyclePolicy);
@@ -540,7 +550,7 @@ export async function selectHeartbeatRuntime(db: Db, input: HeartbeatRuntimeSele
         nativeExecution.binding.issueId !== issueRef.id ||
         nativeExecution.binding.agentId !== agent.id ||
         nativeExecution.binding.executionWorkspaceId !==
-          nativeExecutionWorkspaceId ||
+          (egmPacket ? run.id : nativeExecutionWorkspaceId) ||
         nativeExecution.completionContract.id !==
           completionContract.row.id ||
         nativeExecution.completionContract.sha256 !==
@@ -690,7 +700,7 @@ export async function selectHeartbeatRuntime(db: Db, input: HeartbeatRuntimeSele
         }
       }
       const executionMode =
-        issueRef.workMode === "planning" && !isConversation(issueContext) && !acceptedPlanContinuationWake
+        !egmPacket && issueRef.workMode === "planning" && !isConversation(issueContext) && !acceptedPlanContinuationWake
           ? ("plan" as const)
           : ("default" as const);
       const pinnedPlan =
@@ -715,7 +725,7 @@ export async function selectHeartbeatRuntime(db: Db, input: HeartbeatRuntimeSele
         ? await museRunnerBroker(db).snapshot(agent.companyId, agent.id, String(parseObject(agent.adapterConfig).museBindingId ?? "")) : undefined;
       const dotBinding = ["openai_dot_mcp", "grok_bot_mcp"].includes(nativeRuntimeResolution.profile.backend)
         ? await dotRunnerBroker(db).snapshot(agent.companyId, agent.id, String(parseObject(agent.adapterConfig)[nativeRuntimeResolution.profile.backend === "grok_bot_mcp" ? "externalBindingId" : "dotBindingId"] ?? "")) : undefined;
-      const nativeRuntimeContext = await buildNativeRuntimeContext({
+      const nativeRuntimeContext = egmPacket ? await buildEgmRuntimeContext() : await buildNativeRuntimeContext({
         db,
         agent,
         runId: run.id,
@@ -764,7 +774,8 @@ export async function selectHeartbeatRuntime(db: Db, input: HeartbeatRuntimeSele
               agentKeyId: agentIdentity?.keyId,
               companyId: agent.companyId,
               runId: run.id,
-              issue: nativeReviewRequest ? { ...issueRef, title: `Review: ${issueRef.title}`, description: nativeReviewRequest } : issueRef,
+              issue: egmPacket ? { ...issueRef, title: "Frozen packet review", description: nativeReviewRequest, workMode: "standard" }
+                : nativeReviewRequest ? { ...issueRef, title: `Review: ${issueRef.title}`, description: nativeReviewRequest } : issueRef,
               taskPrompt: [
                 nativeReviewRequest ?? readNonEmptyString(
                   selectPaperclipTaskMarkdown(context, {
@@ -773,15 +784,15 @@ export async function selectHeartbeatRuntime(db: Db, input: HeartbeatRuntimeSele
                   }),
                 ) ??
                 `# ${issueRef.identifier ?? issueRef.id}: ${issueRef.title}`,
-                !["openai_dot_mcp", "grok_bot_mcp", "muse_external"].includes(nativeRuntimeResolution.profile.backend) && projectRepositoryPaths.length > 0
+                !egmPacket && !["openai_dot_mcp", "grok_bot_mcp", "muse_external"].includes(nativeRuntimeResolution.profile.backend) && projectRepositoryPaths.length > 0
                   ? `## Project repositories\nThe task workspace also contains these editable Git repositories:\n${projectRepositoryPaths.map((repo) => `- ${repo}`).join("\n")}`
                   : null,
               ].filter(Boolean).join("\n\n"),
               initialCommunicationGuidance: nativeReviewRequest ? null : readNonEmptyString(context.paperclipTaskCommunicationGuidance),
-              wakePayload: context.paperclipWake,
+              wakePayload: egmPacket ? undefined : context.paperclipWake,
               caseContext: nativeReviewRequest ? null : context.paperclipCase as CaseExecutionContext | undefined,
-              turnContext: context.paperclipTurnContext,
-              githubInstructionSkillKeys: runScopedMentionedSkillKeys,
+              turnContext: egmPacket ? undefined : context.paperclipTurnContext,
+              githubInstructionSkillKeys: egmPacket ? [] : runScopedMentionedSkillKeys,
               resumedSession,
               previousTurn: (() => {
                 if (!previousNativeRun || nativeReviewRequest) return null;
@@ -813,11 +824,11 @@ export async function selectHeartbeatRuntime(db: Db, input: HeartbeatRuntimeSele
                 // Projectless paperclip_runner tasks still have a resolved local cwd. Bind that
                 // transient workspace to the run id so the native input remains durable and replayable
                 // without fabricating a project-scoped execution_workspaces row.
-                id: nativeExecutionWorkspaceId,
-                cwd: executionWorkspace.cwd,
-                repoUrl: executionWorkspace.repoUrl,
-                repoRef: executionWorkspace.repoRef,
-                branchName: executionWorkspace.branchName,
+                id: egmPacket ? run.id : nativeExecutionWorkspaceId,
+                cwd: egmWorkspace ?? executionWorkspace.cwd,
+                repoUrl: egmPacket ? null : executionWorkspace.repoUrl,
+                repoRef: egmPacket ? null : executionWorkspace.repoRef,
+                branchName: egmPacket ? null : executionWorkspace.branchName,
               },
               normalizedSessionId,
               executionMode,
@@ -841,8 +852,9 @@ export async function selectHeartbeatRuntime(db: Db, input: HeartbeatRuntimeSele
                     }
                   : null,
               ...nativeProvider,
+              ...(egmPacket ? { executionPurpose: egmPurposeForPacket(egmPacket), homeMode: "isolated" as const } : {}),
               lifecyclePolicy: effectiveLifecyclePolicy,
-              interactionResponses,
+              interactionResponses: egmPacket ? [] : interactionResponses,
               completionContract: {
                 id: completionContract.row.id,
                 sha256: completionContract.row.canonicalSha256,
@@ -1065,8 +1077,8 @@ export async function selectHeartbeatRuntime(db: Db, input: HeartbeatRuntimeSele
       db,
       runId: run.id,
       companyId: agent.companyId,
-      workspaceId: nativeExecutionWorkspaceId,
-      workspaceLocalDir: executionWorkspace.cwd,
+      workspaceId: egmPacket ? run.id : nativeExecutionWorkspaceId,
+      workspaceLocalDir: egmWorkspace ?? executionWorkspace.cwd,
       target: executionTarget,
       lease: activeEnvironmentLease.lease,
       restartRecovery: runOptions.nativeRestartRecovery,

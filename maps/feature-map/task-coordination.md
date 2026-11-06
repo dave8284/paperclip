@@ -9,8 +9,10 @@ A larger task can coordinate child work, dependencies, reviewers, and execution 
 The native EGM preparation API freezes same-task document revisions and a named
 persona/standard before author completion. Prepared packets are inspectable and
 can be cleared by receipt before binding; bound requests use native cancellation.
-Independent provider execution remains explicitly unavailable. Preparation is
-not isolation or a completed review.
+The native local subscription-backed Codex path admits a fresh packet-only review
+with frozen-source reads and structured findings. Findings remain separate from
+the owner's resolution and task approval. Other provider/runtime combinations
+fail closed; source and protocol checks are separate from real-account qualification.
 
 Feature ID: `task-coordination`.
 

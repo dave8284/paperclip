@@ -77,7 +77,7 @@ const service = () => egmReviewPacketService(state.db);
 it("prepares before reviewer admission with real owner bindings and no execution claim", async () => {
   const response = await service().prepare(actor, scope, request);
   expect(state.locks.slice(0, 3)).toEqual(["native_run_finalizations", "issues", "heartbeat_runs"]);
-  expect(response).toMatchObject({ stage: "server_prepared", execution: "independent_review_unavailable", providerDelivery: "not_observed", packet: { sourceRunId, authorAgentId, request: { reviewerAgentId } } });
+  expect(response).toMatchObject({ stage: "server_prepared", execution: "pending_native_admission", providerDelivery: "not_observed", packet: { sourceRunId, authorAgentId, request: { reviewerAgentId } } });
   expect(parseRetainedEgmPacket(state.source.runnerProfileJson.nativeEgmPacketPreparation)).toEqual(response.packet);
   expect(JSON.stringify(boundary.activity.mock.calls)).not.toContain("Frozen");
   expect(boundary.publish).toHaveBeenCalledOnce();

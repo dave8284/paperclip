@@ -16,22 +16,22 @@ Agent access: [companion](../agent-access-map/managed-applications.md).
 
 - `registry`: `managed-applications/registry` — register existing/new applications, edit descriptive lifecycle, and associate initiative projects.
 - `work`: `managed-applications/work` — inspect authorized work through portfolio counts, map, Kanban, task list and native run/output drill-downs.
-- `coordination`: `managed-applications/coordination` — assign a planning task to a configured coordinator and select a reusable operating team.
+- `coordination`: `managed-applications/coordination` — assign a planning task to a company lead and select a reusable operating team.
 - `connections`: `managed-applications/connections` — inspect organization connection health and discovered read/write capabilities.
 
 ## How to get to it (user POV)
 
 ### `portfolio`
 
-Open `/applications` or the Applications sidebar entry. Add an application with its name, brief and existing repository, or select Start from an idea. Open its detail and use Work map, Kanban, Task list and project filtering. Select a dot to inspect the real task, reported execution and work products. Zoom, fit and pan the map. Native task links expose plans, history, reviews and outputs.
+Open Settings → Company → Applications and repositories, or `/applications`. Add an application with its name, brief and existing repository, or select Start from an idea. Open its detail and use Work map, Kanban, Task list and project filtering. Select a dot to inspect the real task, reported execution and work products. Zoom, fit and pan the map. Native task links expose plans, history, reviews and outputs. A failed application work refresh hides cached content and actions until a successful retry.
 
 ### `operating-team`
 
-Choose Install operating team, or open `/teams-catalog?search=AgentOS`. Preview the package and choose runtime adapters. For a new organization select the full-organization package option. The daily portfolio and weekly role reviews install as paused routines. Configure accounts and activate them through Routines. Assign the application planning task to the coordinator.
+Choose Install operating team, or open `/teams-catalog?search=AgentOS`. Preview the package and choose runtime adapters. For a new organization select the full-organization package option. The daily portfolio and weekly role reviews install as paused routines. Configure accounts and activate them through Routines. Choose the application's Planning lead and Start planning; this assigns one native task in that company and does not replace Friday as portfolio coordinator.
 
 ### `operating-connections`
 
-Open `/operating-connections`. Inspect model account status, use a native provider setup link, and configure agent bindings. Inspect a tool connection's reported health and active tool catalog; use Configure access to enter its native permissions page. These are organization resources, not inferred application deployment health.
+Open Settings → Connectors or Models. The native `/operating-connections` route is retained for compatibility, without a redundant application-footer entry. Inspect model account status, use a native provider setup link, and configure agent bindings. Inspect a tool connection's reported health and active tool catalog; use Configure access to enter its native permissions page. These are organization resources, not inferred application deployment health.
 
 ## Driving it with the API and UI
 
@@ -40,6 +40,10 @@ Preconditions: an isolated instance and a company; a configured adapter is addit
 ### `portfolio`
 
 Automated: [database and access tests](../../server/src/__tests__/managed-applications.test.ts) cover concurrent idempotency, cross-company and private-resource denial, hidden-task filtering, counts, pagination, agent linking and rollback after audit failure. [registration recovery](../../ui/src/pages/Applications.test.tsx) tests lost responses and reloads with mocked API boundaries.
+
+[Application detail checks](../../ui/src/pages/ApplicationDetail.test.tsx) cover
+company-scoped planning assignment, drill-down and hiding cached content after a
+failed access refresh. They do not execute the assigned planning task.
 
 Manual: register both starting paths, reload, link a second initiative, and compare the same tasks across map/board/list. Select a task and inspect its run and output. Run a real assigned task and verify that pulsing follows recorded running state. Disconnect/reconnect the live socket and verify catch-up. Repeat with a private project and an unauthorized actor. No browser pass is implied by these recipes.
 
@@ -68,6 +72,30 @@ The existing registry/work/coordination capabilities now include `/friday`, GET/
 
 The galaxy projects native records through the same project/task ACLs before counting or pagination. `kind=application` is the default; `kind=platform` separates internal development and `kind=all` supports cross-portfolio awareness. Dots are bounded and truncation is explicit. Select application/project/task to drill down while Friday stays alongside it. Native conversations own persistence, handoffs and revision-bound approvals.
 
+The Agent Map additionally requests `dataAccess=tools` on the existing Friday
+work read. Tool resource points come from native catalog/profile configuration
+or recorded invocation connection IDs. Dashed employee/resource links mean
+**Profile allows tool**, while solid links to separate tool-action points show
+stored attempts and outcomes on the visible task page. Open an action to inspect
+its source task; select a resource to inspect its configured and observed links.
+Read/write/destructive labels use the invocation's recorded classification;
+legacy risk levels stay unclassified, and denied/failed/pending actions retain
+their outcomes. These records do not identify every provider dataset or file.
+
+Configuration uses the native board/company boundary. Action history separately
+requires native tool-audit access; the map says when it is restricted. Reads are
+on demand, without discovery, provider calls or a new timer. At most eight
+employees' native effective profiles, 100 configured links and 100 task-linked
+actions are projected per company page; cap notices remain visible. Selecting a
+project narrows the cohort. No arguments, results, schemas or credentials enter
+the projection. Failed source refreshes remove its cached graph records.
+
+Checks: [real graph navigation and access refresh](../../ui/src/components/AgentOSPortfolioMap.test.tsx),
+[pan/fit and source inspection](../../ui/src/components/FridayWorkGraph.test.tsx),
+[record/permission/action semantics](../../ui/src/lib/friday-graph.test.ts),
+and [native database authority/privacy](../../server/src/__tests__/friday-awareness.test.ts).
+These establish stored-record behavior, not a successful external provider call.
+
 Voice is a browser capability: explicit microphone activation writes final transcripts to the existing draft, playback is stoppable, and automatic new-reply speech is opt-in. There is no paid speech API fallback. Component tests cover transcript/permission/cleanup behavior; a real microphone and audible playback are not yet qualified. Live model coordination, account-wide quota queuing and self-deployment remain separate qualification gates.
 
 
@@ -76,6 +104,17 @@ Friday is now the company landing view, mobile Home and company-switch destinati
 The existing `work` and `coordination` capabilities also include on-demand generated displays. Agent publication uses native HTML attachment/artifact work products, resolved against the same conversation's authorized attachment list. The workspace reuses the opaque-origin HTML preview and its bounded text loader. Save for reuse creates a native revision-controlled document `friday-canvas-{attachmentId}` with JSON `{version:1,attachmentId,workProductId}`; it does not modify the published file or the agent's privileges. Reusing a display means reading the saved source and publishing a new attachment. Platform component promotion remains a reviewed engineering change. No new API or permission key is added.
 
 Native reusable live tables, lists and task boards additionally use revisioned conversation documents keyed `friday-display-{slug}`. Their strict version-1 data descriptor selects a registered table/list/board (boards require task data), then `tasks` or `projects`, one authorized company, an optional project, a supported task-status filter and 1–100 rows. Saved displays filters by the selected company/project; the document's source company may be the internal Friday coordinator company. Opening/resuming re-reads the authorized document and existing Friday work API, displays company/project labels and observation time, and pages within the native bounds. Existing event invalidation refreshes data without polling; Stop preview unmounts the reader. Scope mismatches, unsupported fields, and access errors never leave cached rows visible. Boards group only the current bounded page and open native tasks for edits. HTML snapshots remain separate; arbitrary generated-component promotion is still unimplemented. Verification: `friday-saved-display.test.ts`, `FridaySavedDisplay.test.tsx`, and `FridayWorkspace.test.tsx` cover parsing, scope, current reads, revocation, pagination, revisions and stop/resume. Browser visual acceptance remains unverified.
+
+If the saved definition read fails, Retry saved display reauthorizes the document
+and uses its current revision before requesting any source data. It does not
+reuse a cached descriptor or rows after a failed read.
+
+Friday distinguishes reply audio preparation from observed playback. Preparing
+reply audio uses the thinking state; Speaking begins only after the local audio
+play request succeeds or browser speech emits its start event. Native holds and
+interruptions still cancel pending synthesis, and late cancelled starts do not
+restore the speaking label. Focused UI checks cover these transitions; physical
+microphone, playback quality and room-noise acceptance remain separate.
 
 Verification: FridayWorkspace, TaskChatThread, FridayVoiceControls and existing HTML/attachment tests cover arrival, stale-access suppression, saved references, original sending, inline decision visibility and preview isolation attributes. `scripts/agentos-smoke.mjs` additionally checks authenticated agent upload/registration and revision-protected reusable-reference writes against an owned local instance. Real browser animation, microphone and model-driven generation require live qualification.
 

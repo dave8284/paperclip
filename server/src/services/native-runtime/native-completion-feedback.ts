@@ -11,6 +11,8 @@ import { isConversation } from "../agent-conversations.js";
 import { issueTreeControlService } from "../issue-tree-control.js";
 import { resolveExternalChatResponseWaitAuthorization } from "./chat-attachment-reuse.js";
 import { getNativeReviewAssignment, readNativeReviewAssignmentContext } from "./native-review-participant.js";
+import { hasEgmFindings } from "./egm-review-execution.js";
+import { loadEgmReviewPacket } from "./egm-review-packets.js";
 import { and, eq, inArray, notInArray } from "drizzle-orm";
 import {
   approvals,
@@ -77,6 +79,11 @@ export async function nativeCompletionFeedback(
       companyId: run.companyId, issueId: issue.id, agentId: run.agentId,
       contextSnapshot: reviewContext, allowResolvedByRunId: run.id,
     });
+    if (review?.interaction.status === "pending" && hasEgmFindings(run)) {
+      if (result.continuation) throw new Error("A packet review ends after submitting findings; the accountable owner resolves them separately.");
+      await loadEgmReviewPacket(db, { companyId: run.companyId, issueId: issue.id, agentId: run.agentId, runId: run.id });
+      return "Frozen-packet findings recorded. End this review run. The task remains in review until its accountable owner resolves the findings; this report grants no approval.";
+    }
     if (review?.interaction.status === "pending" && result.reportedWorkDisposition !== "blocked") {
       throw new Error("Resolve your assigned review with resolve_review before finishing. If you cannot review the work, report the concrete blocker with paperclip_block.");
     }

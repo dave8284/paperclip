@@ -31,7 +31,7 @@ it("shows only related employees in a project map but includes available staff i
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
   const data = { applications: [], tasks: [], projects: [{ id: "project", name: "Campaign", leadAgentId: "related", status: "in_progress" }], evidence: [], assignments: [], handoffs: [], counts: {}, projectCount: 1, totalCount: 0 };
   client.setQueryData(queryKeys.agents.list("company"), [{ id: "related", name: "Project lead", companyId: "company", role: "product" }, { id: "other", name: "Unrelated colleague", companyId: "company", role: "engineer" }]);
-  for (const projectId of ["project", undefined]) client.setQueryData(["friday", "company", "work", { projectId, offset: 0, projectOffset: 0, status: "all" }], data);
+  for (const projectId of ["project", undefined]) client.setQueryData(["friday", "company", "work", { projectId, offset: 0, projectOffset: 0, status: "all", dataAccess: "tools" }], data);
   const host = document.createElement("div"); document.body.append(host); const root = createRoot(host);
   try {
     const render = async (projectId?: string) => act(async () => root.render(<QueryClientProvider client={client}><FridayWork companyId="company" agents={[]} view={{ panel: "work", mode: "graph", projectId }} navigate={vi.fn()} onAsk={vi.fn()} /></QueryClientProvider>));

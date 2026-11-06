@@ -75,6 +75,19 @@ it("reauthorizes the document on reopen and hides the old table when document ac
   await render(); await settled("Saved display unavailable");
   expect(host.textContent).not.toContain("Prepare launch"); expect(api.work).toHaveBeenCalledTimes(1);
 });
+it("retries a failed definition read and uses its freshly authorized revision before loading data", async () => {
+  api.getDocument.mockRejectedValueOnce(new Error("Temporary connection failure"));
+  await render(); await settled("Saved display unavailable");
+  expect(api.work).not.toHaveBeenCalled();
+  const revised = { ...saved, latestRevisionId: "revision-2", body: JSON.stringify({ ...descriptor, kind: "list", status: "completed" }) };
+  api.getDocument.mockResolvedValue(revised); api.work.mockResolvedValue(work("Completed after refresh"));
+  await act(async () => [...host.querySelectorAll("button")].find(button => button.textContent === "Retry saved display")!.click());
+  await settled("Completed after refresh");
+  expect(api.getDocument).toHaveBeenCalledTimes(2);
+  expect(api.work).toHaveBeenCalledWith(companyId, expect.objectContaining({ status: "completed" }), expect.objectContaining({ cache: "no-store" }));
+  expect(host.querySelector("table")).toBeNull();
+  expect(host.querySelector('[role="alert"]')).toBeNull();
+});
 it("pages project tables within the chosen company without skipping a native page", async () => {
   const document = { ...saved, body: JSON.stringify({ ...descriptor, source: "projects", status: "all", projectId: undefined }) };
   api.getDocument.mockResolvedValue(document);

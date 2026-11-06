@@ -14,6 +14,7 @@ import type { CodexWorkingDirectoryAuthority } from "./codex-boundaries.js";
 import type { CodexQuestionResponseContext } from "./codex-question-adapter.js";
 
 export interface CodexAppServerDriverOptions {
+  executionPurpose?: import("../../contracts/native-execution.js").NativeEgmPacketReviewPurpose;
   taskEnvelope: CodexTaskEnvelope;
   /** Explicit provider model selected by the persisted native execution. */
   model?: string;

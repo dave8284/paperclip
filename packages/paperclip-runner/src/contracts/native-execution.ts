@@ -24,6 +24,38 @@ export const NATIVE_SESSION_IDLE_TIMEOUT_MAX_MS = 86_400_000;
 
 export type NativeExecutionMode = "default" | "plan";
 
+/** Server-frozen review authority. It grants no workspace or general tools. */
+export interface NativeEgmPacketReviewPurpose {
+  kind: "egm_packet_review";
+  packetSha256: string;
+  sourceDigests: Array<{ id: string; sha256: string }>;
+}
+export const EGM_PACKET_REVIEW_TOOL_NAMES = ["read_egm_source", "submit_egm_findings", "paperclip_finish"] as const;
+
+export function parseNativeExecutionPurpose(value: unknown): NativeEgmPacketReviewPurpose {
+  const purpose = record(value, "input.executionPurpose");
+  exactKeys(purpose, ["kind", "packetSha256", "sourceDigests"], "input.executionPurpose");
+  if (purpose.kind !== "egm_packet_review" || typeof purpose.packetSha256 !== "string"
+    || !/^[a-f0-9]{64}$/.test(purpose.packetSha256) || !Array.isArray(purpose.sourceDigests)
+    || purpose.sourceDigests.length < 4 || purpose.sourceDigests.length > 12) {
+    throw new NativeExecutionInputError("Invalid packet-review execution purpose");
+  }
+  const sourceDigests = purpose.sourceDigests.map((value, index) => {
+    const source = record(value, `input.executionPurpose.sourceDigests[${index}]`);
+    exactKeys(source, ["id", "sha256"], "input.executionPurpose.sourceDigests[]");
+    if (typeof source.id !== "string" || !/^(packet|target|persona|standard|source:[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})$/.test(source.id)
+      || typeof source.sha256 !== "string" || !/^[a-f0-9]{64}$/.test(source.sha256)) {
+      throw new NativeExecutionInputError("Invalid packet-review source digest");
+    }
+    return { id: source.id, sha256: source.sha256 };
+  });
+  const ids = new Set(sourceDigests.map(source => source.id));
+  if (ids.size !== sourceDigests.length || ["packet", "target", "persona", "standard"].some(id => !ids.has(id))) {
+    throw new NativeExecutionInputError("Packet-review sources must be unique and include all four frozen inputs");
+  }
+  return { kind: "egm_packet_review", packetSha256: purpose.packetSha256, sourceDigests };
+}
+
 export interface NativePlanningContext {
   documentId: string | null;
   baseRevisionId: string | null;
@@ -263,6 +295,7 @@ export type NativeProviderConfigV9 = Exclude<NativeProviderConfigV5, { kind: "ac
 export interface NativeExecutionInputV9 extends Omit<NativeExecutionInputV7, "schema" | "provider"> {
   schema: typeof NATIVE_EXECUTION_INPUT_SCHEMA_V9;
   provider: NativeProviderConfigV9;
+  executionPurpose?: NativeEgmPacketReviewPurpose;
 }
 
 export interface NativeExecutionInputV8 extends Omit<NativeExecutionInputV6, "schema" | "provider" | "session"> {
@@ -436,6 +469,7 @@ export function parseNativeExecutionInput(value: unknown): NativeExecutionInput 
     ...(isV4 ? ["continuationPrompt", "initialCommunicationGuidance"] : []),
     ...(isV5 ? ["completionSources"] : []),
     ...(isV7 ? ["homeMode"] : []),
+    ...(isV9 ? ["executionPurpose"] : []),
   ], "input");
   if (!isV2 && input.schema !== NATIVE_EXECUTION_INPUT_SCHEMA_V1) {
     throw new NativeExecutionInputError(
@@ -894,6 +928,14 @@ export function parseNativeExecutionInput(value: unknown): NativeExecutionInput 
   };
   if (!isV3) return { ...current, schema: NATIVE_EXECUTION_INPUT_SCHEMA_V2 };
   const withRuntimeContext = { ...current, runtimeContext: parseNativeRuntimeContext(input.runtimeContext) };
+  const executionPurpose = isV9 && input.executionPurpose !== undefined ? parseNativeExecutionPurpose(input.executionPurpose) : undefined;
+  if (executionPurpose && (parsedProvider.kind !== "codex" || input.homeMode !== "isolated" || executionMode !== "default"
+    || common.session.lifecyclePolicy.mode !== "per_turn" || common.credentialBindings.length !== 0 || common.interactionResponses.length !== 0
+    || common.workspace.repoUrl !== null || common.workspace.repoRef !== null || common.workspace.branchName !== null
+    || withRuntimeContext.runtimeContext.skills.length !== 0 || withRuntimeContext.runtimeContext.mcp.bindingId !== null
+    || withRuntimeContext.runtimeContext.instructions.workingCopy || withRuntimeContext.runtimeContext.connectionInstructions)) {
+    throw new NativeExecutionInputError("Packet reviews require isolated Codex execution without workspace, skills, MCP or prior interaction authority");
+  }
   if (!isV4) return { ...withRuntimeContext, schema: NATIVE_EXECUTION_INPUT_SCHEMA_V3 };
   const withPermissions = {
     ...withRuntimeContext,
@@ -905,6 +947,7 @@ export function parseNativeExecutionInput(value: unknown): NativeExecutionInput 
   if (isV9) return {
     ...withPermissions, schema: NATIVE_EXECUTION_INPUT_SCHEMA_V9, homeMode: input.homeMode as NativeHomeMode,
     provider: parsedProvider as NativeProviderConfigV9,
+    ...(executionPurpose ? { executionPurpose } : {}),
     ...(input.completionSources !== undefined ? { completionSources: parseCompletionSources(input.completionSources) } : {}),
   };
   return {

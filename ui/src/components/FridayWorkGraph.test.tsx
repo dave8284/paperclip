@@ -42,3 +42,28 @@ it("uses Friday employee orbs, shows actual work and opens a selected task direc
     expect(host.querySelector('canvas[data-running="false"]')).not.toBeNull();
   } finally { await act(async () => root.unmount()); host.remove(); canvas.mockRestore(); }
 });
+
+it("pans from the background without dragging selected records and restores the fitted view", async () => {
+  const host = document.createElement("div"); document.body.append(host); const root = createRoot(host);
+  const data = { projects: [{ id: "project", name: "Launch", status: "in_progress" }], applications: [], tasks: [], assignments: [], evidence: [], handoffs: [] } as unknown as FridayWork;
+  try {
+    await act(async () => root.render(<FridayWorkGraph data={data} agents={[]} running={new Set()} onSelect={vi.fn()} />));
+    const svg = host.querySelector<SVGSVGElement>("svg.friday-work-graph")!;
+    svg.setPointerCapture = vi.fn();
+    vi.spyOn(svg, "getBoundingClientRect").mockReturnValue({ width: 1100, height: 700 } as DOMRect);
+    const initial = svg.getAttribute("viewBox");
+    const pointer = async (target: Element, type: string, clientX: number, clientY: number) => act(async () => target.dispatchEvent(new MouseEvent(type, { bubbles: true, clientX, clientY })));
+    await pointer(host.querySelector('g[role="button"]')!, "pointerdown", 20, 20);
+    await pointer(svg, "pointermove", 120, 90);
+    expect(svg.getAttribute("viewBox")).toBe(initial);
+    await pointer(svg, "pointerdown", 20, 20);
+    await pointer(svg, "pointermove", 120, 90);
+    const panned = svg.getAttribute("viewBox");
+    expect(panned).not.toBe(initial);
+    await pointer(svg, "pointerup", 120, 90);
+    await pointer(svg, "pointermove", 220, 190);
+    expect(svg.getAttribute("viewBox")).toBe(panned);
+    await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Fit work graph"]')!.click());
+    expect(svg.getAttribute("viewBox")).toBe(initial);
+  } finally { await act(async () => root.unmount()); host.remove(); }
+});

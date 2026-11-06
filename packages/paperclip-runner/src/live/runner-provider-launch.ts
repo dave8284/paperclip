@@ -10,6 +10,7 @@ import { resolveAcpxProviderMode } from "../drivers/acpx/provider-mode.js";
 import type { DurableRecoveryIdentity } from "../contracts/durable-recovery.js";
 import type { NativeRuntimeContextSnapshot } from "../contracts/runtime-context.js";
 import type { CapabilityRunnerdCodexTransportOptions } from "./runnerd-codex-transport.js";
+import { parseNativeExecutionPurpose, type NativeEgmPacketReviewPurpose } from "../contracts/native-execution.js";
 
 /** Core's provider inputs. Executable paths and filesystem layout are supplied separately. */
 export interface RunnerProviderLaunchRequirements {
@@ -26,6 +27,7 @@ export interface RunnerProviderLaunchRequirements {
     "piThinkingLevel" | "claudeEffort" | "managedProfile" | "agentCoreProfile" | "opencodePermissionMode">;
   instructions: string;
   runtimeContext: NativeRuntimeContextSnapshot | null;
+  executionPurpose?: NativeEgmPacketReviewPurpose;
 }
 
 /** A prepared descriptor belongs to one exact request and contains no launch secrets. */
@@ -47,11 +49,18 @@ export function runnerProviderLaunchRequirements(
   runtimeContext: NativeRuntimeContextSnapshot | null,
   instructions: string,
 ): RunnerProviderLaunchRequirements {
+  const executionPurpose = options.executionPurpose === undefined ? undefined : parseNativeExecutionPurpose(options.executionPurpose);
+  if (executionPurpose && ((options.provider ?? "codex") !== "codex" || options.homeMode === "preconfigured"
+    || options.lifecyclePolicy?.mode === "warm" || runtimeContext?.skills.length || runtimeContext?.mcp.bindingId
+    || runtimeContext?.instructions.workingCopy || runtimeContext?.connectionInstructions)) {
+    throw new Error("runner_packet_review_authority_invalid");
+  }
   const requirements: RunnerProviderLaunchRequirements = {
     schema: "paperclip.runner.launch-requirements.v1",
     identity, provider: options.provider ?? "codex",
     model: typeof params.model === "string" ? params.model : null,
     instructions, runtimeContext,
+    ...(executionPurpose ? { executionPurpose } : {}),
     settings: {
       acpxAgent: options.acpxAgent, acpxMode: options.acpxMode,
       acpxPermissionMode: options.acpxPermissionMode,
@@ -60,9 +69,9 @@ export function runnerProviderLaunchRequirements(
       managedProfile: options.managedProfile, agentCoreProfile: options.agentCoreProfile,
       opencodePermissionMode: options.opencodePermissionMode,
     },
-    approvalPolicy: params.approvalPolicy === "on-request" || params.approvalPolicy === "untrusted"
+    approvalPolicy: !executionPurpose && (params.approvalPolicy === "on-request" || params.approvalPolicy === "untrusted")
       ? params.approvalPolicy : "never",
-    readOnly: params.permissions === "paperclip-runner-workspace-read-only",
+    readOnly: !!executionPurpose || params.permissions === "paperclip-runner-workspace-read-only",
     preparedConversation: params.conversationMode === "prepared",
     includeCollaborationModeInstructions: (params.config as Record<string, unknown> | undefined)?.include_collaboration_mode_instructions !== false,
   };
@@ -105,6 +114,8 @@ export function validatePreparedRunnerLaunch(
     || prepared.requirementsDigest !== runnerLaunchRequirementsDigest(requirements)
     || !prepared.provider || typeof prepared.provider !== "object") reject();
   const descriptor = prepared.provider;
+  if (JSON.stringify(descriptor.executionPurpose) !== JSON.stringify(requirements.executionPurpose)) reject();
+  if (requirements.executionPurpose && descriptor.preconfiguredHome != null) reject();
   if (!requirements.runtimeContext && descriptor.runtimeContext != null) reject();
   if (descriptor.kind !== requirements.provider || descriptor.model !== requirements.model) reject();
   if (requirements.provider === "codex" && (descriptor.approvalPolicy !== requirements.approvalPolicy
@@ -172,6 +183,10 @@ export function createRunnerProviderLaunch(
   input: RunnerProviderLaunchEnvironment,
 ): Record<string, unknown> {
   const { identity, instructions: baseInstructions, runtimeContext, settings, provider } = requirements;
+  const executionPurpose = requirements.executionPurpose === undefined ? undefined : parseNativeExecutionPurpose(requirements.executionPurpose);
+  if (executionPurpose && (provider !== "codex" || input.options.homeMode === "preconfigured" || !requirements.readOnly || requirements.approvalPolicy !== "never")) {
+    throw new Error("runner_packet_review_authority_invalid");
+  }
   const acpxAgent = provider === "acpx" ? settings.acpxAgent ?? "codex" : null;
   const requestedModel = requirements.model ?? "";
   const includeCodexCollaborationInstructions = provider === "codex" &&
@@ -289,6 +304,7 @@ export function createRunnerProviderLaunch(
               : {
                   kind: provider,
                   provider,
+                  ...(executionPurpose ? { executionPurpose } : {}),
                   ...(input.options.homeMode === "preconfigured" ? { preconfiguredHome: { HOME: input.options.environment!.HOME, CODEX_HOME: codexHome } } : {}),
                   driver:
                     provider === "opencode"
@@ -311,7 +327,7 @@ export function createRunnerProviderLaunch(
                           runtimeStateRoot: input.options.runnerFilesystemRoot ?? input.root,
                           codexCommand: effectiveCodexCommand,
                           instructionWorkingCopyRoot: runtimeContext?.instructions.workingCopy?.rootPath,
-                          disableProjectInstructions: input.options.disableCodexProjectInstructions,
+                          disableProjectInstructions: !!executionPurpose || input.options.disableCodexProjectInstructions,
                           readOnlyRoots: [
                             ...trustedRuntimeReadOnlyRoots(
                               input.options.environment,
@@ -343,16 +359,16 @@ export function createRunnerProviderLaunch(
                         )
                       : baseInstructions,
                   collaborationMode:
-                    requirements.readOnly
+                    requirements.readOnly && !executionPurpose
                       ? "plan"
                       : "default",
-                  ...(requirements.preparedConversation
-                    ? { conversationMode: "prepared" }
+                  ...(executionPurpose || requirements.preparedConversation
+                    ? { conversationMode: executionPurpose ? "egm_packet_review" : "prepared" }
                     : {}),
                   includeCollaborationModeInstructions:
                     includeCodexCollaborationInstructions,
                   ...(provider === "codex"
-                    ? { includeSkillInstructions: runtimeContext !== null }
+                    ? { includeSkillInstructions: !executionPurpose && runtimeContext !== null }
                     : {}),
                   runtimeContext,
                 };

@@ -7,7 +7,7 @@ import { fridayApi, fridayKey } from "@/api/friday";
 import { heartbeatsApi } from "@/api/heartbeats";
 import { queryKeys } from "@/lib/queryKeys";
 import { attentionDecisionSummary } from "@/lib/attention";
-import type { FridayNavigation } from "@/lib/friday-navigation";
+import { fridayAttentionNavigation, type FridayNavigation } from "@/lib/friday-navigation";
 import { useFridayUpdates } from "@/hooks/useFridayUpdates";
 import { AgentOSCompanyScope } from "./AgentOSCompanyScope";
 import { FridayAttention } from "./FridayAttention";
@@ -39,9 +39,9 @@ function CompanyCard({ company, navigate }: { company: Company; navigate: Naviga
 
 export function AgentOSDecisionPeek({ companies, navigate }: { companies: Company[]; navigate: Navigation }) {
   const feeds = useQueries({ queries: companies.map(company => ({ queryKey: [...queryKeys.attention(company.id), "preview"], queryFn: () => attentionApi.list(company.id, { limit: 3, sort: "decide" }) })) });
-  const items = feeds.flatMap((feed, index) => feed.isSuccess ? feed.data.items.map(item => ({ item, company: companies[index] })) : []).slice(0, 3);
+  const items = feeds.flatMap((feed, index) => feed.isSuccess && !feed.isFetching ? feed.data.items.filter(item => item.companyId === companies[index].id).map(item => ({ item, company: companies[index] })) : []).slice(0, 3);
   return <section className="agentos-home-decisions" aria-label="Decisions and blockers"><div className="agentos-section-heading"><h2>A few things to move forward</h2><button type="button" onClick={() => navigate(companies.length === 1 ? { panel: "attention", companyId: companies[0].id } : { panel: "attention", scope: "portfolio" })}>Review all <ArrowRight /></button></div>
-    <div className="agentos-decision-cards">{items.map(({ item, company }) => <button type="button" key={`${company.id}:${item.id}`} onClick={() => navigate({ panel: "attention", companyId: company.id, projectId: item.project?.id ?? undefined, decisionId: item.id })}><span className="agentos-eyebrow">{company.name}{item.project ? ` / ${item.project.name}` : ""}</span><strong>{item.subject.title ?? item.whyNow}</strong><span>{attentionDecisionSummary(item)}<ArrowRight /></span></button>)}</div>
+    <div className="agentos-decision-cards">{items.map(({ item, company }) => <button type="button" key={`${company.id}:${item.id}`} onClick={() => navigate(fridayAttentionNavigation(company.id, item))}><span className="agentos-eyebrow">{company.name}{item.project ? ` / ${item.project.name}` : ""}</span><strong>{item.subject.title ?? item.whyNow}</strong><span>{attentionDecisionSummary(item)}<ArrowRight /></span></button>)}</div>
     {feeds.some(feed => feed.isPending) && <p className="text-sm text-muted-foreground">Checking what needs you…</p>}
     {feeds.some(feed => feed.isError) && <p role="alert" className="text-sm text-destructive">Some companies could not be checked. Open Decisions to retry.</p>}
     {!items.length && feeds.every(feed => feed.isSuccess) && <p className="agentos-empty">A little room to breathe. No decisions or blockers currently need you.</p>}
@@ -66,7 +66,7 @@ export function AgentOSWorkforceTable({ companies, contextCompany, navigate }: {
 }
 
 export function AgentOSPortfolioMap({ companies, navigate }: { companies: Company[]; navigate: Navigation }) {
-  const work = useQueries({ queries: companies.map(company => ({ queryKey: [...fridayKey(company.id), "map"], queryFn: () => fridayApi.work(company.id, { limit: 200 }) })) });
+  const work = useQueries({ queries: companies.map(company => ({ queryKey: [...fridayKey(company.id), "map", "data-access"], queryFn: () => fridayApi.work(company.id, { limit: 200, dataAccess: "tools" }) })) });
   const rosters = useQueries({ queries: companies.map(company => ({ queryKey: queryKeys.agents.list(company.id), queryFn: () => agentsApi.list(company.id) })) });
   const live = useQueries({ queries: companies.map(company => ({ queryKey: queryKeys.liveRuns(company.id), queryFn: () => heartbeatsApi.liveRunsForCompany(company.id) })) });
   const data = work.flatMap(query => query.isSuccess ? [query.data] : []);
@@ -74,6 +74,12 @@ export function AgentOSPortfolioMap({ companies, navigate }: { companies: Compan
     observedAt: data[0]?.observedAt ?? new Date().toISOString(), projects: data.flatMap(row => row.projects), projectCount: data.reduce((sum, row) => sum + row.projectCount, 0), nextProjectOffset: null,
     applications: data.flatMap(row => row.applications), tasks: data.flatMap(row => row.tasks), counts: {}, nextOffset: null,
     assignments: data.flatMap(row => row.assignments), evidence: data.flatMap(row => row.evidence), handoffs: data.flatMap(row => row.handoffs), assignmentsTruncated: data.some(row => row.assignmentsTruncated), evidenceTruncated: data.some(row => row.evidenceTruncated), handoffsTruncated: data.some(row => row.handoffsTruncated),
+    dataAccess: data.some(row => row.dataAccess) ? {
+      configuredAccess: data.every(row => row.dataAccess?.configuredAccess === "available") ? "available" : "restricted",
+      observedAccess: data.every(row => row.dataAccess?.observedAccess === "available") ? "available" : "restricted",
+      resources: data.flatMap(row => row.dataAccess?.resources ?? []), permissions: data.flatMap(row => row.dataAccess?.permissions ?? []), actions: data.flatMap(row => row.dataAccess?.actions ?? []),
+      permissionsTruncated: data.some(row => row.dataAccess?.permissionsTruncated), actionsTruncated: data.some(row => row.dataAccess?.actionsTruncated),
+    } : undefined,
   };
   const agents: Agent[] = rosters.flatMap(query => query.isSuccess ? query.data : []);
   const running = new Set(live.flatMap(query => query.isSuccess ? query.data.filter(run => run.status === "running" && run.issueId).map(run => run.issueId!) : []));

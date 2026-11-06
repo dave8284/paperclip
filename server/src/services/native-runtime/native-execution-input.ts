@@ -18,6 +18,7 @@ import type {
   NativeExecutionInputV6,
   NativeExecutionInputV8,
   NativeExecutionInputV9,
+  NativeEgmPacketReviewPurpose,
   MuseBindingSnapshot,
   DotBindingSnapshot,
   NativeExecutionInputV7,
@@ -46,6 +47,7 @@ const NATIVE_GITHUB_ATTACHMENT_RECOVERY_GUIDANCE = [
 
 /** Closed constructor: callers cannot spread legacy context or environment data. */
 export interface BuildNativeExecutionInput {
+  executionPurpose?: NativeEgmPacketReviewPurpose;
   companyId: string;
   runId: string;
   issue: {
@@ -227,7 +229,7 @@ export function buildNativeExecutionInput(input: BuildNativeExecutionInput): Nat
   const externalChatSkillDescription = configuredGitHubSkills.length > 0
     ? `Configured GitHub instruction skills:\n${configuredGitHubSkills.map((skill) => `/${skill.runtimeName}`).join("\n")}`
     : null;
-  const taskPrompt = caseProjectionBootstrapPrefix(input.caseContext) + [
+  const taskPrompt = input.executionPurpose ? input.taskPrompt : caseProjectionBootstrapPrefix(input.caseContext) + [
     wakePrompt,
     // Durable task questions must survive the current provider turn.
     // Keep routing visible before deferred tool discovery; usage belongs in the tool schema.
@@ -253,9 +255,10 @@ export function buildNativeExecutionInput(input: BuildNativeExecutionInput): Nat
   const workflowCase = input.caseContext && previousCaseProjection
     ? projectCaseContinuation(input.caseContext, previousCaseProjection) : null;
   const prepared = {
-    schema: input.claudeEffort !== undefined ? "paperclip.native-execution-input.v9"
+    schema: input.executionPurpose || input.claudeEffort !== undefined ? "paperclip.native-execution-input.v9"
       : input.homeMode === "preconfigured" ? "paperclip.native-execution-input.v7" : "paperclip.native-execution-input.v5",
-    ...(input.claudeEffort !== undefined || input.homeMode === "preconfigured" ? { homeMode: input.homeMode ?? "isolated" } : {}),
+    ...(input.executionPurpose || input.claudeEffort !== undefined || input.homeMode === "preconfigured" ? { homeMode: input.homeMode ?? "isolated" } : {}),
+    ...(input.executionPurpose ? { executionPurpose: input.executionPurpose } : {}),
     ...((input.initialCommunicationGuidance || input.freshSessionHandoff) ? {
       initialCommunicationGuidance: [input.initialCommunicationGuidance, input.freshSessionHandoff].filter(Boolean).join("\n\n"),
     } : {}),

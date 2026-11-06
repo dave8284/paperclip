@@ -24,6 +24,7 @@ use crate::qualified_launch::verify_launch_artifact;
 use crate::question_response::validate_question_response;
 
 pub const CODEX_APP_SERVER_MAX_FRAME_BYTES: usize = 4 * 1024 * 1024;
+const QUALIFIED_PACKET_REVIEW_CODEX_VERSION: &str = "codex-cli 0.160.0";
 const QUALIFIED_OPENCODE_VERSION: &str = "1.18.34";
 const DEFAULT_PROVIDER_TRACE_MAX_BYTES: usize = 64 * 1024 * 1024;
 const MAX_BUFFERED_MESSAGES: usize = 1_024;
@@ -348,6 +349,84 @@ fn default_approval_policy() -> String {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct EgmSourceDigest {
+    pub id: String,
+    pub sha256: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct EgmPacketReviewPurpose {
+    pub kind: String,
+    pub packet_sha256: String,
+    pub source_digests: Vec<EgmSourceDigest>,
+}
+
+impl EgmPacketReviewPurpose {
+    fn validate(&self) -> Result<(), LocalRunnerError> {
+        let digest = |value: &str| {
+            value.len() == 64
+                && value
+                    .bytes()
+                    .all(|c| c.is_ascii_digit() || (b'a'..=b'f').contains(&c))
+        };
+        let base = ["packet", "target", "persona", "standard"];
+        let mut ids = BTreeSet::new();
+        if self.kind != "egm_packet_review"
+            || !digest(&self.packet_sha256)
+            || !(4..=12).contains(&self.source_digests.len())
+            || self.source_digests.iter().any(|source| {
+                let valid_id = base.contains(&source.id.as_str())
+                    || source.id.strip_prefix("source:").is_some_and(|id| {
+                        uuid::Uuid::parse_str(id).is_ok_and(|parsed| parsed.to_string() == id)
+                    });
+                !valid_id || !digest(&source.sha256) || !ids.insert(source.id.as_str())
+            })
+            || base.iter().any(|id| !ids.contains(id))
+        {
+            return Err(LocalRunnerError::invalid(
+                "invalid frozen EGM packet review purpose",
+            ));
+        }
+        Ok(())
+    }
+}
+
+fn qualify_packet_review_executable(config: &CodexProviderConfig) -> Result<(), LocalRunnerError> {
+    // Empty environment selection is a qualified 0.160.0 protocol boundary.
+    // Older providers may ignore unknown fields, so check the executable on
+    // every fresh or restored spawn before opening any provider session.
+    let mut probe = SupervisedProcess::spawn_in_directory_with_environment_keys(
+        &config.command,
+        &["--version".to_owned()],
+        Duration::from_millis(100),
+        1024,
+        &[],
+        Path::new(&config.cwd),
+    )?;
+    let version = probe.receive_stdout_line(Duration::from_secs(2))?;
+    let deadline = std::time::Instant::now() + Duration::from_secs(2);
+    let success = loop {
+        if let Some(exit) = probe.try_wait()? {
+            break exit.success;
+        }
+        if std::time::Instant::now() >= deadline {
+            break false;
+        }
+        thread::sleep(Duration::from_millis(5));
+    };
+    probe.terminate_group()?;
+    if !success || version.as_deref().map(str::trim) != Some(QUALIFIED_PACKET_REVIEW_CODEX_VERSION)
+    {
+        return Err(LocalRunnerError::invalid(
+            "EGM packet review requires qualified Codex CLI 0.160.0",
+        ));
+    }
+    Ok(())
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct CodexProviderConfig {
     pub provider: String,
@@ -375,6 +454,8 @@ pub struct CodexProviderConfig {
     // Older sessions retain their standalone task envelope.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub conversation_mode: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub execution_purpose: Option<EgmPacketReviewPurpose>,
 }
 
 /// Explicit per-turn skill selection. The controller resolves assigned skill
@@ -418,6 +499,45 @@ impl CodexSkillInput {
 
 impl CodexProviderConfig {
     fn skill_instructions_config(&self) -> Option<Value> {
+        if self.execution_purpose.is_some() {
+            // Environment selection is the filesystem boundary. Feature flags
+            // also remove provider-owned network, plugin, and delegated tools.
+            return Some(json!({
+                "skills.include_instructions": false,
+                "include_apps_instructions": false,
+                "include_collaboration_mode_instructions": false,
+                "project_doc_max_bytes": 0,
+                "tools.update_plan.enabled": false,
+                "tools.experimental_request_user_input.enabled": false,
+                "agents.enabled": false,
+                "web_search": "disabled",
+                "features.shell_tool": false,
+                "features.view_image": false,
+                "features.apps": false,
+                "features.plugins": false,
+                "features.multi_agent": false,
+                "features.multi_agent_v2": false,
+                "features.memories": false,
+                "features.image_generation": false,
+                "features.browser_use": false,
+                "features.computer_use": false,
+                "features.in_app_browser": false,
+                "features.code_mode": false,
+                "features.code_mode_only": false,
+                "features.code_mode_host": false,
+                "features.skill_search": false,
+                "features.skill_mcp_dependency_install": false,
+                "features.workspace_dependencies": false,
+                "features.hooks": false,
+                "features.goals": false,
+                "features.sleep_tool": false,
+                "features.tool_suggest": false,
+                "features.deferred_executor": false,
+                "features.send_message_to_user_async": false,
+                "features.token_budget": false,
+                "features.current_time_reminder": false
+            }));
+        }
         (self.provider == "codex")
             .then_some(self.include_skill_instructions)
             .flatten()
@@ -425,12 +545,32 @@ impl CodexProviderConfig {
     }
 
     pub fn validate(&self) -> Result<(), LocalRunnerError> {
+        if let Some(purpose) = &self.execution_purpose {
+            purpose.validate()?;
+            if self.provider != "codex"
+                || !self.read_only
+                || self.approval_policy != "never"
+                || self.include_skill_instructions != Some(false)
+                || self.conversation_mode.as_deref() != Some("egm_packet_review")
+            {
+                return Err(LocalRunnerError::invalid("EGM packet review requires isolated read-only Codex without skills or approvals"));
+            }
+        }
         if !matches!(
             self.conversation_mode.as_deref(),
-            None | Some("task" | "prepared")
+            None | Some("task" | "prepared" | "egm_packet_review")
         ) {
             return Err(LocalRunnerError::invalid(
                 "unsupported provider context mode",
+            ));
+        }
+        // This closed discriminator also makes older Runner builds reject the
+        // profile instead of ignoring the newer executionPurpose field.
+        if self.conversation_mode.as_deref() == Some("egm_packet_review")
+            && self.execution_purpose.is_none()
+        {
+            return Err(LocalRunnerError::invalid(
+                "packet review context requires its frozen purpose",
             ));
         }
         if !matches!(
@@ -910,6 +1050,13 @@ impl CodexProvider {
         observe: &mut dyn FnMut(ProviderStartupObservation) -> Result<(), LocalRunnerError>,
     ) -> Result<Self, LocalRunnerError> {
         config.validate()?;
+        if config.execution_purpose.is_some()
+            && std::env::var("PAPERCLIP_RUNNER_HOME_MODE").as_deref() == Ok("preconfigured")
+        {
+            return Err(LocalRunnerError::invalid(
+                "EGM packet review cannot use a preconfigured home",
+            ));
+        }
         if config.provider == "codex"
             && std::env::var("PAPERCLIP_RUNNER_HOME_MODE").as_deref() != Ok("preconfigured")
         {
@@ -937,6 +1084,20 @@ impl CodexProvider {
         };
         let (dynamic_tools, authorized_tool_ids) =
             codex_dynamic_tools(authorized_tools.iter().cloned())?;
+        if config.execution_purpose.is_some()
+            && authorized_tool_ids
+                != ["read_egm_source", "submit_egm_findings", "paperclip_finish"]
+                    .into_iter()
+                    .map(str::to_owned)
+                    .collect()
+        {
+            return Err(LocalRunnerError::invalid(
+                "EGM packet review requires the exact frozen tool set",
+            ));
+        }
+        if config.execution_purpose.is_some() {
+            qualify_packet_review_executable(config)?;
+        }
         let common_environment_keys = [
             "LANGUAGE",
             "SSL_CERT_FILE",
@@ -961,7 +1122,12 @@ impl CodexProvider {
             .iter()
             .copied()
             .chain(provider_environment_keys.iter().copied())
-            .chain(GITHUB_CREDENTIAL_ENVIRONMENT_KEYS.iter().copied())
+            .chain(
+                GITHUB_CREDENTIAL_ENVIRONMENT_KEYS
+                    .iter()
+                    .copied()
+                    .filter(|_| config.execution_purpose.is_none()),
+            )
             .collect::<Vec<_>>();
         let runtime_request_scope = new_runtime_request_scope()?;
         let stdio_mcp = if config.provider == "codex" && !config.read_only {
@@ -1158,6 +1324,15 @@ impl CodexProvider {
                 params_object.insert("experimentalRawEvents".to_owned(), json!(false));
                 "thread/start"
             };
+            if config.execution_purpose.is_some() {
+                params_object.remove("cwd");
+                params_object.remove("runtimeWorkspaceRoots");
+                // thread/resume has no environments field. Each resumed turn
+                // is explicitly constrained below; a fresh thread starts empty.
+                if resume_thread_id.is_none() {
+                    params_object.insert("environments".to_owned(), json!([]));
+                }
+            }
             stage = ProviderStartupStage::ThreadOpen;
             let opened = provider.request(method, params)?;
             provider.thread_id = opened
@@ -1276,6 +1451,11 @@ impl CodexProvider {
         authorized_tools: impl IntoIterator<Item = AuthorizedTool>,
         completion_contract: Option<(&str, &[String])>,
     ) -> Result<bool, LocalRunnerError> {
+        if self.config.execution_purpose.is_some() {
+            return Err(LocalRunnerError::invalid(
+                "EGM packet review cannot attach another run",
+            ));
+        }
         let authorized_tools = authorized_tools.into_iter().collect::<Vec<_>>();
         let completion_contract =
             completion_contract.map(|(revision, criterion_ids)| ProviderCompletionContract {
@@ -1649,6 +1829,11 @@ impl CodexProvider {
         status: Option<&str>,
         token_budget: Option<Option<u64>>,
     ) -> Result<Value, LocalRunnerError> {
+        if self.config.execution_purpose.is_some() {
+            return Err(LocalRunnerError::invalid(
+                "EGM packet review cannot start autonomous goals",
+            ));
+        }
         let starts_idle_turn = self.active_provider_turn_id.is_none()
             && (status == Some("active") || (status.is_none() && objective.is_some()));
         let prior_reconciliation_pending = self.completion_reconciliation_pending;
@@ -1765,7 +1950,10 @@ impl CodexProvider {
                 "turn.reasoningMode requires OpenCode and must be default or disabled",
             ));
         }
-        if skills.len() > 64 || (self.config.provider != "codex" && !skills.is_empty()) {
+        if skills.len() > 64
+            || ((self.config.provider != "codex" || self.config.execution_purpose.is_some())
+                && !skills.is_empty())
+        {
             return Err(LocalRunnerError::invalid(
                 "explicit skills require Codex and at most 64 selections",
             ));
@@ -1824,6 +2012,11 @@ impl CodexProvider {
         let turn_params_object = turn_params
             .as_object_mut()
             .expect("Codex turn parameters are an object");
+        if self.config.execution_purpose.is_some() {
+            turn_params_object.remove("cwd");
+            turn_params_object.remove("runtimeWorkspaceRoots");
+            turn_params_object.insert("environments".to_owned(), json!([]));
+        }
         if let Some(effort) = effort {
             turn_params_object.insert("effort".to_owned(), effort.clone());
         }
@@ -1963,6 +2156,11 @@ impl CodexProvider {
     }
 
     pub fn steer_turn(&mut self, message: &str) -> Result<Value, LocalRunnerError> {
+        if self.config.execution_purpose.is_some() {
+            return Err(LocalRunnerError::invalid(
+                "EGM packet review cannot accept additional steering input",
+            ));
+        }
         let turn_id = self
             .active_provider_turn_id
             .clone()
@@ -2580,6 +2778,12 @@ impl CodexProvider {
                     .and_then(Value::as_str)
                     == Some("mcp_tool_call"))
             {
+                if self.config.execution_purpose.is_some() {
+                    self.send_frame(&json!({"id": rpc_id, "error": {
+                        "code": -32600, "message": "Frozen packet review cannot request additional input"
+                    }}))?;
+                    return Ok(None);
+                }
                 let params = message.get("params").cloned().unwrap_or(Value::Null);
                 if matches!(
                     method,
@@ -4212,6 +4416,7 @@ done
             read_only: false,
             include_skill_instructions: None,
             conversation_mode: None,
+            execution_purpose: None,
         };
         let mut provider = CodexProvider::start(&config, None).unwrap();
         provider.start_turn("First turn", &config.cwd).unwrap();
@@ -4600,6 +4805,7 @@ done
             read_only: false,
             include_skill_instructions: None,
             conversation_mode: None,
+            execution_purpose: None,
         };
         let mut spawned = None;
         let mut failure = None;
@@ -4721,6 +4927,7 @@ done
             read_only: false,
             include_skill_instructions: None,
             conversation_mode: None,
+            execution_purpose: None,
         };
         config.include_skill_instructions = Some(true);
         assert_eq!(

@@ -19,6 +19,23 @@ const environment: RunnerProviderLaunchEnvironment = {
 };
 
 describe("built-in provider launch preparation", () => {
+  it("pins frozen review scope through preparation and rejects changed source authority", () => {
+    const purpose = { kind: "egm_packet_review" as const, packetSha256: "a".repeat(64),
+      sourceDigests: ["packet", "target", "persona", "standard"].map(id => ({ id, sha256: "b".repeat(64) })) };
+    const selected = { ...requirements, approvalPolicy: "never" as const, executionPurpose: purpose };
+    const provider = createRunnerProviderLaunch(selected, environment);
+    const prepared = { configurationId: "review", requirementsDigest: runnerLaunchRequirementsDigest(selected), provider };
+    expect(provider).toMatchObject({ executionPurpose: purpose, readOnly: true, includeSkillInstructions: false, collaborationMode: "default", conversationMode: "egm_packet_review" });
+    expect(() => validatePreparedRunnerLaunch(selected, prepared)).not.toThrow();
+    const changed = { ...purpose, packetSha256: "c".repeat(64) };
+    expect(runnerLaunchRequirementsDigest({ ...selected, executionPurpose: changed })).not.toBe(prepared.requirementsDigest);
+    for (const executionPurpose of [undefined, changed]) {
+      expect(() => validatePreparedRunnerLaunch(selected, { ...prepared, provider: { ...provider, executionPurpose } })).toThrow("requirements_mismatch");
+    }
+    expect(() => createRunnerProviderLaunch({ ...selected, readOnly: false }, environment)).toThrow();
+    expect(() => createRunnerProviderLaunch({ ...selected, approvalPolicy: "on-request" }, environment)).toThrow();
+    expect(() => createRunnerProviderLaunch(selected, { ...environment, options: { homeMode: "preconfigured" } })).toThrow();
+  });
   it("keeps Core's selection and policy when the execution environment changes", () => {
     const before = structuredClone(requirements);
     const local = createRunnerProviderLaunch(requirements, environment);

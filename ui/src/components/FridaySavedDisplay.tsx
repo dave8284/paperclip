@@ -23,7 +23,7 @@ function AuthorizedDisplay({ document, scope, companyNames, navigate }: Props) {
     staleTime: 0, refetchOnMount: "always", retry: false,
   });
   if (current.isFetching || current.isPending) return <p role="status" className="text-sm text-muted-foreground">Opening saved display…</p>;
-  if (current.error) return <p role="alert" className="text-sm text-destructive">Saved display unavailable: {current.error.message}</p>;
+  if (current.error) return <div className="space-y-3"><p role="alert" className="text-sm text-destructive">Saved display unavailable: {current.error.message}</p><Button variant="outline" size="sm" onClick={() => void current.refetch()}>Retry saved display</Button></div>;
   const display = current.data && current.data.key === document.key ? scopedFridaySavedDisplay(current.data, scope) : null;
   if (!display) return <Unavailable />;
   return <DisplayContent key={`${current.data!.latestRevisionId}:${JSON.stringify(display)}`} document={current.data!} display={display} companyName={companyNames[display.companyId] ?? "Company"} navigate={navigate} />;

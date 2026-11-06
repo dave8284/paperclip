@@ -95,7 +95,12 @@ export function fridayAwarenessService(db: Db) {
         const app = applications.get(row.id) ?? { id: row.id, name: row.name, kind: row.kind as "application" | "platform", projectIds: [] };
         app.projectIds.push(row.projectId); applications.set(row.id, app);
       }
-      return { observedAt: new Date().toISOString(), accountability, projects: projectRows.slice(0, 200), projectCount: totals[0].count,
+      const dataAccess = query.dataAccess === "tools" ? await (await import("./friday-data-access.js")).fridayDataAccess(db, companyId, actor, taskIds,
+        [...new Set([...projectRows.slice(0, 200).flatMap(row => row.leadAgentId ? [row.leadAgentId] : []),
+          ...tasks.flatMap(row => [row.assigneeAgentId, row.createdByAgentId].filter((id): id is string => !!id)),
+          ...comments.slice(0, 200).flatMap(row => row.agentId ? [row.agentId] : []),
+          ...visibleHandoffs.slice(0, 200).flatMap(row => [row.fromAgentId, row.toAgentId].filter((id): id is string => !!id))])]) : undefined;
+      return { observedAt: new Date().toISOString(), accountability, ...(dataAccess ? { dataAccess } : {}), projects: projectRows.slice(0, 200), projectCount: totals[0].count,
         nextProjectOffset: projectRows.length > 200 ? query.projectOffset + 200 : null, applications: [...applications.values()],
         tasks: tasks.map(task => ({ ...task, parentId: task.parentId && taskSet.has(task.parentId) ? task.parentId : null })),
         counts: Object.fromEntries(counts.map(row => [row.status, Number(row.count)])),

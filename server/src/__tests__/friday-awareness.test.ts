@@ -3,7 +3,8 @@ import { eq } from "drizzle-orm";
 import express from "express";
 import request from "supertest";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { agents, agentosDepartments, agentosDepartmentProjects, cases, caseAccessSources, caseHandoffs, companies, companyMemberships, createDb, issueComments, issues, issueWorkProducts, projects, projectAccessMembers } from "@paperclipai/db";
+import { agents, agentosDepartments, agentosDepartmentProjects, cases, caseAccessSources, caseHandoffs, companies, companyMemberships, createDb, issueComments, issues, issueWorkProducts, projects, projectAccessMembers,
+  principalPermissionGrants, toolApplications, toolConnections, toolCatalogEntries, toolProfiles, toolProfileBindings, toolInvocations } from "@paperclipai/db";
 import { startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
 import { errorHandler } from "../middleware/index.js";
 import { fridayRoutes } from "../routes/friday.js";
@@ -65,6 +66,69 @@ describe("Friday native awareness", () => {
     const completed = await request(api).get(f.base).query({ agentId: f.worker.id, status: "completed" }).expect(200);
     expect(completed.body.tasks.map((task: { id: string }) => task.id)).toEqual([f.done.id]);
     expect(completed.body.counts).toEqual({ in_progress: 1, done: 1 });
+  });
+  async function seedToolAccess() {
+    const f = await seed();
+    const [application] = await db.insert(toolApplications).values({ companyId: f.companyId, name: "Dataset tools", type: "mcp_http" }).returning();
+    const [connection] = await db.insert(toolConnections).values({ companyId: f.companyId, applicationId: application.id,
+      uid: randomUUID(), name: "Records", transport: "mcp_remote", config: { secret: "DO_NOT_EXPOSE_CONFIGURATION" } }).returning();
+    const [catalog] = await db.insert(toolCatalogEntries).values({ companyId: f.companyId, applicationId: application.id,
+      connectionId: connection.id, name: "read_records", toolName: "read_records", riskLevel: "read", versionHash: "fixture",
+      inputSchema: { description: "DO_NOT_EXPOSE_SCHEMA" } }).returning();
+    const [profile] = await db.insert(toolProfiles).values({ companyId: f.companyId, profileKey: "records", name: "Records profile", defaultAction: "allow" }).returning();
+    await db.insert(toolProfileBindings).values({ companyId: f.companyId, profileId: profile.id, targetType: "agent", targetId: f.worker.id });
+    const rows = await db.insert(toolInvocations).values([
+      { companyId: f.companyId, issueId: f.active.id, agentId: f.worker.id, connectionId: connection.id, catalogEntryId: catalog.id,
+        toolName: "read_records", riskLevel: "read", status: "succeeded", completedAt: new Date(),
+        argumentsSummary: { secret: "DO_NOT_EXPOSE_ARGUMENTS" } as never, resultSummary: { secret: "DO_NOT_EXPOSE_RESULTS" } as never },
+      { companyId: f.companyId, issueId: f.active.id, agentId: f.worker.id, connectionId: connection.id, toolName: "write_records", riskLevel: "write", status: "failed" },
+      { companyId: f.companyId, issueId: f.active.id, agentId: f.worker.id, toolName: "legacy_action", riskLevel: "low", status: "authorized" },
+      { companyId: f.companyId, issueId: f.privateTask.id, agentId: f.worker.id, toolName: "PRIVATE_TOOL", riskLevel: "read", status: "succeeded" },
+      { companyId: f.companyId, agentId: f.worker.id, toolName: "UNLINKED_TOOL", riskLevel: "read", status: "succeeded" },
+    ]).returning();
+    return { ...f, catalog, connection, rows };
+  }
+  it("separates configured tool access from audit authority and never gives an agent operator receipts", async () => {
+    const f = await seedToolAccess();
+    const ordinary = await request(app(f.actor)).get(f.base).expect(200);
+    expect(ordinary.body.dataAccess).toBeUndefined();
+    const board = await request(app(f.actor)).get(f.base).query({ dataAccess: "tools" }).expect(200);
+    expect(board.body.dataAccess).toMatchObject({ configuredAccess: "available", observedAccess: "restricted", actions: [] });
+    expect(board.body.dataAccess.permissions).toEqual([{ agentId: f.worker.id, resourceId: `catalog:${f.catalog.id}` }]);
+    const agent = await request(app({ type: "agent", source: "agent_key", companyId: f.companyId, agentId: f.worker.id })).get(f.base).query({ dataAccess: "tools" }).expect(200);
+    expect(agent.body.dataAccess).toEqual({ configuredAccess: "restricted", observedAccess: "restricted", resources: [], permissions: [], actions: [], permissionsTruncated: false, actionsTruncated: false });
+    expect(JSON.stringify(board.body)).not.toContain("DO_NOT_EXPOSE");
+  });
+  it("projects tool access receipts only for the authorized loaded tasks and preserves native outcomes and unknown classifications", async () => {
+    const f = await seedToolAccess();
+    const foreign = await seed();
+    await db.insert(toolInvocations).values({ companyId: foreign.companyId, issueId: f.active.id, toolName: "FOREIGN_TOOL", status: "succeeded" });
+    await db.insert(principalPermissionGrants).values({ companyId: f.companyId, principalType: "user", principalId: "reader", permissionKey: "tools:view_audit" });
+    const response = await request(app(f.actor)).get(f.base).query({ dataAccess: "tools", projectId: f.first.id }).expect(200);
+    const access = response.body.dataAccess;
+    expect(access.observedAccess).toBe("available");
+    expect(access.actions.map((row: { id: string }) => row.id).sort()).toEqual(f.rows.slice(0, 3).map(row => row.id).sort());
+    expect(access.actions.find((row: { id: string }) => row.id === f.rows[0].id)).toMatchObject({ taskId: f.active.id, operation: "read", status: "succeeded", resourceId: `catalog:${f.catalog.id}` });
+    expect(access.actions.find((row: { id: string }) => row.id === f.rows[1].id)).toMatchObject({ operation: "write", status: "failed", resourceId: `connection:${f.connection.id}` });
+    expect(access.actions.find((row: { id: string }) => row.id === f.rows[2].id)).toMatchObject({ operation: "unknown", status: "authorized", resourceId: null });
+    expect(JSON.stringify(response.body)).not.toMatch(/PRIVATE_TOOL|FOREIGN_TOOL|UNLINKED_TOOL|DO_NOT_EXPOSE/);
+    const completed = await request(app(f.actor)).get(f.base).query({ dataAccess: "tools", status: "completed", limit: 1 }).expect(200);
+    expect(completed.body.tasks[0].id).toBe(f.done.id);
+    expect(completed.body.dataAccess.actions).toEqual([]);
+    expect(completed.body.dataAccess.actionsTruncated).toBe(false);
+  });
+  it("bounds visible tool action history without counting private receipts", async () => {
+    const f = await seedToolAccess();
+    await db.insert(toolInvocations).values(Array.from({ length: 101 }, () => ({ companyId: f.companyId, issueId: f.privateTask.id, toolName: "private", status: "succeeded" as const })));
+    await db.insert(principalPermissionGrants).values({ companyId: f.companyId, principalType: "user", principalId: "reader", permissionKey: "tools:view_audit" });
+    const actor = f.actor;
+    const before = await request(app(actor)).get(f.base).query({ dataAccess: "tools" }).expect(200);
+    expect(before.body.dataAccess.actions).toHaveLength(3);
+    expect(before.body.dataAccess.actionsTruncated).toBe(false);
+    await db.insert(toolInvocations).values(Array.from({ length: 101 }, () => ({ companyId: f.companyId, issueId: f.active.id, toolName: "read", riskLevel: "read" as const, status: "succeeded" as const, completedAt: new Date() })));
+    const after = await request(app(actor)).get(f.base).query({ dataAccess: "tools" }).expect(200);
+    expect(after.body.dataAccess.actions).toHaveLength(100);
+    expect(after.body.dataAccess.actionsTruncated).toBe(true);
   });
   it("removes archived projects from portfolio cards while retaining explicit history access", async () => {
     const f = await seed(); const api = app(f.actor);

@@ -608,8 +608,8 @@ export const issuesApi = {
     api.delete<{ ok: true }>(
       `/issues/${id}/documents/${encodeURIComponent(key)}`,
     ),
-  listAttachments: (id: string) =>
-    api.get<IssueAttachment[]>(`/issues/${id}/attachments`),
+  listAttachments: (id: string, options?: RequestOptions) =>
+    api.get<IssueAttachment[]>(`/issues/${id}/attachments`, options),
   uploadAttachment: (
     companyId: string,
     issueId: string,

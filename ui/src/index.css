@@ -5386,6 +5386,10 @@ html:has(.design-proposal-theme) [data-canonical-toolbar] .collection-toolbar-ta
 .agentos-map-constellation .friday-graph-edge { stroke: var(--graph-orb, var(--map-hairline)); stroke-width: 1.2; opacity: .56; }
 .agentos-map-constellation .friday-graph-edge[data-kind="assignment"] { stroke-dasharray: none; }
 .agentos-map-constellation .friday-graph-edge[data-kind="creation"] { stroke-dasharray: 2 7; opacity: .25; }
+.agentos-map-constellation .friday-graph-edge[data-kind="configured-access"] { stroke: var(--map-lilac-ink); stroke-dasharray: 2 6; opacity: .55; }
+.agentos-map-constellation .friday-graph-edge[data-kind="observed-action"] { stroke: var(--map-mint-ink); stroke-dasharray: none; }
+.friday-map-shell [data-kind="resource"] { --node-fill: var(--map-lilac); --node-ink: var(--map-lilac-ink); --map-node-radius: 9px; }
+.friday-map-shell [data-kind="action"] { --node-fill: var(--map-mint); --node-ink: var(--map-mint-ink); --map-node-radius: 5px; }
 .agentos-map-constellation .friday-graph-edge[data-active="true"] { stroke: var(--agentos-role-ink, var(--map-active-track)); stroke-width: 2; stroke-dasharray: 2 11; stroke-linecap: round; opacity: .8; }
 .agentos-map-constellation .friday-graph-edge[data-dimmed="true"] { opacity: .1; }
 .agentos-map-orb-frame { overflow: visible; pointer-events: none; }

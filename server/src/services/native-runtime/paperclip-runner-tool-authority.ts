@@ -91,6 +91,7 @@ import { documentService } from "../documents.js";
 import { issueService } from "../issues.js";
 import { issueThreadInteractionService } from "../issue-thread-interactions.js";
 import { getNativeReviewAssignment, readNativeReviewAssignmentContext, type NativeReviewAssignmentContext } from "./native-review-participant.js";
+import { EGM_REVIEW_TOOLS, executeEgmReviewTool, type EgmExecutionPurpose } from "./egm-review-execution.js";
 import { childReviewOutcomes } from "./child-review-outcomes.js";
 import { logActivity, persistActivity, publishActivity } from "../activity-log.js";
 import { captureRunIdentity } from "../run-identity.js";
@@ -148,6 +149,7 @@ type NativeDocumentContent = { id: string | null; documentId: string; body: stri
 const UNKNOWN_DOCUMENT_REVISION_BODY = "[Document revision content omitted: historical source trust could not be established.]";
 
 type Binding = {
+  egmPurpose?: EgmExecutionPurpose;
   /** Server-derived scope for one addressed native completion review. */
   nativeReview?: NativeReviewAssignmentContext;
   companyId: string;
@@ -244,6 +246,7 @@ export class PaperclipRunnerToolAuthority {
   constructor(readonly db: Db, readonly binding: Binding) {}
 
   definitions(): Array<Record<string, unknown>> {
+    if (this.binding.egmPurpose) return EGM_REVIEW_TOOLS;
     if (this.binding.nativeReview) {
       // Scope Paperclip control-plane actions. Provider file and shell access
       // still follow the configured agent/environment policy, including tests.
@@ -336,6 +339,10 @@ export class PaperclipRunnerToolAuthority {
     callId: string;
     arguments: unknown;
   }): Promise<unknown> {
+    if (this.binding.egmPurpose) {
+      await this.#boundContext();
+      return executeEgmReviewTool(this.db, this.binding, this.binding.egmPurpose, call.tool, call.arguments);
+    }
     if ((call.tool === "handoff_case" || call.tool === "create_case") && !this.binding.nativeReview) {
       if (this.binding.workMode && this.binding.workMode !== "standard") throw forbidden("Case tools require standard work mode");
       const create = call.tool === "create_case" ? createNativeCaseSchema.parse(call.arguments) : null;

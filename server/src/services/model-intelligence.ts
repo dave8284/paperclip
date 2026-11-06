@@ -23,6 +23,85 @@ export function modelIntelligenceProduct() {
 const fingerprint = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
 export const classifyModelWork = classifyWork;
 
+/** Observation only, after native managed-account preparation. The catalog and
+ * old usage from another grant/credential epoch cannot establish this evidence.
+ * This does not certify current entitlement, model identity or answer quality,
+ * and cannot add an automatically eligible routing candidate. */
+export async function observeSelectedModelAccountAccess(db: Db, input: {
+  companyId: string; agentId: string; runId: string; model: string;
+  account: { provider: string; method: string; subscriptionId?: string; sessionIdentity: string };
+}) {
+  const { companyId, agentId, runId, model, account } = input;
+  const base = {
+    schema: "agentos.model-account-access.v1" as const,
+    provider: account.provider, requestedModel: model,
+    lookbackExecutions: 100 as const,
+    currentEntitlementVerified: false as const, actualProviderModelVerified: false as const,
+    automaticAlternatives: "current_account_qualification_required" as const,
+  };
+  if (account.method !== "subscription" || !account.subscriptionId || !account.sessionIdentity
+    || !["openai", "anthropic"].includes(account.provider) || !model) {
+    return { ...base, state: "not_observed" as const, reason: "managed_subscription_account_required" as const };
+  }
+  const accountFingerprint = fingerprint({ companyId, provider: account.provider,
+    subscriptionId: account.subscriptionId, sessionIdentity: account.sessionIdentity });
+  const unavailable = () => ({ ...base, accountFingerprint, state: "not_observed" as const,
+    reason: "observation_unavailable" as const });
+  // Bound work using the existing company/agent/started-at index before
+  // inspecting account/model fields. Only scalar projections leave PostgreSQL;
+  // no task bodies, provider probes or credential values are needed.
+  const recent = await db.select({ id: heartbeatRuns.id, status: heartbeatRuns.status,
+    finishedAt: heartbeatRuns.finishedAt,
+    receiptReady: sql<boolean>`${heartbeatRuns.usageJson}->'accountingReceiptReady' = 'true'::jsonb`,
+    captureFailed: sql<boolean>`${heartbeatRuns.usageJson}->'accountingCaptureFailed' = 'true'::jsonb`,
+    errorCode: heartbeatRuns.errorCode, accountingPending: heartbeatRuns.costAccountingPending,
+    accountedAt: heartbeatRuns.costAccountedAt, runtimeMode: heartbeatRuns.runtimeMode,
+    sessionIdentity: sql<string>`${heartbeatRuns.contextSnapshot} #>> '{aiConnection,sessionIdentity}'`,
+    subscriptionId: sql<string>`${heartbeatRuns.contextSnapshot} #>> '{aiConnection,subscriptionId}'`,
+    provider: sql<string>`${heartbeatRuns.contextSnapshot} #>> '{aiConnection,provider}'`,
+    method: sql<string>`${heartbeatRuns.contextSnapshot} #>> '{aiConnection,method}'`,
+    nativeCompanyId: sql<string>`${heartbeatRuns.runnerProfileJson} #>> '{nativeExecutionInput,binding,companyId}'`,
+    nativeRunId: sql<string>`${heartbeatRuns.runnerProfileJson} #>> '{nativeExecutionInput,binding,runId}'`,
+    nativeAgentId: sql<string>`${heartbeatRuns.runnerProfileJson} #>> '{nativeExecutionInput,binding,agentId}'`,
+    nativeModel: sql<string>`${heartbeatRuns.runnerProfileJson} #>> '{nativeExecutionInput,provider,model}'`,
+    nativeProvider: sql<string>`${heartbeatRuns.runnerProfileJson} #>> '{nativeExecutionInput,provider,kind}'`,
+    nativeAcpxAgent: sql<string>`${heartbeatRuns.runnerProfileJson} #>> '{nativeExecutionInput,provider,agent}'`,
+  }).from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.agentId, agentId),
+    sql`${heartbeatRuns.id} <> ${runId}`, sql`${heartbeatRuns.startedAt} <= now()`,
+  )).orderBy(desc(heartbeatRuns.startedAt)).limit(100).catch(() => null);
+  if (!recent) return unavailable();
+  // Include failures and unfinished runs; never search past a newer matching
+  // execution to report an older success as the latest account observation.
+  const previous = recent.find(row => row.runtimeMode === "native" && row.sessionIdentity === account.sessionIdentity
+    && row.subscriptionId === account.subscriptionId && row.provider === account.provider && row.method === "subscription"
+    && row.nativeCompanyId === companyId && row.nativeRunId === row.id && row.nativeAgentId === agentId
+    && row.nativeModel === model && row.nativeProvider === (account.provider === "openai" ? "codex" : "acpx")
+    && (account.provider !== "anthropic" || row.nativeAcpxAgent === "claude"));
+  const unobserved = (reason: "no_matching_native_execution" | "latest_execution_not_confirmed") => ({
+    ...base, accountFingerprint, state: "not_observed" as const, reason,
+    evidenceRunId: previous?.id ?? null, observedAt: previous?.finishedAt?.toISOString() ?? null,
+  });
+  if (!previous) return unobserved("no_matching_native_execution");
+  if (previous.status !== "succeeded" || !previous.finishedAt || previous.finishedAt.getTime() > Date.now()
+    || previous.errorCode || previous.accountingPending || !previous.accountedAt
+    || previous.receiptReady !== true || previous.captureFailed === true) {
+    return unobserved("latest_execution_not_confirmed");
+  }
+  const usage = await db.select({ model: costEvents.model, provider: costEvents.provider,
+    subscriptionId: costEvents.subscriptionId, billingType: costEvents.billingType,
+    outputTokens: costEvents.outputTokens,
+  }).from(costEvents).where(and(eq(costEvents.companyId, companyId), eq(costEvents.heartbeatRunId, previous.id))).catch(() => null);
+  if (!usage) return unavailable();
+  if (!usage.length || !usage.some(row => row.outputTokens > 0)
+    || !usage.every(row => row.model === model && row.provider === account.provider
+      && row.subscriptionId === account.subscriptionId && row.billingType === "subscription_included")) {
+    return unobserved("latest_execution_not_confirmed");
+  }
+  return { ...base, accountFingerprint, state: "observed_same_account" as const,
+    source: "completed_native_execution" as const, evidenceRunId: previous.id,
+    observedAt: previous.finishedAt!.toISOString() };
+}
+
 /** Local product integration at execution-configuration admission. Record the
  * operator-configured profile, subject to native managed-account admission.
  * Historical usage and the harness catalog do not prove current-account model

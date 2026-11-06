@@ -83,7 +83,12 @@ API: `present` — representative operation IDs:
   inspects or clears exact native document revisions before review admission.
   Current creator/run/responsible-user/reviewer ceilings and source access are
   rechecked; clear requires its receipt. Bound packets use native cancellation.
-  Provider execution is unavailable; preparation grants no new task access.
+  Preparation grants no new task access. Qualified native isolated Codex runs
+  admit a durable packet-review purpose; other runtimes remain unavailable.
+  `read_egm_source` reads only its frozen source manifest; `submit_egm_findings`
+  saves one revisioned findings document after complete source coverage. History,
+  current-document reads, ordinary writes and `resolve_review` are denied in
+  packet mode. The task stays in review for separate accountable-owner resolution.
 
 Agent access: `partial` — Native paperclip_finish/paperclip_block and assigned
 resolve_review; legacy agent REST disposition.

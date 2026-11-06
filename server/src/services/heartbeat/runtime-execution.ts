@@ -61,6 +61,7 @@ import {
   buildNativeWakeIngressSpan,
 } from "../native-runtime/native-run-trace.js";
 import { PROVIDER_TRACE_MAX_BYTES } from "../provider-trace-store.js";
+import { egmExecutionPurpose } from "../native-runtime/egm-review-execution.js";
 import type { AdapterExecutionResult } from "../../adapters/index.js";
 import { createLocalAgentJwt } from "../../agent-auth-jwt.js";
 import { parseObject, asNumber } from "../../adapters/utils.js";
@@ -511,7 +512,7 @@ export async function executeHeartbeatRuntime(db: Db, input: HeartbeatRuntimeExe
         nativeExecution.runtimeContext.mcp.bindingId
           ? nativeExecution.runtimeContext.mcp.digest
           : null;
-      const nativeMcpServers = "homeMode" in nativeExecution && nativeExecution.homeMode === "preconfigured" ? [] : await measureRunPhase("execution.mcp_handoff", () => buildPaperclipRuntimeMcpServers({
+      const nativeMcpServers = egmExecutionPurpose(nativeExecution) || ("homeMode" in nativeExecution && nativeExecution.homeMode === "preconfigured") ? [] : await measureRunPhase("execution.mcp_handoff", () => buildPaperclipRuntimeMcpServers({
         db,
         agent,
         runId: run.id,

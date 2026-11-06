@@ -46,8 +46,10 @@ The AgentOS landing copy and opt-in decorative pointer motion add no endpoint,
 agent grant, microphone access or execution path. Account links and registration
 redirects remain native. The workspace orb still uses its existing voice/run
 states. DOM and animation-lifecycle tests are local presentation evidence;
-current app screenshots, real browser rendering and physical voice input/output
-remain unqualified.
+current app screenshots now use isolated illustrative records and add no data
+API or authority. Local-trusted profile presentation omits synthetic account
+actions; native authentication and sign-out policy are unchanged. Physical voice
+and actual Google sign-in remain separate qualification.
 
 Google-only deployment policy (2026-11-04):
 `PAPERCLIP_AUTH_PASSWORD_ENABLED=false` disables password login/registration and

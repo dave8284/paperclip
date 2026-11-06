@@ -187,6 +187,14 @@ list, so a file removed by a successful refresh is no longer displayed. Document
 and attachment detail reads also withhold cached content, history and links after
 failure; Retry restores only successfully reread content. The
 [access-refresh regressions](../../ui/src/components/AgentOSArtifactAccess.test.tsx)
-and existing folder behavior check pass (seven checks, 6 November). These use
+and existing folder behavior check pass. A work product previews its backing file
+only when that content path matches the task's current authorized attachment
+list. If the backing file disappears, its cached preview and file links disappear
+too; the source task remains available for provenance. These checks use
 controlled query responses; real stored authorization and browser acceptance
 remain separate.
+
+Reopening a native attachment preview re-reads its authorized task list and then
+its content without an HTTP cache. Pending or failed reads hide cached text;
+401/403/404 content responses also hide download links. Retry rechecks the task
+list, and closing the preview aborts its active fetch. No polling is added.

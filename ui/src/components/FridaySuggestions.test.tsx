@@ -46,7 +46,7 @@ describe("Friday activity suggestions", () => {
   }
 
   it("updates decision and work suggestions from current reads and only navigates after a click", async () => {
-    fixture.attention.mockImplementation(async (id: string) => ({ items: id === "company-b" ? [{ id: "decision", companyId: id, subject: { title: "Approve the launch" }, project: { id: "project-b" } }] : [] }));
+    fixture.attention.mockImplementation(async (id: string) => ({ items: id === "company-b" ? [{ id: "decision", companyId: id, sourceKind: "decision", inlineResolvable: true, subject: { title: "Approve the launch" }, project: { id: "project-b" } }] : [] }));
     fixture.work.mockImplementation(async (id: string) => ({ counts: { in_progress: id === "company-b" ? 1 : 0 } }));
     await render();
     expect(navigate).not.toHaveBeenCalled(); expect(onNew).not.toHaveBeenCalled();
@@ -59,6 +59,15 @@ describe("Friday activity suggestions", () => {
     expect(host.textContent).not.toContain("Approve the launch"); expect(host.textContent).not.toContain("in motion");
     await click("What needs me?");
     expect(navigate).toHaveBeenLastCalledWith({ panel: "attention", scope: "portfolio" });
+  });
+
+  it.each(["blocker_attention", "recovery_action"])("opens the actual task for a %s instead of looking for a proposal", async sourceKind => {
+    fixture.attention.mockResolvedValue({ items: [{ id: "attention-record", companyId: "company-a", sourceKind, inlineResolvable: false,
+      subject: { kind: sourceKind === "blocker_attention" ? "issue" : "recovery_action", id: sourceKind === "blocker_attention" ? "task-a" : "recovery-a", title: "Review the blocked work" },
+      relatedIssue: sourceKind === "recovery_action" ? { id: "task-a" } : undefined, project: { id: "project-a" } }] });
+    await render([companies[0]]);
+    await click("Review: Review the blocked work");
+    expect(navigate).toHaveBeenLastCalledWith({ panel: "work", companyId: "company-a", projectId: "project-a", taskId: "task-a", mode: "combined" });
   });
 
   it("uses personal task activity with current authorized labels and native task navigation", async () => {

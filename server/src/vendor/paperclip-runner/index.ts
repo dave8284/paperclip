@@ -38,6 +38,7 @@ export type {
   NativeExecutionInputV6,
   NativeExecutionInputV8,
   NativeExecutionInputV9,
+  NativeEgmPacketReviewPurpose,
   MuseBindingSnapshot,
   DotBindingSnapshot,
   ExternalProviderPort,

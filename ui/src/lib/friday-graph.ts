@@ -1,14 +1,15 @@
 import type { Agent, FridayWork } from "@paperclipai/shared";
 import { galaxyPoint } from "./galaxy-layout";
 
-export type FridayGraphNode = { id: string; recordId: string; kind: "company" | "application" | "project" | "agent" | "task" | "comment" | "artifact"; title: string;
-  x: number; y: number; taskId?: string; status?: string; running?: boolean };
-export type FridayGraphEdge = { id: string; from: string; to: string; kind: "contains" | "lead" | "assignment" | "creation" | "subtask" | "message" | "output" | "handoff"; label: string; active?: boolean; taskId?: string };
+export type FridayGraphNode = { id: string; recordId: string; kind: "company" | "application" | "project" | "agent" | "task" | "comment" | "artifact" | "resource" | "action"; title: string;
+  x: number; y: number; taskId?: string; status?: string; running?: boolean; details?: string[] };
+export type FridayGraphEdge = { id: string; from: string; to: string; kind: "contains" | "lead" | "assignment" | "creation" | "subtask" | "message" | "output" | "handoff" | "configured-access" | "observed-action"; label: string; active?: boolean; taskId?: string };
 
 function relatedEmployeeIds(data: FridayWork) {
   return new Set([...data.assignments.map(row => row.agentId), ...data.projects.flatMap(project => project.leadAgentId ? [project.leadAgentId] : []),
     ...data.tasks.flatMap(task => [task.assigneeAgentId, task.createdByAgentId].filter((id): id is string => !!id)),
-    ...data.evidence.flatMap(row => row.agentId ? [row.agentId] : []), ...data.handoffs.flatMap(row => [row.fromAgentId, row.toAgentId].filter((id): id is string => !!id))]);
+    ...data.evidence.flatMap(row => row.agentId ? [row.agentId] : []), ...data.handoffs.flatMap(row => [row.fromAgentId, row.toAgentId].filter((id): id is string => !!id)),
+    ...(data.dataAccess?.permissions.map(row => row.agentId) ?? []), ...(data.dataAccess?.actions.flatMap(row => row.agentId ? [row.agentId] : []) ?? [])]);
 }
 
 /** A focused project/application map must not show the rest of its company roster. */
@@ -58,6 +59,30 @@ export function fridayGraph(data: FridayWork, agents: Agent[], running: Readonly
   for (const handoff of data.handoffs) if (handoff.fromAgentId && handoff.toAgentId) {
     connect({ id: `handoff:${handoff.id}`, from: `agent:${handoff.fromAgentId}`, to: `agent:${handoff.toAgentId}`, kind: "handoff", label: `${handoff.phase} · ${handoff.state}`, taskId: handoff.taskId,
       active: handoff.state === "pending_dispatch" || handoff.state === "awaiting_release" });
+  }
+  for (const resource of data.dataAccess?.resources ?? []) {
+    const id = `resource:${resource.id}`;
+    add({ id, recordId: resource.id, kind: "resource", title: resource.name, ...galaxyPoint(id, 370),
+      details: [resource.kind === "catalog" ? "Native tool catalog entry" : "Connection recorded by a tool action", "Specific datasets and files are not identified by these records."] });
+  }
+  for (const permission of data.dataAccess?.permissions ?? []) connect({
+    id: `permission:${permission.agentId}:${permission.resourceId}`, from: `agent:${permission.agentId}`, to: `resource:${permission.resourceId}`,
+    kind: "configured-access", label: "Profile allows tool; execution still requires native policy and credentials", active: false,
+  });
+  for (const action of data.dataAccess?.actions ?? []) {
+    const task = nodes.get(`task:${action.taskId}`);
+    if (!task) continue;
+    const id = `action:${action.id}`;
+    const operation = action.operation === "unknown" ? "Tool action" : `${action.operation[0].toUpperCase()}${action.operation.slice(1)} tool`;
+    const outcome = action.status === "succeeded" && action.completedAt ? "succeeded" : action.status.replaceAll("_", " ");
+    const label = `${operation} · ${outcome}`;
+    add({ id, recordId: action.id, taskId: action.taskId, kind: "action", title: `${label} · ${action.toolName}`,
+      status: action.status, ...galaxyPoint(id, 45, task), details: [`Recorded ${new Date(action.observedAt).toLocaleString()}`,
+        action.operation === "unknown" ? "Read/write classification was not recorded." : "Operation type comes from the recorded tool classification.",
+        "This receipt does not identify every dataset or file touched."] });
+    connect({ id: `action-task:${action.id}`, from: task.id, to: id, kind: "observed-action", label: "Recorded tool action for task", taskId: action.taskId });
+    if (action.agentId) connect({ id: `action-agent:${action.id}`, from: `agent:${action.agentId}`, to: id, kind: "observed-action", label, taskId: action.taskId });
+    if (action.resourceId) connect({ id: `action-resource:${action.id}`, from: `resource:${action.resourceId}`, to: id, kind: "observed-action", label, taskId: action.taskId });
   }
   return { nodes: spaceGraphNodes([...nodes.values()]), edges: edges.filter(edge => nodes.has(edge.from) && nodes.has(edge.to)) };
 }

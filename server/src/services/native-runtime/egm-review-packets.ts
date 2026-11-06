@@ -34,7 +34,7 @@ async function requireRead(db: Db, actor: AuthorizationActor, companyId: string,
   const result = await authorizationService(db).decide({ actor, action: "issue:read", resource: { type: "issue", companyId, issueId } });
   if (!result.allowed) throw notFound("EGM packet not found");
 }
-async function requirePacketAuthority(db: Db, packet: EgmPacketPreparation) {
+export async function requirePacketAuthority(db: Db, packet: EgmPacketPreparation) {
   const creator = await refreshEgmActor(db, packet.creatorAuthority);
   await requireRead(db, creator, packet.companyId, packet.issueId);
   await requireRead(db, await egmExecutionActor(db, { ...packet, agentId: packet.authorAgentId, runId: packet.sourceRunId }), packet.companyId, packet.issueId);
@@ -49,8 +49,8 @@ function assertSourceBinding(packet: EgmPacketPreparation, source: typeof heartb
     throw conflict("EGM packet source binding does not match");
 }
 function preparationResponse(packet: EgmPacketPreparation, binding: unknown) {
-  return { packet, binding: binding ?? null, stage: "server_prepared" as const, execution: unavailable,
-    providerDelivery: "not_observed" as const, message: "Packet prepared. Independent review execution is unavailable; no packet was delivered to a provider." };
+  return { packet, binding: binding ?? null, stage: "server_prepared" as const, execution: "pending_native_admission" as const,
+    providerDelivery: "not_observed" as const, message: "Packet prepared. Execution requires a separate eligible native reviewer admission; preparation alone does not deliver a packet or complete a review." };
 }
 
 export function egmReviewPacketService(db: Db) {
@@ -178,7 +178,7 @@ export async function bindEgmPacketInteraction(db: Db, binding: EgmPacketBinding
 }
 
 /** Retain a receipt before the unavailable execution boundary. No provider call. */
-export async function retainEgmReviewPreparation(db: Db, runId: string, review: NativeReviewAssignment) {
+export async function retainEgmReviewPreparation(db: Db, runId: string, review: NativeReviewAssignment, packetExecution = false) {
   const raw = record(review.interaction.payload).egmPacketPreparation;
   if (raw === undefined) {
     if (record(review.sourceRun.runnerProfileJson).nativeEgmPacketPreparation) throw conflict("The explicit EGM preparation has no matching review binding");
@@ -204,11 +204,39 @@ export async function retainEgmReviewPreparation(db: Db, runId: string, review: 
     await requireRead(tx, await egmExecutionActor(tx, { companyId: run.companyId, issueId: current.interaction.issueId, agentId: run.agentId, runId: run.id }), run.companyId, current.interaction.issueId);
     const receipt = { schema: "agentos.egm-packet-receipt.v1", stage: "server_prepared", companyId: run.companyId, issueId: current.interaction.issueId,
       reviewerRunId: run.id, reviewerAgentId: run.agentId, sourceRunId: binding.sourceRunId, interactionId: current.interaction.id,
-      sourceDecisionId: current.sourceDecision.id, requestSha256: binding.requestSha256, execution: unavailable, providerDelivery: "not_observed",
+      sourceDecisionId: current.sourceDecision.id, requestSha256: binding.requestSha256, execution: packetExecution ? "packet_review_ready" : unavailable, providerDelivery: "not_observed",
       parentConversationIsolation: "unverified", sourceReadCoverage: "unverified", readOnlyEnforcement: "unverified" };
     const prior = record(run.runnerProfileJson).nativeEgmPacketReceipt;
-    if (prior && canonicalEgmJson(prior) !== canonicalEgmJson(receipt)) throw conflict("The saved EGM review receipt does not match");
+    if (prior && canonicalEgmJson({ ...record(prior), execution: receipt.execution }) !== canonicalEgmJson(receipt)) throw conflict("The saved EGM review receipt does not match");
     await tx.update(heartbeatRuns).set({ runnerProfileJson: sql`jsonb_set(coalesce(${heartbeatRuns.runnerProfileJson}, '{}'::jsonb), '{nativeEgmPacketReceipt}', ${JSON.stringify(receipt)}::jsonb)` }).where(eq(heartbeatRuns.id, run.id));
   });
   return true;
+}
+
+/** The native assignment and frozen source remain the authority on every read,
+ * launch, recovery and findings write. Caller-supplied packet text is ignored. */
+export async function loadEgmReviewPacket(db: Db, binding: { companyId: string; issueId: string; agentId: string; runId: string }) {
+  const [run] = await db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.id, binding.runId),
+    eq(heartbeatRuns.companyId, binding.companyId), eq(heartbeatRuns.agentId, binding.agentId))).limit(1);
+  if (!run || run.status !== "running" || run.runtimeMode !== "native" || run.nativeIssueId !== binding.issueId || agentRunWritesRevoked(run)) throw forbidden("EGM review execution is no longer active");
+  const [issue] = await db.select({ executionRunId: issues.executionRunId }).from(issues).where(and(eq(issues.id, binding.issueId), eq(issues.companyId, binding.companyId))).limit(1);
+  if (issue?.executionRunId !== run.id) throw forbidden("The EGM review no longer owns this execution");
+  const context = readNativeReviewAssignmentContext(run.contextSnapshot);
+  const review = context && await getNativeReviewAssignment(db, { ...binding, contextSnapshot: context, actingRunId: run.id });
+  if (!review) throw forbidden("EGM review assignment is no longer available");
+  const declared = egmPacketBindingSchema.parse(record(review.interaction.payload).egmPacketPreparation);
+  const packet = parseRetainedEgmPacket(record(review.sourceRun.runnerProfileJson).nativeEgmPacketPreparation);
+  const receipt = record(record(run.runnerProfileJson).nativeEgmPacketReceipt);
+  const linked = record(record(review.sourceRun.runnerProfileJson).nativeEgmPacketBinding);
+  assertSourceBinding(packet, review.sourceRun, binding.issueId);
+  if (declared.sourceRunId !== packet.sourceRunId || declared.requestSha256 !== packet.requestSha256
+    || packet.request.reviewerAgentId !== binding.agentId || linked.interactionId !== review.interaction.id
+    || linked.decisionId !== review.sourceDecision.id || linked.requestSha256 !== packet.requestSha256
+    || receipt.requestSha256 !== packet.requestSha256 || receipt.reviewerRunId !== run.id
+    || receipt.reviewerAgentId !== binding.agentId || receipt.sourceRunId !== packet.sourceRunId) {
+    throw conflict("The frozen EGM packet does not match this review");
+  }
+  await requirePacketAuthority(db, packet);
+  await requireRead(db, await egmExecutionActor(db, binding), binding.companyId, binding.issueId);
+  return { packet, run, review };
 }

@@ -27,6 +27,14 @@ Agent access: [companion](../agent-access-map/navigation-preferences.md).
 
 Use starred/recent/sidebar links and direct company-prefixed URLs.
 
+AgentOS is the default frame. Expand Departments or Projects in the selected
+company's sidebar; Settings remains below Saved displays, including on native
+record and Audit pages. If a department or project refresh fails, the hierarchy
+hides cached names and actions until both reads succeed. Retry refreshes the
+existing authorized sources. Company switches reset the expanded hierarchy.
+For retained upstream navigation, add `shell=classic` to the native route's query
+for that visit; see the [capability inventory and restoration procedure](../../doc/plans/2026-10-25-agentos-capability-inventory.md#current-agentos-navigation-and-restoration).
+
 ### `profile-announcements`
 
 Use Settings → Profile, `/u/:userSlug`, and the announcement well when a publication is available.
@@ -42,6 +50,13 @@ Preconditions: follow the [baseline](./README.md#before-driving-a-journey). Use 
 ### `sidebar-deep-links`
 
 Automated: [sidebar](../../ui/src/components/Sidebar.test.tsx) and [sidebar preference routes](../../server/src/__tests__/sidebar-preferences-routes.test.ts) cover UI/server behavior.
+
+AgentOS-specific checks: [hierarchy and footer](../../ui/src/components/AgentOSNavigation.test.tsx),
+[failed structure reads and retry](../../ui/src/components/AgentOSNavigation.access.test.tsx),
+and [default/legacy frames](../../ui/src/components/Layout.test.tsx). In a browser,
+open both hierarchy sections, select a nested project, switch company and inspect
+Audit. Revoke or fail a structure read after it was visible: cached department
+and project navigation must disappear and only return after successful reads.
 
 Manual: Star and reorder supported resources, collapse a section, navigate and reload. Switch company/user and inspect the intended preference scope. Open an unavailable resource and a legacy route; verify clear fallback or correct redirect without leaking another company’s state.
 

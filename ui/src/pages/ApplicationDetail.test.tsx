@@ -5,7 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ApplicationDetail } from "./ApplicationDetail";
 
-const mocks = vi.hoisted(() => ({ work: vi.fn(), breadcrumbs: vi.fn(), navigate: vi.fn() }));
+const mocks = vi.hoisted(() => ({ work: vi.fn(), create: vi.fn(), breadcrumbs: vi.fn(), navigate: vi.fn() }));
 vi.mock("../api/managed-applications", () => ({ managedApplicationsApi: { work: mocks.work } }));
 vi.mock("../api/projects", () => ({ projectsApi: { list: async () => [] } }));
 vi.mock("../api/agents", () => ({ agentsApi: { list: async () => [
@@ -13,6 +13,7 @@ vi.mock("../api/agents", () => ({ agentsApi: { list: async () => [
   { id: "marketer", name: "Marketer", status: "idle", role: "cmo" },
 ] } }));
 vi.mock("../api/heartbeats", () => ({ heartbeatsApi: { liveRunsForCompany: async () => [] } }));
+vi.mock("../api/issues", () => ({ issuesApi: { create: mocks.create } }));
 vi.mock("../context/CompanyContext", () => ({ useCompany: () => ({ selectedCompanyId: "company" }) }));
 vi.mock("../context/BreadcrumbContext", () => ({ useBreadcrumbs: () => ({ setBreadcrumbs: mocks.breadcrumbs }) }));
 vi.mock("../hooks/useApplicationUpdates", () => ({ useApplicationUpdates: () => {}, applicationQueryKey: (id: string) => ["managedApplications", id] }));
@@ -25,6 +26,7 @@ describe("application agent drill-down", () => {
   let client: QueryClient;
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.create.mockResolvedValue({ id: "planning-task", identifier: "APP-2" });
     mocks.work.mockImplementation(async (_company, _id, _offset, _project, agentId) => ({
       application: { id: "application", name: "Product", source: "existing", stage: "building", brief: "Operate the product", homeProjectId: "home" },
       projects: [{ id: "home", name: "Home", status: "in_progress", leadAgentId: null }],
@@ -70,5 +72,32 @@ describe("application agent drill-down", () => {
     const task = host.querySelector('a[href="/issues/APP-1"]')!;
     expect(task.parentElement!.textContent).toContain("Operator");
     expect(task.parentElement!.textContent).not.toContain("Unassigned");
+  });
+  it("assigns the application planning lead within the current company without changing Friday", async () => {
+    await render();
+    expect(host.querySelector('[aria-label="Planning coordinator"]')).toBeNull();
+    expect(host.textContent).toContain("Friday remains your portfolio coordinator");
+    await act(async () => {
+      const select = host.querySelector<HTMLSelectElement>('[aria-label="Planning lead"]')!;
+      select.value = "engineer"; select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await click("Start planning");
+    await vi.waitFor(() => expect(mocks.create).toHaveBeenCalledWith("company", expect.objectContaining({ projectId: "home", assigneeAgentId: "engineer", idempotencyKey: "agentos:application:kickoff" })));
+    expect(mocks.navigate).toHaveBeenCalledWith("/issues/APP-2");
+  });
+  it("hides retained application data and actions when its work access refresh fails", async () => {
+    await render();
+    const readable = mocks.work.getMockImplementation()!;
+    mocks.work.mockRejectedValue(new Error("Application access removed"));
+    await act(async () => { await client.invalidateQueries({ queryKey: ["managedApplications", "company"] }); });
+    await vi.waitFor(() => expect(host.querySelector('[role="alert"]')?.textContent).toContain("Application access removed"));
+    expect(host.textContent).not.toContain("Operate the product");
+    expect(host.querySelector('[aria-label="Planning lead"]')).toBeNull();
+    expect(host.querySelector('a[href="/projects/home"]')).toBeNull();
+    expect(mocks.breadcrumbs).toHaveBeenLastCalledWith([{ label: "Applications", href: "/applications" }, { label: "Application" }]);
+    mocks.work.mockImplementation(readable);
+    await click("Retry");
+    await vi.waitFor(() => expect(host.querySelector('[aria-label="Planning lead"]')).not.toBeNull());
+    expect(host.textContent).toContain("Operate the product");
   });
 });

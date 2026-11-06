@@ -594,6 +594,10 @@ fn send_runtime_request_flood(
 
 fn run() -> Result<(), Box<dyn std::error::Error>> {
     let args = std::env::args().skip(1).collect::<Vec<_>>();
+    if args.as_slice() == ["--version"] {
+        println!("codex-cli 0.160.0");
+        return Ok(());
+    }
     let state_path = if args
         .iter()
         .any(|value| value == "--state-file-in-codex-home")

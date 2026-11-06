@@ -35,8 +35,9 @@ function CompanyTree({ companyId, view, navigate, selectProject, section }: { co
   const projects = useQuery({ queryKey: queryKeys.projects.list(companyId), queryFn: () => projectsApi.list(companyId) });
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
   const treeId = useId();
-  const rows = departments.data ?? [];
-  const activeProjects = (projects.data ?? []).filter(project => !project.archivedAt);
+  const structureReady = departments.isSuccess && projects.isSuccess;
+  const rows = structureReady ? departments.data : [];
+  const activeProjects = (structureReady ? projects.data : []).filter(project => !project.archivedAt);
   const groups = rows.map(row => ({ id: row.id, name: row.name, projects: activeProjects.filter(project => row.projectIds.includes(project.id)) }));
   return <div className="agentos-company-tree" role="group" aria-label={section === "departments" ? "Departments and their projects" : "Company projects"}>
     {section === "departments" && groups.map(group => {
@@ -55,7 +56,10 @@ function CompanyTree({ companyId, view, navigate, selectProject, section }: { co
     })}
     {section === "projects" && activeProjects.map(project => <button type="button" key={project.id} className="agentos-tree-project" aria-current={view.projectId === project.id ? "page" : undefined} onClick={() => selectProject({ panel: "work", companyId, departmentId: rows.find(row => row.projectIds.includes(project.id))?.id, projectId: project.id, mode: "combined" })}><FolderKanban /><span title={project.name}>{project.name}</span></button>)}
     {departments.isPending || projects.isPending ? <p className="p-3 text-xs text-muted-foreground">Loading company structure…</p> : null}
-    {(departments.error || projects.error) && <p role="alert" className="p-3 text-xs text-destructive">Could not load company structure.</p>}
+    {(departments.error || projects.error) && <div className="p-3">
+      <p role="alert" className="text-xs text-destructive">Could not load company structure.</p>
+      <Button type="button" variant="ghost" size="sm" disabled={departments.isFetching || projects.isFetching} onClick={() => { void Promise.all([departments.refetch(), projects.refetch()]); }}>Retry</Button>
+    </div>}
   </div>;
 }
 

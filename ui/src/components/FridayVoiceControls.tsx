@@ -13,7 +13,7 @@ export function FridayVoiceControls({ onTranscript, reply, question, disabled = 
   disabled?: boolean; compact?: boolean; minimal?: boolean; speakReplies?: boolean;
   onVoiceMessage?: (text: string) => Promise<void>;
   sessionKey?: string; companyId?: string; busy?: boolean; onTurn?: () => void;
-  renderPresence?: (voice: { enabled: boolean; listening: boolean; hearingSpeech: boolean; speaking: boolean; starting: boolean; preparing: boolean; sending: boolean; interim: string; canListen: boolean; toggleListening: () => void }) => ReactNode;
+  renderPresence?: (voice: { enabled: boolean; listening: boolean; hearingSpeech: boolean; speaking: boolean; preparingReply: boolean; starting: boolean; preparing: boolean; sending: boolean; interim: string; canListen: boolean; toggleListening: () => void }) => ReactNode;
 }) {
   const session = useMemo(() => sessionKey ? fridayVoiceSession : new FridayVoiceSession(), [!!sessionKey]);
   const voice = useSyncExternalStore(session.subscribe, session.snapshot);
@@ -40,7 +40,7 @@ export function FridayVoiceControls({ onTranscript, reply, question, disabled = 
     <FridayVoiceTiming session={session} context={{ companyId, sessionKey: key }} />
   </>;
   return <div className={compact ? "friday-voice" : "space-y-2"} aria-label={`${assistantName} voice controls`}>
-    {renderPresence?.({ ...voice, canListen, toggleListening: session.toggle })}
+    {renderPresence?.({ ...voice, speaking: voice.speaking && voice.timings.playback.status === "measured", preparingReply: voice.speaking && voice.timings.playback.status === "pending", canListen, toggleListening: session.toggle })}
     {!minimal && <div className="flex flex-wrap items-center gap-2"><Button type="button" size="sm" variant={voice.enabled ? "default" : "outline"} disabled={!canListen} onClick={session.toggle}>{voice.enabled ? <Mic /> : <MicOff />}{voice.enabled ? "Pause microphone" : `Talk to ${assistantName}`}</Button><Button type="button" size="sm" variant="outline" disabled={!reply} onClick={() => reply && void session.speak(reply.body)}><Volume2 />Read reply</Button>{compact && <Button variant="ghost" size="sm" onClick={() => toggleAutoSpeak(!autoSpeak)}>{autoSpeak ? "Mute replies" : "Unmute replies"}</Button>}{voice.speaking && <Button variant="outline" size="sm" onClick={() => session.stopSpeaking()}><Square />Stop speaking</Button>}</div>}
     {!renderPresence && (compact ? <details className="friday-voice-settings"><summary className="cursor-pointer text-xs text-muted-foreground">Voice settings</summary><div className="space-y-2 pt-2">{preferences}{minimal && <Button type="button" variant="outline" size="sm" disabled={!reply} onClick={() => voice.speaking ? session.stopSpeaking() : reply && void session.speak(reply.body)}><Volume2 />{voice.speaking ? "Stop speaking" : "Read reply"}</Button>}</div></details> : preferences)}
     {voice.interim && !renderPresence && <p role="status" className="text-sm text-muted-foreground">{voice.interim}</p>}

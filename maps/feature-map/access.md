@@ -28,8 +28,9 @@ Open `/auth`; first-owner bootstrap uses `/board-claim/:token` when configured.
 
 The AgentOS public landing uses Wispr Flow as a layout reference, not a product
 feature claim. It introduces Friday, company work, digital employees and decisions
-with the tagline “Turn ideas into coordinated action.” Its centred hero and
-Google signup links lead to the waiting list. The hero orb responds to pointer
+with the tagline “Turn ideas into coordinated action.” Desktop places the text
+left and the larger sphere right; mobile stacks them. Google signup links lead
+to the waiting list. The hero orb responds to pointer
 position and movement with tilt and spin, plus an explicit hover pulse that grows
 and shrinks even when the pointer stays still, then settles without an idle frame loop.
 Reduced-motion, coarse/touch input, hidden-page and offscreen guards keep this
@@ -38,11 +39,16 @@ landing does not open the microphone or start agent work. Sign-in, sign-up and
 approved/pending redirects retain the existing registration flow.
 `AgentOSLanding.test.tsx` and `FridayOrb.test.tsx` cover DOM routing and motion
 lifecycle; `Friday.test.tsx` and `FridayWorkspace.test.tsx` retain workspace
-coverage. Current application screenshots and browser visual acceptance remain
-outstanding: available saved captures show older Paperclip screens, browser tools
-are unavailable, and normal Chromium startup was sandbox-blocked. No old or
-fabricated screenshots are presented as the current application. Physical voice
-input/output remains a separate qualification.
+coverage. The feature rows include actual Agent Map, Workforce and Decisions
+captures from the current local app, using isolated Northstar example records.
+The public images in `ui/public/images/agentos/` contain illustrative data, no
+personal account details or claimed business execution. Images link to their
+full-size capture and load lazily with intrinsic dimensions. Physical voice
+input/output and interactive Google login remain separate qualifications.
+
+In local-trusted mode the profile menu identifies the local workspace and omits
+synthetic-user email/sign-out controls. Authenticated mode retains the actual
+account, sign-out and account-switch actions.
 
 AgentOS shows **Continue with Google** without password fields or email
 registration controls, including with older password-enabled backend options.

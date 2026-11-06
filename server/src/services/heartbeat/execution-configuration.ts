@@ -1,4 +1,4 @@
-import { selectCompanyModelProfile } from "../model-intelligence.js";
+import { observeSelectedModelAccountAccess, selectCompanyModelProfile } from "../model-intelligence.js";
 import { agentHarnessType } from "@paperclipai/shared";
 import { assertCompanyModelPolicy, defaultCompanyModelBinding } from "../company-model-policy.js";
 import { observabilitySecretValues } from "@paperclipai/adapter-utils/agent-observability";
@@ -236,7 +236,13 @@ export async function prepareHeartbeatExecutionConfiguration(db: Db, input: Hear
     Object.assign(resolvedConfig, managedAiRuntime.config);
     for (const key of AI_AUTH_ENV_KEYS) secretKeys.add(key);
     context.aiConnection = { ...managedAiRuntime.attribution, accountName: managedAiRuntime.accountName, identity: managedAiRuntime.identity, sessionIdentity: managedAiRuntime.sessionIdentity };
-    await db.update(heartbeatRuns).set({ contextSnapshot: sql`coalesce(${heartbeatRuns.contextSnapshot}, '{}'::jsonb) || ${JSON.stringify({ aiConnection: context.aiConnection, ...(context.aiRouterTaskKey ? { aiRouterTaskKey: context.aiRouterTaskKey } : {}), ...(context.aiRouterSelection ? { aiRouterSelection: context.aiRouterSelection } : {}) })}::jsonb` }).where(eq(heartbeatRuns.id, run.id));
+    if (modelSelection.receipt && agent.adapterType === "paperclip_runner") {
+      context.modelAccountAccess = await observeSelectedModelAccountAccess(db, {
+        companyId: agent.companyId, agentId: agent.id, runId: run.id, model: modelSelection.receipt.candidate.model,
+        account: { ...managedAiRuntime.attribution, sessionIdentity: managedAiRuntime.sessionIdentity },
+      });
+    }
+    await db.update(heartbeatRuns).set({ contextSnapshot: sql`coalesce(${heartbeatRuns.contextSnapshot}, '{}'::jsonb) || ${JSON.stringify({ aiConnection: context.aiConnection, ...(context.modelAccountAccess ? { modelAccountAccess: context.modelAccountAccess } : {}), ...(context.aiRouterTaskKey ? { aiRouterTaskKey: context.aiRouterTaskKey } : {}), ...(context.aiRouterSelection ? { aiRouterSelection: context.aiRouterSelection } : {}) })}::jsonb` }).where(eq(heartbeatRuns.id, run.id));
   }
   if (secretManifest.length > 0) {
     context.paperclipSecrets = {

@@ -2,7 +2,7 @@ import { describeRunnerdMuseDriver } from "../drivers/muse/runnerd-muse-driver.j
 import { createCodexTaskEnvelope } from "../contracts/codex.js";
 import { ACPX_CAPABILITY_PROFILES } from "../drivers/acpx/capability-profiles.js";
 import { NATIVE_EXECUTION_INPUT_SCHEMA, NATIVE_EXECUTION_INPUT_SCHEMA_V7, NATIVE_EXECUTION_INPUT_SCHEMA_V9 } from "../contracts/native-execution.js";
-import type { NativeExecutionInput } from "../contracts/native-execution.js";
+import type { NativeExecutionInput, NativeEgmPacketReviewPurpose } from "../contracts/native-execution.js";
 import type { PersistedHarnessSession } from "../contracts/harness-driver.js";
 import type {
   NativeSessionBackend,
@@ -34,6 +34,7 @@ export interface CodexNativeSessionBackendOptions {
   }) => Promise<void>;
   transportFactory?: (context?: {
     baseInstructions?: string;
+    executionPurpose?: NativeEgmPacketReviewPurpose;
     providerRecoveryPolicy?: PersistedNativeSession["providerRecoveryPolicy"];
     persistedSession?: Pick<
       PersistedHarnessSession,
@@ -117,6 +118,7 @@ function createTransportBackedNativeSessionBackend(
     );
   }
   const driverIdentity = transportDriverIdentity(input);
+  const executionPurpose = "executionPurpose" in input ? input.executionPurpose : undefined;
   const isCodex = input.provider.kind === "codex";
   const preparedContext = input.schema === NATIVE_EXECUTION_INPUT_SCHEMA
     || input.schema === NATIVE_EXECUTION_INPUT_SCHEMA_V7
@@ -164,9 +166,10 @@ function createTransportBackedNativeSessionBackend(
           ? (input.provider.approvalPolicy ?? "never")
           : "never",
       baseInstructions,
+      executionPurpose,
       instructionWorkingCopyRoot: "runtimeContext" in input ? input.runtimeContext.instructions.workingCopy?.rootPath : undefined,
-      includeSkillInstructions: isCodex && "runtimeContext" in input,
-      skillInputs: isCodex
+      includeSkillInstructions: !executionPurpose && isCodex && "runtimeContext" in input,
+      skillInputs: isCodex && !executionPurpose
         ? nativeTaskSkillInputs(
             input.task.description,
             "runtimeContext" in input ? input.runtimeContext : null,
@@ -187,8 +190,10 @@ function createTransportBackedNativeSessionBackend(
         options.runnerInstanceId ?? `paperclip-native-${input.binding.runId}`,
       onSpawn: options.onSpawn,
       transportFactory: transportFactory
-        ? (context) => transportFactory({ ...context, baseInstructions })
-        : undefined,
+        ? (context) => transportFactory({ ...context, baseInstructions, executionPurpose })
+        : executionPurpose
+          ? () => { throw new Error("Packet reviews require the purpose-enforcing native Runner transport"); }
+          : undefined,
       dynamicTools: options.dynamicTools,
       dynamicToolHandler: options.dynamicToolHandler,
       completionFeedback: options.completionFeedback,
@@ -196,7 +201,9 @@ function createTransportBackedNativeSessionBackend(
       observability: options.observability,
       workingDirectoryAuthority: options.workingDirectoryAuthority,
       driverIdentity,
-      capabilities: isCodex
+      capabilities: executionPurpose
+        ? { steering: false, goals: false, threadLineage: false }
+        : isCodex
         ? {}
         : { steering: false, goals: false, threadLineage: false,
             toolRefreshOnResume: input.provider.kind !== "acpx"

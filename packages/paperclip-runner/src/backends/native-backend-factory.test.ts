@@ -31,7 +31,7 @@ import {
   WORKSPACE,
 } from "../drivers/codex/codex-app-server-driver.test-support.js";
 import { createNativeSessionBackend } from "../index.js";
-import { createCodexNativeSessionBackend, createRunnerdNativeSessionBackend } from "./codex-native-backend.js";
+import { createCodexNativeSessionBackend, createRunnerdNativeSessionBackend, describeRunnerdNativeSessionBackend } from "./codex-native-backend.js";
 import { createOpenCodeNativeSessionBackend } from "./opencode-native-backend.js";
 
 function execution(
@@ -210,6 +210,29 @@ function managedExecution(
 }
 
 describe("native backend factory", () => {
+  it("describes frozen reviews without launching and requires purpose enforcement when opening", async () => {
+    const executionPurpose = { kind: "egm_packet_review" as const, packetSha256: "a".repeat(64),
+      sourceDigests: ["packet", "target", "persona", "standard"].map(id => ({ id, sha256: "b".repeat(64) })) };
+    const input = parseNativeExecutionInput({ ...preparedExecution(execution(), "v9"), executionPurpose });
+    await expect(describeRunnerdNativeSessionBackend(input)).resolves.toMatchObject({
+      name: "codex_app_server", capabilities: { steering: false, goals: false, threadLineage: false },
+    });
+    const identity = { companyId: "company", agentId: "agent", runId: "run", sessionId: "session" };
+    await expect(createCodexNativeSessionBackend(input, { environment: { PAPERCLIP_WORKSPACE_CWD: process.cwd() } }).openSession({ identity, workingDirectory: process.cwd() }))
+      .rejects.toThrow("purpose-enforcing native Runner transport");
+    const transport = new FakeCodexTransport();
+    let observedPurpose: unknown;
+    const backend = createRunnerdNativeSessionBackend(input, {
+      transportFactory: context => { observedPurpose = context?.executionPurpose; return transport; },
+      workingDirectoryAuthority: "remote_runner", environment: { PAPERCLIP_WORKSPACE_CWD: WORKSPACE },
+      dynamicTools: ["read_egm_source", "submit_egm_findings"].map(name => ({ name, description: "Review tool", inputSchema: { type: "object" } })),
+    });
+    const session = await backend.openSession({ identity, workingDirectory: WORKSPACE });
+    expect(observedPurpose).toEqual(executionPurpose);
+    const tools = transport.calls.find(call => call.method === "thread/start")?.params.dynamicTools as Array<{ name: string }>;
+    expect(tools.map(tool => tool.name).sort()).toEqual(["paperclip_finish", "read_egm_source", "submit_egm_findings"]);
+    await session.close({ reason: "test completed" });
+  });
   it("constructs the Codex backend without starting its transport", async () => {
     const backend = createNativeSessionBackend(execution(), {
       codexTransportFactory: () => {

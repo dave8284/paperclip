@@ -13,22 +13,21 @@ The owner requested simple **Fixed / Not fixed** tracking in the existing
 [93-item worksheet](2026-11-03-agentos-requirements-reconciliation.md).
 Update those rows as work completes; do not create another backlog.
 
-- **F06 / N01–N08 — Not fixed:** source checks pass; browser navigation,
-  task detail, tables and pinned Settings pass. Local account menu correction
-  and remaining rendered checks are active.
-- **O04 / O06 / O07 / O09 / R03 — Not fixed:** all 61 persisted PostgreSQL
-  checks pass. Remaining live operating acceptance and policy choices stay open.
-- **M01 — Fixed:** independently packaged HTTP service, persistence/upgrade and
-  local selection speed verified. **M08:** namespace/revocation checks pass. **M03 / M05 — Not fixed:** account observation remains
-  evidence only; qualified alternatives and evaluated learning remain open.
-- **R04 — Not fixed:** 50 local recovery/cancellation/continuity checks pass,
-  including five real subprocess restart cases. Actual delegated user flow remains.
-- **X02 — Not fixed:** real current-app screenshots captured with labelled
-  example data; landing placement and browser recheck active.
-- **G04 / A05 — Not fixed:** native tool/resource graph projection and genuinely
-  isolated packet-only review execution are being implemented by separate workers.
-- Local runtime activation is **Fixed**. The designated owner’s interactive Google
-  sign-in result has been requested; no credentials need supplying again.
+- **Fixed:** retained native features, navigation/table/layout corrections, home
+  transcript/drafts/suggestions, actual landing screenshots, graph navigation,
+  standalone model-service transport/persistence/isolation. See each worksheet row.
+- **Not fixed:** full operating delivery, actual owner Google account acceptance,
+  physical voice conversation, provider workflows and evaluated learning. Keep
+  fixture/source checks separate from those results.
+- Current combined server and UI builds pass. Native packet-only review and
+  bounded tool/resource graph are implemented; real provider journeys remain.
+- Installed local Whisper/Kokoro audio roundtrip passes (0.56s synthesis, 0.06s
+  recognition after warmup); this does not prove physical microphone behavior.
+- Active work: artifact/saved-display browser acceptance; connector/performance
+  persisted checks; bounded owner-requested platform-change admission. Then load
+  the checked backend through the guarded local restart and update statuses.
+- The designated owner’s interactive Google sign-in result has been requested;
+  existing credentials are configured and must not be requested again.
 - Cloud/public hosting and Higgsfield sign-in remain deferred. Shared-seat starting
   concurrency, portfolio private scope and Supabase storage scope remain unanswered.
 
