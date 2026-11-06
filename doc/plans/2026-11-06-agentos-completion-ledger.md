@@ -18,7 +18,7 @@ Update those rows as work completes; do not create another backlog.
   navigation/style; local artifact history and scoped search; connector inventory;
   standalone model-service transport/persistence/isolation. Worksheet rows are
   authoritative and each carries its current binary status.
-- Source checkpoints `8d3f92b3d`, `d68507272`, `1bc35a4b9` and `496cf185b` are pushed to the AgentOS fork.
+- Source checkpoints `8d3f92b3d`, `d68507272`, `1bc35a4b9`, `496cf185b` and `26f90de27` are pushed to the AgentOS fork.
   Later active changes must be checked before starting another worker.
 - **Not fixed:** full operating delivery, owner Google account acceptance, physical
   voice conversation, provider workflows, model qualification and evaluated learning.
@@ -28,11 +28,18 @@ Update those rows as work completes; do not create another backlog.
   no lost runs. Employee configuration and typed deletion journeys pass on the
   disposable instance. Dock overlap is fixed and desktop/mobile clicks pass.
 - Full UI regression passes all 850 files / 9,440 checks. The owner corrected
-  the landing to one prominent dashboard screenshot; desktop/mobile checks pass.
+  the landing to one prominent dashboard screenshot, then requested the rounded
+  overlay from the 11.06.25 AM reference in AgentOS colours. The charcoal panel
+  and translucent frame are live; desktop/mobile and three landing checks pass.
 - Active work: account-bound model qualification, provider observation and local
-  triage audit. OpenAPI discovery
+  triage token-fit guards. The original 12-case diagnostic failures remain valid;
+  the audit found no parser defect that would turn them into successful routing.
+  OpenAPI discovery
   drift is corrected; all 27 catalog checks and 70 remaining contract checks pass.
   Real account, physical audio and business workflow acceptance remain open.
+- Broader workspace regression was interrupted after failures during concurrent
+  builds. Preserve `/private/tmp/agentos-workspaces-{b,c}-regression-20261107.log`;
+  database and adapter failures need isolated verification before full sign-off.
 - Packet-only review source/protocol checks pass; real account review and accepted
   output remain open. Cross-company component publication is still unimplemented.
 - The designated owner’s interactive Google sign-in result has been requested;

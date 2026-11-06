@@ -4979,6 +4979,70 @@ html:has(.design-proposal-theme) [data-canonical-toolbar] .collection-toolbar-ta
    the landing canvas so the visible sphere fills the hero's right column. */
 .agentos-landing-orb-stage { display: grid; place-items: center; width: 100%; aspect-ratio: 1; min-width: 0; }
 .agentos-landing-orb-stage .friday-orb { grid-area: 1 / 1; width: var(--agentos-landing-orb-size); max-width: none; }
+/* Landing showcase: the owner's rounded overlay reference, in AgentOS neutrals.
+   The actual dashboard stays untouched inside its translucent presentation frame. */
+.agentos-dashboard-showcase {
+  --showcase-radius: clamp(2rem, 4vw, 4rem);
+  --showcase-padding: clamp(1rem, 5vw, 4.5rem);
+  --showcase-frame-padding: clamp(.375rem, .8vw, .75rem);
+  --showcase-screen-radius: clamp(.625rem, 1.5vw, 1.5rem);
+  --showcase-muted: color-mix(in oklab, var(--agentos-paper) 70%, var(--agentos-ink));
+  --showcase-glass: color-mix(in oklab, var(--agentos-paper) 12%, transparent);
+  --showcase-edge: color-mix(in oklab, var(--agentos-paper) 20%, transparent);
+  position: relative;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(82rem, calc(100vw - 2rem));
+  padding: clamp(3rem, 7vw, 6rem) var(--showcase-padding) clamp(1.5rem, 3vw, 2.5rem);
+  border-radius: var(--showcase-radius);
+  background: var(--agentos-ink);
+  color: var(--agentos-paper);
+  isolation: isolate;
+}
+.agentos-dashboard-showcase-heading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: calc(var(--spacing) * 5);
+  margin-bottom: clamp(2rem, 5vw, 4rem);
+  text-align: center;
+}
+.agentos-dashboard-showcase-heading h2 {
+  font-size: clamp(2rem, 4.5vw, 4rem);
+  font-weight: var(--font-weight-medium);
+  line-height: 1.08;
+  letter-spacing: -.045em;
+}
+.agentos-dashboard-showcase-heading p {
+  max-width: 34rem;
+  font-size: clamp(.875rem, 1.5vw, 1.125rem);
+  line-height: 1.6;
+  color: var(--showcase-muted);
+}
+.agentos-dashboard-showcase-frame {
+  padding: var(--showcase-frame-padding);
+  border: var(--focus-ring-stroke-width) solid var(--showcase-edge);
+  border-radius: calc(var(--showcase-screen-radius) + var(--showcase-frame-padding));
+  background: linear-gradient(145deg, var(--showcase-glass), transparent);
+  box-shadow: 0 2rem 4rem color-mix(in oklab, var(--agentos-ink) 45%, transparent);
+}
+.agentos-dashboard-showcase-screen {
+  display: block;
+  overflow: hidden;
+  border-radius: var(--showcase-screen-radius);
+  background: var(--agentos-paper);
+}
+.agentos-dashboard-showcase-screen:focus-visible {
+  outline: var(--focus-ring-halo-width) solid var(--agentos-paper);
+  outline-offset: var(--showcase-frame-padding);
+}
+.agentos-dashboard-showcase figcaption {
+  padding-top: calc(var(--spacing) * 5);
+  text-align: center;
+  font-size: var(--text-xs);
+  line-height: var(--text-xs--line-height);
+  color: var(--showcase-muted);
+}
 .agentos-root-frame { height: 100dvh; display: flex; flex-direction: column; background: var(--agentos-paper); }
 .agentos-loading { min-height: 60dvh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1rem; font-size: .8125rem; color: var(--muted-foreground); }
 .agentos-loading .friday-orb { width: 6rem; height: 6rem; }

@@ -39,11 +39,17 @@ export function AgentOSLanding({ preview = false }: { preview?: boolean }) {
       </section>
 
       <section id="dashboard-preview" aria-label="AgentOS dashboard preview" className="scroll-mt-8 pb-16 md:pb-24">
-        <figure className="rounded-3xl bg-muted p-3 md:p-8">
-          <a href="/images/agentos/dashboard.png" target="_blank" rel="noreferrer" aria-label="View the AgentOS dashboard at full size" className="block overflow-hidden rounded-2xl border border-border bg-background shadow-2xl shadow-foreground/10 focus-visible:outline focus-visible:outline-ring">
-            <img src="/images/agentos/dashboard.png" alt="AgentOS dashboard with company navigation, work totals and the connected project and employee map" width={1440} height={1200} loading="lazy" decoding="async" className="h-auto w-full" />
-          </a>
-          <figcaption className="px-2 pt-4 text-center text-xs text-muted-foreground">Your workspace, with Friday alongside. Shown with illustrative company data.</figcaption>
+        <figure className="agentos-dashboard-showcase">
+          <div className="agentos-dashboard-showcase-heading">
+            <h2>Your team. Your work.<br />One clear view.</h2>
+            <p>Projects, people and decisions, brought together with Friday.</p>
+          </div>
+          <div className="agentos-dashboard-showcase-frame">
+            <a href="/images/agentos/dashboard.png" target="_blank" rel="noreferrer" aria-label="View the AgentOS dashboard at full size" className="agentos-dashboard-showcase-screen">
+              <img src="/images/agentos/dashboard.png" alt="AgentOS dashboard with company navigation, work totals and the connected project and employee map" width={1440} height={1200} loading="lazy" decoding="async" className="h-auto w-full" />
+            </a>
+          </div>
+          <figcaption>Your workspace, with Friday alongside. Shown with illustrative company data.</figcaption>
         </figure>
       </section>
 
