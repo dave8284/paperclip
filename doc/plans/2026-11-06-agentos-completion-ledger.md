@@ -12,14 +12,18 @@ Those requirements remain in scope; the rows below do not replace or erase them.
 The owner requested simple **Fixed / Not fixed** tracking in the existing
 [93-item worksheet](2026-11-03-agentos-requirements-reconciliation.md).
 Update those rows as work completes; do not create another backlog.
+**Current total: 37 Fixed / 56 Not fixed.** Partial implementation and unverified
+live acceptance remain Not fixed. This checkpoint was refreshed at the owner's
+request on 7 November; the tables below the current checkpoint are historical.
 
 - **Fixed:** retained native features; company hierarchy/navigation; transcript,
-  connected/setup drafts and home suggestions; landing screenshots/icons; graph
+  connected/setup drafts and home suggestions; single-dashboard landing and icons; graph
   navigation/style; local artifact history and scoped search; connector inventory;
   standalone model-service transport/persistence/isolation. Worksheet rows are
   authoritative and each carries its current binary status.
 - Source checkpoints through model qualification `846613d4e`, migration
-  repair `651e0b23a` and component publication `99277b71d` are pushed to the fork.
+  repair `651e0b23a`, component publication `99277b71d` and its verified checkpoint
+  `5caf81c0d` are pushed to the fork.
   Later active changes must be checked before starting another worker.
 - **Not fixed:** full operating delivery, owner Google account acceptance, physical
   voice conversation, provider workflows, model qualification and evaluated learning.
@@ -28,7 +32,9 @@ Update those rows as work completes; do not create another backlog.
 - Backend model checkpoint `846613d4e` activated; matching native recovery reports
   no lost runs. Employee configuration and typed deletion journeys pass on the
   disposable instance. Dock overlap is fixed and desktop/mobile clicks pass.
-- Full UI regression passes all 850 files / 9,440 checks. The owner corrected
+- The earlier full UI regression passed 850 files / 9,440 checks. Subsequent
+  slices have focused checks; this does not certify the unfinished M05 changes.
+  The owner corrected
   the landing to one prominent dashboard screenshot, then requested the rounded
   overlay from the 11.06.25 AM reference in AgentOS colours. The charcoal panel
   and translucent frame are live; desktop/mobile and three landing checks pass.
@@ -70,10 +76,27 @@ Update those rows as work completes; do not create another backlog.
   Browser evidence: `/private/tmp/agentos-platform-publication-browser-attempt6-20261107.log`
   and `agentos-platform-publication-browser-mobile-20261107.log`. Earlier fixture
   and selector failures are retained separately; no product guard was relaxed.
-- M05 native observed-outcome delivery is the next active source slice. Existing
-  admin-submitted evaluations and standalone comparison receipts do not yet form
-  a native reviewed-outcome delivery path. Real quality evidence and M06 rollout
-  remain open; process success must not be treated as accepted quality.
+- **In progress — M05:** comparison discovery/preparation UI and client pass
+  25 focused checks, UI typecheck and token gates. They prepare an existing fresh
+  backlog task; normal task controls own starting work. Independent product
+  discovery/binding changes, native scope and persisted test scaffolding are in
+  the working tree. Backend preparation, admission, exact independent verdicts,
+  accounting and durable outcome delivery are not yet complete or activated.
+  **Next:** finish those owners, run real PostgreSQL/recovery/authority checks,
+  review and build, then activate and verify the browser flow. Preserve unknown
+  outcomes; process success must not be treated as accepted quality.
+  `model_completion` owns production integration; `verify_original_fixes` owns
+  persisted tests/review; `inspect_workspace` completed the UI/client slice.
+  Check worker status and Git before resuming; do not overwrite their changes.
+- **Still to implement after M05 — M06:** versioned company rollout, canary,
+  adoption and rollback. Existing manual block/restore and conservative selection
+  are foundations, not the completed rollout feature. Real representative cases,
+  evaluated improvement and accepted account execution remain separate.
+- **Other remaining work:** real Friday → lead → specialist → independent review
+  → accepted output, provider/business workflows, actual component release and
+  independent recovery, physical microphone/reply/interruption, owner Google
+  sign-in/admin acceptance and the current full backend/regression pass. Their
+  individual next actions remain in the 93-item worksheet; no new list replaces it.
 - The designated owner’s interactive Google sign-in result has been requested;
   existing credentials are configured and must not be requested again.
 - Cloud/public hosting and Higgsfield sign-in remain deferred. Shared-seat starting
@@ -81,7 +104,7 @@ Update those rows as work completes; do not create another backlog.
 
 The detailed sections below are historical reference, not additional checklists.
 
-## Execution and acceptance
+## Historical execution and acceptance — superseded by the checkpoint above
 
 | Workstream | Required result | Current state |
 | --- | --- | --- |
@@ -103,9 +126,10 @@ The detailed sections below are historical reference, not additional checklists.
 | Platform changes and recovery | Reviewed reusable-component promotion and eventual Friday platform-engineering/release workflow with independent recovery | Open; ordinary build work continues in this development session |
 | Deferred stage | Higgsfield sign-in and public/cloud hosting with durable workers/storage/backup/recovery | Still explicitly deferred by the owner; this continuation does not silently activate them |
 
-## Original interface and account requests
+## Historical original interface and account requests
 
-These rows preserve the earlier requests alongside the platform work. “Source
+These rows preserve the earlier checkpoint, including statuses that have since
+changed. Use the worksheet and Resume here section for current work. “Source
 checked” means the recorded focused checks passed, not that the current running
 application has passed the owner's final acceptance. Detailed evidence is in the
 [fourteen-fix log](2026-11-04-agentos-platform-fixes.md) and

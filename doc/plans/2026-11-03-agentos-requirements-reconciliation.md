@@ -13,18 +13,26 @@ Explicit deferrals stay **Not fixed**, with the deferral retained in the row.
 Older detail is reference material; new updates need only status and the next
 required action. Do not recreate this list or ask the owner to repeat it.
 
-Current work: account-bound model qualification and durable provider observations.
-All 9,440 UI checks pass after the native connector fixes. The owner’s latest
-landing choice is one prominent dashboard image, not multiple feature captures.
-Next: local triage qualification, physical voice and real delegated workflows.
+Current total: **37 Fixed / 56 Not fixed — all 93 requirements retained**.
+The one approved dashboard screenshot and charcoal overlay are complete and live.
+Model qualification controls and explicit component publication are implemented
+and active; their remaining real-work acceptance stays open in M03 and A04.
+
+Current work: **M05 native comparison preparation and observed-outcome delivery**.
+Its new Models UI/client passes 25 focused checks, but backend integration,
+native admission/review/accounting/recovery tests and browser acceptance are
+unfinished. The working changes are not a completed or activated M05 feature.
+M06 still needs versioned rollout/canary/rollback; real account, physical voice,
+provider workflows and the complete delegated operating journey also remain.
 The [execution checkpoint](2026-11-06-agentos-completion-ledger.md) records active
-ownership and blockers. No item is closed merely because its source compiles.
+ownership, the next action, unanswered choices and explicit deferrals.
+No item is closed merely because its source compiles.
 
 ## Evidence and limits
 
 - Sources: all 146 saved user messages in session `01a16fe4-6b53-7633-97fe-4de98f1ce2f7`, from 24–27 October UTC / 25–28 October New Zealand time, plus the final assistant checkpoints and the current working tree. `U139`, for example, means the 139th saved user message in that session. Source numbering includes repeated prompts and operational replies.
 - At the initial audit, the latest saved implementation commit was `933f79bca` with extensive subsequent uncommitted changes. The first execution checkpoint was subsequently committed and pushed as `e7d080c30`; later evidence is recorded below and in the action ledger. Earlier passing checks do not certify later changes.
-- This is a requirements reconciliation and targeted source review, not a fresh full runtime acceptance run. No application behavior, account setting, database record or deployment was changed for this audit.
+- The initial reconciliation was a read-only source/history audit. Subsequent implementation and runtime acceptance are recorded in the current worksheet dispositions and execution checkpoint; the original audit alone was not acceptance evidence.
 - The source text only names `IMG_6004.JPG` and `IMG_6005.jpg`; their visual contents were not available in the reviewed conversation. No requirements are invented from those filenames.
 - Credentials, verification codes and personal account details are deliberately excluded. The final Google credential handoff was recovered, and both required values were confirmed present privately without printing them.
 - **Recorded implemented** means code and/or prior checkpoint evidence exists; it does not claim that every interaction is accepted. **Partial** means a foundation exists but part of the requested behavior or end-to-end evidence is missing. **Pending changes** means relevant uncommitted work exists. **Open** means no completion evidence was found. **Deferred** records an explicit postponement. **Constraint** is an enduring instruction, not an unfinished feature.
@@ -32,7 +40,7 @@ ownership and blockers. No item is closed merely because its source compiles.
 
 ### Execution updates after the reconciliation
 
-The source requirements remain unchanged; dispositions are refreshed when execution evidence supersedes the initial audit. Historical checkpoint notes below retain what was known at that time. The [action-plan ledger](2026-11-03-agentos-action-plan.md) tracks current execution. On 3 November:
+The source requirements remain unchanged; dispositions are refreshed when execution evidence supersedes the initial audit. Historical checkpoint notes below retain what was known at that time. The [completion ledger](2026-11-06-agentos-completion-ledger.md) tracks current execution. The following notes describe the historical 3 November checkpoint:
 
 - **O02:** the [concrete staffing proposal](2026-11-03-agentos-workforce.md) is delivered: three departments, seven initial company roles, and explicit responsibilities/escalation. Role configuration does not prove employee execution quality.
 - **O10:** migration 0388 is applied and native APIs confirm ordinary company listing excludes Platform Operations while the explicit internal listing retains it. Existing credentials and dependencies were preserved. Browser/Friday operating acceptance remains separate.
@@ -177,7 +185,7 @@ the current conversation, not invented additions to its historical numbering.
 | W04 | **Not fixed** | Routines show connected agents/steps/triggers, live work and outputs in a workflow-style diagram, relationships between multiple loops, and each loop's cycle history. Create/edit loops and triage work when needed. | U115, U123 | Create, edit, save, reload/reopen and retained routine revision history pass in the browser. Native scheduling/task creation passes. Actual completed delegated cycle remains. |
 | W05 | **Not fixed** | Run the concrete marketing cycle: create content/video through Higgsfield, publish to TikTok/LinkedIn, inspect comments/reach, revise and repeat with retained outputs and measures. | U39–U41, U115 | End-to-end workflow open; provider capabilities/authority must be qualified. Higgsfield login deferred. |
 | W06 | **Not fixed** | Convert application health, comments and feedback into prioritised work and owner decisions; perform authorised repairs/improvements and observe results. | U2–U3, U22, U40 | Full recurring operating journey open. |
-| W07 | **Not fixed** | On explicit owner request, Friday can arrange platform features, skills/connectors and release/redeployment with review and independent recovery. | U39–U40, U63 | Owner-only internal platform request preparation is implemented, idempotent and revalidates current authority. Next: actual Friday implementation, versioned release and independent recovery; no current build tasks sent to Friday. |
+| W07 | **Not fixed** | On explicit owner request, Friday can arrange platform features, skills/connectors and release/redeployment with review and independent recovery. | U39–U40, U63 | Owner-only platform request preparation and explicit selected-text publication are active; desktop/mobile copy and retry pass. Next: actual Friday implementation, versioned release and independent recovery; no current build tasks sent to Friday. |
 
 ## Artefacts, knowledge, search and generated views
 
@@ -197,8 +205,8 @@ the current conversation, not invented additions to its historical numbering.
 | M02 | **Not fixed** | Maintain a central library of task examples/families, eligible model choices, outcomes, iterations and improvements; route new work using that evidence. | U87–U88, U115, U123, U125 | Receipt/evaluation store and conservative rules implemented; meaningful real learning evidence outstanding. |
 | M03 | **Not fixed** | Select efficient qualified models for suitable tasks and stronger models for complex work, respecting models actually available on the connected subscription. Support more providers when connected/qualified. | U34, U68, U71–U72, U87, U115, U123 | Account/profile qualification, native provider identity, revocation/recovery and Models controls are implemented and checked. Next: actual selected-account reviewed workflow and comparative quality evidence; configured models/catalog/history do not qualify alternatives. |
 | M04 | **Not fixed** | Explain selected versus actual model, reasons, attempts, retries, outcomes and resource use. Separate actual quality from merely finishing a process. | U69–U70, U87, U93 | Native selection/actual-model audit, task cohorts and directly observed queue/comment timing are implemented and checked. Capacity/credential waits are distinguished; full live attempt/outcome/audio journey remains unqualified. |
-| M05 | **Not fixed** | Evaluate model choice, prompting and context improvements separately on representative work; preserve failures and compare accepted outcomes. | U87–U88 | Frozen dataset/variant and paired-holdout ledger implemented. Native evaluation rejects mismatched model/provider/account/funding with focused service checks. Native observed-outcome delivery, representative corpus and independent/live evaluator proof remain open. |
-| M06 | **Not fixed** | Automatically adopt proven low-risk routing improvements within the agreed policy, with versioned rollout, observation and rollback. Keep company skill adoption distinct. | U67, U88, U91 | Conservative automatic selection/rollback foundation exists; broader experiments/canary/production proof open. |
+| M05 | **Not fixed** | Evaluate model choice, prompting and context improvements separately on representative work; preserve failures and compare accepted outcomes. | U87–U88 | In progress: native comparison discovery/preparation UI and client pass 25 checks. Frozen dataset/variant ledger exists. Next: finish backend preparation/admission and reviewed-outcome delivery, persisted recovery/authority checks, build/activation/browser acceptance; representative corpus and real evaluator proof remain open. |
+| M06 | **Not fixed** | Automatically adopt proven low-risk routing improvements within the agreed policy, with versioned rollout, observation and rollback. Keep company skill adoption distinct. | U67, U88, U91 | Conservative selection and manual block/restore exist. Next after M05: versioned company rollout/canary/adoption/rollback, then measured non-regression and production proof; this is an implementation gap, not only live testing. |
 | M07 | **Not fixed** | Expose meaningful company/admin model analytics, learning/training/evaluation state and improvement history. Do not present empty/unavailable evidence as working learning. | U93, U115, U123 | Admin analytics show task/model cohorts, selected versus actual execution, local shadow decisions, prepared review evidence and explicit unknown quality. Real reviewed outcomes and demonstrated improvement remain open. |
 | M08 | **Fixed** | Preserve company data boundaries and existing execution continuity; independent hosting needs its own authenticated tenant boundary. | U64–U67, U87–U88 | Persisted native authorization, standalone HTTP namespace isolation, credential replacement and restart checks pass. Public hosting remains deferred with L02. |
 
@@ -230,19 +238,19 @@ the current conversation, not invented additions to its historical numbering.
 | L01 | **Fixed** | Keep local deployment until the concept works flawlessly; do not restart the tunnel or provision billable cloud hosting from older instructions. | U108–U114 | Constraint; public hosting deferred. |
 | L02 | **Not fixed** | Eventual cloud-native operation continues while the laptop is off, with durable data/workers, backups, restore, monitoring and release/rollback. | U22, U39–U40, U92, U113–U114 | Deferred release phase; local-first does not remove the eventual requirement. |
 | L03 | **Not fixed** | Mobile-responsive, fast, usable phone/tablet flows; minimise infrastructure cost without losing functionality or speed. Measure before promising performance/cost. | U89, U92, U113–U114 | Responsive foundation; device/audio/load/cost acceptance outstanding. |
-| L04 | **Not fixed** | Validate the current full revision: relevant backend/UI checks, full regression completion, build/typecheck, migrations, actual browser/voice and operating journeys. | U26, U76, U80, U98, U114–U115, U139, U145 | Full UI regression passes all 850 files/9,440 checks. Relevant native database, protocol and browser checks pass; guarded backend restart reports no lost runs. Real account, physical audio, full backend and delegated operating acceptance remain. |
+| L04 | **Not fixed** | Validate the current full revision: relevant backend/UI checks, full regression completion, build/typecheck, migrations, actual browser/voice and operating journeys. | U26, U76, U80, U98, U114–U115, U139, U145 | Baseline full UI regression passed 850 files/9,440 checks; later changes have focused checks, not a fresh full-revision pass. Relevant native database/protocol/browser checks and guarded restart pass. Current M05 integration, full backend/current-revision regression, real account, physical audio and delegated operating acceptance remain. |
 
 ## Evidence pointers and immediate closure order
 
-- [Latest committed refinement record](2026-10-27-agentos-functional-refinement.md): implemented ownership, voice history, 9,221-test UI checkpoint, incomplete broad suite, local deployment, Supabase and deferred Higgsfield, EGM limitation.
+- [Original refinement record](2026-10-27-agentos-functional-refinement.md): implemented ownership, voice history, 9,221-test UI checkpoint, incomplete broad suite, local deployment, Supabase and deferred Higgsfield, EGM limitation.
 - [Shared workforce access](../../maps/agent-access-map/workforce.md): company-scoped read/bind/retirement slices are implemented with explicit native grants; global identity and portfolio management remain operator-only. Native company hiring must not be described as absent.
-- [Current model product](../../packages/model-intelligence/README.md): local API, selection/evaluation receipts, pins and conservative improvement rules; hosted namespace authorisation still required.
+- [Current model product](../../packages/model-intelligence/README.md): local API, selection/evaluation receipts, pins and conservative rules. Local standalone namespace isolation is verified; public hosting remains deferred.
 - [Decisions discussion test](../../ui/src/components/FridayWorkspaceDiscussion.test.tsx): the audit found a closed-transcript expectation; subsequent work corrected it to the final requested opening behavior and preserved context/speech checks.
 - [Internal company migration](../../packages/db/src/migrations/0388_lowly_fixer.sql), [company context](../../ui/src/context/CompanyContext.tsx), and [Friday binding](../../ui/src/pages/Friday.tsx): migration and native runtime filtering are now verified in the execution ledger; rendered/operating acceptance is separate.
 - [Team instructions](../../packages/teams-catalog/catalog/bundled/company-defaults/agentos-operators/TEAM.md): roles and paused routines do not constitute an installed, qualified CEO/workforce in every company.
 - [Model learning plan](2026-10-27-agentos-model-intelligence.md) and [operating model](2026-10-25-agentos-operating-model.md): broader learning, authority, capacity and isolation acceptance.
 
-Recommended immediate closure order: finish/review current changes and migration; supply the workforce proposal; verify internal-company separation and build the linked example; repair the Decisions interaction and voice auto-send; activate/verify already-configured Google auth; run the actual UI/mobile/voice and regression checks; then prove a complete delegated operating workflow and its recovery. Expand live integrations, learning and recurring operations from that evidence. Cloud release remains deferred.
+Current next action: finish the active M05 native preparation/admission/outcome-delivery slice and its checks, then complete M06 versioned rollout/rollback. Retain the separate real-account, physical-voice, provider and delegated-workflow acceptance gates. The workforce proposal, internal-company separation, linked example, landing overlay and verified UI fixes are already recorded above and must not be restarted. Follow the completion ledger for current workers and blockers. Cloud release remains deferred.
 
 ## Source coverage accounting
 
