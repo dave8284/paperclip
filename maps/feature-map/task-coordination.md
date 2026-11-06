@@ -23,6 +23,10 @@ selected text crosses the boundary; original references stay in the source
 company's audit. The destination copy is locked and independent of the original.
 The release/recovery journey remains open; preparing a task does not start work
 or grant deployment or permission changes.
+The owner publication path passes desktop/mobile acceptance on a disposable
+instance, including exact copied text, retained source provenance, independent
+review selection and duplicate-free retry. This does not qualify actual agent
+implementation, independent review execution or release.
 
 Feature ID: `task-coordination`.
 

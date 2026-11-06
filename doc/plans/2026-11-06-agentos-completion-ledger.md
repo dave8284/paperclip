@@ -18,8 +18,8 @@ Update those rows as work completes; do not create another backlog.
   navigation/style; local artifact history and scoped search; connector inventory;
   standalone model-service transport/persistence/isolation. Worksheet rows are
   authoritative and each carries its current binary status.
-- Source checkpoints through model qualification `846613d4e` and migration
-  repair `651e0b23a` are pushed to the AgentOS fork.
+- Source checkpoints through model qualification `846613d4e`, migration
+  repair `651e0b23a` and component publication `99277b71d` are pushed to the fork.
   Later active changes must be checked before starting another worker.
 - **Not fixed:** full operating delivery, owner Google account acceptance, physical
   voice conversation, provider workflows, model qualification and evaluated learning.
@@ -61,8 +61,15 @@ Update those rows as work completes; do not create another backlog.
   output remain open. A04 owner-selected component publication is implemented:
   only reviewed text is copied into a locked destination document; original
   private references remain in the source audit. Source/destination authority,
-  exact revisions, bounded previews and retry checks pass. Final browser
-  acceptance and activation are in progress; release/recovery remains open.
+  exact revisions, bounded previews and retry checks pass (13 database, 32 UI,
+  27 API checks). Checkpoint `99277b71d` is active after native restart
+  `2026-11-06T22:45:28.522Z`, with no lost runs. Desktop/mobile publication from
+  an earlier saved file version passes: exact locked copy, source-only provenance,
+  independent reviewer, destination link, duplicate-free retry and zero runs.
+  Actual component implementation/release/recovery remains open.
+  Browser evidence: `/private/tmp/agentos-platform-publication-browser-attempt6-20261107.log`
+  and `agentos-platform-publication-browser-mobile-20261107.log`. Earlier fixture
+  and selector failures are retained separately; no product guard was relaxed.
 - M05 native observed-outcome delivery is the next active source slice. Existing
   admin-submitted evaluations and standalone comparison receipts do not yet form
   a native reviewed-outcome delivery path. Real quality evidence and M06 rollout
