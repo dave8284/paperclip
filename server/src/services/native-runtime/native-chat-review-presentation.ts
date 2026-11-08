@@ -1,3 +1,4 @@
+import { nativeReviewCreationEffect } from "./native-review-identity.js";
 import { and, eq, inArray, ne, sql } from "drizzle-orm";
 import {
   agents,
@@ -255,14 +256,7 @@ async function reviewPresentationEvidence(
       .then((rows) => rows[0]),
   ]);
   if (!origin || competingInteraction || competingApproval) return null;
-  const reviewEffects = Array.isArray(origin.decisionJson.effects) ? origin.decisionJson.effects : [];
-  const matchesReviewRequest = reviewEffects.some((value) => {
-    const effect = record(value);
-    const requestKey = typeof effect.requestKey === "string" ? effect.requestKey : null;
-    return effect.kind === "bind_reviewer"
-      && gate.idempotencyKey === `native-review:${origin.id}${requestKey ? `:${requestKey}` : ""}`;
-  });
-  if (!matchesReviewRequest) return null;
+  if (!nativeReviewCreationEffect(origin.id, origin.decisionJson, gate.idempotencyKey)) return null;
   if (await hasChatRunOwnedProviderInteraction(db, input)) return null;
   return {
     schema: SCHEMA,

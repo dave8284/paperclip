@@ -77,6 +77,30 @@ semantic checks pass. This improves receipt integrity; implicit/retrieved contex
 and actual provider acceptance/use remain unknown, so native canary readiness
 stays blocked.
 
+The next source repair retains the original authenticated native journal through
+the existing pre-acknowledgement commit hook for admitted per-turn comparisons.
+The Codex chat facade transforms chronology, identities and semantic-tool events;
+its receipt fields alone cannot supply full-history evaluation. Bounded native
+projections retain every source position, original digest and exact tool/turn
+correlation without copying prompts, instructions, arguments, results or
+credentials. Model-chosen idempotency keys are hashed. Native v1 lifecycle and
+semantic events may accompany v2 capability events only with this explicit native
+provenance. Unknown versions, missing prefixes and overflow remain unmeasured.
+
+New records recheck frozen admission/input and the current run/controller lease;
+exact duplicate acknowledgement and post-cap discards make no new writes or
+evidence claims. Cold and recovery construction share the awaited commit hook.
+Warm sessions remain explicitly unavailable because a retained acknowledged
+prefix cannot establish full history and a callback must not leak into later
+ordinary runs. Ordinary runs have no evidence sink. This uses existing run-event
+storage and native replay, with no migration, backfill, polling, enrollment or
+promotion. A read-only projection of the retained 215-event EGM journal validates
+the parser/identity boundary and measures one iteration; a missing prefix stays
+null. That diagnostic is not a registered comparison or a quality outcome.
+Focused source checks pass; real PostgreSQL commit/replay/lease/privacy cases are
+authored but unrun under the retained listener restriction. M05/M06 remain
+**Not fixed** pending the existing actual-context and live acceptance gates.
+
 Current focused checks: 74 host, 74 selected Rust backend, 12 provider-boundary,
 exact-byte/replay checks, 73 app transcript checks and 14 package transcript checks
 pass. These counts overlap. A wider initial Rust selection passed 97 and failed

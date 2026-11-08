@@ -12,7 +12,7 @@ Those requirements remain in scope; the rows below do not replace or erase them.
 The owner requested simple **Fixed / Not fixed** tracking in the existing
 [93-item worksheet](2026-11-03-agentos-requirements-reconciliation.md).
 Update those rows as work completes; do not create another backlog.
-**Current total: 39 Fixed / 54 Not fixed.** Partial implementation and unverified
+**Current total: 40 Fixed / 53 Not fixed.** Partial implementation and unverified
 live acceptance remain Not fixed. This checkpoint was refreshed at the owner's
 request on 7 November; the tables below the current checkpoint are historical.
 
@@ -414,6 +414,95 @@ request on 7 November; the tables below the current checkpoint are historical.
   maxConcurrent=2, interactiveReserved=1 and interactivePriority=true. All three
   original company bindings remain. This permits one background job alongside
   one conversation; no parallel throughput or recovery pass is claimed yet.
+
+- **939336c93 committed, pushed and active — 8 November:** commit and remote
+  ref match `939336c9307f384f3f1e7d72ad80c50854e402f6`. Native restart
+  `d7c52e6c-01c4-4b92-a2fc-8316ec30fd4a` at 06:20:49 UTC replaced PID82169
+  with PID3943; recovery completed 06:21:15, startup ready 06:21:16. Source was
+  clean at boot, with no pending migration/restart. Actual runs were active.
+  Friday `50083bc5-1cbc-4229-9e20-1f315f15cd46` and CEO
+  `3475d619-e793-48d7-8153-739cd6113389` each retain native transition
+  `reattach_existing_runner`, controllerGeneration2/providerAttempt1, matching
+  restart ID and original process birth/runner/session/provider-turn identities.
+  Both finished successfully. The general report correctly lists native-owned
+  runs as skipped, not adopted; their separate native receipts prove recovery.
+  This advances R04 but does not close its actual pause/stop/resume journey.
+- **R03 Fixed — bounded current-account concurrency:** Friday's actual turn
+  began 06:19:47 and the CEO's 06:20:41, overlapping before and after recovery.
+  Both retained the same canonical account and subscription_included accounting.
+  A subsequent Friday status run `e9d157cd-4db5-4887-bfd5-d3b7e064cc91`
+  completed alongside CEO correction work (06:22:48–06:24:06). Group revision4
+  remains maxConcurrent2/interactiveReserved1. This qualifies one background job
+  plus one conversation, not arbitrary higher concurrency or a speed guarantee.
+  Earlier one-slot waiting/admission checks remain separate evidence. Bounded
+  audit attachment `19371d42-2d57-4669-bd43-0761cafe8546` is retained on ORB-7.
+- **O04/W03 live head setup blocked on a real grant:** Friday commissioned ORB-7
+  `64dd4b57-76ea-4432-9fd8-07f509400763`. The recovered CEO hired one Pilot
+  Operations Head `fd75c026-9919-40dd-b96f-d67183296554` and created project
+  `5f8be084-8a8c-492c-ac2d-7f06a2e83c51`, then correctly stopped at department
+  creation with Missing permission: applications:manage. Native reads show no
+  duplicate hire/project. Head has native creator permission; no department,
+  analyst or cycle exists yet. Human membership APIs cannot manage agent grants.
+  A board-authorized single-key grant control and explicit owner-installed CEO
+  template provisioning are being repaired; no direct database grant was made.
+- **A05 corrective review executed, final finding retained:** CEO correction
+  `7448421a-5194-4b94-b9d9-81c213a84d46` supplied alternatives, scoped provenance
+  assertions and both factual runtime audits. Final permitted reviewer run
+  `cda94550-47dc-4af7-a20d-30ff7634a69f` read all ten frozen sources and finished
+  06:26:10 UTC. Actual session/turn accepted hashes now appear in its native run
+  log, verifying the loaded receipt propagation repair. Finding document
+  `1d75c83c-1015-45a3-a65b-e8b586e83300`, revision
+  `e05d0647-0e40-44e0-ad3c-45438b819f20`, retains one major inconsistency between
+  old business-revision wording and the bounded test's terminal review policy.
+  Arithmetic/content checks passed within scope; the review is not marked passed.
+  Root requested a terminal board proposal/lesson and explicit scope clarification
+  through the existing rejection/continuation path; no third review is authorized.
+  Owner disposition and full A05/R05 acceptance remain open.
+- **ORB-6 terminal owner decision pending:** CEO run
+  `9f381498-523c-4b22-b029-c4dd5ccf5b2b` published `terminal-board-report`,
+  document `a4a62389-46ac-4b8c-a597-f1318858176f`, revision
+  `9c46789a-6000-4c2d-8e3a-5f13d7758222`. Its test-only clarification preserves
+  historical documents and the remaining major finding; neither review is
+  relabeled passed. Native question `5b2c9064-e353-4091-9702-b301b3ac9db3`
+  awaits `terminal_disposition`. The owner was asked to accept the limited test
+  delivery, request output changes or review later. Do not answer for the owner,
+  authorize a third automatic review or infer acceptance from silence. Continue
+  independent platform work meanwhile.
+- **M05 authenticated comparison-history source slice:** admitted per-turn
+  comparisons now persist bounded, content-free original native event projections
+  before ACK, with current run/controller/admission fences and exact replay.
+  Ordinary runs have no evidence sink. Readers use native chronology and semantic
+  correlation; mixed native v1/v2 events require explicit provenance. Missing
+  prefixes, warm history and overflow remain unknown. **63 focused checks** and
+  source/test semantic, module and map checks pass. A read-only projection of the
+  actual 215-event review journal preserves ten tool inputs/results/write
+  receipts and measures one iteration; missing prefixes remain null. Nine real
+  PostgreSQL cases are authored, unrun under retained restrictions. Implicit and
+  retrieved context remain unverified, observedVariant remains null, and no
+  comparison enrollment, backfill or promotion occurred. Source is not loaded.
+  Logs: `/private/tmp/agentos-m05-native-journal-{focused-r2,transport,types-r2,runner-types,runner-test-types,maps,boundaries}-20261108.log`.
+- **Company management/import and review identity — checked source checkpoint:**
+  the existing employee permissions endpoint and panel now manage the explicit
+  `applications:manage` grant. Current approved board permission-management and
+  granting ceilings are rechecked; unrelated grants and suspended memberships
+  remain intact. Owner-installed CEO templates include it; existing Operators
+  routine schedules are preserved. Import preflight and native employee/grant/
+  audit writes use the lifecycle owner's root-guarded accounting transaction,
+  with post-commit effects and the original import pause reason. Independent
+  review caught and corrected both the transaction-facade integration error and
+  accidental schedule-map replacement before activation. **119 grant/UI/catalog
+  checks, 156 import checks and four direct route checks pass** (overlapping
+  suites, not an aggregate unique count). Exact native review-effect identity
+  matching has **76 focused checks**, with no prefix-based acceptance.
+  Runner/vendor, integrated server and UI builds, direct UI/source/test semantic
+  checks, module/map/token and diff gates pass. First integrated server compile
+  found a test contextual-type omission; the corrected r2 build passes. Initial
+  UI compile found two older DecisionPeek fixture omissions, corrected with six
+  passing related tests. Real PostgreSQL contention and loaded/live behavior
+  are not certified by these checks. Logs:
+  `/private/tmp/agentos-native-evidence-grants-{runner-vendor,server-build,server-build-r2,ui-build,maps,boundaries}-20261108.log`,
+  `/private/tmp/agentos-import-grant-{final-tests,routes}.log`, and
+  `/private/tmp/agentos-application-grant-handoff-20261108.txt`.
 
 - **8 November — continued after owner correction:** keep progressing through
   unblocked source work when runtime acceptance is blocked; a source checkpoint

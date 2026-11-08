@@ -2,12 +2,13 @@ import { and, eq, isNotNull, sql } from "drizzle-orm";
 import { heartbeatRunEvents, heartbeatRuns, type Db } from "@paperclipai/db";
 import type { NativeModelComparisonBinding } from "./model-comparison-admission.js";
 import { modelProfileDigest } from "./model-profile-binding.js";
-import { modelComparisonEventProjection, type ModelComparisonEvent } from "./model-comparison-event-projection.js";
+import { nativeModelComparisonEventProjection, type ModelComparisonEvent } from "./model-comparison-event-projection.js";
+import { MAX_COMPARISON_EVENTS, NATIVE_COMPARISON_EVENT } from "./native-runtime/native-comparison-event-projection.js";
 
 type Run = typeof heartbeatRuns.$inferSelect;
 type Event = ModelComparisonEvent;
 const record = (value: unknown): Record<string, unknown> => value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
-const MAX_EVENTS = 20_000;
+const MAX_EVENTS = MAX_COMPARISON_EVENTS;
 const terminalTurns = new Set(["turn.completed", "turn.failed", "turn.cancelled", "turn.interrupted"]);
 export interface ModelComparisonMeasurements {
   schema: "agentos.model-comparison-measurements.v1";
@@ -32,8 +33,13 @@ export function comparisonWorkIterations(run: Run, events: Event[]): number | nu
   let terminal = false;
   for (const row of events) {
     const event = record(record(row.payload).prpEvent);
+    // Current runnerd uses v1 for native lifecycle/semantic events and v2 for
+    // goal/capability events. Only the authenticated journal projection may
+    // supply that mixed history; a legacy facade cannot establish its origin.
+    const nativeV1 = row.protocolSchemaVersion === 1 && record(row.payload).nativeEvidenceSchema === "agentos.native-comparison-event.v1";
     if (row.companyId !== run.companyId || row.runId !== run.id || row.agentId !== run.agentId
-      || !row.sourceInstanceId || !row.sourceEventId || !row.sourcePayloadSha256 || (row.protocolSchemaVersion ?? 0) < 2
+      || !row.sourceInstanceId || !row.sourceEventId || !row.sourcePayloadSha256
+      || (!nativeV1 && ![2, 3].includes(row.protocolSchemaVersion ?? 0))
       || event.runId !== run.id || event.sourceInstanceId !== row.sourceInstanceId || event.sourceEventId !== row.sourceEventId
       || event.sourceSeq !== row.sourceSeq || event.eventType !== row.eventType
       || !Number.isSafeInteger(row.sourceSeq) || row.sourceSeq !== (sources.get(row.sourceInstanceId) ?? 0) + 1
@@ -110,8 +116,9 @@ export function measureModelComparison(run: Run, binding: Pick<NativeModelCompar
 /** Runs own the frozen measurement chain; no polling, provider calls or global
  * history scan. The existing terminal/review/accounting producer wakes delivery. */
 export function readModelComparisonEvents(db: Db, run: Run) {
-  return db.select(modelComparisonEventProjection).from(heartbeatRunEvents).where(and(eq(heartbeatRunEvents.companyId, run.companyId),
-    eq(heartbeatRunEvents.runId, run.id), isNotNull(heartbeatRunEvents.sourceEventId))).orderBy(heartbeatRunEvents.seq).limit(MAX_EVENTS + 1);
+  return db.select(nativeModelComparisonEventProjection).from(heartbeatRunEvents).where(and(eq(heartbeatRunEvents.companyId, run.companyId),
+    eq(heartbeatRunEvents.runId, run.id), eq(heartbeatRunEvents.eventType, NATIVE_COMPARISON_EVENT),
+    isNotNull(heartbeatRunEvents.sourceEventId))).orderBy(heartbeatRunEvents.seq).limit(MAX_EVENTS + 1);
 }
 export async function readModelComparisonMeasurements(db: Db, run: Run, binding: NativeModelComparisonBinding, reviewedAt: Date | null) {
   const events = await readModelComparisonEvents(db, run);

@@ -192,6 +192,24 @@ only staff explicitly anchored to their own current reporting team; CEO/top-leve
 packages, cycles and another department's employees are rejected. Reporting links
 are created with each employee under current transaction-checked authority.
 
+Explicit package permission grants require the authenticated board actor's
+current `users:manage_permissions` authority; `applications:manage` additionally
+requires that same company-wide granting authority. Other existing grant keys
+retain the native permission-management policy. CEO title or `agents:create`
+alone cannot mint grants. Selected non-skipped grants are checked before import
+mutations and again inside the employee's native lifecycle transaction. The
+employee, grants and audit commit together; lifecycle work and publications occur
+after commit. Existing membership status/role, pending hire approvals, scoped
+grants and the import pause reason are preserved. Imports without explicit grants
+retain their normal lifecycle path.
+
+Evidence includes the real lifecycle facade with controlled transaction transport
+(root guard, distinct nested transaction context, rollback, revoked/scoped board
+authority and post-commit wake), actual importer wiring and listener-free native
+route handlers. These checks do not qualify PostgreSQL contention or live import
+acceptance. Sources: `server/src/services/company-import-permission-grants.ts`,
+`server/src/modules/agent-lifecycle/index.ts` and their focused tests.
+
 Evidence: `source-only` — [implementation](../../server/src/routes/companies.ts#L1245)
 at the reviewed commit above.
 

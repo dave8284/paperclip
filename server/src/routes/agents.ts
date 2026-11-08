@@ -5,6 +5,7 @@ import { cancellationRequestId } from "../services/native-runtime/native-cancell
 import { agentHarnessType, isEnvironmentDriverSupportedForAdapter, normalizeClaudeRunnerOptions, type AgentConfigurationWarning, type AgentRunnerChoice } from "@paperclipai/shared";
 import { resolveNewAgentRunnerForCompany } from "../services/agent-runner-selection.js";
 import { resolveAgentHiringAuthority, resolveDepartmentConfigurationAuthority } from "../services/agent-hiring-authority.js";
+import { setAgentApplicationManagementGrant } from "../services/agent-application-grants.js";
 import { agentEnvironmentTestService } from "../services/agent-environment-test.js";
 import { qualifyAgentRunner } from "../services/agent-runner-qualification.js";
 import { createAgentLifecycle } from "../services/agent-lifecycle.js";
@@ -4945,6 +4946,14 @@ export function agentRoutes(
     const id = req.params.id as string;
     const existing = await getAccessibleResource(req, res, svc.getById(id), "Agent not found");
     if (!existing) return;
+
+    if (typeof req.body.canManageApplications === "boolean") {
+      await setAgentApplicationManagementGrant(db, {
+        companyId: existing.companyId, agentId: id, actor: req.actor, enabled: req.body.canManageApplications,
+      });
+      res.json(await buildAgentDetail(existing));
+      return;
+    }
 
     if (req.actor.type === "agent") {
       const actorAgent = req.actor.agentId ? await svc.getById(req.actor.agentId) : null;

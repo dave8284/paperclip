@@ -134,7 +134,10 @@ locking or caller-controlled wake metadata cannot authorize comparison admission
 The native admission/outbox owners recheck the prepared account/profile and retain
 historical receipts without granting execution on replay. Private comparison
 bindings are withheld from ordinary run responses. Exact source-run/decision and
-independent reviewer bindings govern quality. Native complete event histories and
+independent reviewer bindings govern quality. Historical review identity must
+match the decision's unique stored reviewer effect and its materialized interaction
+receipt, including explicit attention keys or the canonical default key. Missing
+or ambiguous evidence remains unknown. Native complete event histories and
 review timestamps supply repair counts and acceptance latency; incomplete evidence
 stays null. Delivered context remains unbound and blocks readiness. PostgreSQL/restart and live flow evidence is still
 blocked/unverified; source checks do not establish those boundaries.
@@ -142,6 +145,15 @@ Native tool-result transport receipts bind original call/result/turn history,
 with hashes and byte counts but no result bodies. Business outcomes remain
 distinct from transport errors. Written bytes do not certify provider acceptance
 or implicit context; no new model or routing authority follows from a receipt.
+The [native comparison sink](../../server/src/services/native-runtime/native-comparison-events.ts)
+is internal to authenticated runner delivery, absent for ordinary runs, and
+requires frozen comparison admission plus the current native controller claim
+for every new record. It retains bounded identities/hashes in a separate run-log
+source namespace, with exact replay and overflow witnesses; no caller can upload
+evidence or copy raw tool bodies through this path. Only its complete original
+history can supply measurements. Warm sessions and partial prefixes remain
+unavailable. Controlled source checks and retained-journal projection do not
+establish PostgreSQL/restart or live comparison acceptance.
 
 Policy: `assertAdministration` executes before queries. Actual usage joins both
 company and run; selection/triage receipts bind their recorded company/run, and

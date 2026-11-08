@@ -592,7 +592,7 @@ export function companyRoutes(db: Db, storage?: StorageService, options?: Compan
     assertBoard(req);
     const body = companyPortabilityPreviewSchema.parse(await resolveImportPayload(req, res));
     assertImportTargetAccess(req, body.target);
-    const preview = await portability.previewImport(body);
+    const preview = await portability.previewImport(body, { authorizationActor: req.actor });
     res.json(preview);
   });
 
@@ -639,6 +639,7 @@ export function companyRoutes(db: Db, storage?: StorageService, options?: Compan
         const activity = importedCompanyActivityContext(actor, importBody.include ?? null);
         const result = await portability.importBundle(importBody, boardUserId, {
           pauseAutomations: importBody.pauseAutomations === true,
+          authorizationActor: req.actor,
         });
         // The import is committed. Settlement (hooks) runs before the
         // best-effort audit entry so a logging failure cannot make a
@@ -1045,7 +1046,7 @@ export function companyRoutes(db: Db, storage?: StorageService, options?: Compan
     if (!resolved) return;
     const body = companyPortabilityPreviewSchema.parse(resolved.rawBody);
     assertImportTargetAccess(req, body.target);
-    const preview = await portability.previewImport(body);
+    const preview = await portability.previewImport(body, { authorizationActor: req.actor });
     res.json(preview);
   });
 

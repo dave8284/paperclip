@@ -1041,6 +1041,7 @@ export function AgentDetail() {
   const updatePermissions = useMutation({
     mutationFn: (permissions: AgentPermissionUpdate) =>
       agentsApi.updatePermissions(agentLookupRef, permissions, resolvedCompanyId ?? undefined),
+    onMutate: () => setActionError(null),
     onSuccess: () => {
       setActionError(null);
       queryClient.invalidateQueries({ queryKey: queryKeys.agents.detail(routeAgentRef) });
@@ -1049,7 +1050,8 @@ export function AgentDetail() {
         queryClient.invalidateQueries({ queryKey: queryKeys.agents.list(resolvedCompanyId) });
       }
     },
-    onError: (err) => {
+    onError: (err, permissions) => {
+      if (typeof permissions.canManageApplications === "boolean") return;
       setActionError(err instanceof Error ? err.message : "Failed to update permissions");
     },
   });
@@ -2009,7 +2011,7 @@ export function ConfigurationTab({
   onSaveActionChange: (save: (() => void) | null) => void;
   onCancelActionChange: (cancel: (() => void) | null) => void;
   onSavingChange: (saving: boolean) => void;
-  updatePermissions: { mutate: (permissions: AgentPermissionUpdate) => void; isPending: boolean };
+  updatePermissions: { mutate: (permissions: AgentPermissionUpdate) => void; isPending: boolean; error?: unknown; variables?: AgentPermissionUpdate };
   hidePromptTemplate?: boolean;
   hideInstructionsFile?: boolean;
   content?: "runtime" | "permissions" | "secrets";
@@ -2021,6 +2023,19 @@ export function ConfigurationTab({
   const { pushToast } = useToastActions();
   const [awaitingRefreshAfterSave, setAwaitingRefreshAfterSave] = useState(false);
   const lastAgentRef = useRef(agent);
+
+  const boardAccess = useQuery({ queryKey: queryKeys.access.currentBoardAccess,
+    queryFn: () => accessApi.getCurrentBoardAccess(), enabled: content === "permissions", retry: false });
+  const boardAdministrator = !boardAccess.isError && (boardAccess.data?.source === "local_implicit" || boardAccess.data?.isInstanceAdmin === true);
+  const companyMembers = useQuery({ queryKey: queryKeys.access.companyMembers(companyId ?? "__disabled"),
+    queryFn: () => accessApi.listMembers(companyId!),
+    enabled: content === "permissions" && !!companyId && !!boardAccess.data && !boardAdministrator, retry: false });
+  const currentMember = companyMembers.data?.members.find(member => member.principalId === boardAccess.data?.userId);
+  const currentBoardGrant = (key: string) => !boardAccess.isError && !companyMembers.isError && currentMember?.status === "active"
+    && currentMember.grants.some(grant => grant.permissionKey === key && (!grant.scope || Object.keys(grant.scope).length === 0));
+  const canManageApplicationGrant = boardAdministrator || (boardAccess.data?.companyIds.includes(agent.companyId)
+    && currentBoardGrant("users:manage_permissions"));
+  const canGrantApplicationManagement = canManageApplicationGrant && (boardAdministrator || currentBoardGrant("applications:manage"));
 
   const catalogProvider = agent.adapterType === "paperclip_runner" ? String(agent.adapterConfig.provider ?? "codex") : undefined;
   const { data: adapterModels } = useQuery({
@@ -2099,6 +2114,7 @@ export function ConfigurationTab({
   const canCreateAgents = Boolean(agent.permissions?.canCreateAgents);
   const canCreateSkills = agent.permissions?.canCreateSkills !== false;
   const canAssignTasks = Boolean(agent.access?.canAssignTasks);
+  const canManageApplications = agent.access?.grants.some(grant => grant.permissionKey === "applications:manage") ?? false;
   const taskAssignSource = agent.access?.taskAssignSource ?? "none";
   const taskAssignLocked = agent.role === "ceo" || canCreateAgents;
   const taskAssignHint =
@@ -2162,7 +2178,25 @@ export function ConfigurationTab({
 
       {content === "permissions" ? <div>
         <h3 className="text-sm font-medium mb-3">Permissions</h3>
+        {updatePermissions.error && typeof updatePermissions.variables?.canManageApplications === "boolean" ? <p role="alert" className="text-sm text-destructive mb-3">
+          {updatePermissions.error instanceof Error ? updatePermissions.error.message : "Failed to update permissions. Try again."}
+        </p> : null}
         <div className="border border-border rounded-lg p-4 space-y-4">
+          <div className="flex items-center justify-between gap-4 text-sm">
+            <div className="space-y-1">
+              <div>Manage departments and projects</div>
+              <p className="text-xs text-muted-foreground">
+                Allows company structure and application management within this employee’s role. An authorized board member grants this permission.
+              </p>
+            </div>
+            <ToggleSwitch aria-label="Manage departments and projects"
+              checked={canManageApplications}
+              onCheckedChange={enabled => updatePermissions.mutate({ canManageApplications: enabled })}
+              disabled={updatePermissions.isPending || !agent.access
+                || !(canManageApplications ? canManageApplicationGrant : canGrantApplicationManagement)
+                || (!canManageApplications && ["pending_approval", "terminated"].includes(agent.status))}
+            />
+          </div>
           <div className="flex items-center justify-between gap-4 text-sm">
             <div className="space-y-1">
               <div>Can create new agents</div>

@@ -27,6 +27,7 @@
     "The owner request and Friday direction retain their original native actor/run identities.",
     "Friday delegates only to the test company's actual CEO or responsible department head.",
     "The CEO delegates directly to specialists or appoints a department head who delegates to their staff; at least two specialists own distinct tasks. An intermediate lead is optional and no role is added merely to satisfy this test.",
+    "Before department creation, retain the CEO's company-native applications:manage grant and the board provisioning audit. Explicit board provisioning uses PATCH /api/agents/{id}/permissions with only canManageApplications:true; verify the resulting access.grants without changing other grants or membership. A head managing department metadata or project membership also needs that native capability. canCreateAgents and a job title do not imply it. Preparation alone never grants permissions.",
     "Provider identity and subscription-only account authorization are observed; no paid API fallback is used.",
     "Every task, workspace, attachment and provider execution remains company-local.",
     "Deliverable files/documents exist with immutable hashes or revision IDs and are read by the reviewer.",

@@ -76,6 +76,13 @@ requires rendered-browser acceptance; browser verification remains blocked.
 
 Use `/company/export` and `/company/import` where enabled, or the corresponding CLI company commands.
 
+Packages that explicitly grant employee permissions require a board member who
+can manage permissions. Granting department management also requires the board
+member's own company-wide application-management authority. A CEO title alone
+does not grant this capability. Unauthorized packages are refused before import
+changes; employee and grant changes commit together without reactivating a
+suspended membership or bypassing hire approval.
+
 ### `company-ai-services`
 
 Use Settings → Connections (`/company/settings/connections`) for Decision model

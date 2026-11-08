@@ -55,6 +55,7 @@ const mockAgentService = vi.hoisted(() => ({
   resolveByReference: vi.fn(),
 }));
 const mockStaffingAuthority = vi.hoisted(() => ({ hiring: vi.fn(), configuration: vi.fn() }));
+const mockApplicationGrant = vi.hoisted(() => vi.fn());
 
 const mockBuiltInAgentService = vi.hoisted(() => ({
   ensureCompanyDefaultAgentGrants: vi.fn(),
@@ -168,6 +169,7 @@ function registerModuleMocks() {
     resolveAgentHiringAuthority: mockStaffingAuthority.hiring,
     resolveDepartmentConfigurationAuthority: mockStaffingAuthority.configuration,
   }));
+  vi.doMock("../services/agent-application-grants.js", () => ({ setAgentApplicationManagementGrant: mockApplicationGrant }));
 
   vi.doMock("../services/approvals.js", () => ({
     approvalService: () => mockApprovalService,
@@ -314,6 +316,9 @@ describe("agent permission routes", () => {
 
   beforeEach(() => {
     vi.resetAllMocks();
+    mockApplicationGrant.mockImplementation(async (_db, input) => {
+      if (input.actor.type !== "board") throw Object.assign(new Error("Only board members can manage application permissions."), { status: 403 });
+    });
     mockStaffingAuthority.hiring.mockImplementation(async (_db, _companyId, _actor, input) => ({ departmentHead: false, reportsTo: input.reportsTo }));
     mockStaffingAuthority.configuration.mockResolvedValue({ departmentHead: false });
     mockAgentService.getById.mockReset();
@@ -441,6 +446,55 @@ describe("agent permission routes", () => {
     const response = { status: vi.fn().mockReturnThis(), json: vi.fn().mockReturnThis() };
     return handler({ actor, params: { id: agentId }, body, query: {}, headers: {} } as any, response as any, vi.fn());
   }
+
+  async function invokeApplicationGrant(body: Record<string, unknown>, actor: Record<string, unknown> = {
+    type: "board", userId: "board-user", source: "session", companyIds: [companyId],
+  }) {
+    const router = routeModules.value.agentRoutes(createDbStub() as any);
+    const route = router.stack.find((entry: any) => entry.route?.path === "/agents/:id/permissions" && entry.route.methods.patch)!.route!;
+    const req = { actor, params: { id: agentId }, body, query: {}, headers: {} };
+    const res = { status: vi.fn().mockReturnThis(), json: vi.fn().mockReturnThis() };
+    // Run the actual validator and native route dispatch without a listener.
+    for (const entry of route.stack) await entry.handle(req as any, res as any, vi.fn());
+    return res;
+  }
+
+  it.each([true, false])("dispatches a standalone application grant %s without changing legacy permissions", async enabled => {
+    const grant = { permissionKey: "applications:manage", scope: null };
+    mockAccessService.listPrincipalGrants.mockResolvedValue(enabled ? [grant] : []);
+    const res = await invokeApplicationGrant({ canManageApplications: enabled });
+    expect(mockApplicationGrant).toHaveBeenCalledWith(expect.anything(), {
+      companyId, agentId, enabled, actor: expect.objectContaining({ type: "board", userId: "board-user", source: "session" }),
+    });
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ access: expect.objectContaining({ grants: enabled ? [grant] : [] }) }));
+    expect(mockAgentService.updatePermissions).not.toHaveBeenCalled();
+    expect(mockAccessService.ensureMembership).not.toHaveBeenCalled();
+    expect(mockAccessService.setPrincipalPermission).not.toHaveBeenCalled();
+    expect(mockLogActivity).not.toHaveBeenCalled();
+  });
+
+  it("keeps application grant failures out of the legacy CEO permission path", async () => {
+    mockAgentService.getById.mockResolvedValue({ ...baseAgent, role: "ceo" });
+    await expect(invokeApplicationGrant({ canManageApplications: true }, { type: "agent", agentId, companyId, source: "agent_key" })).rejects.toMatchObject({ status: 403 });
+    expect(mockAgentService.updatePermissions).not.toHaveBeenCalled();
+    expect(mockAccessService.setPrincipalPermission).not.toHaveBeenCalled();
+  });
+
+  it("rejects mixed native-grant and legacy permission payloads before dispatch", async () => {
+    await expect(invokeApplicationGrant({ canManageApplications: true, canCreateAgents: true, canAssignTasks: false })).rejects.toThrow();
+    expect(mockApplicationGrant).not.toHaveBeenCalled(); expect(mockAgentService.updatePermissions).not.toHaveBeenCalled();
+  });
+
+  it("preserves the route's company boundary before application grant dispatch", async () => {
+    const res = await invokeApplicationGrant({ canManageApplications: true }, { type: "board", userId: "other", source: "session", companyIds: [] });
+    expect(res.status).toHaveBeenCalledWith(404); expect(mockApplicationGrant).not.toHaveBeenCalled();
+  });
+
+  it("propagates current board revocation from the owning grant service", async () => {
+    mockApplicationGrant.mockRejectedValue(Object.assign(new Error("Missing permission: users:manage_permissions."), { status: 403 }));
+    await expect(invokeApplicationGrant({ canManageApplications: true })).rejects.toMatchObject({ status: 403 });
+    expect(mockAgentService.updatePermissions).not.toHaveBeenCalled(); expect(mockLogActivity).not.toHaveBeenCalled();
+  });
 
   it.each(["paused", "terminated"])("blocks agent lifecycle PATCH %s consistently with its board-only route", async status => {
     await expect(invokeLifecycleRoute("/agents/:id", "patch", { status })).rejects.toMatchObject({ status: 403 });

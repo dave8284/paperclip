@@ -1232,6 +1232,9 @@ export interface CapabilityRunnerdCodexTransportOptions extends RunnerExecutionD
   provider?: "codex" | "opencode" | "claude_managed" | "aws_agentcore" | "acpx";
   observeCredentials?: boolean;
   onCredentialsUpdated?: (event: PrpEvent) => Promise<void>;
+  /** Optional host evidence commit. Runs on the authenticated original event,
+   * before the durable ACK, including exact replay. Never the facade stream. */
+  onAuthenticatedEvent?: (event: PrpEvent) => Promise<void>;
   opencodePermissionMode?: NativeOpenCodePermissionMode;
   acpxAgent?: QualifiedAcpxAgent;
   /** Explicit evaluation-only candidate selection, never derived from persisted session input. */
@@ -5048,11 +5051,7 @@ class DurablePrpCodexTransport implements CodexAppServerTransport {
       expectedRunnerDigest: runnerArtifact.digest,
       onProtocolIntegrityError: (error) => this.#failTransport(error),
       onSemanticToolInput: (call) => this.#handleSemanticToolInput(call),
-      onCommittedEvent: async (event) => {
-        if (event.eventType === "auth.credentials.updated") {
-          await this.options.onCredentialsUpdated?.(event);
-        }
-      },
+      onCommittedEvent: (event) => this.#commitAuthenticatedEvent(event),
       connectionLeaseTtlMs: 60 * 60 * 1_000,
     });
     this.#core = core;
@@ -5140,6 +5139,11 @@ class DurablePrpCodexTransport implements CodexAppServerTransport {
     this.#startupComplete = true;
     this.#diagnostic("runnerd authenticated to the durable PRP control plane");
     return this.#openedThreadResponse(params);
+  }
+
+  async #commitAuthenticatedEvent(event: PrpEvent): Promise<void> {
+    if (this.options.onAuthenticatedEvent) await this.options.onAuthenticatedEvent(event);
+    if (event.eventType === "auth.credentials.updated") await this.options.onCredentialsUpdated?.(event);
   }
 
   #openedThreadResponse(params: Record<string, unknown>): Record<string, unknown> {
@@ -5477,11 +5481,7 @@ class DurablePrpCodexTransport implements CodexAppServerTransport {
       expectedRunnerDigest: runnerArtifact.digest,
       onProtocolIntegrityError: (error) => this.#failTransport(error),
       onSemanticToolInput: (call) => this.#handleSemanticToolInput(call),
-      onCommittedEvent: async (event) => {
-        if (event.eventType === "auth.credentials.updated") {
-          await this.options.onCredentialsUpdated?.(event);
-        }
-      },
+      onCommittedEvent: (event) => this.#commitAuthenticatedEvent(event),
       ...(warmRecovery
         ? {
             beforeAuthenticatedConnection: async (admission) => {

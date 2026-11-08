@@ -336,7 +336,7 @@ Evidence: `source-only` — [interaction routes](../../server/src/routes/issues.
 
 Verification: `not-run` — Inspect submitted work through a real bound reviewer, accept or reject with a reason, replay the exact decision, and reject retargeting, missing/stale binding, creator exclusion and conflicting verdict. Compare reviewer receipt, task ownership and all required review outcomes.
 
-Gaps: A declared scenario review tool is not an admitted review run. Review verdict and the reviewer’s own paperclip_finish report are separate obligations.
+Gaps: A declared scenario review tool is not an admitted review run. Review verdict and the reviewer’s own paperclip_finish report are separate obligations. Historical outcome reporting additionally binds the exact stored reviewer effect and its materialized interaction receipt; ambiguous or missing evidence remains unknown.
 
 ### `resolve-chat-plan-continuation`
 

@@ -3815,11 +3815,12 @@ registry.registerPath({
   path: "/api/agents/{id}/permissions",
   tags: ["agents"],
   summary: "Update agent permissions",
+  description: "A standalone canManageApplications boolean grants or revokes only applications:manage. It requires current board users:manage_permissions authority and, when granting, company-wide applications:manage authority. It cannot be mixed with legacy permission fields. Other native grants and membership state are preserved.",
   request: {
     params: z.object({ id: z.string() }),
     body: jsonBody(updateAgentPermissionsSchema),
   },
-  responses: { 200: r.ok(), 400: r.badRequest, 401: r.unauthorized },
+  responses: { 200: r.ok(), 400: r.badRequest, 401: r.unauthorized, 403: r.forbidden, 404: r.notFound, 409: r.conflict },
 });
 
 const agentProjectAccessResponse = z.object({ projectIds: z.array(z.string().uuid()), canManage: z.boolean() });

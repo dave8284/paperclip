@@ -16,3 +16,9 @@ routines:
       - kind: schedule
         cronExpression: "0 10 * * 1"
         timezone: Pacific/Auckland
+agents:
+  ceo:
+    permissionGrants:
+      -
+        permissionKey: applications:manage
+        scope: null

@@ -65,6 +65,11 @@ adoption can require an explicit reset of existing sessions.
 ### `organization`
 
 Use the roster’s organization view; `/org` redirects to the roster in the streamlined shell.
+An authorized board member can open an employee’s **Permissions** view and use
+**Manage departments and projects** to grant or revoke its native company
+structure capability. The toggle reflects the stored grant, independently of
+the employee’s title and creator permission. Unknown or failed authority reads
+disable changes; a server rejection is shown beside the control.
 
 ### `personal-primary-agent`
 
@@ -170,6 +175,19 @@ or provider execution.
 ### `organization`
 
 Automated: [org chart](../../ui/src/pages/OrgChart.test.tsx) is component evidence. Built-in setup also has [configuration modal tests](../../ui/src/components/ConfigureBuiltInAgentModal.test.tsx).
+
+Explicit company-structure permission provisioning uses the existing agent
+permissions API with standalone `canManageApplications`. It is board-only and
+requires permission-management authority plus the capability being granted.
+[Grant owner tests](../../server/src/services/agent-application-grants.test.ts)
+exercise real native authorization and the single-key writer through controlled
+SQL, including current revocation, grant/revoke, preserved membership/scopes and
+audit rollback. [Route cases](../../server/src/__tests__/agent-permissions-routes.test.ts)
+exercise the actual validator/dispatch without a listener. These checks do not
+prove PostgreSQL contention or the live department delegation journey.
+[Permission component cases](../../ui/src/pages/AgentDetail.permissions.test.tsx)
+cover the stored grant, exclusive update payload, legacy toggles, current board
+ceiling, failed authority refresh and inline server denial.
 
 Manual: Inspect a manager and report, change the relationship through the offered controls, and reload both views. Exercise a rejected invalid relationship. Configure a built-in agent and verify it retains its required identity and restrictions.
 

@@ -43,6 +43,12 @@ Version: 2.0.0. The package contains a company CEO and specialists; it does not 
 
 The CEO's daily company review and weekly role review are native routines, installed paused. Enable them after the adapters and required connections are ready. Their default timezone is Pacific/Auckland; schedules are editable in Routines. No agent timer is needed.
 
+The package explicitly provisions `applications:manage` for its CEO so it can
+create company departments within native authority. Installation requires a
+board member with current permission-management authority and that capability.
+It does not grant permission to specialists. Editing the package does not
+backfill existing employees.
+
 Each role uses native task ownership, reviews, permissions, budgets and work products. Credentials belong in connections, not in this package. A role title does not grant provider or staffing authority. The CEO owns company delivery and staffing within current grants, budgets and approval policy. Specialists report directly to the CEO by default; appointed department heads manage their own staff. The CEO's team creates application work within the owning company project or an authorized linked initiative.
 
 Inspect the native Agent, Task, Run, Routine and Connection pages for execution, costs, outputs and capability setup. External source content cannot authorize actions or override company policy.

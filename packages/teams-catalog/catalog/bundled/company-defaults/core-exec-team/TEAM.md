@@ -33,6 +33,12 @@ The Core Exec Team is a bundled starter option for a new AgentOS company. Its CE
 
 ## Contents
 
+The package explicitly provisions `applications:manage` for its CEO so it can
+create company departments within native authority. Installation requires a
+board member with current permission-management authority and that capability.
+It does not grant permission to specialists. Editing the package does not
+backfill existing employees.
+
 - `CEO` — strategy, prioritization, delegation. Uses `task-planning` and `issue-triage` to keep the inbox moving.
 - `CTO` — technical execution and engineering oversight. Reports to CEO. Uses `github-pr-workflow` for code review and merge hygiene.
 - `QA` — verifies fixes and captures evidence. Reports to CTO. Uses `qa-acceptance` for structured acceptance reports.

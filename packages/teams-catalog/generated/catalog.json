@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "packageName": "@paperclipai/teams-catalog",
   "packageVersion": "0.1.0",
-  "generatedAt": "2026-11-08T05:10:51.312Z",
+  "generatedAt": "2026-11-08T06:49:23.526Z",
   "teams": [
     {
       "id": "paperclipai:bundled:company-defaults:agentos-operators",
@@ -141,14 +141,14 @@
         {
           "path": "TEAM.md",
           "kind": "team",
-          "sizeBytes": 3730,
-          "sha256": "55f620230a1338f3eb5d8d7a55e41d320941e5d5f2d9ef8292c4f7f494b45cbc"
+          "sizeBytes": 4067,
+          "sha256": "026e70e7d771c016b421245f9cfa738365d68473103f3f214be9c1c46f0cbf38"
         },
         {
           "path": ".paperclip.yaml",
           "kind": "extension",
-          "sizeBytes": 480,
-          "sha256": "f30d41b1a16f3ed0186c6bb1e2234d6a1b1f179ad7bd3d9d7a7a8f151da9617e"
+          "sizeBytes": 588,
+          "sha256": "a12e74f44d9e98694ccb004adf40617b57d15193ede83b047b8305cce5a92c5b"
         },
         {
           "path": "agents/ceo/AGENTS.md",
@@ -219,7 +219,7 @@
       ],
       "trustLevel": "assets",
       "compatibility": "compatible",
-      "contentHash": "sha256:64f5f338e417ad8b98b9a0d202a5cbbe93fb128a32c4c6fa320caaf1c561d700"
+      "contentHash": "sha256:9654bcf5482f5eb87daa430dafccf54b6e3293915641c766315ede0b6a1ebd88"
     },
     {
       "id": "paperclipai:bundled:company-defaults:core-exec-team",
@@ -313,8 +313,14 @@
         {
           "path": "TEAM.md",
           "kind": "team",
-          "sizeBytes": 2309,
-          "sha256": "b1c245ffc82de01d86d743c3cd69cb60b3652151b7e5798b39030bc457713ca5"
+          "sizeBytes": 2646,
+          "sha256": "6c0cc676098a70cdcfce227831234ab5b51e1c7635109435bee11ead9f95d6eb"
+        },
+        {
+          "path": ".paperclip.yaml",
+          "kind": "extension",
+          "sizeBytes": 129,
+          "sha256": "938a17bd478bb07f09fa26e48cb35a407c93e7643f774b17f4d3a2fc52e082c3"
         },
         {
           "path": "agents/ceo/AGENTS.md",
@@ -347,9 +353,9 @@
           "sha256": "bdc979cafa43fc9b8f0d6f0e4120c01cecfb899082781a5da88e26fa262f18e4"
         }
       ],
-      "trustLevel": "markdown_only",
+      "trustLevel": "assets",
       "compatibility": "compatible",
-      "contentHash": "sha256:1ea5ef711d19dc2cf0c10a914291009aaee826659fb90aba95e6b2fb106cb5cd"
+      "contentHash": "sha256:1258b70d345e172018b45fea830b793fc8075145b827a8a788d9bf72333664c0"
     },
     {
       "id": "paperclipai:bundled:product:product-design",

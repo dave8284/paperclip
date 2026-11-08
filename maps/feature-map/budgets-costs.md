@@ -79,6 +79,9 @@ authorize a model, account or policy change. Source/check access is rechecked;
 unavailable private cases and stale cached choices remain hidden.
 Native reviewed outcome delivery is separate from manual administrator feedback.
 Unknown results remain unknown, and process success alone cannot pass a case.
+A historical review must match its exact source decision, recorded creation effect,
+interaction and independent reviewer execution; explicit attention review keys
+are recognized without accepting arbitrary aliases.
 The source now binds admission to the prepared arm and freezes native outcome
 delivery for idempotent recovery. Complete native histories supply provider-turn/repair
 counts and queue-through-review latency, including failed attempts. Incomplete
@@ -89,6 +92,12 @@ Content-free tool transport receipts now distinguish persisted results from
 bytes actually written to the provider. Missing delivery and unverified provider
 acceptance/use remain explicit; these receipts do not supply the missing actual
 context qualification or add ordinary chat messages.
+Admitted comparisons using a fresh per-turn session now retain a separate,
+bounded projection of the authenticated native journal before acknowledgement.
+Measurements consume its original sequence and tool correlation instead of the
+chat facade's rewritten chronology. Missing prefixes, overflow and warm-session
+history remain unavailable. This source change preserves private bodies in
+their existing owner and does not enroll a comparison or qualify a model.
 
 Settings → Models also offers company/task-family routing enrollment, pins to
 adopted versions and rollback. Changes preserve revision and retry identity;

@@ -46,6 +46,10 @@ export function createAgentLifecycle(db: Db, hooks: BudgetServiceHooks = {}) {
   return lifecycle.createAgentLifecycle(db, createAgentLifecycleEffects(hooks));
 }
 
+export function createAgentImportLifecycle(db: Db, input: Parameters<typeof lifecycle.createAgentImportLifecycle>[2]) {
+  return lifecycle.createAgentImportLifecycle(db, createAgentLifecycleEffects(), input);
+}
+
 function trackedDriver(driver: lifecycle.LifecycleDriver): lifecycle.LifecycleDriver {
   return { ...driver, runHost: agent => trackIdleWork(driver.runHost(agent)),
     runPlugin: (agent, pluginId) => trackIdleWork(driver.runPlugin(agent, pluginId)) };

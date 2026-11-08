@@ -12,6 +12,7 @@ import { assertRootDatabase, createLifecycleStore } from "./adapters/postgres.js
 import { hasCompanyHoldMismatch, projectCompanyHolds } from "./adapters/company-policy.js";
 import { createLifecycleWorker } from "./application/worker.js";
 import type { LifecycleDriver } from "./application/ports.js";
+import type { ActivityPublication } from "../../types/activity-publication.js";
 
 export { applyAgentPolicyHoldsInTransaction } from "./adapters/postgres.js";
 export { terminateAgentInTransaction } from "./adapters/postgres.js";
@@ -82,12 +83,12 @@ export function createAgentLifecycle(db: Db, effects: LifecycleEffects) {
       scheduleAgentLifecycle(db, id);
       return agent;
     },
-    async updateAndTransition(id: string, command: "pause" | "resume" | "terminate", data: AgentConfigurationPatch, options?: UpdateAgentOptions) {
+    async updateAndTransition(id: string, command: "pause" | "resume" | "terminate", data: AgentConfigurationPatch, options?: UpdateAgentOptions, pauseReason?: "import") {
       const existing = await records.getById(id);
       if (!existing) return null;
       const agent = await effects.transaction(db, existing.companyId, async (tx, publications) => {
         await updateAgentConfiguration(tx, effects, id, data, options, publications);
-        await createLifecycleStore(tx, effects).change(id, command, { reason: command === "resume" ? "user" : "manual" });
+        await createLifecycleStore(tx, effects).change(id, command, { reason: command === "resume" ? "user" : command === "pause" ? pauseReason ?? "manual" : "manual" });
         return agentRecords(tx, effects).getById(id);
       });
       scheduleAgentLifecycle(db, id);
@@ -100,6 +101,45 @@ export function createAgentLifecycle(db: Db, effects: LifecycleEffects) {
     clearError: records.clearError,
     purgeAgent: (id: string) => purgeAgent(db, effects, id),
   };
+}
+
+/** Company imports compose native employee changes with their authorized grant
+ * writes. The root command still owns commit and wakeup; only transactions
+ * created here may join its accounting context and publication queue. */
+export function createAgentImportLifecycle(db: Db, effects: LifecycleEffects, input: {
+  companyId: string;
+  authorize(tx: Db): Promise<void>;
+  writeGrants(tx: Db, publications: ActivityPublication[], employee: { id: string; companyId: string }): Promise<void>;
+}) {
+  assertRootDatabase(db);
+  const contexts = new WeakMap<Db, ActivityPublication[]>();
+  const importedEffects: LifecycleEffects = { ...effects, transaction: async (owner, companyId, work) => {
+    if (companyId !== input.companyId) throw new Error("Imported employee must remain in the authorized company");
+    if (owner !== db) {
+      const publications = contexts.get(owner);
+      if (!publications) throw new Error("Import lifecycle requires its owning accounting transaction");
+      return work(owner, publications);
+    }
+    return effects.transaction(db, companyId, async (tx, publications) => {
+      contexts.set(tx, publications);
+      try {
+        await input.authorize(tx);
+        const result = await work(tx, publications);
+        if (result !== null) {
+          const employee = result as { id?: unknown; companyId?: unknown };
+          if (!employee || typeof employee.id !== "string" || employee.companyId !== input.companyId) {
+            throw new Error("Import lifecycle returned an unexpected employee");
+          }
+          await input.writeGrants(tx, publications, { id: employee.id, companyId: input.companyId });
+        }
+        return result;
+      } finally { contexts.delete(tx); }
+    });
+  } };
+  const lifecycle = createAgentLifecycle(db, importedEffects);
+  return { requestHire: lifecycle.requestHire, updateConfiguration: lifecycle.updateConfiguration,
+    updateAndTransition: (id: string, command: "pause", data: AgentConfigurationPatch, options?: UpdateAgentOptions) =>
+      lifecycle.updateAndTransition(id, command, data, options, "import") };
 }
 
 export function startAgentLifecycle(db: Db, effects: LifecycleEffects, driver: LifecycleDriver, canRun: () => boolean) {

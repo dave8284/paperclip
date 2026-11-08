@@ -1,3 +1,4 @@
+import { preflightImportedAgentPermissionGrants, mutateImportedAgentWithGrants } from "./company-import-permission-grants.js";
 import { createAgentLifecycle } from "./agent-lifecycle.js";
 import { agentAppearanceSchema, agentHarnessType, agentRunner, type AgentRunnerChoice } from "@paperclipai/shared";
 import { resolveNewAgentRunnerForCompany } from "./agent-runner-selection.js";
@@ -74,7 +75,7 @@ import {
 import { requireOpenCodeModelId } from "@paperclipai/adapter-opencode-local/server";
 import { findServerAdapter } from "../adapters/index.js";
 import { formatAttachmentSize, MAX_ATTACHMENT_BYTES } from "../attachment-types.js";
-import { forbidden, notFound, unprocessable } from "../errors.js";
+import { conflict, forbidden, notFound, unprocessable } from "../errors.js";
 import { ghFetch, gitHubApiBase, resolveRawGitHubUrl } from "./github-fetch.js";
 import type { StorageService } from "../storage/types.js";
 import { accessService } from "./access.js";
@@ -3574,7 +3575,6 @@ export function parseGitHubSourceUrl(rawUrl: string) {
 export function companyPortabilityService(db: Db, storage?: StorageService) {
   const companies = companyService(db);
   const agents = agentService(db);
-  const agentsLifecycle = createAgentLifecycle(db);
   const assetRecords = assetService(db);
   const instructions = agentInstructionsService(db);
   const access = accessService(db);
@@ -3586,27 +3586,6 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
   const workProductsSvc = workProductService(db);
   const strictSecretsMode = process.env.PAPERCLIP_SECRETS_STRICT_MODE === "true";
   const defaultSecretProvider = getConfiguredSecretProvider();
-
-  async function applyImportedAgentPermissionGrants(
-    companyId: string,
-    agentId: string,
-    permissionGrants: PortableAgentPermissionGrant[],
-    grantedByUserId: string | null,
-  ) {
-    if (permissionGrants.length === 0) return;
-    await access.ensureMembership(companyId, "agent", agentId, "member", "active");
-    for (const grant of permissionGrants) {
-      await access.setPrincipalPermission(
-        companyId,
-        "agent",
-        agentId,
-        grant.permissionKey,
-        true,
-        grantedByUserId,
-        grant.scope ?? null,
-      );
-    }
-  }
 
   function assertKnownImportAdapterType(type: string | null | undefined): string {
     const adapterType = typeof type === "string" ? type.trim() : "";
@@ -5253,8 +5232,20 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
     options?: ImportBehaviorOptions,
   ): Promise<CompanyPortabilityPreviewResult> {
     const plan = await buildPreview(input, options);
-    if (plan.preview.errors.length === 0) await prepareImportStaffing(input, plan, options);
+    if (plan.preview.errors.length === 0) {
+      await prepareImportStaffing(input, plan, options);
+      await preflightImportGrants(input, plan, options);
+    }
     return plan.preview;
+  }
+
+  async function preflightImportGrants(input: CompanyPortabilityPreview, plan: ImportPlanInternal, options?: ImportBehaviorOptions) {
+    const mutatedSlugs = new Set(plan.preview.plan.agentPlans.filter(agent => agent.action !== "skip").map(agent => agent.slug));
+    const grants = plan.include.agents ? plan.selectedAgents.filter(agent => mutatedSlugs.has(agent.slug)).flatMap(agent => agent.permissionGrants ?? []) : [];
+    if (!grants.length) return null;
+    const companyId = input.target.mode === "existing_company" ? input.target.companyId : randomUUID();
+    await preflightImportedAgentPermissionGrants(db, { companyId, actor: options?.authorizationActor, grants });
+    return companyId;
   }
 
   async function prepareImportStaffing(input: CompanyPortabilityPreview, plan: ImportPlanInternal, options?: ImportBehaviorOptions) {
@@ -5285,6 +5276,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
       throw unprocessable(`Import preview has errors: ${plan.preview.errors.join("; ")}`);
     }
     const importStaffing = await prepareImportStaffing(input, plan, options);
+    const permissionCompanyId = await preflightImportGrants(input, plan, options);
     if (
       mode === "agent_safe"
       && (
@@ -5379,6 +5371,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
               (await companies.list()).map((company) => company.name),
             ));
       const created = await companies.create({
+        ...(permissionCompanyId ? { id: permissionCompanyId } : {}),
         name: companyName,
         description: include.company ? (sourceManifest.company?.description ?? null) : null,
         requireBoardApprovalForNewAgents: include.company
@@ -5715,9 +5708,14 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
             : {};
 
           if (planAgent.action === "update" && planAgent.existingAgentId) {
-            if (pauseAutomations) await agentsLifecycle.pauseAgent(planAgent.existingAgentId, "import");
-            let updated = await agents.update(planAgent.existingAgentId, {
-              ...patch,
+            let updated = await mutateImportedAgentWithGrants(db, {
+              companyId: targetCompany.id, actor: options?.authorizationActor, grants: manifestAgent.permissionGrants ?? [],
+            }, async lifecycle => {
+              if (pauseAutomations && manifestAgent.permissionGrants?.length) {
+                return lifecycle.updateAndTransition(planAgent.existingAgentId!, "pause", { ...patch });
+              }
+              if (pauseAutomations) await createAgentLifecycle(db).pauseAgent(planAgent.existingAgentId!, "import");
+              return lifecycle.updateConfiguration(planAgent.existingAgentId!, { ...patch });
             });
             if (!updated) {
               warnings.push(`Skipped update for missing agent ${planAgent.existingAgentId}.`);
@@ -5739,12 +5737,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
             } catch (err) {
               warnings.push(`Failed to materialize instructions bundle for ${manifestAgent.slug}: ${err instanceof Error ? err.message : String(err)}`);
             }
-            await applyImportedAgentPermissionGrants(
-              targetCompany.id,
-              updated.id,
-              manifestAgent.permissionGrants ?? [],
-              actorUserId ?? null,
-            );
+
             agentStatusById.set(updated.id, updated.status ?? agentStatusById.get(updated.id) ?? null);
             await secrets.syncEnvBindingsForTarget?.(
               targetCompany.id,
@@ -5763,30 +5756,28 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
             continue;
           }
 
-          let created = await agentsLifecycle.requestHire(targetCompany.id, {
-            ...patch,
-            runner: agentRunner(patch.adapterType),
-            ...automationPausePatch,
-            status: pauseAutomations ? "paused" : "idle",
-          }, {
-            createdByUserId: actorUserId,
-            ...(importStaffing && options?.authorizationActor ? {
-              responsibleUserId: options.authorizationActor.onBehalfOfUserId ?? options.authorizationActor.authorizingUserId ?? null,
-              hiringAuthority: {
-                actor: options.authorizationActor, departmentHead: importStaffing.departmentHead,
-                importedManagerIds: [...importedSlugToAgentId.values()], importRequiresNoApproval: true,
-              },
-            } : {}),
+          const importedCompanyId = targetCompany.id;
+          let created = await mutateImportedAgentWithGrants(db, {
+            companyId: importedCompanyId, actor: options?.authorizationActor, grants: manifestAgent.permissionGrants ?? [],
+            baselineTaskAssignment: true, baselineGrantedByUserId: actorUserId ?? null,
+          }, async lifecycle => {
+            return lifecycle.requestHire(importedCompanyId, {
+              ...patch,
+              runner: agentRunner(patch.adapterType),
+              ...automationPausePatch,
+              status: pauseAutomations ? "paused" : "idle",
+            }, {
+              createdByUserId: actorUserId,
+              ...(importStaffing && options?.authorizationActor ? {
+                responsibleUserId: options.authorizationActor.onBehalfOfUserId ?? options.authorizationActor.authorizingUserId ?? null,
+                hiringAuthority: {
+                  actor: options.authorizationActor, departmentHead: importStaffing.departmentHead,
+                  importedManagerIds: [...importedSlugToAgentId.values()], importRequiresNoApproval: true,
+                },
+              } : {}),
+            });
           });
-          await access.ensureMembership(targetCompany.id, "agent", created.id, "member", "active");
-          await access.setPrincipalPermission(
-            targetCompany.id,
-            "agent",
-            created.id,
-            "tasks:assign",
-            true,
-            actorUserId ?? null,
-          );
+          if (!created) throw conflict("The imported employee could not be created.");
           try {
             const materialized = await instructions.materializeManagedBundle(created, bundleFiles, {
               clearLegacyPromptTemplate: true,
@@ -5796,12 +5787,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
           } catch (err) {
             warnings.push(`Failed to materialize instructions bundle for ${manifestAgent.slug}: ${err instanceof Error ? err.message : String(err)}`);
           }
-          await applyImportedAgentPermissionGrants(
-            targetCompany.id,
-            created.id,
-            manifestAgent.permissionGrants ?? [],
-            actorUserId ?? null,
-          );
+
           agentStatusById.set(created.id, created.status ?? (pauseAutomations ? "paused" : "idle"));
           await secrets.syncEnvBindingsForTarget?.(
             targetCompany.id,

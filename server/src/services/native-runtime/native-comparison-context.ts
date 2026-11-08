@@ -125,9 +125,11 @@ export function nativeComparisonContextEvidence(run: typeof heartbeatRuns.$infer
     stage: "unavailable" as const, initialInputMatched: false, gaps: [reason], receipts: [] });
   if (!binding.contextReceipt) return unavailable("prepared_context_receipt_missing");
   let expected: NativeComparisonContextReceipt;
-  try { expected = nativeComparisonContextReceipt(run, parseNativeExecutionInput(run.runnerProfileJson?.nativeExecutionInput), binding); }
+  let execution: NativeExecutionInput;
+  try { execution = parseNativeExecutionInput(run.runnerProfileJson?.nativeExecutionInput); expected = nativeComparisonContextReceipt(run, execution, binding); }
   catch { return unavailable("prepared_context_invalid"); }
   if (modelProfileDigest(expected) !== modelProfileDigest(binding.contextReceipt)) return unavailable("prepared_context_changed");
+  if (execution.session.lifecyclePolicy.mode !== "per_turn") return unavailable("warm_context_history_unavailable");
   if (comparisonWorkIterations(run, events) === null) return unavailable("context_event_history_incomplete");
   const turnKey = (event: Record<string, unknown>) => JSON.stringify([event.normalizedSessionId, event.turnId, record(event.payload).providerTurnId]);
   const starts = new Set(events.filter(row => row.eventType === "turn.started").map(row => turnKey(record(record(row.payload).prpEvent))));
@@ -145,7 +147,7 @@ export function nativeComparisonContextEvidence(run: typeof heartbeatRuns.$infer
     }
     if (!["session.started", "session.resumed", "turn.accepted"].includes(row.eventType)) continue;
     if (terminal) return unavailable("provider_context_receipt_out_of_order");
-    if (event.normalizedSessionId !== expected.normalizedSessionId) return unavailable("context_session_changed");
+    if (event.normalizedSessionId !== (expected.normalizedSessionId ?? `session-${run.id}`)) return unavailable("context_session_changed");
     const isTurn = row.eventType === "turn.accepted";
     const receipt = isTurn ? record(payload.inputReceipt)
       : record(record(record(payload.providerDescriptor).observedCodexIdentity).contextReceipt);

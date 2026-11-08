@@ -130,6 +130,26 @@ describe("shipped teams catalog", () => {
     expect(observed).toEqual(expected);
   });
 
+  it.each(["agentos-operators", "core-exec-team"])("declares only the CEO company-structure grant in %s", slug => {
+    const team = resolveCatalogTeamRef(slug)!;
+    const file = team.files.find(file => file.path === ".paperclip.yaml");
+    expect(file?.kind).toBe("extension");
+    const raw = fs.readFileSync(path.join(PACKAGE_DIR, team.path, ".paperclip.yaml"), "utf8");
+    const extension = parseFrontmatterMarkdown(`---\n${raw}\n---\n`).frontmatter;
+    expect(extension).toMatchObject({
+      schema: "paperclip/v1", agents: { ceo: { permissionGrants: [{ permissionKey: "applications:manage", scope: null }] } },
+    });
+    expect(Object.keys(extension.agents as Record<string, unknown>)).toEqual(["ceo"]);
+    // The catalog's lightweight frontmatter reader only inventories nested
+    // routines. Native import tests check the full schedule objects after the
+    // authoritative shared YAML reader and provenance merge.
+    if (slug === "agentos-operators") expect(extension.routines).toMatchObject({
+      "daily-portfolio-review": { status: "paused", concurrencyPolicy: "coalesce_if_active", catchUpPolicy: "skip_missed" },
+      "weekly-role-review": { status: "paused", concurrencyPolicy: "coalesce_if_active", catchUpPolicy: "skip_missed" },
+    });
+    expect(file?.sha256).toBe(createHash("sha256").update(raw).digest("hex"));
+  });
+
   it("declares a valid project for every shipped recurring task", () => {
     const issues: string[] = [];
 

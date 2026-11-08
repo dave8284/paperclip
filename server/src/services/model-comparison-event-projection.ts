@@ -1,5 +1,6 @@
 import { sql, type SQL } from "drizzle-orm";
 import { heartbeatRunEvents } from "@paperclipai/db";
+import { NATIVE_COMPARISON_SOURCE } from "./native-runtime/native-comparison-event-projection.js";
 
 // Finalization needs identities and receipts, never model prose, tool results
 // or attachments. Project inside PostgreSQL so large logs stay in their owner.
@@ -37,3 +38,22 @@ export const modelComparisonEventProjection = {
     else null end`,
 };
 export type ModelComparisonEvent = Pick<typeof heartbeatRunEvents.$inferSelect, keyof typeof modelComparisonEventProjection>;
+
+// These rows are written only by the authenticated native commit sink, under a
+// separate namespace from the facade's transcript. The stored digest remains
+// that of the original native event, not this deliberately incomplete body.
+export const nativeModelComparisonEventProjection = {
+  companyId: heartbeatRunEvents.companyId, runId: heartbeatRunEvents.runId, agentId: heartbeatRunEvents.agentId,
+  eventType: sql<string>`${heartbeatRunEvents.payload}->'event'->>'eventType'`,
+  sourceInstanceId: sql<string | null>`substring(${heartbeatRunEvents.sourceInstanceId} from ${NATIVE_COMPARISON_SOURCE.length + 1}::int)`,
+  sourceEventId: sql<string | null>`substring(${heartbeatRunEvents.sourceEventId} from ${NATIVE_COMPARISON_SOURCE.length + 1}::int)`,
+  sourceSeq: heartbeatRunEvents.sourceSeq, sourcePayloadSha256: heartbeatRunEvents.sourcePayloadSha256,
+  protocolSchemaVersion: heartbeatRunEvents.protocolSchemaVersion,
+  payload: sql<Record<string, unknown> | null>`case
+    when ${heartbeatRunEvents.payload}->>'schema' = 'agentos.native-comparison-event.v1'
+      and ${heartbeatRunEvents.sourceInstanceId} like ${`${NATIVE_COMPARISON_SOURCE}%`}
+      and ${heartbeatRunEvents.sourceEventId} like ${`${NATIVE_COMPARISON_SOURCE}%`}
+      and octet_length((${heartbeatRunEvents.payload})::text) <= 9216
+    then jsonb_build_object('nativeEvidenceSchema', 'agentos.native-comparison-event.v1',
+      'prpEvent', ${heartbeatRunEvents.payload}->'event') else null end`,
+};

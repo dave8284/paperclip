@@ -41,7 +41,8 @@ describe("portfolio attention preview", () => {
     const ordinary = [1, 2, 3].map(n => item("first", `ordinary-${n}`));
     const urgent = [item("later", "overdue", { decideBy: "2026-11-07" }),
       item("later", "critical-blocker", { sourceKind: "blocker_attention", severity: "critical", inlineResolvable: false,
-        subject: { kind: "issue", id: "blocked-task", title: "critical-blocker" }, project: { id: "later-project", name: "Later project" } })];
+        subject: { kind: "issue", id: "blocked-task", companyId: "later", title: "critical-blocker", identifier: "LATER-1", status: "blocked", href: "/issues/blocked-task" },
+        project: { id: "later-project", name: "Later project", urlKey: "later-project", color: null, icon: null } })];
     list.mockImplementation((companyId: string) => Promise.resolve(feed(companyId === "first" ? ordinary : urgent)));
     await render();
     expect(titles()).toEqual(["overdue", "critical-blocker", "ordinary-1"]);

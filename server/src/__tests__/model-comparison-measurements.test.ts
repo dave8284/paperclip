@@ -1,12 +1,13 @@
 import { describe, expect, it } from "vitest";
-import type { heartbeatRuns, heartbeatRunEvents } from "@paperclipai/db";
+import type { heartbeatRuns } from "@paperclipai/db";
+import type { ModelComparisonEvent } from "../services/model-comparison-event-projection.js";
 import type { NativeModelComparisonBinding } from "../services/model-comparison-admission.js";
 import { comparisonWorkIterations, measureModelComparison } from "../services/model-comparison-measurements.js";
 import { modelComparisonOutcome } from "../services/model-comparison-delivery.js";
 import { modelComparisonTaskScope } from "../services/model-comparison-scope.js";
 
 type Run = typeof heartbeatRuns.$inferSelect;
-type Event = typeof heartbeatRunEvents.$inferSelect;
+type Event = ModelComparisonEvent & { seq: number };
 const at = (seconds: number) => new Date(Date.UTC(2026, 0, 1, 0, 0, seconds));
 function fixture() {
   const task = { title: "Classify", description: "Classify the supplied data", workMode: "standard" };
@@ -58,7 +59,7 @@ describe("native comparison measurements", () => {
     const first = measureModelComparison(failed, f.binding,
       [f.event("turn.started"), f.event("turn.failed"), f.event("run.terminal", { runTerminalState: "failed" })], null);
     const secondRun = { ...f.run, id: "retry", createdAt: at(20), startedAt: at(24), finishedAt: at(30) };
-    const second = measureModelComparison(secondRun, { ...f.binding, runId: "retry", attempt: 2, admittedAt: at(25).toISOString() }, [], at(40), first);
+    const second = measureModelComparison(secondRun, { ...f.binding, attempt: 2, admittedAt: at(25).toISOString() }, [], at(40), first);
     expect(first).toMatchObject({ iterations: 1, latencyMs: 10_000 });
     expect(second).toMatchObject({ startedAt: at(10).toISOString(), latencyMs: 30_000, iterations: null });
     expect(first.latencyMs! + second.latencyMs!).toBe(40_000);

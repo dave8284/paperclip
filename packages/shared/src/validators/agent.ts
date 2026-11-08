@@ -312,13 +312,17 @@ export const testAdapterEnvironmentSchema = z.object({
 
 export type TestAdapterEnvironment = z.infer<typeof testAdapterEnvironmentSchema>;
 
-export const updateAgentPermissionsSchema = z.object({
+export const updateAgentPermissionsSchema = z.union([z.object({
   canCreateAgents: z.boolean(),
   canCreateSkills: z.boolean().optional(),
   canAssignTasks: z.boolean(),
   trustPreset: trustPresetSchema.optional(),
   authorizationPolicy: trustAuthorizationPolicySchema.optional(),
-});
+  canManageApplications: z.never().optional(),
+}), z.object({
+  /** Explicit native grant; board permission management and granting ceiling apply. */
+  canManageApplications: z.boolean(),
+}).strict()]);
 
 export type UpdateAgentPermissions = z.infer<typeof updateAgentPermissionsSchema>;
 

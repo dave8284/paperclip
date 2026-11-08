@@ -7,6 +7,9 @@ import { modelComparisonTaskScope } from "../model-comparison-scope.js";
 import { nativeComparisonContextEvidence, nativeComparisonContextReceipt, nativeComparisonEnvelopeDigest,
   prepareNativeComparisonContext } from "./native-comparison-context.js";
 import { publicModelComparisonRecord } from "../model-comparison-presentation.js";
+import { projectNativeComparisonEvent } from "./native-comparison-event-projection.js";
+import { matchesNativeComparisonEvent, nativeComparisonEventSink } from "./native-comparison-events.js";
+import type { PrpEvent } from "../../vendor/paperclip-runner/index.js";
 
 type Run = typeof heartbeatRuns.$inferSelect;
 type Event = ModelComparisonEvent & { seq: number };
@@ -78,6 +81,75 @@ function toolFixture() {
   f.events.splice(3, 0, input, result, written); resequence(f.events);
   return { ...f, input, result, written };
 }
+
+describe("authenticated native comparison projection", () => {
+  it.each(["sourceKind", "sourceInstanceId", "runId", "normalizedSessionId", "turnId", "itemId"] as const)(
+    "rejects another native %s before persistence", field => {
+      const f = fixture(), scope = { runId: f.run.id, normalizedSessionId: f.execution.session.normalizedSessionId!, runnerInstanceId: "runner" };
+      const event = { ...f.events[0].payload!.prpEvent as PrpEvent, sourceKind: "runner" as const,
+        turnId: `turn-${scope.runId}`, itemId: `item-${scope.runId}` };
+      expect(matchesNativeComparisonEvent(event, scope)).toBe(true);
+      expect(matchesNativeComparisonEvent({ ...event, [field]: "different" } as PrpEvent, scope)).toBe(false);
+    });
+
+  it("retains native chronology and tool receipts without private bodies or model-chosen idempotency text", () => {
+    const f = toolFixture();
+    payload(f.input).semantic_tool = { ...(payload(f.input).semantic_tool as object), input: {
+      idempotencyKey: "PRIVATE IDEMPOTENCY TEXT", source: "PRIVATE TOOL INPUT" }, output: "PRIVATE TOOL RESULT" };
+    payload(f.events[0]).privateInstructions = "PRIVATE INSTRUCTIONS";
+    const events = f.events.map(row => ({ ...row, payload: { prpEvent: projectNativeComparisonEvent(row.payload!.prpEvent as PrpEvent) } }));
+    expect(JSON.stringify(events)).not.toMatch(/PRIVATE/);
+    expect(nativeComparisonContextEvidence(f.run, f.binding, events)).toMatchObject({ stage: "partial", initialInputMatched: true,
+      missingToolResultReceipts: 0, toolResultReceipts: [expect.objectContaining({ nativeOutcome: "succeeded", stage: "transport_written" })] });
+  });
+
+  it("does not repair facade chronology or infer a retained prefix", () => {
+    const f = fixture();
+    const late = [f.events[0], f.events[2], f.events[1], ...f.events.slice(3)].map(row => structuredClone(row));
+    resequence(late);
+    expect(nativeComparisonContextEvidence(f.run, f.binding, late)).toMatchObject({ stage: "unavailable", gaps: ["provider_context_receipt_missing"] });
+    expect(nativeComparisonContextEvidence(f.run, f.binding, f.events.slice(1))).toMatchObject({ stage: "unavailable", gaps: ["context_event_history_incomplete"] });
+  });
+
+  it("accepts current native mixed protocol versions only with journal provenance, preserving unknown versions", () => {
+    const f = fixture();
+    const events = f.events.map((row, index) => ({ ...row, protocolSchemaVersion: index === 2 ? 2 : 1,
+      payload: { nativeEvidenceSchema: "agentos.native-comparison-event.v1", prpEvent: projectNativeComparisonEvent(row.payload!.prpEvent as PrpEvent) } }));
+    expect(nativeComparisonContextEvidence(f.run, f.binding, events)).toMatchObject({ stage: "partial", initialInputMatched: true });
+    expect(nativeComparisonContextEvidence(f.run, f.binding, events.map(row => ({ ...row, payload: { prpEvent: row.payload.prpEvent } }))))
+      .toMatchObject({ stage: "unavailable", gaps: ["context_event_history_incomplete"] });
+    events[2].protocolSchemaVersion = 99;
+    expect(nativeComparisonContextEvidence(f.run, f.binding, events)).toMatchObject({ stage: "unavailable", gaps: ["context_event_history_incomplete"] });
+  });
+
+  it("keeps ordinary and warm sessions without a sink and makes warm evidence explicitly unavailable", () => {
+    const f = fixture(), noDb = new Proxy({}, { get() { throw new Error("ordinary run accessed DB"); } });
+    expect(nativeComparisonEventSink(noDb as never, { execution: f.execution, runnerInstanceId: "runner", binding: null })).toBeUndefined();
+    f.execution.session.lifecyclePolicy = { mode: "warm", idleTimeoutMs: 60_000 };
+    f.binding.contextReceipt = nativeComparisonContextReceipt(f.run, f.execution, f.binding);
+    expect(nativeComparisonEventSink(noDb as never, { execution: f.execution, runnerInstanceId: "runner", binding: f.binding })).toBeUndefined();
+    expect(nativeComparisonContextEvidence(f.run, f.binding, f.events)).toMatchObject({ stage: "unavailable", gaps: ["warm_context_history_unavailable"] });
+  });
+
+  it("does not create an admitted sink without the frozen input and current controller claim", () => {
+    const f = fixture();
+    expect(() => nativeComparisonEventSink({} as never, { execution: f.execution, runnerInstanceId: "runner", binding: f.binding }))
+      .toThrow("native_comparison_event_admission_missing");
+    f.execution.task.prompt += " changed";
+    expect(() => nativeComparisonEventSink({} as never, { execution: f.execution, runnerInstanceId: "runner", binding: f.binding,
+      authority: { leaseOwner: "owner", attempt: 1, controller: { bootId: "boot", pid: 1, processStartedAt: new Date() }, assertActive() {} } }))
+      .toThrow("native_comparison_event_admission_missing");
+  });
+
+  it("drops malformed receipt prose and oversized event metadata while retaining missing-evidence positions", () => {
+    const f = fixture(), original = f.events[1].payload!.prpEvent as PrpEvent;
+    original.payload.inputReceipt = { ...original.payload.inputReceipt as object, promptSha256: "PRIVATE PROMPT", privateBody: "PRIVATE RESULT" };
+    const projected = projectNativeComparisonEvent(original);
+    expect(JSON.stringify(projected)).not.toMatch(/PRIVATE/);
+    expect(projected).toMatchObject({ payload: { inputReceipt: { promptSha256: null } } });
+    expect(projectNativeComparisonEvent({ ...original, sourceEventId: "x".repeat(9000) })).toBeNull();
+  });
+});
 
 describe("native comparison context chain", () => {
   it("freezes complete prepared input without copying private content or paths into its receipt", () => {

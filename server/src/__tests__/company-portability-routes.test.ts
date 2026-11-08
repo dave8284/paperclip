@@ -361,6 +361,38 @@ describe("company portability routes", () => {
     });
   });
 
+  async function callImportRoute(routePath: string, actor: ReturnType<typeof boardActor>, body: unknown) {
+    registerCompanyRouteMocks();
+    const { companyRoutes } = await import("../routes/companies.js");
+    const router = companyRoutes({} as never);
+    const route = router.stack.find(layer => layer.route?.path === routePath)?.route;
+    expect(route).toBeDefined();
+    const req = { actor, body, query: {}, headers: {}, header: () => undefined, get: () => undefined, is: () => false };
+    const res = { json: vi.fn(), status: vi.fn() };
+    res.status.mockReturnValue(res);
+    for (const layer of route!.stack) await layer.handle(req as never, res as never, (error?: unknown) => { if (error) throw error; });
+    return res;
+  }
+
+  it.each(["/import/preview", "/import"])("listener-free %s retains the authenticated board actor through import authorization", async route => {
+    const actor = boardActor("limited-board");
+    actor.isInstanceAdmin = false;
+    await callImportRoute(route, actor, { ...importRequest, authorizationActor: boardActor("forged-admin") });
+    const called = route === "/import" ? mockCompanyPortabilityService.importBundle : mockCompanyPortabilityService.previewImport;
+    expect(called).toHaveBeenCalledTimes(1);
+    expect(called.mock.calls[0].at(-1)).toEqual(route === "/import"
+      ? { pauseAutomations: false, authorizationActor: actor }
+      : { authorizationActor: actor });
+  });
+
+  it.each(["/import/preview", "/import"])("listener-free %s preserves native grant denial", async route => {
+    const denial = Object.assign(new Error("Current permission management authority is required"), { status: 403 });
+    const called = route === "/import" ? mockCompanyPortabilityService.importBundle : mockCompanyPortabilityService.previewImport;
+    called.mockRejectedValueOnce(denial);
+    await expect(callImportRoute(route, boardActor("limited-board"), importRequest)).rejects.toBe(denial);
+    expect(mockLogActivity).not.toHaveBeenCalled();
+  });
+
   it("rejects non-CEO agents from CEO-safe export preview routes", async () => {
     const app = await createApp({
       type: "agent",
@@ -942,7 +974,7 @@ describe("company portability routes", () => {
     expect(accepted.body.statusUrl).toMatch(/^\/api\/companies\/import\/jobs\/tenant-import-/);
     expect(accepted.body.retryAfterMs).toBe(1000);
     await waitForCondition(() => mockCompanyPortabilityService.importBundle.mock.calls.length === 1, "import job start");
-    expect(mockCompanyPortabilityService.importBundle).toHaveBeenCalledWith(importRequest, "cloud-user-1", { pauseAutomations: false });
+    expect(mockCompanyPortabilityService.importBundle).toHaveBeenCalledWith(importRequest, "cloud-user-1", { pauseAutomations: false, authorizationActor: cloudTenantActor() });
     expect(mockLogActivity).not.toHaveBeenCalled();
 
     resolveImport(createImportResult("updated"));
@@ -1067,7 +1099,7 @@ describe("company portability routes", () => {
     expect(mockCompanyPortabilityService.importBundle).toHaveBeenCalledWith(
       { ...importRequest, pauseAutomations: true },
       "cloud-user-1",
-      { pauseAutomations: true },
+      { pauseAutomations: true, authorizationActor: cloudTenantActor() },
     );
   });
 
@@ -1091,7 +1123,7 @@ describe("company portability routes", () => {
     expect(accepted.body.statusUrl).toMatch(/^\/api\/companies\/import\/jobs\/import-/);
     expect(accepted.body.statusUrl).not.toMatch(/\/jobs\/tenant-import-/);
     await waitForCondition(() => mockCompanyPortabilityService.importBundle.mock.calls.length === 1, "board import start");
-    expect(mockCompanyPortabilityService.importBundle).toHaveBeenCalledWith(importRequest, "board-user-a", { pauseAutomations: false });
+    expect(mockCompanyPortabilityService.importBundle).toHaveBeenCalledWith(importRequest, "board-user-a", { pauseAutomations: false, authorizationActor: boardActor("board-user-a") });
 
     const fullResult = createImportResult("created");
     resolveImport(fullResult);
@@ -1268,7 +1300,9 @@ describe("company portability routes", () => {
     expect(mockCompanyPortabilityService.importBundle).toHaveBeenCalledWith(
       { ...importRequest, pauseAutomations: true },
       null,
-      { mode: "agent_safe", sourceCompanyId: companyId, pauseAutomations: true },
+      { mode: "agent_safe", sourceCompanyId: companyId, pauseAutomations: true, authorizationActor: {
+        type: "agent", agentId: ceoAgentId, companyId, source: "agent_key", runId: "run-1",
+      } },
     );
   });
 
@@ -1290,7 +1324,7 @@ describe("company portability routes", () => {
     // consumes; the other import fields ride along from the JSON meta field.
     expect(call[0]).toEqual({ ...importMeta, source: { type: "inline", rootPath: "paperclip", files } });
     expect(call[1]).toBe("board-user-a");
-    expect(call[2]).toEqual({ pauseAutomations: false });
+    expect(call[2]).toEqual({ pauseAutomations: false, authorizationActor: boardActor("board-user-a") });
   });
 
   it("previews a company from a multipart zip upload", async () => {

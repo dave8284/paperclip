@@ -44,6 +44,17 @@ bypass hiring authorization. Source: [runner resolver](../../server/src/services
 Policy: Agent creation/configuration uses action grants, resource policies and change
 consent; some controls require a board actor.
 
+`PATCH /api/agents/{id}/permissions` accepts standalone
+`{"canManageApplications":true|false}` for the native `applications:manage` grant.
+Only a current authorized board member can use this payload: native
+`users:manage_permissions` is required, plus company-wide `applications:manage`
+when granting. Employee callers, including CEOs, cannot self-grant. The owning
+[grant service](../../server/src/services/agent-application-grants.ts) pins current
+authority, preserves every other grant/scope and membership role/status, and
+commits the mutation with its audit. Legacy permission payloads remain separate.
+Department authority still checks the actual CEO or current appointed head;
+neither a title nor `canCreateAgents` supplies this grant.
+
 The early wizard record (`setupId` on create) and completion of that record
 (`setupAgentId` on hire) require a board actor and company-scoped creation
 permission. Its creator can finish their own inactive setup with that permission;

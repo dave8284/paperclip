@@ -40,9 +40,21 @@ The 8 November checkout snapshot at migration 0395 contains 323 application
 tables. Native guarded recovery completed at 04:40:12 UTC with 0395 applied and
 no pending migrations; the subsequent 04:53:16 recovery also reported ready.
 These runtime observations are recorded in the [completion ledger](2026-11-06-agentos-completion-ledger.md).
-The latest retained backup inspected below is older: it contains 320 application
-tables and migration history through 0392. Checkout schema, loaded runtime and
-backup coverage are separate evidence.
+The older retained backup inspected below contains 320 application tables and
+migration history through 0392. A subsequent read-only inventory of the native
+05:54:40 UTC online backup finds **323 application tables plus the journal,
+21,134 one-row INSERT statements and 394 journal rows**. It also retains five
+sequences, 923 indexes, 85 triggers and two extension declarations. Its complete
+decompressed SHA256 is
+`8dd66dd4b093562b832876f10c186dde2fb9c168c8a4fadb4c9b3fc4ea6a021b`.
+Private inventory: `/private/tmp/agentos-source-backup-inventory-r2-20261108.json`
+(0600). SQL parsing excluded quoted row bodies; no record values were printed.
+The first inventory expected COPY and found none; the corrected inventory uses
+this backup's native JavaScript writer format. Per-table SQL digests normalize
+line endings and are not logical database-content digests. The native format
+does not encode a server version. This is an online backup inventory, not a
+drained migration baseline or restore/PG18-to-PG17 compatibility proof.
+Checkout schema, loaded runtime and backup coverage remain separate evidence.
 Inventory the actual source/target at execution time. The native client detects
 the journal schema; do not assume `drizzle` or `public`. Source migrations require
 `pg_trgm` and `fuzzystrmatch`; compare installed versions and all other actual

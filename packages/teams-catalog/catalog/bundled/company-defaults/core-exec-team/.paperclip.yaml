@@ -1,0 +1,7 @@
+schema: paperclip/v1
+agents:
+  ceo:
+    permissionGrants:
+      -
+        permissionKey: applications:manage
+        scope: null

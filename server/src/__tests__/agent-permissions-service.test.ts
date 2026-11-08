@@ -106,11 +106,17 @@ describe("agent permissions service", () => {
     expect(updateAgentPermissionsSchema.parse({
       canCreateAgents: false,
       canAssignTasks: false,
-    }).canCreateSkills).toBeUndefined();
+    })).not.toHaveProperty("canCreateSkills");
     expect(updateAgentPermissionsSchema.parse({
       canCreateAgents: false,
       canCreateSkills: false,
       canAssignTasks: false,
-    }).canCreateSkills).toBe(false);
+    })).toMatchObject({ canCreateSkills: false });
+  });
+  it("accepts only a standalone native application grant update", () => {
+    expect(updateAgentPermissionsSchema.parse({ canManageApplications: true })).toEqual({ canManageApplications: true });
+    expect(updateAgentPermissionsSchema.parse({ canManageApplications: false })).toEqual({ canManageApplications: false });
+    expect(updateAgentPermissionsSchema.safeParse({ canManageApplications: true, canCreateAgents: true, canAssignTasks: false }).success).toBe(false);
+    expect(updateAgentPermissionsSchema.safeParse({ canManageApplications: true, role: "ceo" }).success).toBe(false);
   });
 });

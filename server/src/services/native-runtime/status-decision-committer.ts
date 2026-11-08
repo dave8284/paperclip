@@ -1,3 +1,4 @@
+import { nativeReviewInteractionKey } from "./native-review-identity.js";
 import { scheduledIssueMonitorWait } from "../issue-monitors.js";
 import { hasPublishedGitHubReview } from "../chat-channels/github/review-wait.js";
 import { pendingNativeGovernance } from "./native-governance.js";
@@ -604,7 +605,7 @@ async function materializeDecisionEffect(input: {
       { kind: "request_confirmation" }
     > = {
       kind: "request_confirmation",
-      idempotencyKey: `native-review:${input.decisionId}${effect.requestKey ? `:${effect.requestKey}` : ""}`,
+      idempotencyKey: nativeReviewInteractionKey(input.decisionId, effect.requestKey),
       sourceRunId: input.runId,
       resolverPolicy: effect.ownerAgentId ? "anyone" : "human_only",
       addresseeAgentId: effect.ownerAgentId ?? null,

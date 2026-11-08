@@ -6,7 +6,7 @@ import type {
   ConnectionIntentInteraction,
   AgentDesiredSkillEntry,
   AgentSkillAssignmentMode,
-  AgentPermissions,
+  UpdateAgentPermissions,
   AgentDetail,
   AgentInstructionsBundle,
   AgentInstructionHistory,
@@ -83,13 +83,7 @@ export interface AgentHireResponse {
   approval: Approval | null;
 }
 
-export interface AgentPermissionUpdate {
-  canCreateAgents: boolean;
-  canCreateSkills: boolean;
-  canAssignTasks: boolean;
-  trustPreset?: AgentPermissions["trustPreset"];
-  authorizationPolicy?: AgentPermissions["authorizationPolicy"];
-}
+export type AgentPermissionUpdate = UpdateAgentPermissions;
 
 export interface AgentWakeRequest {
   source?: "timer" | "assignment" | "on_demand" | "automation";

@@ -199,6 +199,23 @@ describe("teamsCatalogService", () => {
     expect(prepared.source.files[".paperclip.yaml"]).toEqual(expect.stringContaining("catalogSlug: \"product-engineering\""));
   });
 
+  it.each(["agentos-operators", "core-exec-team"])("retains %s explicit CEO grant through native import preparation", async slug => {
+    const prepared = await teamsCatalogService({} as any).prepareCatalogTeamSource("company-1", slug);
+    const extension = parseFrontmatterMarkdown(`---\n${prepared.source.files[".paperclip.yaml"]}\n---\n`).frontmatter as {
+      agents: Record<string, { permissionGrants?: unknown[]; metadata?: unknown }>;
+      routines?: unknown;
+    };
+    expect(extension.agents.ceo.permissionGrants).toEqual([{ permissionKey: "applications:manage", scope: null }]);
+    expect(extension.agents.ceo.metadata).toBeDefined();
+    expect(Object.entries(extension.agents).filter(([, entry]) => entry.permissionGrants?.length).map(([slug]) => slug)).toEqual(["ceo"]);
+    if (slug === "agentos-operators") expect(extension.routines).toMatchObject({
+      "daily-portfolio-review": { status: "paused", concurrencyPolicy: "coalesce_if_active", catchUpPolicy: "skip_missed",
+        triggers: [{ kind: "schedule", cronExpression: "0 9 * * *", timezone: "Pacific/Auckland" }] },
+      "weekly-role-review": { status: "paused", concurrencyPolicy: "coalesce_if_active", catchUpPolicy: "skip_missed",
+        triggers: [{ kind: "schedule", cronExpression: "0 10 * * 1", timezone: "Pacific/Auckland" }] },
+    });
+  });
+
   it("preserves package sidecar permissions when generated target-manager metadata is merged onto the same root agent", async () => {
     const svc = teamsCatalogService({} as any);
 

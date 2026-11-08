@@ -11,6 +11,11 @@ import { runnerApiResponseReservations } from "@paperclipai/db";
 const runnerTarget = vi.hoisted(() => ({ driver: "local", platform: "linux", architecture: "x64" }));
 const importStaffing = vi.hoisted(() => ({ prepare: vi.fn() }));
 vi.mock("../services/company-import-staffing-authority.js", () => ({ prepareAgentImportStaffing: importStaffing.prepare }));
+const importPermissionGrants = vi.hoisted(() => ({ preflight: vi.fn(), mutate: vi.fn() }));
+vi.mock("../services/company-import-permission-grants.js", () => ({
+  preflightImportedAgentPermissionGrants: importPermissionGrants.preflight,
+  mutateImportedAgentWithGrants: importPermissionGrants.mutate,
+}));
 
 vi.mock("../services/agent-runner-selection.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../services/agent-runner-selection.js")>();
@@ -226,6 +231,21 @@ describe("company portability", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    importPermissionGrants.preflight.mockResolvedValue(undefined);
+    // This suite checks importer wiring. The real native authority, current
+    // scopes and atomic rollback are exercised by the helper's transport tests.
+    importPermissionGrants.mutate.mockImplementation(async (db, input, mutate) => {
+      const employee = await mutate({ requestHire: (...args: unknown[]) => agentSvc.create(...args),
+        updateConfiguration: (...args: unknown[]) => agentSvc.update(...args),
+        updateAndTransition: (id: string, _command: unknown, patch: unknown) => agentSvc.update(id, patch) });
+      if (employee && input.baselineTaskAssignment) await accessSvc.setPrincipalPermission(input.companyId,
+        "agent", employee.id, "tasks:assign", true, input.baselineGrantedByUserId ?? null);
+      if (employee) for (const grant of input.grants) {
+        await accessSvc.setPrincipalPermission(input.companyId, "agent", employee.id,
+          grant.permissionKey, true, input.actor?.userId ?? null, grant.scope ?? null);
+      }
+      return employee;
+    });
     runnerTarget.platform = "linux";
     runnerTarget.architecture = "x64";
     agentSvc.getById.mockImplementation(async (id: string) => (await agentSvc.list()).find((agent: { id: string }) => agent.id === id) ?? null);
@@ -2011,6 +2031,65 @@ describe("company portability", () => {
     );
   });
 
+  function grantImportRequest() {
+    return {
+      source: { type: "inline" as const, files: {
+        "COMPANY.md": "---\nname: Import\n---\n",
+        "agents/coder/AGENTS.md": "---\nname: Coder\nslug: coder\nkind: agent\n---\nDo the work.\n",
+        ".paperclip.yaml": "schema: paperclip/v1\nagents:\n  coder:\n    adapter:\n      type: process\n      config: {}\n    permissionGrants:\n      - permissionKey: applications:manage\n",
+      } },
+      include: { company: false, agents: true, projects: false, issues: false, skills: false },
+      target: { mode: "existing_company" as const, companyId: "company-1" },
+      collisionStrategy: "rename" as const,
+    };
+  }
+
+  const importBoardActor = { type: "board" as const, source: "session" as const, userId: "user-1", companyIds: ["company-1"] };
+
+  it.each(["existing_company", "new_company"] as const)("checks all selected explicit grants before %s import mutations", async mode => {
+    const input = grantImportRequest();
+    importPermissionGrants.preflight.mockRejectedValueOnce(Object.assign(new Error("Permission management denied"), { status: 403 }));
+    await expect(companyPortabilityService({} as never).importBundle({ ...input,
+      include: { ...input.include, company: true },
+      target: mode === "existing_company" ? input.target : { mode },
+    }, "user-1", { authorizationActor: importBoardActor })).rejects.toMatchObject({ status: 403 });
+    expect(importPermissionGrants.preflight).toHaveBeenCalledWith(expect.anything(), {
+      companyId: mode === "existing_company" ? "company-1" : expect.any(String), actor: importBoardActor,
+      grants: [{ permissionKey: "applications:manage", scope: null }],
+    });
+    expect(companySvc.create).not.toHaveBeenCalled();
+    expect(companySvc.update).not.toHaveBeenCalled();
+    expect(agentSvc.create).not.toHaveBeenCalled();
+    expect(agentSvc.update).not.toHaveBeenCalled();
+    expect(secretSvc.create).not.toHaveBeenCalled();
+    expect(accessSvc.setPrincipalPermission).not.toHaveBeenCalled();
+  });
+
+  it("keeps current authority at the employee mutation after successful import preparation", async () => {
+    const input = grantImportRequest();
+    importPermissionGrants.mutate.mockRejectedValueOnce(Object.assign(new Error("Board grant revoked"), { status: 403 }));
+    await expect(companyPortabilityService({} as never).importBundle(input, "user-1", {
+      authorizationActor: importBoardActor,
+    })).rejects.toMatchObject({ status: 403 });
+    expect(importPermissionGrants.preflight).toHaveBeenCalledTimes(1);
+    expect(importPermissionGrants.mutate).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+      companyId: "company-1", actor: importBoardActor, grants: [{ permissionKey: "applications:manage", scope: null }],
+    }), expect.any(Function));
+    expect(agentSvc.create).not.toHaveBeenCalled();
+    expect(accessSvc.setPrincipalPermission).not.toHaveBeenCalled();
+    expect(agentInstructionsSvc.materializeManagedBundle).not.toHaveBeenCalled();
+  });
+
+  it("does not request grant authority for a skipped imported employee", async () => {
+    agentSvc.list.mockResolvedValue([{ id: "existing-coder", name: "Coder", role: "engineer", status: "idle", adapterType: "process", adapterConfig: {} }]);
+    await companyPortabilityService({} as never).importBundle({ ...grantImportRequest(), collisionStrategy: "skip" }, "user-1", {
+      authorizationActor: importBoardActor,
+    });
+    expect(importPermissionGrants.preflight).not.toHaveBeenCalled();
+    expect(importPermissionGrants.mutate).not.toHaveBeenCalled();
+    expect(accessSvc.setPrincipalPermission).not.toHaveBeenCalled();
+  });
+
   it("imports agent permission grants from package metadata", async () => {
     const portability = companyPortabilityService({} as any);
     agentSvc.list.mockResolvedValue([]);
@@ -2073,7 +2152,10 @@ describe("company portability", () => {
         companyId: "company-1",
       },
       collisionStrategy: "rename",
-    }, "user-1");
+    }, "user-1", { authorizationActor: importBoardActor });
+
+    expect(importPermissionGrants.preflight).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ actor: importBoardActor }));
+    expect(importPermissionGrants.mutate).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ actor: importBoardActor }), expect.any(Function));
 
     expect(accessSvc.setPrincipalPermission).toHaveBeenCalledWith(
       "company-1",

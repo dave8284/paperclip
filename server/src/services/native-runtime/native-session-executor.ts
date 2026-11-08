@@ -1,4 +1,6 @@
 import { writeEnvironmentCleanup } from "../environment-cleanup-notifications.js";
+import { nativeComparisonEventSink, type NativeComparisonEventAuthority } from "./native-comparison-events.js";
+import { readNativeModelComparison } from "../model-comparison-admission.js";
 import { DELIVERY_QUEUES } from "../delivery-work-notifications.js";
 import { writeExecutionControl } from "../execution-control-notifications.js";
 import { notifyExecutionRunWork } from "../execution-control-notifications.js";
@@ -8914,6 +8916,7 @@ async function executePaperclipNativeSessionWithinScope(
             // projects remoteCwd into the provider execution boundary.
             execution: input.execution,
             runnerInstanceId: effectiveRunnerInstanceId,
+            nativeEventAuthority: { leaseOwner, attempt, controller, assertActive: assertControllerActive },
             pluginTaskDescription,
             retainedPluginTaskOwner: existingWarmSession ? pluginTaskSessionOwners.get(existingWarmSession) : undefined,
             durableEnvironmentLeaseId: durableRunnerBinding?.environmentLeaseId,
@@ -8944,6 +8947,7 @@ async function executePaperclipNativeSessionWithinScope(
           nativeSessionConfigDigest(remoteWarmRecovery.previousExecution, "remote"), await recovered.session.snapshot());
         persistedWarmSession = loadWarmNativeCheckpoint(input.execution, warmConfigDigest!, "remote");
         runnerdBackend = await createRunnerdBackend({ ...input, runnerInstanceId: effectiveRunnerInstanceId,
+          nativeEventAuthority: { leaseOwner, attempt, controller, assertActive: assertControllerActive },
           durableEnvironmentLeaseId: durableRunnerBinding?.environmentLeaseId, trace, toolTrace });
       }
     }
@@ -11515,6 +11519,8 @@ export async function createRunnerdBackend(input: {
   db: Db;
   execution: NativeExecutionInput;
   runnerInstanceId: string;
+  /** Current controller claim; used only by already admitted comparisons. */
+  nativeEventAuthority?: NativeComparisonEventAuthority;
   chatAttachmentReadScope?: NativeChatAttachmentReadScope;
   restartRecovery?: NativeRestartRecoveryClaim;
   durableEnvironmentLeaseId?: string;
@@ -11743,7 +11749,8 @@ async function createRunnerdBackendWithinSessionClaim(
   ));
   const pinnedSkills = new Set("runtimeContext" in input.execution ? input.execution.runtimeContext.skills.map((skill) => skill.key) : []);
   const connectorAssignments = input.execution.provider.kind !== "muse" ? connectorToolDefinitionsForSkills(pinnedSkills) : [];
-  const reviewRun = await input.db.select({ contextSnapshot: heartbeatRuns.contextSnapshot })
+  const reviewRun = await input.db.select({ contextSnapshot: heartbeatRuns.contextSnapshot,
+    comparison: sql<Record<string, unknown> | null>`${heartbeatRuns.runnerProfileJson}->'nativeModelComparison'` })
     .from(heartbeatRuns).where(and(
       eq(heartbeatRuns.id, input.execution.binding.runId),
       eq(heartbeatRuns.companyId, input.execution.binding.companyId),
@@ -11857,6 +11864,11 @@ async function createRunnerdBackendWithinSessionClaim(
     (pluginTask ? remoteTarget?.leaseId : undefined) ?? durableBinding?.environmentLeaseId ??
     input.durableEnvironmentLeaseId ??
     input.execution.binding.executionWorkspaceId;
+  const comparisonSink = nativeComparisonEventSink(input.db, {
+    execution: input.execution, runnerInstanceId: effectiveRunnerInstanceId, authority: input.nativeEventAuthority,
+    binding: reviewRun ? readNativeModelComparison({ id: input.execution.binding.runId,
+      companyId: input.execution.binding.companyId, runnerProfileJson: { nativeModelComparison: reviewRun.comparison } }) : null,
+  });
   mkdirSync(root, { recursive: true, mode: 0o700 });
   if (pluginTask && remoteTarget?.transport === "sandbox" && input.execution.schema !== "paperclip.native-execution-input.v6" && input.execution.schema !== "paperclip.native-execution-input.v8") {
     const provider = input.execution.provider;
@@ -11942,6 +11954,7 @@ async function createRunnerdBackendWithinSessionClaim(
         return nativeCompletionFeedback(input.db, current.runId, result);
       },
       codexTransportFactory: recovery => createRunnerdCodexTransport({ provider: provider.kind, stateDirectory: root,
+        ...(comparisonSink ? { onAuthenticatedEvent: comparisonSink } : {}),
         ...owner.driver, runnerArtifact: description.runner,
         ...(provider.kind === "acpx" ? { acpxAgent: provider.agent,
           acpxCandidateProfile: provider.agent === "pi" ? undefined : resolveAcpxQualification(provider, process.env),
@@ -13359,6 +13372,7 @@ async function createRunnerdBackendWithinSessionClaim(
     ),
     codexTransportFactory: (recoveryContext) =>
       createRunnerdCodexTransport({
+        ...(comparisonSink ? { onAuthenticatedEvent: comparisonSink } : {}),
         onSpawn: input.onSpawn,
         homeMode: preconfiguredHome ? "preconfigured" : "isolated",
         onCredentialsUpdated: (event) => appendNativeCredentialUpdate(input.db, {
