@@ -14,7 +14,7 @@ type Binding = { companyId: string; issueId: string; agentId: string; runId: str
 export type EgmExecutionPurpose = NativeEgmPacketReviewPurpose;
 const record = (value: unknown): Record<string, unknown> => value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 export function egmExecutionPurpose(execution: NativeExecutionInput): EgmExecutionPurpose | undefined {
-  return "executionPurpose" in execution ? execution.executionPurpose : undefined;
+  return "executionPurpose" in execution && execution.executionPurpose?.kind === "egm_packet_review" ? execution.executionPurpose : undefined;
 }
 export function egmSources(packet: EgmPacketPreparation) {
   return [

@@ -6753,87 +6753,193 @@ fn packet_review_tools() -> Vec<AuthorizedTool> {
         .collect()
 }
 
+fn skill_test_config(directory: &Path, switches: &[&str]) -> CodexProviderConfig {
+    let mut config = packet_review_config(directory, switches);
+    config.conversation_mode = Some("skill_test".to_owned());
+    config.expected_codex_identity = Some(
+        paperclip_runner_core::codex_provider::ExpectedCodexIdentity {
+            cli_version: "0.160.0".to_owned(),
+            model: "test-model".to_owned(),
+        },
+    );
+    config.execution_purpose = Some(
+        serde_json::from_value(json!({
+            "kind": "skill_test", "testRunId": "00000000-0000-4000-8000-000000000001",
+            "skillId": "00000000-0000-4000-8000-000000000002",
+            "skillVersionId": "00000000-0000-4000-8000-000000000003",
+            "inputSha256": "a".repeat(64), "skillSha256": "b".repeat(64)
+        }))
+        .unwrap(),
+    );
+    config
+}
+
 #[test]
-fn packet_review_cold_restore_keeps_zero_environments_and_frozen_tool_scope() {
-    let directory = temporary_directory("packet-review-restore");
-    let log = directory.join("requests.ndjson");
-    let config = packet_review_config(&directory, &["--request-log", log.to_str().unwrap()]);
-    let operations = packet_review_tools();
-    let tools = AuthorizedToolSet {
-        schema: TOOL_SET_SCHEMA.to_owned(),
-        schema_version: 1,
-        catalog_digest: authorized_tool_catalog_digest(&operations).unwrap(),
-        operations,
-    };
-    let runner_config = durable_config(&directory);
-    let mut executor = CodexCommandExecutor::with_runner_config(&directory, &runner_config);
-    executor
-        .execute(&command(
-            "prepare",
-            1,
-            "run.prepare",
-            json!({"provider":config,"authorizedTools":tools}),
-        ))
-        .unwrap();
-    executor
-        .execute(&command("open", 2, "session.open", json!({})))
-        .unwrap();
-    executor.shutdown().unwrap();
-    drop(executor);
-    let mut restored = CodexCommandExecutor::with_runner_config(&directory, &runner_config);
-    restored
-        .execute(&command(
-            "turn",
-            3,
-            "turn.start",
-            json!({"text":"Review only the frozen packet."}),
-        ))
-        .unwrap();
-    restored.shutdown().unwrap();
-    let frames = skill_wire_requests(&directory);
-    for method in ["thread/start", "thread/resume"] {
-        let frame = frames
-            .iter()
-            .find(|f| f["method"] == method)
-            .expect("start and recovery both observed");
-        assert!(frame["params"].get("cwd").is_none());
-        assert!(frame["params"].get("runtimeWorkspaceRoots").is_none());
-        let names = frame["params"]["dynamicTools"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .map(|tool| tool["name"].as_str().unwrap())
-            .collect::<std::collections::BTreeSet<_>>();
-        assert_eq!(
-            names,
-            ["read_egm_source", "submit_egm_findings", "paperclip_finish"]
-                .into_iter()
-                .collect()
-        );
-        let policy = &frame["params"]["config"];
-        assert_eq!(policy["project_doc_max_bytes"], 0);
-        assert_eq!(policy["web_search"], "disabled");
-        for key in [
-            "skills.include_instructions",
-            "features.shell_tool",
-            "features.view_image",
-            "features.apps",
-            "features.plugins",
-            "features.multi_agent",
-            "features.memories",
-            "features.image_generation",
-        ] {
-            assert_eq!(policy[key], false, "{method}: {key}");
-        }
-        if method == "thread/start" {
-            assert_eq!(frame["params"]["environments"], json!([]));
-        }
-    }
-    let turn = frames.iter().find(|f| f["method"] == "turn/start").unwrap();
-    assert_eq!(turn["params"]["environments"], json!([]));
-    assert!(turn["params"].get("cwd").is_none());
-    assert_eq!(turn["params"]["input"].as_array().unwrap().len(), 1);
+fn skill_test_preserves_qualified_model_identity_before_inference() {
+    let directory = temporary_directory("skill-test-identity");
+    let config = skill_test_config(&directory, &["--returned-model", "different-model"]);
+    let error = CodexProvider::start_with_tools(&config, skill_test_tools(), None)
+        .err()
+        .expect("a different observed model cannot execute the test");
+    assert!(error
+        .to_string()
+        .contains("qualified Codex provider model mismatch"));
     fs::remove_dir_all(directory).unwrap();
+}
+
+fn skill_test_tools() -> Vec<AuthorizedTool> {
+    [
+        "get_task_context",
+        "read_document",
+        "write_document",
+        "report_progress",
+        "list_assigned_skills",
+        "read_assigned_skill",
+        "paperclip_finish",
+        "paperclip_block",
+    ]
+    .into_iter()
+    .map(|name| AuthorizedTool {
+        operation_id: name.to_owned(),
+        version: 1,
+        description: "Bound skill test operation".to_owned(),
+        input_schema: json!({"type":"object"}),
+        response_schema: json!({"type":"object"}),
+    })
+    .collect()
+}
+
+#[test]
+fn skill_test_rejects_expanded_authority_before_spawn() {
+    let directory = temporary_directory("skill-test-invalid");
+    let config = skill_test_config(&directory, &[]);
+    assert!(CodexProvider::start_with_tools(&config, packet_review_tools(), None).is_err());
+    let mut tools = skill_test_tools();
+    tools.push(task_context_tool());
+    assert!(CodexProvider::start_with_tools(&config, tools, None).is_err());
+    for changed in [
+        json!({"kind":"egm_packet_review"}),
+        json!({"inputSha256":"malformed"}),
+        json!({"skillVersionId":"other-company-version"}),
+    ] {
+        let mut value = serde_json::to_value(&config).unwrap();
+        for (key, replacement) in changed.as_object().unwrap() {
+            value["executionPurpose"][key] = replacement.clone();
+        }
+        let invalid: CodexProviderConfig = serde_json::from_value(value).unwrap();
+        assert!(invalid.validate().is_err());
+    }
+    for changed in [
+        json!({"conversationMode":"task"}),
+        json!({"executionPurpose":null}),
+        json!({"includeSkillInstructions":true}),
+        json!({"readOnly":false}),
+        json!({"externallySandboxed":true}),
+    ] {
+        let mut value = serde_json::to_value(&config).unwrap();
+        for (key, replacement) in changed.as_object().unwrap() {
+            value[key] = replacement.clone();
+        }
+        let invalid: CodexProviderConfig = serde_json::from_value(value).unwrap();
+        assert!(invalid.validate().is_err());
+    }
+    assert!(
+        !directory.join("calls.log").exists(),
+        "invalid authority must not start the provider"
+    );
+    fs::remove_dir_all(directory).unwrap();
+}
+
+#[test]
+fn restricted_execution_cold_restore_keeps_zero_environments_and_frozen_tool_scope() {
+    for skill_test in [false, true] {
+        let directory = temporary_directory("packet-review-restore");
+        let log = directory.join("requests.ndjson");
+        let config = if skill_test {
+            skill_test_config(&directory, &["--request-log", log.to_str().unwrap()])
+        } else {
+            packet_review_config(&directory, &["--request-log", log.to_str().unwrap()])
+        };
+        let operations = if skill_test {
+            skill_test_tools()
+        } else {
+            packet_review_tools()
+        };
+        let expected_tools = operations
+            .iter()
+            .map(|tool| tool.operation_id.clone())
+            .collect::<std::collections::BTreeSet<_>>();
+        let tools = AuthorizedToolSet {
+            schema: TOOL_SET_SCHEMA.to_owned(),
+            schema_version: 1,
+            catalog_digest: authorized_tool_catalog_digest(&operations).unwrap(),
+            operations,
+        };
+        let runner_config = durable_config(&directory);
+        let mut executor = CodexCommandExecutor::with_runner_config(&directory, &runner_config);
+        executor
+            .execute(&command(
+                "prepare",
+                1,
+                "run.prepare",
+                json!({"provider":config,"authorizedTools":tools}),
+            ))
+            .unwrap();
+        executor
+            .execute(&command("open", 2, "session.open", json!({})))
+            .unwrap();
+        executor.shutdown().unwrap();
+        drop(executor);
+        let mut restored = CodexCommandExecutor::with_runner_config(&directory, &runner_config);
+        restored
+            .execute(&command(
+                "turn",
+                3,
+                "turn.start",
+                json!({"text":"Review only the frozen packet."}),
+            ))
+            .unwrap();
+        restored.shutdown().unwrap();
+        let frames = skill_wire_requests(&directory);
+        for method in ["thread/start", "thread/resume"] {
+            let frame = frames
+                .iter()
+                .find(|f| f["method"] == method)
+                .expect("start and recovery both observed");
+            assert!(frame["params"].get("cwd").is_none());
+            assert!(frame["params"].get("runtimeWorkspaceRoots").is_none());
+            let names = frame["params"]["dynamicTools"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|tool| tool["name"].as_str().unwrap())
+                .collect::<std::collections::BTreeSet<_>>();
+            assert_eq!(names, expected_tools.iter().map(String::as_str).collect());
+            let policy = &frame["params"]["config"];
+            assert_eq!(policy["project_doc_max_bytes"], 0);
+            assert_eq!(policy["web_search"], "disabled");
+            for key in [
+                "skills.include_instructions",
+                "features.shell_tool",
+                "features.view_image",
+                "features.apps",
+                "features.plugins",
+                "features.multi_agent",
+                "features.memories",
+                "features.image_generation",
+            ] {
+                assert_eq!(policy[key], false, "{method}: {key}");
+            }
+            if method == "thread/start" {
+                assert_eq!(frame["params"]["environments"], json!([]));
+            }
+        }
+        let turn = frames.iter().find(|f| f["method"] == "turn/start").unwrap();
+        assert_eq!(turn["params"]["environments"], json!([]));
+        assert!(turn["params"].get("cwd").is_none());
+        assert_eq!(turn["params"]["input"].as_array().unwrap().len(), 1);
+        fs::remove_dir_all(directory).unwrap();
+    }
 }
 
 #[test]
@@ -6842,8 +6948,9 @@ fn packet_review_rejects_expanded_sources_and_tools_before_spawn() {
     let config = packet_review_config(&directory, &[]);
     assert!(CodexProvider::start_with_tools(&config, [task_context_tool()], None).is_err());
     let mut invalid = config.clone();
-    invalid.execution_purpose.as_mut().unwrap().source_digests[0].id =
-        "file:/private/file".to_owned();
+    let mut purpose = serde_json::to_value(invalid.execution_purpose.as_ref().unwrap()).unwrap();
+    purpose["sourceDigests"][0]["id"] = json!("file:/private/file");
+    invalid.execution_purpose = Some(serde_json::from_value(purpose).unwrap());
     assert!(invalid.validate().is_err());
     let mut invalid = config.clone();
     invalid.read_only = false;

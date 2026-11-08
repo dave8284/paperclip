@@ -201,7 +201,7 @@ export class CodexAppServerDriver implements HarnessDriver {
           text(tool.name) === "read_chat_attachment",
       );
     }
-    return [...supplied, ...codexSemanticToolSpecs().filter(tool => !this.#options.executionPurpose || tool.name === "paperclip_finish")];
+    return [...supplied, ...codexSemanticToolSpecs().filter(tool => !this.#options.executionPurpose || tool.name === "paperclip_finish" || (this.#options.executionPurpose.kind === "skill_test" && tool.name === "paperclip_block"))];
   }
 
   #baseInstructions(): string {
@@ -944,7 +944,7 @@ export class CodexAppServerDriver implements HarnessDriver {
         ),
         modelInputKinds: ["text"],
         liveConsole: {
-          conversationMode: this.#options.executionPurpose ? "egm_packet_review" : this.#prepared()
+          conversationMode: this.#options.executionPurpose ? this.#options.executionPurpose.kind : this.#prepared()
             ? "prepared"
             : this.#direct()
               ? "direct"

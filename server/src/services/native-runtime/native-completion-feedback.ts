@@ -1,3 +1,5 @@
+import { parseNativeExecutionInput } from "../../vendor/paperclip-runner/index.js";
+import { readNativeSkillTestOutput, skillTestExecutionPurpose, assertNativeSkillTestBinding } from "./native-skill-test.js";
 import { pendingTaskRepository } from "../task-workspace-tools.js";
 import { eligibleIssueMonitorWait } from "../issue-monitors.js";
 import { assertNativeCaseHandoffResult } from "./native-case-handoff.js";
@@ -70,6 +72,14 @@ export async function nativeCompletionFeedback(
     )
     .then((rows) => rows[0]);
   if (!issue) throw new Error("Completion task no longer exists.");
+  if (issue.workMode === "skill_test" || record(record(run.runnerProfileJson).nativeExecutionInput).schema === "paperclip.native-execution-input.v10") {
+    const execution = parseNativeExecutionInput(record(run.runnerProfileJson).nativeExecutionInput);
+    const purpose = skillTestExecutionPurpose(execution);
+    if (!purpose) throw new Error("Native skill-test completion requires its exact admitted receipt");
+    await assertNativeSkillTestBinding(db, execution.binding, purpose);
+    if (result.continuation || !["done", "blocked"].includes(result.reportedWorkDisposition)) throw new Error("A bounded skill test must finish with its saved output or report a blocker; it cannot start follow-up work");
+    if (result.reportedWorkDisposition === "done") await readNativeSkillTestOutput(db, execution.binding, purpose);
+  }
   const acceptedHandoff = await assertNativeCaseHandoffResult(db, runId, issue.id, result);
   if (acceptedHandoff) return "The persisted case handoff controls this turn. End the turn; the task remains open for its next agent.";
   const reviewContext = readNativeReviewAssignmentContext(run.contextSnapshot);

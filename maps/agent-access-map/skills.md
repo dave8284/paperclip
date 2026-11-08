@@ -184,9 +184,36 @@ credentials/run context; inspect its result and applicable persistence/attributi
 Assert the relevant denied actor, owner, company or mode from Policy. Review the
 remaining operations before qualifying the whole capability.
 
-Gaps: No dedicated native orchestration binding; generic REST calls retain
-skills.test policy, task-assignment authorization, responsible-user intersection and
-admitted skill-test JWT scope.
+Native execution: V10 `skill_test` purpose binds company/agent/harness/run plus
+test, version, input and Markdown digests. Only local isolated subscription-backed
+Codex with a standalone non-executable UTF-8 `SKILL.md` (64 KiB maximum) is
+supported. Saved input/template and version bytes survive latest-version edits;
+recovery revalidates the same binding. The qualified Codex model/CLI identity
+remains enforced when present. API-key auth and metered fallback are rejected.
+
+Execution tools: own `get_task_context`, `read_document`, `write_document`,
+`report_progress`, `list_assigned_skills`, `read_assigned_skill`, plus native
+`paperclip_finish` / `paperclip_block`. Document access is restricted to the bound
+output key. The provider disables built-in filesystem/shell/web tools and implicit
+skill discovery; assigned MCP, REST discovery/calls, connectors and employee
+history are unavailable. The ordinary authoring agent still uses policy-checked
+REST/native `call_api` to create a test; its harness receives no authoring,
+publication or adoption authority.
+
+Evidence: isolated PostgreSQL tests exercise exact delivery/recovery, actual
+native tool authorization, cancellation/supersession/expiry, and atomic status /
+test receipt projection. Success requires an output revision authored by the same
+native run and agent; its document/revision IDs and digest are retained in the
+run profile. Native status commit settles the test before checkout release,
+while failed/cancelled historical rows remain terminal. See
+[runtime selection](../../server/src/services/heartbeat/runtime-selection.test.ts)
+and [tool authority](../../server/src/services/native-runtime/native-skill-test-tools.test.ts).
+Live provider execution and owner acceptance are not implied by these tests.
+
+Gaps: Other providers, skill bundles and model-driven interactive test variants
+remain unsupported by this bounded native path. Generic test creation retains
+skills.test policy, task-assignment authorization, responsible-user intersection
+and admitted skill-test JWT scope.
 
 Project-source API additions: GET `/api/companies/{companyId}/skill-sources/project-repositories`,
 POST `/api/companies/{companyId}/skill-sources/adopt-project` with `workspaceId`, and

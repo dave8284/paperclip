@@ -339,13 +339,29 @@ export async function prepareIsolatedCodexHome(input: {
   sourceCodexHome?: string | null;
   nativeMcp?: NativeMcpLaunchBinding | null;
   apiKey?: string | null;
+  /** Frozen subscription tests cannot select API-key or managed-provider billing. */
+  subscriptionOnly?: boolean;
 }): Promise<void> {
+  const providerConfig = await managedCodexProviderConfig(input.sourceCodexHome);
+  let subscriptionAuth: Buffer | null = null;
+  if (input.subscriptionOnly) {
+    if (input.apiKey?.trim() || providerConfig || input.nativeMcp || !input.sourceCodexHome?.trim()) {
+      throw new Error("runner_skill_test_subscription_auth_required");
+    }
+    subscriptionAuth = await readSourceCodexAuth(join(input.sourceCodexHome, "auth.json"));
+    let auth: { auth_mode?: unknown; OPENAI_API_KEY?: unknown; tokens?: { access_token?: unknown } } | null = null;
+    try { auth = subscriptionAuth ? JSON.parse(subscriptionAuth.toString("utf8")) : null; } catch { /* Reject malformed credentials without printing them. */ }
+    if (!auth || typeof auth !== "object" || (auth.auth_mode !== undefined && auth.auth_mode !== "chatgpt")
+      || (auth.OPENAI_API_KEY !== undefined && auth.OPENAI_API_KEY !== null)
+      || typeof auth.tokens?.access_token !== "string" || !auth.tokens.access_token.trim()) {
+      throw new Error("runner_skill_test_subscription_auth_required");
+    }
+  }
   await materializeNativeRuntimeSkills(
     input.context,
     join(input.codexHome, "skills"),
   );
 
-  const providerConfig = await managedCodexProviderConfig(input.sourceCodexHome);
   const configPath = join(input.codexHome, "config.toml");
   await mkdir(input.codexHome, { recursive: true, mode: 0o700 });
   await chmod(input.codexHome, 0o700);
@@ -396,7 +412,7 @@ export async function prepareIsolatedCodexHome(input: {
 
   const sourceHome = input.sourceCodexHome?.trim();
   if (!sourceHome) return;
-  const sourceAuth = await readSourceCodexAuth(join(sourceHome, "auth.json"));
+  const sourceAuth = subscriptionAuth ?? await readSourceCodexAuth(join(sourceHome, "auth.json"));
   if (!sourceAuth) return;
   await writeFile(targetAuth, sourceAuth, { mode: 0o600 });
   await chmod(targetAuth, 0o600);

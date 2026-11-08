@@ -129,8 +129,10 @@ type DismissalState = {
 };
 
 type PlanDocumentSummary = {
+  documentId: string;
   title: string | null;
   body: string;
+  revisionId: string | null;
 };
 
 type BlockingIssueSummary = {
@@ -260,11 +262,32 @@ function interactionDetail(input: {
   images: AttentionDetailImage[];
 }): AttentionItemDetail {
   if (input.kind === "request_confirmation" && isPlanDocumentTarget(input.payload)) {
+    const target = readRecord(input.payload.target);
+    // Only project the target within the already-authorized source task. A
+    // malformed legacy request must not borrow that task's current revision.
+    const targetIssueId = target.issueId == null ? input.issue?.id ?? null : readString(target.issueId);
+    const requestedDocumentId = readString(target.documentId);
+    const requestedRevisionId = readString(target.revisionId);
+    const currentDocumentId = input.planDocument?.documentId ?? null;
+    const currentRevisionId = input.planDocument?.revisionId ?? null;
+    const planTarget = targetIssueId && targetIssueId === input.issue?.id ? {
+      issueId: targetIssueId,
+      key: "plan" as const,
+      requestedDocumentId,
+      requestedRevisionId,
+      currentDocumentId,
+      currentRevisionId,
+      state: !requestedRevisionId || !currentRevisionId ? "unavailable" as const
+        : requestedRevisionId === currentRevisionId && (!requestedDocumentId || requestedDocumentId === currentDocumentId)
+          ? "current" as const : "changed" as const,
+    } : null;
+    const currentIsRequested = planTarget?.state === "current";
     return {
       kind: "plan_approval",
       issueTitle: input.issue?.title ?? null,
-      planTitle: input.planDocument?.title ?? "Plan",
-      summaryExcerpt: excerpt(input.planDocument?.body ?? input.payload.detailsMarkdown ?? input.payload.prompt),
+      planTitle: currentIsRequested ? input.planDocument?.title ?? "Plan" : "Plan",
+      summaryExcerpt: excerpt((currentIsRequested ? input.planDocument?.body : null) ?? input.payload.detailsMarkdown ?? input.payload.prompt),
+      planTarget,
       images: input.images,
     };
   }
@@ -869,8 +892,10 @@ async function planDocumentMap(
   const rows = await db
     .select({
       issueId: issueDocuments.issueId,
+      documentId: documents.id,
       title: documents.title,
       body: documents.latestBody,
+      revisionId: documents.latestRevisionId,
     })
     .from(issueDocuments)
     .innerJoin(documents, eq(issueDocuments.documentId, documents.id))
@@ -882,7 +907,7 @@ async function planDocumentMap(
       inArray(issueDocuments.issueId, ids),
       readCondition,
     ));
-  return new Map(rows.map((row) => [row.issueId, { title: row.title, body: row.body }]));
+  return new Map(rows.map((row) => [row.issueId, { documentId: row.documentId, title: row.title, body: row.body, revisionId: row.revisionId }]));
 }
 
 async function blockingIssueMap(

@@ -1,3 +1,10 @@
+import { createHeartbeatLifecycle } from "./run-lifecycle.js";
+import { commitNativeStatusDecision } from "../native-runtime/status-decision-committer.js";
+import { NATIVE_STATUS_ARBITER_POLICY_VERSION } from "../native-runtime/status-arbiter.js";
+import { companySkills, companySkillVersions, companySkillTestRuns, companySkillTestInputs } from "@paperclipai/db";
+import { assertNativeSkillTestExecution, loadNativeSkillTestPreparation } from "../native-runtime/native-skill-test.js";
+import { companySkillService } from "../company-skills.js";
+import { readFile } from "node:fs/promises";
 import { createHash, randomUUID } from "node:crypto";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -80,6 +87,170 @@ describe.skipIf(!support.supported)("heartbeat runtime selection boundary", () =
   const read = (id: string) => db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, id)).then(rows => rows[0]!);
   const coordinators = (id: string) => db.select().from(nativeRunFinalizations).where(eq(nativeRunFinalizations.runId, id));
   const sandbox = { kind: "remote" as const, transport: "sandbox" as const, remoteCwd: "/workspace", reusableLeaseConfigured: false };
+
+  async function skillTestFixture() {
+    const base = await fixture();
+    const { input, agent, issue, run } = base, companyId = agent.companyId;
+    const markdown = "---\nname: frozen-margin\ndescription: Fictional margin method\n---\nSubtract cost from revenue.\n";
+    const [skill] = await db.insert(companySkills).values({ companyId, key: `company/${companyId}/frozen-margin`, slug: "frozen-margin", name: "Frozen margin", markdown, sourceType: "generated" }).returning();
+    const [version] = await db.insert(companySkillVersions).values({ companyId, companySkillId: skill.id, revisionNumber: 1, fileInventory: [{ path: "SKILL.md", kind: "skill", content: markdown }] }).returning();
+    const [testInput] = await db.insert(companySkillTestInputs).values({ companyId, skillId: skill.id, name: "Normal", content: "Revenue 200, cost 96" }).returning();
+    const [test] = await db.insert(companySkillTestRuns).values({ companyId, skillId: skill.id, skillVersionId: version.id, inputId: testInput.id, inputSnapshot: testInput.content, agentId: agent.id, issueId: issue.id, harnessIssueDescription: "Compute fictional margin", outputDocumentKey: "test-output" }).returning();
+    const [currentIssue] = await db.update(issues).set({ workMode: "skill_test", harnessKind: "skill_test", status: "in_progress", executionRunId: run.id }).where(eq(issues.id, issue.id)).returning();
+    await db.insert(companyMemberships).values({ companyId, principalType: "agent", principalId: agent.id, membershipRole: "member", status: "active" });
+    input.task.issueRef = currentIssue;
+    input.task.context = { paperclipAgentJwtScope: { kind: "skill_test", issueId: issue.id }, paperclipTaskMarkdown: "EXCLUDED_TASK_HISTORY" };
+    input.config.managedAiRuntime = { attribution: { method: "subscription", provider: "openai" } } as never;
+    input.config.runtimeConfig = { lifecycleMode: "warm", paperclipConnectionInstructions: { text: "EXCLUDED_CONNECTION", digest: "a".repeat(64) } };
+    input.workspace.projectRepositoryPaths = ["EXCLUDED_REPOSITORY"];
+    return { ...base, issue: currentIssue, skill, version, test, testInput, markdown };
+  }
+  async function selectSkill(f: Awaited<ReturnType<typeof skillTestFixture>>) {
+    const selected = await selectHeartbeatRuntime(db, f.input);
+    if (!selected.selected || !selected.nativeExecution || selected.nativeExecution.schema !== "paperclip.native-execution-input.v10") throw new Error("Expected native skill-test selection");
+    reviewWorkspaces.push(selected.nativeExecution.workspace.cwd);
+    return { selected, execution: selected.nativeExecution };
+  }
+
+  it("freezes exact test input and v1 bytes despite changed latest version, input, employee selection and recovery context", async () => {
+    const f = await skillTestFixture();
+    const [latest] = await db.insert(companySkillVersions).values({ companyId: f.agent.companyId, companySkillId: f.skill.id, revisionNumber: 2, fileInventory: [{ path: "SKILL.md", kind: "skill", content: "EXCLUDED_V2" }] }).returning();
+    await db.update(companySkills).set({ currentVersionId: latest.id, markdown: "EXCLUDED_LATEST" }).where(eq(companySkills.id, f.skill.id));
+    await db.update(companySkillTestInputs).set({ content: "EXCLUDED_MUTABLE_INPUT" }).where(eq(companySkillTestInputs.id, f.testInput.id));
+    const { selected, execution } = await selectSkill(f);
+    expect(execution.task.workMode).toBe("skill_test");
+    expect(execution.executionPurpose).toMatchObject({ testRunId: f.test.id, skillVersionId: f.version.id, inputSha256: createHash("sha256").update(f.test.inputSnapshot).digest("hex"), skillSha256: createHash("sha256").update(f.markdown).digest("hex") });
+    expect(execution.runtimeContext.skills).toHaveLength(1);
+    expect(await readFile(join(execution.runtimeContext.skills[0].bundle.rootPath, "SKILL.md"), "utf8")).toBe(f.markdown);
+    expect(JSON.stringify(execution)).not.toContain("EXCLUDED_");
+    expect(execution.session.lifecyclePolicy.mode).toBe("per_turn");
+    expect(selected.getNativeFreshSessionHandoff).toBeUndefined();
+    expect((await assertNativeSkillTestExecution(db, execution)).testRunId).toBe(f.test.id);
+    f.input.run = await read(f.run.id);
+    f.input.session.persistedNativeExecutionInput = execution;
+    f.input.session.persistedRunnerProfile = f.input.run.runnerProfileJson ?? {};
+    f.input.task.context.paperclipTaskMarkdown = "EXCLUDED_RESUME_CONTEXT";
+    const resumed = await selectHeartbeatRuntime(db, f.input);
+    expect(resumed.selected && resumed.nativeExecution).toEqual(execution);
+  });
+
+  it.each(["failed", "succeeded", "cancelled", "superseded"])("never restarts a retained %s test receipt", async state => {
+    const f = await skillTestFixture();
+    await db.update(companySkillTestRuns).set(state === "superseded" ? { supersededAt: new Date() } : { status: state }).where(eq(companySkillTestRuns.id, f.test.id));
+    await expect(selectSkill(f)).rejects.toThrow("no longer active");
+    expect(await coordinators(f.run.id)).toHaveLength(0);
+  });
+
+  it("rejects executable or multi-file bundles and unsupported provider/account isolation", async () => {
+    const f = await skillTestFixture();
+    for (const fileInventory of [[{ path: "SKILL.md", kind: "skill" as const, content: f.markdown, executable: true }], [{ path: "SKILL.md", kind: "skill" as const, content: f.markdown }, { path: "script.sh", kind: "script" as const, content: "echo unsafe" }]]) {
+      await db.update(companySkillVersions).set({ fileInventory }).where(eq(companySkillVersions.id, f.version.id));
+      await expect(selectSkill(f)).rejects.toThrow("standalone SKILL.md");
+    }
+    await db.update(companySkillVersions).set({ fileInventory: [{ path: "SKILL.md", kind: "skill", content: f.markdown }] }).where(eq(companySkillVersions.id, f.version.id));
+    f.input.config.managedAiRuntime = { attribution: { method: "api_key", provider: "openai" } } as never;
+    await expect(selectSkill(f)).rejects.toThrow("subscription-backed Codex");
+  });
+
+  it("requires exact active ownership and saved output before terminal receipt, then preserves duplicate/late terminal evidence", async () => {
+    const f = await skillTestFixture(), { execution } = await selectSkill(f);
+    const service = companySkillService(db), nativeBinding = { ...execution.binding, purpose: execution.executionPurpose };
+    const complete = () => service.completeTestRunForIssue({ companyId: f.agent.companyId, issueId: f.issue.id, outcome: "succeeded", nativeBinding, expectedHeartbeatRunId: f.run.id });
+    await expect(complete()).rejects.toThrow("saved output");
+    await documentService(db).upsertIssueDocument({ issueId: f.issue.id, key: "test-output", format: "markdown", body: "Contribution: 104", baseRevisionId: null, createdByAgentId: f.agent.id, createdByRunId: f.run.id });
+    await expect(service.completeTestRunForIssue({ companyId: f.agent.companyId, issueId: f.issue.id, outcome: "succeeded", nativeBinding: { ...nativeBinding, purpose: { ...nativeBinding.purpose, skillVersionId: randomUUID() } } })).rejects.toThrow("binding differs");
+    const output = await documentService(db).getIssueDocumentByKey(f.issue.id, "test-output");
+    const replacement = await documentService(db).upsertIssueDocument({ issueId: f.issue.id, key: "test-output", format: "markdown", body: "Unrelated replacement", baseRevisionId: output!.latestRevisionId, createdByAgentId: f.agent.id });
+    await expect(complete()).rejects.toThrow("exact revision authored by this run");
+    await documentService(db).upsertIssueDocument({ issueId: f.issue.id, key: "test-output", format: "markdown", body: "Contribution: 104", baseRevisionId: replacement.document.latestRevisionId, createdByAgentId: f.agent.id, createdByRunId: f.run.id });
+    expect(await complete()).toMatchObject({ status: "succeeded", outputSnapshot: "Contribution: 104" });
+    expect(await complete()).toMatchObject({ status: "succeeded", outputSnapshot: "Contribution: 104" });
+    await service.completeTestRunForIssue({ companyId: f.agent.companyId, issueId: f.issue.id, outcome: "failed", error: "late failure" });
+    expect((await db.select().from(companySkillTestRuns).where(eq(companySkillTestRuns.id, f.test.id)))[0]).toMatchObject({ status: "succeeded", error: null });
+    await expect(assertNativeSkillTestExecution(db, execution)).rejects.toThrow("no longer active");
+  });
+
+  it("does not let a predecessor complete a successor and preserves a concurrent cancel winner", async () => {
+    const f = await skillTestFixture(), { execution } = await selectSkill(f);
+    const complete = () => companySkillService(db).completeTestRunForIssue({ companyId: f.agent.companyId, issueId: f.issue.id, outcome: "succeeded", nativeBinding: { ...execution.binding, purpose: execution.executionPurpose }, expectedHeartbeatRunId: f.run.id });
+    const [successor] = await db.insert(heartbeatRuns).values({ companyId: f.agent.companyId, agentId: f.agent.id, issueId: f.issue.id, status: "running" }).returning();
+    await db.update(issues).set({ executionRunId: successor.id }).where(eq(issues.id, f.issue.id));
+    expect(await complete()).toBeNull();
+    await db.update(issues).set({ executionRunId: f.run.id }).where(eq(issues.id, f.issue.id));
+    let pending!: ReturnType<typeof complete>;
+    await db.transaction(async tx => {
+      await tx.select().from(companySkillTestRuns).where(eq(companySkillTestRuns.id, f.test.id)).for("update");
+      pending = complete();
+      await tx.update(companySkillTestRuns).set({ status: "cancelled", error: "Operator cancelled" }).where(eq(companySkillTestRuns.id, f.test.id));
+    });
+    expect(await pending).toMatchObject({ status: "cancelled", error: "Operator cancelled" });
+    await expect(loadNativeSkillTestPreparation(db, execution.binding)).rejects.toThrow("no longer active");
+  });
+
+  it.each(["done", "blocked"] as const)("atomically settles native %s receipt before checkout release, with rollback and replay", async toStatus => {
+    const f = await skillTestFixture(), { execution } = await selectSkill(f);
+    await documentService(db).upsertIssueDocument({ issueId: f.issue.id, key: "test-output", format: "markdown", body: "Native evaluated output", baseRevisionId: null, createdByAgentId: f.agent.id, createdByRunId: f.run.id });
+    const [priorIssue] = await db.select().from(issues).where(eq(issues.id, f.issue.id));
+    const [result] = await db.insert(nativeRunResults).values({ companyId: f.agent.companyId, issueId: f.issue.id,
+      runId: f.run.id, completionContractId: execution.completionContract.id, serverFingerprint: randomUUID(), schemaStatus: "accepted", resultJson: {}, canonicalSha256: "0".repeat(64) }).returning();
+    const [assessment] = await db.insert(workAssessments).values({ companyId: f.agent.companyId, issueId: f.issue.id, resultId: result.id,
+      runId: f.run.id, contractId: execution.completionContract.id, triggerKind: "native_result", triggerActorCompanyId: f.agent.companyId,
+      priorIssueStatus: priorIssue.status, priorStatusVersion: priorIssue.statusVersion, policyVersion: NATIVE_STATUS_ARBITER_POLICY_VERSION, assessmentJson: {}, inputDigest: randomUUID() }).returning();
+    await db.update(nativeRunFinalizations).set({ resultId: result.id }).where(eq(nativeRunFinalizations.runId, f.run.id));
+    const args: Parameters<typeof commitNativeStatusDecision>[0] = { db, companyId: f.agent.companyId, issueId: f.issue.id, runId: f.run.id, assessmentId: assessment.id,
+      priorStatus: priorIssue.status, priorStatusVersion: priorIssue.statusVersion, priorDecisionId: priorIssue.lastStatusDecisionId,
+      decision: { policyVersion: NATIVE_STATUS_ARBITER_POLICY_VERSION, statusAction: toStatus, toStatus, reasonCode: toStatus === "done" ? "completion_contract_satisfied" : "explicit_blocker", unblockDescriptor: null, effects: [{ kind: "release_checkout" as const }] } };
+    await expect(commitNativeStatusDecision({ ...args, failpoint: "status_projection" })).rejects.toThrow("native_status_failpoint:status_projection");
+    expect((await db.select().from(companySkillTestRuns).where(eq(companySkillTestRuns.id, f.test.id)))[0].status).toBe("running");
+    expect((await db.select().from(issues).where(eq(issues.id, f.issue.id)))[0].executionRunId).toBe(f.run.id);
+    const committed = await commitNativeStatusDecision(args);
+    expect(committed.issue).toMatchObject({ status: toStatus, executionRunId: null });
+    expect((await db.select().from(companySkillTestRuns).where(eq(companySkillTestRuns.id, f.test.id)))[0]).toMatchObject({ status: toStatus === "done" ? "succeeded" : "failed", outputSnapshot: "Native evaluated output" });
+    if (toStatus === "done") expect((await read(f.run.id)).runnerProfileJson?.nativeSkillTestResult).toMatchObject({ testRunId: f.test.id, skillVersionId: f.version.id, outputRevisionId: expect.any(String) });
+    expect((await commitNativeStatusDecision(args)).replayed).toBe(true);
+  });
+
+  it("rejects retained template tampering during same-run recovery", async () => {
+    const f = await skillTestFixture(), { execution } = await selectSkill(f);
+    await db.update(companySkillTestRuns).set({ renderedTemplateBody: "Changed retained template" }).where(eq(companySkillTestRuns.id, f.test.id));
+    await expect(assertNativeSkillTestExecution(db, execution)).rejects.toThrow("undeclared context");
+  });
+
+  it.each(["failed", "cancelled"] as const)("settles the %s heartbeat hook while checkout is still owned and rejects a later predecessor hook", async outcome => {
+    const f = await skillTestFixture(); await selectSkill(f);
+    const lifecycle = createHeartbeatLifecycle(db, { companySkills: companySkillService(db) } as never);
+    await db.update(heartbeatRuns).set({ status: outcome }).where(eq(heartbeatRuns.id, f.run.id));
+    expect(await lifecycle.completeSkillTestRunForHeartbeatOutcome({ run: await read(f.run.id), issueId: f.issue.id,
+      issueWorkMode: "skill_test", outcome, error: "Provider stopped" })).toMatchObject({ status: outcome });
+    await db.update(issues).set({ executionRunId: null }).where(eq(issues.id, f.issue.id));
+    expect(await lifecycle.completeSkillTestRunForHeartbeatOutcome({ run: await read(f.run.id), issueId: f.issue.id,
+      issueWorkMode: "skill_test", outcome: "failed", error: "Late predecessor" })).toBeNull();
+    expect((await db.select().from(companySkillTestRuns).where(eq(companySkillTestRuns.id, f.test.id)))[0]).toMatchObject({ status: outcome, error: "Provider stopped" });
+  });
+
+  it("serializes expiry behind a completing native issue without inverse test-row locks", async () => {
+    const f = await skillTestFixture(), { execution } = await selectSkill(f);
+    await documentService(db).upsertIssueDocument({ issueId: f.issue.id, key: "test-output", format: "markdown", body: "Retained evaluated output", baseRevisionId: null, createdByAgentId: f.agent.id, createdByRunId: f.run.id });
+    await db.update(companySkillTestRuns).set({ harnessIssueExpiresAt: new Date(Date.now() - 1000) }).where(eq(companySkillTestRuns.id, f.test.id));
+    let cleanup!: Promise<{ pruned: number }>;
+    await db.transaction(async tx => {
+      await tx.select().from(issues).where(eq(issues.id, f.issue.id)).for("update");
+      cleanup = companySkillService(db).pruneExpiredTestHarnessIssues(f.agent.companyId);
+      // Observe the real blocked cleanup query; this is a bounded test probe,
+      // not a production polling worker.
+      let waiting = false;
+      for (let attempt = 0; attempt < 100 && !waiting; attempt++) {
+        const rows = await db.execute(sql`select query from pg_stat_activity where datname = current_database() and wait_event_type = 'Lock' and query like '%issues%'`);
+        waiting = rows.length > 0;
+        if (!waiting) await new Promise(resolve => setTimeout(resolve, 10));
+      }
+      expect(waiting).toBe(true);
+      expect(await companySkillService(tx as unknown as Db).completeTestRunForIssue({ companyId: f.agent.companyId, issueId: f.issue.id,
+        outcome: "succeeded", nativeBinding: { ...execution.binding, purpose: execution.executionPurpose }, expectedHeartbeatRunId: f.run.id })).toMatchObject({ status: "succeeded" });
+    });
+    expect(await cleanup).toEqual({ pruned: 1 });
+    expect((await db.select().from(companySkillTestRuns).where(eq(companySkillTestRuns.id, f.test.id)))[0]).toMatchObject({ status: "succeeded", outputSnapshot: "Retained evaluated output", harnessIssueDeletedAt: expect.any(Date) });
+  });
 
   async function reviewFixture() {
     const base = await fixture();

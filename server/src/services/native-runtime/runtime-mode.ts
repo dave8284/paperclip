@@ -156,7 +156,7 @@ export function resolveNativeRuntimeMode(input: {
       "Paperclip Runner requires an active agent.",
     );
   }
-  const allowedWorkModes = ["standard", "planning", "ask"];
+  const allowedWorkModes = ["standard", "planning", "ask", ...(runnerProfile.backend === "codex_app_server" ? ["skill_test"] : [])];
   if (!input.issue || !allowedWorkModes.includes(input.issue.workMode)) {
     throw ineligible(
       "paperclip_runner_issue_ineligible",

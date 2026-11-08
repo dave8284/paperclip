@@ -1203,6 +1203,8 @@ describeEmbeddedPostgres("attention service", () => {
       issueTitle: "Approve launch plan",
       planTitle: "Launch Plan",
       summaryExcerpt: expect.stringContaining("launch checklist"),
+      planTarget: { issueId, key: "plan", requestedDocumentId: null, requestedRevisionId: planRevisionId,
+        currentDocumentId: planDocumentId, currentRevisionId: planRevisionId, state: "current" },
       images: imageAssetIds.slice(0, 3).map((assetId) => ({ assetId, alt: expect.any(String) })),
     });
     expect(detailsByKind.get("questions")?.detail).toMatchObject({
@@ -1225,6 +1227,46 @@ describeEmbeddedPostgres("attention service", () => {
       itemCount: 2,
       promptExcerpt: "Approve these screenshots",
     });
+  });
+
+  it("keeps the requested plan revision distinct from changed or unavailable current evidence", async () => {
+    const { companyId } = await seedCompany("ATR");
+    const issueId = await insertIssue({ companyId, identifier: "ATR-1", title: "Review an earlier plan", status: "in_review" });
+    const requestedRevisionId = randomUUID(), currentRevisionId = randomUUID(), documentId = randomUUID();
+    await db.insert(documents).values({ id: documentId, companyId, title: "New unreviewed plan", format: "markdown",
+      latestBody: "NEWER PLAN CONTENT MUST NOT REPLACE REQUESTED EVIDENCE", latestRevisionId: currentRevisionId, latestRevisionNumber: 2 });
+    await db.insert(issueDocuments).values({ companyId, issueId, documentId, key: "plan" });
+    const interactionId = randomUUID();
+    const payload = { version: 1, prompt: "Review the saved proposal", detailsMarkdown: "Original proposal context",
+      target: { type: "issue_document", issueId, key: "plan", revisionId: requestedRevisionId } };
+    await db.insert(issueThreadInteractions).values({ id: interactionId, companyId, issueId, kind: "request_confirmation",
+      status: "pending", continuationPolicy: "none", payload });
+    const detail = async () => (await attentionService(db).list(companyId, { category: "proposals" })).items
+      .find(item => item.subject.id === interactionId)?.detail;
+    expect(await detail()).toMatchObject({ kind: "plan_approval", planTitle: "Plan", summaryExcerpt: "Original proposal context",
+      planTarget: { issueId, key: "plan", requestedRevisionId, currentRevisionId, state: "changed" } });
+
+    // Omitted/null task IDs mean the containing task in the native contract.
+    await db.update(issueThreadInteractions).set({ payload: { ...payload, target: { ...payload.target, issueId: null } } }).where(eq(issueThreadInteractions.id, interactionId));
+    expect(await detail()).toMatchObject({ planTarget: { issueId, requestedRevisionId, currentRevisionId, state: "changed" } });
+
+    const otherDocumentId = randomUUID();
+    await db.update(issueThreadInteractions).set({ payload: { ...payload, target: { ...payload.target,
+      documentId: otherDocumentId, revisionId: currentRevisionId } } }).where(eq(issueThreadInteractions.id, interactionId));
+    expect(await detail()).toMatchObject({ summaryExcerpt: "Original proposal context", planTarget: {
+      requestedDocumentId: otherDocumentId, currentDocumentId: documentId, requestedRevisionId: currentRevisionId, currentRevisionId, state: "changed" } });
+
+    await db.update(issueThreadInteractions).set({ payload: { ...payload, target: { ...payload.target, revisionId: null } } }).where(eq(issueThreadInteractions.id, interactionId));
+    expect(await detail()).toMatchObject({ summaryExcerpt: "Original proposal context",
+      planTarget: { requestedRevisionId: null, currentRevisionId, state: "unavailable" } });
+
+    await db.update(issueThreadInteractions).set({ payload }).where(eq(issueThreadInteractions.id, interactionId));
+    await db.delete(issueDocuments).where(eq(issueDocuments.issueId, issueId));
+    expect(await detail()).toMatchObject({ summaryExcerpt: "Original proposal context",
+      planTarget: { requestedRevisionId, currentRevisionId: null, state: "unavailable" } });
+
+    await db.update(issueThreadInteractions).set({ payload: { ...payload, target: { ...payload.target, issueId: randomUUID() } } }).where(eq(issueThreadInteractions.id, interactionId));
+    expect(await detail()).toMatchObject({ planTarget: null, summaryExcerpt: "Original proposal context" });
   });
 
   it("shows only the newest pending confirmation per issue and kind", async () => {

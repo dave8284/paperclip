@@ -62,26 +62,55 @@ request on 7 November; the tables below the current checkpoint are historical.
   `/private/tmp/agentos-model-browser-20261108/verification-report.json`,
   `agentos-m04-{shared-build,server-emit,ui-build}-20261109.log`,
   `agentos-m04-{restart-request,loaded-health,restart-ceo-run}-20261109.json`.
-- **O06 live qualification exposed native Skill Studio admission gap:** root
-  submitted the bounded fictional request in Friday chat by comment
-  `f9cf75a6-11ad-4789-8a95-8db64d456095`. Friday run `30b305e7` succeeded
-  and native direction `f6ca64c3-69c1-425b-9e6d-6b2b56c89ed0` created ORB-14
-  (`496057a0-9ba7-48eb-919f-596e30ab9412`). The CEO delegated author/evaluation
-  ORB-15, evidence checklist ORB-16 and review ORB-17 to existing staff. A new
-  company skill `3ef0f5db-6f73-41ef-80d4-d83fbf013e7a`, immutable v1
-  `94971b03-e11b-4e3e-8b80-590e5d96e8c5`, and native test
-  `5bb5a5eb-cb7d-4af8-aef7-81c83a8f5192` were saved. ORB-18 test attempts
-  `0c3d20da` and `a202a61e` failed before evaluation because native runtime
-  admission rejects `skill_test` (requires standard/planning/ask). This is a
-  platform defect, not a quality result. Source diagnosis is underway; do not
-  relabel the task mode, weaken test containment, manually succeed receipts or
-  switch provider/billing. Root notified the specialist/CEO by comments
-  `ffb2c85d`/`e5ec9340` to preserve v1/failures, avoid retries and wait for an
-  explicit loaded-fix notice. No v2, evaluated improvement, publication, adoption
-  or owner acceptance is claimed. Private captures:
-  `/private/tmp/agentos-o06-{friday-request,progress-followup}-20261109.json`.
-  Full `pnpm test:run` is separately in progress, log
-  `/private/tmp/agentos-full-regression-20261109.log`; no full-suite pass yet.
+- **O06 native Skill Studio fix implemented; live qualification pending:** the
+  fictional company's original test `5bb5a5eb-cb7d-4af8-aef7-81c83a8f5192`
+  and both ORB-18 attempts remain failed admission evidence, not a quality result.
+  Native v10 now binds the exact test, immutable skill version and frozen input/
+  template. Local subscription-backed Codex uses an isolated per-turn home and
+  only the bound context, pinned Markdown skill, output and progress tools.
+  Other providers, environment-owned launches, bundled/executable skills, API-key
+  fallback, task secrets and unbound company/workspace/connector access fail
+  closed. Initial support is standalone `SKILL.md` up to 64 KiB. Provider model
+  identity is retained. Dispatch, recovery and tools recheck current authority;
+  terminal/superseded receipts cannot restart. Successful completion freezes the
+  same run/agent's exact output revision and commits its receipt with task status
+  before checkout release. Cancellation, replay/rollback and expiry races are
+  covered; published-evidence retention remains enforced.
+  Focused validation: 38 persisted runtime cases, 207 neighboring server cases,
+  174 runner contract/backend cases, 36 tool-authority PostgreSQL cases, 65
+  provider-isolation TypeScript cases and six actual Rust wire cases pass.
+  Overlapping suites are not summed. Final seven-case tool rerun also passes.
+  Initial JSONB order comparisons and two fixture setup failures are retained
+  and corrected. Full `pnpm build` and `pnpm -r typecheck` pass; the integrated
+  built-runner PostgreSQL rerun passes all 75 cases across runtime, tool authority
+  and attention. Pre-activation read at
+  11:49:05 UTC confirms no active runs, no scheduled retries on the two original
+  failed attempts, and both wake requests failed. Nothing has been reactivated.
+  Next: commit/activate, verify loaded native admission, then explicitly ask the
+  existing CEO/specialist to create a fresh v1 evaluation under the predeclared
+  cases before refining v2. No evaluated improvement, publication, adoption or
+  owner acceptance is claimed. Evidence is in private
+  `agentos-native-skill-{runtime-selection-final,final-regression,runner-contracts,integrated-build,integrated-typecheck,integrated-pg,preactivation}-20261109.*`
+  and `agentos-skill-test-tools-final-20261109.log`.
+- **D04 exact decision context corrected; live investigation remains open:**
+  Decisions now carries the requested plan revision/document identity separately
+  from the currently observed revision, including changed/unavailable states.
+  A changed plan cannot silently replace the requested proposal's summary.
+  Omitted native target task IDs resolve only to the authorized containing task;
+  foreign/malformed targets do not borrow its current revision. Friday receives
+  an explicit authorized re-read/lead-consultation instruction, not an approval
+  or additional permission. Thirty actual PostgreSQL attention cases and twelve
+  UI cases pass, along with shared/UI semantics, maps and token gates. Full build
+  passes; loaded browser/context and actual lead investigation remain pending.
+  Report: `/private/tmp/agentos-decision-gap-check-20261109/verification-report.json`.
+- **L04 full regression remains in progress:** `pnpm test:run` log is
+  `/private/tmp/agentos-full-regression-20261109.log`. It began before these
+  latest edits and remains diagnostic across the evolving tree. Its first server
+  group has reported 22 failed cases in five suites (model-comparison delivery,
+  workspace expiry, tool access, restore points and isolated-task retention);
+  assertion details/focused reproduction are under investigation. The wrapper
+  stops on group failure, so later workspace/serialized groups are not yet run.
+  No current-head full-suite pass or physical voice acceptance is claimed.
 - **O07 Fixed — current project-lead boundary and real escalation verified:**
   the existing head/PM `fd75c026-9919-40dd-b96f-d67183296554` is Pilot
   Operations' recorded lead. Its native key reads that project and assigned
@@ -113,10 +142,8 @@ request on 7 November; the tables below the current checkpoint are historical.
   audited. Do not erase history to make that counter zero. Captures:
   `/private/tmp/agentos-handoff-capability-{restart-request,loaded-health}-20261108.json`;
   committed-source build: `agentos-handoff-capability-committed-build-20261108.log`.
-  Next: native O06 evaluation and M04 selected/actual execution visibility.
-  Current native runs retain their frozen selected model, but the admin view
-  currently projects only Model Intelligence selection receipts and misses that
-  configured-profile provenance; the bounded projection repair is underway.
+  M04 configured-model projection was subsequently corrected and verified above;
+  O06 native evaluation remains the active unfinished journey.
 - **O03/O04/W03 Fixed; native company handoff completed:** review-preservation
   commit `3aafdf738` is pushed and loaded through guarded restart
   `44b8fda4-27cd-43a7-b86c-c738b4c302e2`, ready at 10:33:18 UTC, no lost runs.

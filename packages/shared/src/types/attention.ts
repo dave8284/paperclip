@@ -123,6 +123,16 @@ export type AttentionItemDetail =
       issueTitle: string | null;
       planTitle: string | null;
       summaryExcerpt: string | null;
+      /** The saved request's target, distinct from the currently observed plan. */
+      planTarget?: {
+        issueId: string;
+        key: "plan";
+        requestedDocumentId: string | null;
+        requestedRevisionId: string | null;
+        currentDocumentId: string | null;
+        currentRevisionId: string | null;
+        state: "current" | "changed" | "unavailable";
+      } | null;
       images: AttentionDetailImage[];
     }
   | {

@@ -18,6 +18,8 @@ import type {
   NativeExecutionInputV6,
   NativeExecutionInputV8,
   NativeExecutionInputV9,
+  NativeExecutionInputV10,
+  NativeSkillTestPurpose,
   NativeEgmPacketReviewPurpose,
   MuseBindingSnapshot,
   DotBindingSnapshot,
@@ -48,6 +50,7 @@ const NATIVE_GITHUB_ATTACHMENT_RECOVERY_GUIDANCE = [
 /** Closed constructor: callers cannot spread legacy context or environment data. */
 export interface BuildNativeExecutionInput {
   executionPurpose?: NativeEgmPacketReviewPurpose;
+  skillTestPurpose?: NativeSkillTestPurpose;
   expectedCodexIdentity?: { cliVersion: string; model: string };
   companyId: string;
   runId: string;
@@ -140,10 +143,11 @@ export interface BuildNativeExecutionInput {
 }
 export function buildNativeExecutionInput(input: BuildNativeExecutionInput & { provider: "muse"; museBinding: MuseBindingSnapshot }): NativeExecutionInputV8;
 export function buildNativeExecutionInput(input: BuildNativeExecutionInput & { provider: "openai_dot" | "grok_bot"; dotBinding: DotBindingSnapshot }): NativeExecutionInputV6;
-export function buildNativeExecutionInput(input: BuildNativeExecutionInput & { provider?: Exclude<BuildNativeExecutionInput["provider"], "openai_dot" | "grok_bot" | "muse"> }): NativeExecutionInputV5 | NativeExecutionInputV7 | NativeExecutionInputV9;
-export function buildNativeExecutionInput(input: BuildNativeExecutionInput): NativeExecutionInputV5 | NativeExecutionInputV6 | NativeExecutionInputV7 | NativeExecutionInputV8 | NativeExecutionInputV9;
-export function buildNativeExecutionInput(input: BuildNativeExecutionInput): NativeExecutionInputV5 | NativeExecutionInputV6 | NativeExecutionInputV7 | NativeExecutionInputV8 | NativeExecutionInputV9 {
-  if (input.issue.workMode !== "standard" && input.issue.workMode !== "planning" && input.issue.workMode !== "ask") {
+export function buildNativeExecutionInput(input: BuildNativeExecutionInput & { skillTestPurpose: NativeSkillTestPurpose }): NativeExecutionInputV10;
+export function buildNativeExecutionInput(input: BuildNativeExecutionInput & { skillTestPurpose?: undefined; provider?: Exclude<BuildNativeExecutionInput["provider"], "openai_dot" | "grok_bot" | "muse"> }): NativeExecutionInputV5 | NativeExecutionInputV7 | NativeExecutionInputV9;
+export function buildNativeExecutionInput(input: BuildNativeExecutionInput): NativeExecutionInputV5 | NativeExecutionInputV6 | NativeExecutionInputV7 | NativeExecutionInputV8 | NativeExecutionInputV9 | NativeExecutionInputV10;
+export function buildNativeExecutionInput(input: BuildNativeExecutionInput): NativeExecutionInputV5 | NativeExecutionInputV6 | NativeExecutionInputV7 | NativeExecutionInputV8 | NativeExecutionInputV9 | NativeExecutionInputV10 {
+  if (input.issue.workMode !== "standard" && input.issue.workMode !== "planning" && input.issue.workMode !== "ask" && !(input.issue.workMode === "skill_test" && input.skillTestPurpose)) {
     throw new Error("native_execution_input_invalid: issue work mode must be standard, planning, or ask");
   }
   const mode = resolvePaperclipRunnerCursorMode(input.provider, input.acpxAgent, input.acpxSessionMode);
@@ -230,7 +234,7 @@ export function buildNativeExecutionInput(input: BuildNativeExecutionInput): Nat
   const externalChatSkillDescription = configuredGitHubSkills.length > 0
     ? `Configured GitHub instruction skills:\n${configuredGitHubSkills.map((skill) => `/${skill.runtimeName}`).join("\n")}`
     : null;
-  const taskPrompt = input.executionPurpose ? input.taskPrompt : caseProjectionBootstrapPrefix(input.caseContext) + [
+  const taskPrompt = input.executionPurpose || input.skillTestPurpose ? input.taskPrompt : caseProjectionBootstrapPrefix(input.caseContext) + [
     wakePrompt,
     // Durable task questions must survive the current provider turn.
     // Keep routing visible before deferred tool discovery; usage belongs in the tool schema.
@@ -256,10 +260,11 @@ export function buildNativeExecutionInput(input: BuildNativeExecutionInput): Nat
   const workflowCase = input.caseContext && previousCaseProjection
     ? projectCaseContinuation(input.caseContext, previousCaseProjection) : null;
   const prepared = {
-    schema: input.executionPurpose || input.expectedCodexIdentity || input.claudeEffort !== undefined ? "paperclip.native-execution-input.v9"
+    schema: input.skillTestPurpose ? "paperclip.native-execution-input.v10" : input.executionPurpose || input.expectedCodexIdentity || input.claudeEffort !== undefined ? "paperclip.native-execution-input.v9"
       : input.homeMode === "preconfigured" ? "paperclip.native-execution-input.v7" : "paperclip.native-execution-input.v5",
-    ...(input.executionPurpose || input.expectedCodexIdentity || input.claudeEffort !== undefined || input.homeMode === "preconfigured" ? { homeMode: input.homeMode ?? "isolated" } : {}),
+    ...(input.skillTestPurpose || input.executionPurpose || input.expectedCodexIdentity || input.claudeEffort !== undefined || input.homeMode === "preconfigured" ? { homeMode: input.homeMode ?? "isolated" } : {}),
     ...(input.executionPurpose ? { executionPurpose: input.executionPurpose } : {}),
+    ...(input.skillTestPurpose ? { executionPurpose: input.skillTestPurpose } : {}),
     ...(input.expectedCodexIdentity ? { expectedCodexIdentity: input.expectedCodexIdentity } : {}),
     ...((input.initialCommunicationGuidance || input.freshSessionHandoff) ? {
       initialCommunicationGuidance: [input.initialCommunicationGuidance, input.freshSessionHandoff].filter(Boolean).join("\n\n"),
@@ -393,7 +398,7 @@ export function buildNativeExecutionInput(input: BuildNativeExecutionInput): Nat
     schema: "paperclip.native-execution-input.v6", provider: { kind: input.provider, model: null, binding: input.dotBinding },
     workspace: { access: "none", cwd: null, repoUrl: null, repoRef: null, branchName: null },
     session: { ...prepared.session, driverKind: input.provider === "grok_bot" ? "grok_bot_mcp" : "openai_dot_mcp", lifecyclePolicy: { mode: "per_turn", idleTimeoutMs: null } }
-  } : prepared) as NativeExecutionInputV5 | NativeExecutionInputV6 | NativeExecutionInputV7 | NativeExecutionInputV8 | NativeExecutionInputV9;
+  } : prepared) as NativeExecutionInputV5 | NativeExecutionInputV6 | NativeExecutionInputV7 | NativeExecutionInputV8 | NativeExecutionInputV9 | NativeExecutionInputV10;
 }
 
 

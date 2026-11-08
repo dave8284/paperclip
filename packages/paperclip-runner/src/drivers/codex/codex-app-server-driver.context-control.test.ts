@@ -45,6 +45,21 @@ import {
 import { rehydrateRunnerdItemNotification } from "../../live/runnerd-codex-transport.js";
 
 describe("Codex app-server Codex driver", () => {
+  it("reports the isolated skill-test profile and exposes both finish and block without review authority", async () => {
+    const transport = new FakeCodexTransport();
+    const session = await makeDriver([transport], { conversationMode: "prepared",
+      executionPurpose: { kind: "skill_test", testRunId: "00000000-0000-4000-8000-000000000001",
+        skillId: "00000000-0000-4000-8000-000000000002", skillVersionId: "00000000-0000-4000-8000-000000000003",
+        inputSha256: "a".repeat(64), skillSha256: "b".repeat(64) },
+    }).openSession({ runId: "run-skill-test", normalizedSessionId: "session-skill-test", workingDirectory: WORKSPACE });
+    const started = await session.events()[Symbol.asyncIterator]().next();
+    expect(started.value).toMatchObject({ eventType: "session.started", payload: { context: {
+      liveConsole: { conversationMode: "skill_test" }, sandbox: { workspaceAccess: "read", evidence: "configured_launch", providerImplicitContext: "unverified" },
+      dynamicToolNames: ["paperclip_finish", "paperclip_block"],
+    } } });
+    expect(transport.calls.find(call => call.method === "thread/start")?.params.permissions).toBe("paperclip-runner-workspace-read-only");
+    await session.close({ reason: "fixture complete" });
+  });
   it("reports the configured EGM read-only profile independently of collaboration mode", async () => {
     const transport = new FakeCodexTransport();
     const session = await makeDriver([transport], { conversationMode: "prepared", requestedCollaborationMode: "default",

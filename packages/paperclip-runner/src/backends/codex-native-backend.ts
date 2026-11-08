@@ -2,7 +2,7 @@ import { describeRunnerdMuseDriver } from "../drivers/muse/runnerd-muse-driver.j
 import { createCodexTaskEnvelope } from "../contracts/codex.js";
 import { ACPX_CAPABILITY_PROFILES } from "../drivers/acpx/capability-profiles.js";
 import { NATIVE_EXECUTION_INPUT_SCHEMA, NATIVE_EXECUTION_INPUT_SCHEMA_V7, NATIVE_EXECUTION_INPUT_SCHEMA_V9 } from "../contracts/native-execution.js";
-import type { NativeExecutionInput, NativeEgmPacketReviewPurpose } from "../contracts/native-execution.js";
+import type { NativeExecutionInput, NativeExecutionPurpose } from "../contracts/native-execution.js";
 import type { PersistedHarnessSession } from "../contracts/harness-driver.js";
 import type {
   NativeSessionBackend,
@@ -35,7 +35,7 @@ export interface CodexNativeSessionBackendOptions {
   transportFactory?: (context?: {
     baseInstructions?: string;
     expectedCodexIdentity?: import("../contracts/codex-identity.js").ExpectedCodexIdentity;
-    executionPurpose?: NativeEgmPacketReviewPurpose;
+    executionPurpose?: NativeExecutionPurpose;
     providerRecoveryPolicy?: PersistedNativeSession["providerRecoveryPolicy"];
     persistedSession?: Pick<
       PersistedHarnessSession,

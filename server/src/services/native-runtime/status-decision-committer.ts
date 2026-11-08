@@ -1,3 +1,6 @@
+import { companySkillService } from "../company-skills.js";
+import { parseNativeExecutionInput } from "../../vendor/paperclip-runner/index.js";
+import { skillTestExecutionPurpose } from "./native-skill-test.js";
 import { nativeReviewInteractionKey } from "./native-review-identity.js";
 import { scheduledIssueMonitorWait } from "../issue-monitors.js";
 import { hasPublishedGitHubReview } from "../chat-channels/github/review-wait.js";
@@ -2023,6 +2026,26 @@ export async function commitNativeStatusDecision(input: {
       await supersedeExternalReviewRequestsInTransaction(tx as unknown as Db, binding, candidates, publications);
     }
 
+    // Settle the bound test before effects release checkout. The outer status
+    // transaction owns both projections, so any later failpoint rolls both back.
+    if (issue.workMode === "skill_test" && ["done", "blocked", "cancelled"].includes(input.decision.toStatus)) {
+      const ownerRun = await tx.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.id, input.runId), eq(heartbeatRuns.companyId, input.companyId))).then(rows => rows[0]);
+      const execution = parseNativeExecutionInput(ownerRun?.runnerProfileJson?.nativeExecutionInput);
+      const purpose = skillTestExecutionPurpose(execution);
+      if (!purpose) throw new Error("Native skill-test completion is missing its admitted receipt");
+      const outcome = input.decision.toStatus === "done" ? "succeeded" : input.decision.toStatus === "cancelled" ? "cancelled" : "failed";
+      const completed = await companySkillService(tx as unknown as Db).completeTestRunForIssue({
+        companyId: input.companyId, issueId: input.issueId, outcome,
+        error: outcome === "succeeded" ? null : input.decision.reasonCode,
+        nativeBinding: { ...execution.binding, purpose }, expectedHeartbeatRunId: input.runId,
+      });
+      if (!completed || completed.status !== outcome) throw new Error("Native skill-test receipt cannot accept completion");
+      publications.push((await persistActivity(tx as unknown as Db, { companyId: input.companyId,
+        actorType: "system", actorId: "native_status_committer", agentId: ownerRun!.agentId, runId: input.runId,
+        issueId: input.issueId, action: "company.skill_test_run_completed", entityType: "company_skill_test_run", entityId: completed.id,
+        details: { status: outcome, skillVersionId: purpose.skillVersionId, outputDocumentKey: completed.outputDocumentKey, source: "native_status_commit" },
+      })).publication);
+    }
     const materialized: NativeMaterializedStatusEffect[] = [];
     const preMaterializedEffects = new Map(
       (input.preMaterializedEffects ?? []).map((effect) => [

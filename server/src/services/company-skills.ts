@@ -1,3 +1,5 @@
+import { assertNativeSkillTestBinding, readNativeSkillTestOutput, type NativeSkillTestBinding } from "./native-runtime/native-skill-test.js";
+import type { NativeSkillTestPurpose } from "../vendor/paperclip-runner/index.js";
 import { ensureSkillCacheDirectory, touchSkillVersionCache, withSkillVersionCacheLock } from "./skill-version-cache.js";
 import { retainProjectSkillAccess, skillAccessService } from "./skill-access.js";
 import type { AuthorizationActor } from "./authorization.js";
@@ -28,6 +30,7 @@ import {
   agentosCapabilityDecisions,
   costEvents,
   documents,
+  heartbeatRuns,
   issueAttachments,
   issueDocuments,
   issues,
@@ -7158,47 +7161,53 @@ export function companySkillService(db: Db, options: { actor?: AuthorizationActo
     issueId: string;
     outcome: "succeeded" | "failed" | "cancelled";
     error?: string | null;
+    nativeBinding?: NativeSkillTestBinding & { purpose: NativeSkillTestPurpose };
+    expectedHeartbeatRunId?: string;
   }): Promise<CompanySkillTestRun | null> {
-    const row = await db
-      .select()
-      .from(companySkillTestRuns)
-      .where(and(
-        eq(companySkillTestRuns.companyId, input.companyId),
-        eq(companySkillTestRuns.issueId, input.issueId),
-        isNull(companySkillTestRuns.deletedAt),
-        isNull(companySkillTestRuns.supersededAt),
-      ))
-      .then((rows) => rows[0] ?? null);
-    if (!row || ["succeeded", "failed", "cancelled"].includes(row.status)) return row
-      ? (await hydrateTestRuns(input.companyId, [row]))[0] ?? null
-      : null;
-
-    const outputDocumentKey = row.outputDocumentKey || "output";
-    const outputDocument = await db
-      .select({ body: documents.latestBody })
-      .from(issueDocuments)
-      .innerJoin(documents, eq(issueDocuments.documentId, documents.id))
-      .where(and(
-        eq(issueDocuments.companyId, input.companyId),
-        eq(issueDocuments.issueId, input.issueId),
-        eq(issueDocuments.key, outputDocumentKey),
-      ))
-      .then((rows) => rows[0] ?? null);
-    const updated = await db
-      .update(companySkillTestRuns)
-      .set({
-        status: input.outcome,
-        outputSnapshot: outputDocument?.body ?? row.outputSnapshot ?? "",
-        error: input.error ?? null,
-        updatedAt: new Date(),
-      })
-      .where(and(eq(companySkillTestRuns.companyId, input.companyId), eq(companySkillTestRuns.id, row.id)))
-      .returning()
-      .then((rows) => rows[0] ?? null);
+    const updated = await db.transaction(async transaction => {
+      const tx = transaction as unknown as Db;
+      // Match the status committer lock order: issue, run, then test receipt.
+      const issue = await tx.select().from(issues).where(and(eq(issues.companyId, input.companyId), eq(issues.id, input.issueId)))
+        .for("update").then(rows => rows[0]);
+      if (input.expectedHeartbeatRunId && issue?.executionRunId !== input.expectedHeartbeatRunId) return null;
+      if (input.nativeBinding) await tx.select({ id: heartbeatRuns.id }).from(heartbeatRuns).where(and(eq(heartbeatRuns.id, input.nativeBinding.runId), eq(heartbeatRuns.companyId, input.companyId))).for("update");
+      const row = await tx.select().from(companySkillTestRuns).where(and(
+        eq(companySkillTestRuns.companyId, input.companyId), eq(companySkillTestRuns.issueId, input.issueId),
+      )).for("update").then(rows => rows[0] ?? null);
+      if (!row || row.deletedAt || row.supersededAt || row.harnessIssueDeletedAt) return null;
+      if (["succeeded", "failed", "cancelled"].includes(row.status)) return row;
+      if (input.nativeBinding) {
+        if (input.nativeBinding.companyId !== input.companyId || input.nativeBinding.issueId !== input.issueId) throw conflict("Skill-test completion binding mismatch");
+        await assertNativeSkillTestBinding(tx, input.nativeBinding, input.nativeBinding.purpose);
+      }
+      const nativeOutput = input.nativeBinding && input.outcome === "succeeded"
+        ? await readNativeSkillTestOutput(tx, input.nativeBinding, input.nativeBinding.purpose) : null;
+      const output = nativeOutput ?? await tx.select({ body: documents.latestBody }).from(issueDocuments)
+        .innerJoin(documents, and(eq(issueDocuments.documentId, documents.id), eq(documents.companyId, input.companyId)))
+        .where(and(eq(issueDocuments.companyId, input.companyId), eq(issueDocuments.issueId, input.issueId),
+          eq(issueDocuments.key, row.outputDocumentKey || "output"))).then(rows => rows[0]);
+      if (nativeOutput && input.nativeBinding) await tx.update(heartbeatRuns).set({ runnerProfileJson: sql`jsonb_set(coalesce(${heartbeatRuns.runnerProfileJson}, '{}'::jsonb), '{nativeSkillTestResult}', ${JSON.stringify({
+        schema: "paperclip.native-skill-test-result.v1", testRunId: row.id, skillId: row.skillId, skillVersionId: row.skillVersionId,
+        outputDocumentId: nativeOutput.documentId, outputRevisionId: nativeOutput.revisionId, outputSha256: nativeOutput.sha256,
+      })}::jsonb)` }).where(and(eq(heartbeatRuns.id, input.nativeBinding.runId), eq(heartbeatRuns.companyId, input.companyId)));
+      return tx.update(companySkillTestRuns).set({ status: input.outcome,
+        outputSnapshot: output?.body ?? row.outputSnapshot ?? "", error: input.error ?? null, updatedAt: new Date() })
+        .where(and(eq(companySkillTestRuns.companyId, input.companyId), eq(companySkillTestRuns.id, row.id),
+          inArray(companySkillTestRuns.status, ["queued", "running"]), isNull(companySkillTestRuns.deletedAt),
+          isNull(companySkillTestRuns.supersededAt), isNull(companySkillTestRuns.harnessIssueDeletedAt)))
+        .returning().then(rows => rows[0] ?? null);
+    });
     return updated ? (await hydrateTestRuns(input.companyId, [updated]))[0] ?? null : null;
   }
 
-  async function markTestRunRunning(companyId: string, issueId: string): Promise<CompanySkillTestRun | null> {
+  async function markTestRunRunning(companyId: string, issueId: string, nativeBinding?: NativeSkillTestBinding & { purpose: NativeSkillTestPurpose }): Promise<CompanySkillTestRun | null> {
+    if (nativeBinding) return db.transaction(async tx => {
+      if (nativeBinding.companyId !== companyId || nativeBinding.issueId !== issueId) throw conflict("Skill-test start binding mismatch");
+      await tx.select().from(issues).where(and(eq(issues.companyId, companyId), eq(issues.id, issueId))).for("update");
+      await tx.select().from(companySkillTestRuns).where(and(eq(companySkillTestRuns.companyId, companyId), eq(companySkillTestRuns.issueId, issueId))).for("update");
+      await assertNativeSkillTestBinding(tx as unknown as Db, nativeBinding, nativeBinding.purpose);
+      return companySkillService(tx as unknown as Db).markTestRunRunning(companyId, issueId);
+    });
     const row = await db
       .update(companySkillTestRuns)
       .set({ status: "running", updatedAt: new Date() })
@@ -7292,6 +7301,7 @@ export function companySkillService(db: Db, options: { actor?: AuthorizationActo
     const rows = await db
       .select({
         id: companySkillTestRuns.id,
+        issueId: companySkillTestRuns.issueId,
       })
       .from(companySkillTestRuns)
       .where(and(
@@ -7307,6 +7317,9 @@ export function companySkillService(db: Db, options: { actor?: AuthorizationActo
     let pruned = 0;
     for (const row of rows) {
       const removed = await db.transaction(async (tx) => {
+        // Native completion and tool mutations take issue before test. Keep the
+        // same order while retaining publication's test-row retention fence.
+        await tx.select({ id: issues.id }).from(issues).where(and(eq(issues.companyId, companyId), eq(issues.id, row.issueId))).for("update");
         // Publication holds this same row through its commit. Recheck both the
         // deadline and retained references after any lock wait; the candidate
         // list can predate a publication, extension or another cleanup.

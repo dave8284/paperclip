@@ -1,3 +1,4 @@
+import { loadNativeSkillTestPreparation } from "../native-runtime/native-skill-test.js";
 import { observeSelectedModelAccountAccess, selectCompanyModelProfile } from "../model-intelligence.js";
 import { assertAdmittedModelComparisonCurrent, claimNativeModelComparison, readNativeModelComparison } from "../model-comparison-admission.js";
 import { readLocalCodexIdentity } from "../../vendor/paperclip-runner/index.js";
@@ -100,13 +101,20 @@ export async function prepareHeartbeatExecutionConfiguration(db: Db, input: Hear
   const { selectedEnvironmentId, selectedEnvironmentForConfig, resolvedInstanceSettings, persistedNativeExecutionInput } = input.environment;
   const comparison = persistedNativeExecutionInput ? null : await claimNativeModelComparison(db, {
     runId: run.id, companyId: agent.companyId, agentId: agent.id, issueId,
-    reviewOnly: Boolean(context.nativeReviewInteractionId),
+    reviewOnly: Boolean(context.nativeReviewInteractionId) || parseObject(context.paperclipAgentJwtScope).kind === "skill_test",
   });
   let sourceWorkspaceConfig = agent.adapterType === "paperclip_runner"
     ? { ...input.config.sourceWorkspaceConfig,
         homeMode: bindHeartbeatRunnerHomeMode(parseObject(agent.adapterConfig), persistedNativeExecutionInput).homeMode }
     : input.config.sourceWorkspaceConfig;
   const preconfiguredHome = agent.adapterType === "paperclip_runner" && sourceWorkspaceConfig.homeMode === "preconfigured";
+  const nativeSkillTest = parseObject(context.paperclipAgentJwtScope).kind === "skill_test" && issueId && agent.adapterType === "paperclip_runner"
+    ? await loadNativeSkillTestPreparation(db, { companyId: agent.companyId, agentId: agent.id, issueId, runId: run.id }) : null;
+  if (nativeSkillTest) {
+    if (preconfiguredHome) throw new ConfigurationIncompleteFailure("Native skill tests require an isolated provider home", { configurationIncomplete: { reason: "native_skill_test_runtime_unsupported" } });
+    context.nativeSkillTestPurpose = nativeSkillTest.purpose;
+    await db.update(heartbeatRuns).set({ contextSnapshot: sql`coalesce(${heartbeatRuns.contextSnapshot}, '{}'::jsonb) || ${JSON.stringify({ nativeSkillTestPurpose: nativeSkillTest.purpose })}::jsonb` }).where(eq(heartbeatRuns.id, run.id));
+  }
   const initialHarness = agentHarnessType(agent.adapterType, sourceWorkspaceConfig);
   const unsupportedObservability = !["codex_local", "claude_local"].includes(initialHarness)
     ? "unsupported_harness" as const : preconfiguredHome && initialHarness === "codex_local" ? "unsupported_home_mode" as const : undefined;
@@ -150,7 +158,7 @@ export async function prepareHeartbeatExecutionConfiguration(db: Db, input: Hear
   const skillActor: AuthorizationActor = { type: "agent", agentId: agent.id, companyId: agent.companyId,
     runId: run.id, source: "agent_jwt", onBehalfOfUserId: responsibleUserId === "local-board" ? null : responsibleUserId };
   const runScopedMentionedSkillKeys =
-    preconfiguredHome ? [] : await time("configuration_mentions", () => resolveRunScopedMentionedSkillKeys({
+    preconfiguredHome || nativeSkillTest ? [] : await time("configuration_mentions", () => resolveRunScopedMentionedSkillKeys({
       db,
       companyId: agent.companyId,
       issueId,
@@ -387,25 +395,25 @@ export async function prepareHeartbeatExecutionConfiguration(db: Db, input: Hear
       throw error;
     }
   };
-  const runtimeSkillEntries = preconfiguredHome ? [] : await time("configuration_skills", prepareSkills);
+  const runtimeSkillEntries = preconfiguredHome || nativeSkillTest ? [] : await time("configuration_skills", prepareSkills);
   nativeRunnerPreparationSpans.push({
     name: "skills.prepare",
     parentName: "task.prepare",
     startedAtMs: skillsPrepareStartedAtMs,
     endedAtMs: Date.now(),
   });
-  const connectorAssignments = preconfiguredHome ? [] : await time("configuration_connector_assignments", () => resolveConnectorAssignments(db, { companyId: agent.companyId, agentId: agent.id, runId: run.id, issueId: typeof context.issueId === "string" ? context.issueId : undefined }));
+  const connectorAssignments = preconfiguredHome || nativeSkillTest ? [] : await time("configuration_connector_assignments", () => resolveConnectorAssignments(db, { companyId: agent.companyId, agentId: agent.id, runId: run.id, issueId: typeof context.issueId === "string" ? context.issueId : undefined }));
   const connectorSkillConfig = await time("configuration_connector_skills", () => applyConnectorSkills(skillDeliveryConfig, runtimeSkillEntries, connectorAssignments));
   // Both CLI adapters and native context materialization use the same resolved set.
   runtimeSkillEntries.splice(0, runtimeSkillEntries.length, ...connectorSkillConfig.paperclipRuntimeSkills);
   const connectorDelivery = await time("configuration_connector_delivery", () => prepareConnectorSkillDelivery(connectorSkillConfig, agent.adapterType));
   // Always replace this runtime-only field; caller wake data cannot supply skills.
   context.paperclipWake = { ...parseObject(context.paperclipWake), connectorSkillInstructions: connectorDelivery.instructions };
-  let runtimeConfig = await time("configuration_connection_instructions", () => prepareConnectionInstructionDelivery({
+  let runtimeConfig = nativeSkillTest ? connectorDelivery.config : await time("configuration_connection_instructions", () => prepareConnectionInstructionDelivery({
     resolve: () => resolveAssignedConnectionInstructionsForRun(db, { companyId: agent.companyId, agentId: agent.id, runId: run.id }),
     context, config: connectorDelivery.config, native: agent.adapterType === "paperclip_runner",
   }));
-  const agentIdentity = supportsManagedAgentIdentity(agent.adapterType, agent.adapterConfig, run.runtimeMode === "native" ? run.driverKind : undefined)
+  const agentIdentity = !nativeSkillTest && supportsManagedAgentIdentity(agent.adapterType, agent.adapterConfig, run.runtimeMode === "native" ? run.driverKind : undefined)
     ? await time("configuration_agent_identity", () => agentIdentityService(db).ensureAgentIdentity(agent.companyId, agent.id))
     : undefined;
   identityRedactor.values.push(...createAgentIdentityRedactor(agentIdentity?.privateKeyPem).values);

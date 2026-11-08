@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { createHash } from "node:crypto";
+import { canonicalNativeRuntimeContextDigest, NATIVE_RUNTIME_ASSET_SCHEMA } from "../contracts/runtime-context.js";
 import { createRunnerProviderLaunch, preparedRunnerLaunchWorkingDirectory, runnerLaunchRequirementsDigest, validatePreparedRunnerLaunch,
   type RunnerProviderLaunchEnvironment, type RunnerProviderLaunchRequirements } from "./runner-provider-launch.js";
 
@@ -19,6 +21,38 @@ const environment: RunnerProviderLaunchEnvironment = {
 };
 
 describe("built-in provider launch preparation", () => {
+  it("keeps a skill test distinct from a review and pins its receipt through prepared recovery", () => {
+    const purpose = { kind: "skill_test" as const, testRunId: "00000000-0000-4000-8000-000000000001",
+      skillId: "00000000-0000-4000-8000-000000000002", skillVersionId: "00000000-0000-4000-8000-000000000003",
+      inputSha256: "a".repeat(64), skillSha256: "b".repeat(64) };
+    const asset = { schema: NATIVE_RUNTIME_ASSET_SCHEMA, rootPath: "/test/bundle", digest: "a".repeat(64),
+      manifestDigest: "b".repeat(64), fileCount: 1, totalBytes: 20 };
+    const context = { prompt: { revision: "test", text: "Only this test", digest: createHash("sha256").update("Only this test").digest("hex") },
+      instructions: { entryPath: "AGENTS.md", bundle: asset },
+      skills: [{ key: "tested", runtimeName: "tested-skill", versionId: purpose.skillVersionId, bundle: asset }],
+      mcp: { assignmentSetId: "none", digest: "0".repeat(64), bindingId: null } };
+    const selected = { ...requirements, approvalPolicy: "never" as const, executionPurpose: purpose,
+      expectedCodexIdentity: { cliVersion: "0.160.0", model: requirements.model! },
+      runtimeContext: { ...context, aggregateDigest: canonicalNativeRuntimeContextDigest(context) } };
+    const provider = createRunnerProviderLaunch(selected, environment);
+    const prepared = { configurationId: "test", requirementsDigest: runnerLaunchRequirementsDigest(selected), provider };
+    expect(provider).toMatchObject({ executionPurpose: purpose, expectedCodexIdentity: selected.expectedCodexIdentity, conversationMode: "skill_test", readOnly: true,
+      includeSkillInstructions: false, collaborationMode: "default", approvalPolicy: "never" });
+    expect(() => validatePreparedRunnerLaunch(selected, prepared)).not.toThrow();
+    expect(() => validatePreparedRunnerLaunch(selected, { ...prepared, provider: { ...provider,
+      executionPurpose: Object.fromEntries(Object.entries(purpose).reverse()),
+    } })).not.toThrow();
+    for (const executionPurpose of [undefined, { ...purpose, inputSha256: "c".repeat(64) }, { ...purpose, skillVersionId: purpose.skillId }]) {
+      expect(() => validatePreparedRunnerLaunch(selected, { ...prepared, provider: { ...provider, executionPurpose } })).toThrow("requirements_mismatch");
+    }
+    expect(() => createRunnerProviderLaunch(selected, { ...environment, options: { externallySandboxed: true } })).toThrow();
+    for (const runtimeContext of [null, { ...selected.runtimeContext, skills: [] },
+      { ...selected.runtimeContext, skills: [...context.skills, ...context.skills] },
+      { ...selected.runtimeContext, mcp: { ...context.mcp, bindingId: "foreign" } },
+      { ...selected.runtimeContext, connectionInstructions: { text: "private", digest: "0".repeat(64) } }]) {
+      expect(() => createRunnerProviderLaunch({ ...selected, runtimeContext }, environment)).toThrow("restricted_execution_context_invalid");
+    }
+  });
   it("pins frozen review scope through preparation and rejects changed source authority", () => {
     const purpose = { kind: "egm_packet_review" as const, packetSha256: "a".repeat(64),
       sourceDigests: ["packet", "target", "persona", "standard"].map(id => ({ id, sha256: "b".repeat(64) })) };

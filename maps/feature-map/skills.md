@@ -53,6 +53,22 @@ Automated: [Studio](../../ui/src/pages/SkillStudio.test.tsx) covers UI behavior;
 
 Manual: Create or fork a disposable skill, edit instructions, save, and reload. Run a bounded test, respond to any question, and inspect the output. Verify the saved version matches what was tested and failed saves retain the draft.
 
+Native Skill Studio execution currently supports local subscription-backed Codex
+and one standalone UTF-8 `SKILL.md` (at most 64 KiB, without executable files).
+Each test uses its retained input/template and exact version in a fresh isolated
+session. It can read the pinned skill and its own output, write that output,
+report progress, finish or block; shell, browser, network tools, connections,
+company history, publication and adoption remain unavailable. Unsupported
+providers/bundles produce an explicit failure. Failed, cancelled and superseded
+tests cannot restart; a new evaluation creates a new test record.
+
+The [persisted runtime-selection regression](../../server/src/services/heartbeat/runtime-selection.test.ts)
+covers frozen v1 bytes after v2 edits, recovery, qualified model identity,
+receipt attribution, terminal projection, rollback/replay and expiry contention.
+The [native authority regression](../../server/src/services/native-runtime/native-skill-test-tools.test.ts)
+covers the restricted tools and scope revocation. Actual provider execution and
+owner acceptance remain separate from these isolated tests.
+
 ### `agent-enablement`
 
 Automated: [policy service](../../server/src/__tests__/company-skill-policy-service.test.ts) and [agent skills state](../../ui/src/pages/agent-skills/AgentSkillsTab.test.ts) cover policy/state contracts.

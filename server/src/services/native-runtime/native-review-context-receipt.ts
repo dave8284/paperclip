@@ -90,7 +90,7 @@ export function buildNativeReviewContextReceipt(input: {
       driverKind: execution.session.driverKind,
       normalizedSessionId: execution.session.normalizedSessionId,
       homeMode: "homeMode" in execution ? execution.homeMode : null,
-      ...(purpose ? { packetSha256: purpose.packetSha256, sourceDigests: purpose.sourceDigests } : {}),
+      ...(purpose?.kind === "egm_packet_review" ? { packetSha256: purpose.packetSha256, sourceDigests: purpose.sourceDigests } : {}),
     },
     qualification: {
       providerDelivery: "not_observed",

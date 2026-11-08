@@ -393,6 +393,84 @@ impl EgmPacketReviewPurpose {
     }
 }
 
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SkillTestPurpose {
+    pub kind: String,
+    pub test_run_id: String,
+    pub skill_id: String,
+    pub skill_version_id: String,
+    pub input_sha256: String,
+    pub skill_sha256: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
+#[serde(untagged)]
+pub enum RestrictedExecutionPurpose {
+    PacketReview(EgmPacketReviewPurpose),
+    SkillTest(SkillTestPurpose),
+}
+
+impl RestrictedExecutionPurpose {
+    fn validate(&self) -> Result<(), LocalRunnerError> {
+        match self {
+            Self::PacketReview(purpose) => purpose.validate(),
+            Self::SkillTest(purpose) => {
+                let uuid = |value: &str| {
+                    uuid::Uuid::parse_str(value).is_ok_and(|parsed| parsed.to_string() == value)
+                };
+                let digest = |value: &str| {
+                    value.len() == 64
+                        && value
+                            .bytes()
+                            .all(|c| c.is_ascii_digit() || (b'a'..=b'f').contains(&c))
+                };
+                if purpose.kind != "skill_test"
+                    || !uuid(&purpose.test_run_id)
+                    || !uuid(&purpose.skill_id)
+                    || !uuid(&purpose.skill_version_id)
+                    || !digest(&purpose.input_sha256)
+                    || !digest(&purpose.skill_sha256)
+                {
+                    return Err(LocalRunnerError::invalid(
+                        "invalid frozen skill test purpose",
+                    ));
+                }
+                Ok(())
+            }
+        }
+    }
+
+    fn kind(&self) -> &str {
+        match self {
+            Self::PacketReview(_) => "egm_packet_review",
+            Self::SkillTest(_) => "skill_test",
+        }
+    }
+
+    fn tool_names(&self) -> BTreeSet<String> {
+        match self {
+            Self::PacketReview(_) => {
+                ["read_egm_source", "submit_egm_findings", "paperclip_finish"].as_slice()
+            }
+            Self::SkillTest(_) => [
+                "get_task_context",
+                "read_document",
+                "write_document",
+                "report_progress",
+                "list_assigned_skills",
+                "read_assigned_skill",
+                "paperclip_finish",
+                "paperclip_block",
+            ]
+            .as_slice(),
+        }
+        .iter()
+        .map(|name| (*name).to_owned())
+        .collect()
+    }
+}
+
 fn probe_codex_cli_version(config: &CodexProviderConfig) -> Result<String, LocalRunnerError> {
     // Only selected qualified profiles add this bounded metadata subprocess.
     // Recheck the executable on every fresh or restored spawn, before opening
@@ -483,7 +561,7 @@ pub struct CodexProviderConfig {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub conversation_mode: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub execution_purpose: Option<EgmPacketReviewPurpose>,
+    pub execution_purpose: Option<RestrictedExecutionPurpose>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub expected_codex_identity: Option<ExpectedCodexIdentity>,
 }
@@ -576,10 +654,15 @@ impl CodexProviderConfig {
 
     pub fn validate(&self) -> Result<(), LocalRunnerError> {
         if let Some(expected) = &self.expected_codex_identity {
+            let skill_test = matches!(
+                self.execution_purpose.as_ref(),
+                Some(RestrictedExecutionPurpose::SkillTest(_))
+            );
             if self.provider != "codex"
-                || self.execution_purpose.is_some()
-                || self.read_only
-                || self.conversation_mode.as_deref() != Some("qualified_codex")
+                || (!skill_test
+                    && (self.execution_purpose.is_some()
+                        || self.read_only
+                        || self.conversation_mode.as_deref() != Some("qualified_codex")))
                 || self.model.as_ref() != Some(&expected.model)
                 || !valid_cli_version(&expected.cli_version)
                 || expected.model.is_empty()
@@ -605,14 +688,21 @@ impl CodexProviderConfig {
                 || !self.read_only
                 || self.approval_policy != "never"
                 || self.include_skill_instructions != Some(false)
-                || self.conversation_mode.as_deref() != Some("egm_packet_review")
+                || self.conversation_mode.as_deref() != Some(purpose.kind())
             {
                 return Err(LocalRunnerError::invalid("EGM packet review requires isolated read-only Codex without skills or approvals"));
+            }
+            if purpose.kind() == "skill_test" && self.externally_sandboxed {
+                return Err(LocalRunnerError::invalid(
+                    "Skill tests require the isolated local provider environment",
+                ));
             }
         }
         if !matches!(
             self.conversation_mode.as_deref(),
-            None | Some("task" | "prepared" | "egm_packet_review" | "qualified_codex")
+            None | Some(
+                "task" | "prepared" | "egm_packet_review" | "skill_test" | "qualified_codex"
+            )
         ) {
             return Err(LocalRunnerError::invalid(
                 "unsupported provider context mode",
@@ -620,8 +710,10 @@ impl CodexProviderConfig {
         }
         // This closed discriminator also makes older Runner builds reject the
         // profile instead of ignoring the newer executionPurpose field.
-        if self.conversation_mode.as_deref() == Some("egm_packet_review")
-            && self.execution_purpose.is_none()
+        if matches!(
+            self.conversation_mode.as_deref(),
+            Some("egm_packet_review" | "skill_test")
+        ) && self.execution_purpose.is_none()
         {
             return Err(LocalRunnerError::invalid(
                 "packet review context requires its frozen purpose",
@@ -1141,12 +1233,10 @@ impl CodexProvider {
         };
         let (dynamic_tools, authorized_tool_ids) =
             codex_dynamic_tools(authorized_tools.iter().cloned())?;
-        if config.execution_purpose.is_some()
-            && authorized_tool_ids
-                != ["read_egm_source", "submit_egm_findings", "paperclip_finish"]
-                    .into_iter()
-                    .map(str::to_owned)
-                    .collect()
+        if config
+            .execution_purpose
+            .as_ref()
+            .is_some_and(|purpose| authorized_tool_ids != purpose.tool_names())
         {
             return Err(LocalRunnerError::invalid(
                 "EGM packet review requires the exact frozen tool set",
@@ -1205,6 +1295,18 @@ impl CodexProvider {
                     .copied()
                     .filter(|_| config.execution_purpose.is_none()),
             )
+            .filter(|key| {
+                !matches!(
+                    config.execution_purpose.as_ref(),
+                    Some(RestrictedExecutionPurpose::SkillTest(_))
+                ) || ![
+                    "OPENAI_API_KEY",
+                    "CODEX_API_KEY",
+                    "PAPERCLIP_AI_PROVIDER_KEY",
+                    "PAPERCLIP_AGENT_PRIVATE_KEY",
+                ]
+                .contains(key)
+            })
             .collect::<Vec<_>>();
         let runtime_request_scope = new_runtime_request_scope()?;
         let stdio_mcp = if config.provider == "codex" && !config.read_only {

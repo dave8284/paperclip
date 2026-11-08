@@ -28,7 +28,7 @@ export interface NativeBackendFactoryOptions extends Omit<
   codexTransportFactory?: (context?: {
     baseInstructions?: string;
     expectedCodexIdentity?: import("../contracts/codex-identity.js").ExpectedCodexIdentity;
-    executionPurpose?: import("../contracts/native-execution.js").NativeEgmPacketReviewPurpose;
+    executionPurpose?: import("../contracts/native-execution.js").NativeExecutionPurpose;
     providerRecoveryPolicy?: PersistedNativeSession["providerRecoveryPolicy"];
     persistedSession?: Pick<
       PersistedHarnessSession,

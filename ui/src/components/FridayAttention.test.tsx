@@ -48,6 +48,32 @@ describe("Friday project attention", () => {
     const context = fridayDecisionContext({ ...item, sourceKind: "decision", updatedAt: "2026-10-28T00:00:00Z", detail: { kind: "generic", summaryExcerpt: "Approve staged rollout", images: [] }, relatedIssue: { id: "task-id", href: "/issues/AGE-2" } } as any, "company");
     for (const expected of ["Company: company", "Project: project", "Native source kind: decision", "id: task", "Related task id: task-id", "/issues/AGE-2", "2026-10-28T00:00:00Z", "Approve staged rollout", "current revision"]) expect(context).toContain(expected);
   });
+  it.each([
+    { requestedRevisionId: "requested-plan-revision", currentRevisionId: "requested-plan-revision", state: "current" },
+    { requestedRevisionId: "requested-plan-revision", currentRevisionId: "newer-plan-revision", state: "changed" },
+    { requestedRevisionId: null, currentRevisionId: "newer-plan-revision", state: "unavailable" },
+    { requestedRevisionId: "requested-plan-revision", currentRevisionId: null, state: "unavailable" },
+  ])("passes the saved plan target separately from the observed $state document when Discuss is clicked", async planTarget => {
+    api.list.mockResolvedValue({ ...feed, items: [{ ...item, sourceKind: "issue_thread_interaction", updatedAt: "2026-10-28T00:00:00Z",
+      detail: { kind: "plan_approval", planTarget: { issueId: "task", key: "plan", requestedDocumentId: "bound-document", currentDocumentId: "bound-document", ...planTarget }, images: [] } }] });
+    await render(); await click("Discuss with Friday");
+    const context = onAsk.mock.calls[0]?.[0];
+    expect(context).toContain(`Requested review target: task task, document key plan, requested revision ${planTarget.requestedRevisionId ?? "not recorded"}`);
+    expect(context).toContain(`Observed current document revision: ${planTarget.currentRevisionId ?? "unavailable"}; target state: ${planTarget.state}`);
+    expect(context).toContain("requested document id: bound-document");
+    expect(context).toContain("observed document id: bound-document");
+    expect(context).toContain("observation timestamp, not a target revision");
+    expect(context).toContain("a newer current revision does not replace or approve it");
+    expect(context).toContain("through authorized access");
+    expect(context).toContain("This discussion is not approval.");
+    expect(api.dismiss).not.toHaveBeenCalled();
+  });
+  it("does not invent a target revision for a legacy plan summary", () => {
+    const context = fridayDecisionContext({ ...item, updatedAt: "2026-10-28T00:00:00Z", detail: { kind: "plan_approval", images: [] } } as any, "company");
+    expect(context).toContain("Requested review target/revision unavailable");
+    expect(context).toContain("Do not infer it from the current document or source update time");
+    expect(context).not.toContain("requested revision 2026");
+  });
   it("lets a deep-linked decision stay collapsed across a feed refresh", async () => {
     await render("project", "decision");
     expect(host.querySelector('button[aria-expanded="true"]')).not.toBeNull();

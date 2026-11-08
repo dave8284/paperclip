@@ -38,6 +38,9 @@ export type {
   NativeExecutionInputV6,
   NativeExecutionInputV8,
   NativeExecutionInputV9,
+  NativeExecutionInputV10,
+  NativeSkillTestPurpose,
+  NativeExecutionPurpose,
   NativeEgmPacketReviewPurpose,
   MuseBindingSnapshot,
   DotBindingSnapshot,
@@ -137,6 +140,8 @@ export const parseCodexTurnDiff = runner.parseCodexTurnDiff;
 export const parseHarnessRuntimeRequestResolution =
   runner.parseHarnessRuntimeRequestResolution;
 export const parseNativeExecutionInput = runner.parseNativeExecutionInput;
+export const parseNativeSkillTestPurpose = runner.parseNativeSkillTestPurpose;
+export const SKILL_TEST_TOOL_NAMES = runner.SKILL_TEST_TOOL_NAMES;
 export const buildNativeModelEnvelope = runner.buildNativeModelEnvelope;
 export const isProviderMode = runner.isProviderMode;
 export const parseNativeRuntimeContext = runner.parseNativeRuntimeContext;

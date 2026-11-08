@@ -2,7 +2,8 @@ import { parseExpectedCodexIdentity, type ExpectedCodexIdentity, type ObservedCo
 import { providerThreadContextReceipt } from "../contracts/provider-context-receipt.js";
 import { acceptedRunnerTurnInputReceipt } from "./runner-provider-context.js";
 import { PRP_COMPLETION_TOOL_NAME, PRP_COMPLETION_RESULT_BRIDGE_INPUT_SCHEMA } from "../contracts/completion-result.js";
-import { EGM_PACKET_REVIEW_TOOL_NAMES, parseNativeExecutionPurpose, type NativeEgmPacketReviewPurpose } from "../contracts/native-execution.js";
+import { EGM_PACKET_REVIEW_TOOL_NAMES, SKILL_TEST_TOOL_NAMES } from "../contracts/native-execution.js";
+import { parseRestrictedExecutionPurpose, sameRestrictedExecutionPurpose, type RestrictedExecutionPurpose } from "./restricted-execution-purpose.js";
 import { RunnerLaunchPreparationStore } from "./runner-launch-preparation-store.js";
 import type { PreparedRunnerProviderLaunch, RunnerProviderLaunchRequirements } from "./runner-provider-launch.js";
 import { preparedRunnerLaunchWorkingDirectory, validatePreparedRunnerLaunch, runnerProviderLaunchRequirements, createRunnerProviderLaunch, createRunnerdCodexAppServerArgs, trustedRuntimeReadOnlyRoots } from "./runner-provider-launch.js";
@@ -1225,7 +1226,7 @@ export interface CapabilityRunnerdProcessEvidence {
 }
 
 export interface CapabilityRunnerdCodexTransportOptions extends RunnerExecutionDriver {
-  executionPurpose?: NativeEgmPacketReviewPurpose;
+  executionPurpose?: RestrictedExecutionPurpose;
   expectedCodexIdentity?: ExpectedCodexIdentity;
   observability?: import("../drivers/agent-observability.js").ProviderObservabilityLaunch;
   homeMode?: "isolated" | "preconfigured";
@@ -2495,6 +2496,7 @@ async function settleRetainedRunnerdSessionOwned(
       prepareIsolatedCodexHome({
         context: null,
         codexHome,
+        subscriptionOnly: record(record(initial.provider.config).executionPurpose).kind === "skill_test",
         sourceCodexHome:
           input.sourceCodexHome ?? resolveSourceCodexHome(input.environment),
         apiKey:
@@ -3251,10 +3253,11 @@ export function authorizedToolSetForProvider(
   return authorizedToolSet(tools);
 }
 
-function assertPacketReviewTools(purpose: NativeEgmPacketReviewPurpose | undefined, tools: readonly Readonly<Record<string, unknown>>[]) {
+function assertPacketReviewTools(purpose: RestrictedExecutionPurpose | undefined, tools: readonly Readonly<Record<string, unknown>>[]) {
   if (!purpose) return;
   const names = tools.map(tool => tool.name);
-  if (names.length !== EGM_PACKET_REVIEW_TOOL_NAMES.length || EGM_PACKET_REVIEW_TOOL_NAMES.some(name => !names.includes(name))) {
+  const required = purpose.kind === "skill_test" ? SKILL_TEST_TOOL_NAMES : EGM_PACKET_REVIEW_TOOL_NAMES;
+  if (names.length !== required.length || required.some(name => !names.includes(name))) {
     throw new Error("runner_packet_review_tool_authority_invalid");
   }
 }
@@ -3602,12 +3605,27 @@ class DurablePrpCodexTransport implements CodexAppServerTransport {
   constructor(readonly options: CapabilityRunnerdCodexTransportOptions) {
     if (options.expectedCodexIdentity) {
       options.expectedCodexIdentity = parseExpectedCodexIdentity(options.expectedCodexIdentity);
-      if ((options.provider ?? "codex") !== "codex" || options.homeMode === "preconfigured" || options.lifecyclePolicy?.mode === "warm" || options.executionPurpose) throw new Error("runner_qualified_codex_authority_invalid");
+      if ((options.provider ?? "codex") !== "codex" || options.homeMode === "preconfigured" || options.lifecyclePolicy?.mode === "warm" || (options.executionPurpose && options.executionPurpose.kind !== "skill_test")) throw new Error("runner_qualified_codex_authority_invalid");
     }
     if (options.executionPurpose) {
-      options.executionPurpose = parseNativeExecutionPurpose(options.executionPurpose);
+      options.executionPurpose = parseRestrictedExecutionPurpose(options.executionPurpose);
       if ((options.provider ?? "codex") !== "codex" || options.homeMode === "preconfigured" || options.lifecyclePolicy?.mode === "warm") {
         throw new Error("runner_packet_review_authority_invalid");
+      }
+      if (options.executionPurpose.kind === "skill_test") {
+        if (options.prepareLaunch) throw new Error("runner_skill_test_environment_owned_launch_unsupported");
+        if (["OPENAI_API_KEY", "CODEX_API_KEY", "PAPERCLIP_AI_PROVIDER_KEY"].some(key => options.environment?.[key]?.trim())
+          || options.environment?.PAPERCLIP_RUNNER_EXTERNAL_SANDBOX === "1" || options.externallySandboxed) {
+          throw new Error("runner_skill_test_subscription_auth_required");
+        }
+        const environment = { ...options.environment };
+        for (const key of Object.keys(configuredEnvironment(options.environment))) delete environment[key];
+        // Prevent a shared runner's configured task secrets from reaching the
+        // frozen provider. OAuth remains in the separately verified home.
+        environment.PAPERCLIP_CONFIGURED_ENV_KEYS = "[]";
+        environment.PAPERCLIP_RUNNER_NETWORK_ACCESS = "disabled";
+        delete environment.PAPERCLIP_AGENT_PRIVATE_KEY;
+        options.environment = environment;
       }
     }
     if (options.prepareLaunch && (!options.runnerProcessLauncher || !options.controlPlaneRegistration || !options.runnerArtifact)) {
@@ -3665,7 +3683,7 @@ class DurablePrpCodexTransport implements CodexAppServerTransport {
     if (options.resumeDynamicTools !== undefined) {
       const resumedTools = [
         ...options.resumeDynamicTools,
-        ...codexSemanticToolSpecs().filter(tool => !options.executionPurpose || tool.name === "paperclip_finish"),
+        ...codexSemanticToolSpecs().filter(tool => !options.executionPurpose || tool.name === "paperclip_finish" || (options.executionPurpose.kind === "skill_test" && tool.name === "paperclip_block")),
       ];
       assertPacketReviewTools(options.executionPurpose, resumedTools);
       this.#authorizedTools = authorizedToolSetForProvider(options.provider, resumedTools);
@@ -4878,6 +4896,7 @@ class DurablePrpCodexTransport implements CodexAppServerTransport {
       await prepareIsolatedCodexHome({
         context: sourceRuntimeContext,
         codexHome: localCodexHome,
+        subscriptionOnly: this.options.executionPurpose?.kind === "skill_test",
         observability: this.options.observability,
         sourceCodexHome:
           this.options.sourceCodexHome ??
@@ -5326,7 +5345,7 @@ class DurablePrpCodexTransport implements CodexAppServerTransport {
     }
     const recordedPurpose = record(record(controlPlaneState?.runAttachTemplate).provider).executionPurpose;
     if (this.options.executionPurpose || recordedPurpose) {
-      if (!exactAuthority || JSON.stringify(recordedPurpose) !== JSON.stringify(this.options.executionPurpose)) {
+      if (!exactAuthority || !sameRestrictedExecutionPurpose(recordedPurpose, this.options.executionPurpose)) {
         throw new Error("runner_packet_review_recovery_authority_changed");
       }
     }
@@ -5754,6 +5773,7 @@ class DurablePrpCodexTransport implements CodexAppServerTransport {
       await prepareIsolatedCodexHome({
         context: sourceRuntimeContext,
         codexHome: localCodexHome,
+        subscriptionOnly: this.options.executionPurpose?.kind === "skill_test",
         observability: this.options.observability,
         sourceCodexHome:
           this.options.sourceCodexHome ??

@@ -205,6 +205,16 @@ Agent OS inline decision presentation changes no endpoint or actor grant. Always
 
 AgentOS presentation extension (2026-10-28): optional `category=proposals|work` on the existing attention GET filters authorized records before counts/pages. It grants no additional agent access; route board/user checks and native source permissions remain intact. Linked approvals now inherit project/task references from the already-authorized issue summary, so company/project Decisions agree. Discussion context identifies native sources and asks Friday to re-read current revisions; it is not an approval or an autonomous resolver. Raw operational items and conversational questions are not counted as executable proposals. Database and UI regression coverage is described in the companion feature map; no live agent or microphone qualification is claimed.
 
+Plan-approval attention details additionally preserve the request's exact task,
+document key and requested revision, alongside the currently observed revision.
+Missing or changed evidence is explicit; neither the current document nor an
+attention update timestamp invents the requested revision. The projection reuses
+the source task's existing authorized document read and does not fetch a foreign
+target from malformed legacy payloads. Discuss and alternative instructions carry
+this distinction and require authorized re-reads; they confer no cross-company
+source access or resolver authority. Persisted projection and UI callback checks
+cover this source change; loaded discussion and lead investigation remain pending.
+
 Decision summary/disclosure refinement (2026-11-05): summaries are excerpts of
 existing authorized feed/payload/body context, not generated recommendations.
 The summary observes the native resolver cache and discards failed or

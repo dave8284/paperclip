@@ -419,8 +419,13 @@ describe("resolveNativeRuntimeMode", () => {
   it("rejects an explicit native profile outside the approved boundary", () => {
     expect(resolveNativeRuntimeMode({ ...eligible, agent: { ...eligible.agent, adapterType: "claude_local" } }))
       .toEqual(expect.objectContaining({ kind: "legacy", reason: "direct_adapter" }));
-    expect(() => resolveNativeRuntimeMode({ ...eligible, issue: { id: "issue", workMode: "skill_test" } }))
+    expect(() => resolveNativeRuntimeMode({ ...eligible, issue: { id: "issue", workMode: "unsupported" } }))
       .toThrow(NativeRuntimeEligibilityError);
+  });
+
+  it("admits skill-test mode only for native Codex, preserving explicit unsupported-provider rejection", () => {
+    expect(resolveNativeRuntimeMode({ ...eligible, issue: { id: "issue", workMode: "skill_test" } })).toMatchObject({ kind: "native", profile: { backend: "codex_app_server" } });
+    expect(() => resolveNativeRuntimeMode({ ...eligible, adapterConfig: { provider: "opencode", model: "openrouter/deepseek/deepseek-v4-flash-0731" }, issue: { id: "issue", workMode: "skill_test" } })).toThrow(NativeRuntimeEligibilityError);
   });
 
   it("admits remote targets only through paperclip_runner", () => {

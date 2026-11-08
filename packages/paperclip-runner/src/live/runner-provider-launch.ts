@@ -11,7 +11,7 @@ import { resolveAcpxProviderMode } from "../drivers/acpx/provider-mode.js";
 import type { DurableRecoveryIdentity } from "../contracts/durable-recovery.js";
 import type { NativeRuntimeContextSnapshot } from "../contracts/runtime-context.js";
 import type { CapabilityRunnerdCodexTransportOptions } from "./runnerd-codex-transport.js";
-import { parseNativeExecutionPurpose, type NativeEgmPacketReviewPurpose } from "../contracts/native-execution.js";
+import { assertRestrictedExecutionContext, parseRestrictedExecutionPurpose, sameRestrictedExecutionPurpose, type RestrictedExecutionPurpose } from "./restricted-execution-purpose.js";
 
 /** Core's provider inputs. Executable paths and filesystem layout are supplied separately. */
 export interface RunnerProviderLaunchRequirements {
@@ -28,7 +28,7 @@ export interface RunnerProviderLaunchRequirements {
     "piThinkingLevel" | "claudeEffort" | "managedProfile" | "agentCoreProfile" | "opencodePermissionMode">;
   instructions: string;
   runtimeContext: NativeRuntimeContextSnapshot | null;
-  executionPurpose?: NativeEgmPacketReviewPurpose;
+  executionPurpose?: RestrictedExecutionPurpose;
   expectedCodexIdentity?: ExpectedCodexIdentity;
 }
 
@@ -53,12 +53,12 @@ export function runnerProviderLaunchRequirements(
 ): RunnerProviderLaunchRequirements {
   const expectedCodexIdentity = options.expectedCodexIdentity === undefined ? undefined : parseExpectedCodexIdentity(options.expectedCodexIdentity);
   if (expectedCodexIdentity && ((options.provider ?? "codex") !== "codex" || options.homeMode === "preconfigured"
-    || options.lifecyclePolicy?.mode === "warm" || options.executionPurpose || params.model !== expectedCodexIdentity.model
-    || params.permissions === "paperclip-runner-workspace-read-only")) throw new Error("runner_qualified_codex_authority_invalid");
-  const executionPurpose = options.executionPurpose === undefined ? undefined : parseNativeExecutionPurpose(options.executionPurpose);
+    || options.lifecyclePolicy?.mode === "warm" || (options.executionPurpose && options.executionPurpose.kind !== "skill_test") || params.model !== expectedCodexIdentity.model
+    || (params.permissions === "paperclip-runner-workspace-read-only" && options.executionPurpose?.kind !== "skill_test"))) throw new Error("runner_qualified_codex_authority_invalid");
+  const executionPurpose = options.executionPurpose === undefined ? undefined : parseRestrictedExecutionPurpose(options.executionPurpose);
+  assertRestrictedExecutionContext(executionPurpose, runtimeContext);
   if (executionPurpose && ((options.provider ?? "codex") !== "codex" || options.homeMode === "preconfigured"
-    || options.lifecyclePolicy?.mode === "warm" || runtimeContext?.skills.length || runtimeContext?.mcp.bindingId
-    || runtimeContext?.instructions.workingCopy || runtimeContext?.connectionInstructions)) {
+    || options.lifecyclePolicy?.mode === "warm" || (executionPurpose.kind === "skill_test" && options.externallySandboxed))) {
     throw new Error("runner_packet_review_authority_invalid");
   }
   const requirements: RunnerProviderLaunchRequirements = {
@@ -121,7 +121,7 @@ export function validatePreparedRunnerLaunch(
     || prepared.requirementsDigest !== runnerLaunchRequirementsDigest(requirements)
     || !prepared.provider || typeof prepared.provider !== "object") reject();
   const descriptor = prepared.provider;
-  if (JSON.stringify(descriptor.executionPurpose) !== JSON.stringify(requirements.executionPurpose)) reject();
+  if (!sameRestrictedExecutionPurpose(descriptor.executionPurpose, requirements.executionPurpose)) reject();
   if (JSON.stringify(descriptor.expectedCodexIdentity) !== JSON.stringify(requirements.expectedCodexIdentity)) reject();
   if ((requirements.executionPurpose || requirements.expectedCodexIdentity) && descriptor.preconfiguredHome != null) reject();
   if (!requirements.runtimeContext && descriptor.runtimeContext != null) reject();
@@ -143,6 +143,7 @@ export function validatePreparedRunnerLaunch(
   const hostFields = new Set(["command", "args", "sidecarCommand", "sidecarArgs", "runtimeDirectory", "cwd",
     "preconfiguredHome", "externallySandboxed", "runtimeContext", "instructions"]);
   for (const [key, value] of Object.entries(expected)) {
+    if (key === "executionPurpose") continue; // Compared structurally above.
     if (!hostFields.has(key) && JSON.stringify(value) !== JSON.stringify(descriptor[key])) reject();
   }
   if ("cwd" in expected) {
@@ -192,10 +193,12 @@ export function createRunnerProviderLaunch(
 ): Record<string, unknown> {
   const { identity, instructions: baseInstructions, runtimeContext, settings, provider } = requirements;
   const expectedCodexIdentity = requirements.expectedCodexIdentity === undefined ? undefined : parseExpectedCodexIdentity(requirements.expectedCodexIdentity);
-  if (expectedCodexIdentity && (provider !== "codex" || input.options.homeMode === "preconfigured" || requirements.executionPurpose
-    || requirements.model !== expectedCodexIdentity.model || requirements.readOnly)) throw new Error("runner_qualified_codex_authority_invalid");
-  const executionPurpose = requirements.executionPurpose === undefined ? undefined : parseNativeExecutionPurpose(requirements.executionPurpose);
-  if (executionPurpose && (provider !== "codex" || input.options.homeMode === "preconfigured" || !requirements.readOnly || requirements.approvalPolicy !== "never")) {
+  if (expectedCodexIdentity && (provider !== "codex" || input.options.homeMode === "preconfigured" || (requirements.executionPurpose && requirements.executionPurpose.kind !== "skill_test")
+    || requirements.model !== expectedCodexIdentity.model || (requirements.readOnly && requirements.executionPurpose?.kind !== "skill_test"))) throw new Error("runner_qualified_codex_authority_invalid");
+  const executionPurpose = requirements.executionPurpose === undefined ? undefined : parseRestrictedExecutionPurpose(requirements.executionPurpose);
+  assertRestrictedExecutionContext(executionPurpose, runtimeContext);
+  if (executionPurpose && (provider !== "codex" || input.options.homeMode === "preconfigured" || !requirements.readOnly || requirements.approvalPolicy !== "never"
+    || (executionPurpose.kind === "skill_test" && input.options.externallySandboxed))) {
     throw new Error("runner_packet_review_authority_invalid");
   }
   const acpxAgent = provider === "acpx" ? settings.acpxAgent ?? "codex" : null;
@@ -375,7 +378,7 @@ export function createRunnerProviderLaunch(
                       ? "plan"
                       : "default",
                   ...(executionPurpose || expectedCodexIdentity || requirements.preparedConversation
-                    ? { conversationMode: executionPurpose ? "egm_packet_review" : expectedCodexIdentity ? "qualified_codex" : "prepared" }
+                    ? { conversationMode: executionPurpose ? executionPurpose.kind : expectedCodexIdentity ? "qualified_codex" : "prepared" }
                     : {}),
                   includeCollaborationModeInstructions:
                     includeCodexCollaborationInstructions,

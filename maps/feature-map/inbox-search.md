@@ -176,6 +176,15 @@ AgentOS requests the native attention feed with `category=proposals` for Decisio
 
 Approval cards load the actual native payload, recommendation, stated approval effect and risks inline. Unreadable, mismatched-company or no-longer-pending proposals cannot be acted on in this presentation. Native typed decisions retain options, input requirements, effect previews and stale-revision guards. Discuss/alternative instructions carry the selected company, project, native source/task identity and observed proposal context to Friday; they never grant approval. `attention-service.test.ts`, `attention-category.test.ts`, `AttentionQueueRow.test.tsx`, `FridayAttention.test.tsx`, and `FridayWorkBlockers.test.tsx` cover filtering, private-source exclusions, pagination, empty categories and native controls. Browser visuals and actual spoken output remain separate verification.
 
+Plan discussions preserve the saved request's task/key/revision separately from
+the currently observed document revision and the source update timestamp. Changed
+or unavailable targets remain explicit; a newer plan body never substitutes for
+the requested revision's summary. The existing authorized plan projection supplies
+this metadata without extra requests. Persisted attention regressions cover changed,
+missing and mismatched targets; UI regressions inspect the actual Discuss callback.
+The source fix still needs loaded acceptance and a real lead investigation; it does
+not grant Friday additional read or approval authority.
+
 AgentOS keeps View details / Hide details beside the decision title in both states.
 The summary below the title prefers recorded proposal context over a repeated
 title or generic waiting reason. It observes the existing resolver's detail cache

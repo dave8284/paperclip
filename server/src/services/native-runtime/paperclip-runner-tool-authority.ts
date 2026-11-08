@@ -10,7 +10,8 @@ import { withExternalExecutionAdmission, type ExternalAdmissionTransaction } fro
 import { callTaskWorkspaceTool, pendingTaskRepositoryContinuation } from "../task-workspace-tools.js";
 import { TaskAttachmentReadCache, TASK_ATTACHMENT_DEFINITIONS, TASK_ATTACHMENT_SCHEMAS, listTaskAttachments, readTaskAttachment } from "./runner-task-attachments.js";
 import { RUNNER_BRIDGE_SCHEMAS, runnerBridgeDefinitions, readAssignedSkill, executeWorkspaceTool, readWorkspaceUploadFile, settleRunnerBridgeRead, assertRunnerWorkspacePathAllowed } from "./runner-bridge-tools.js";
-import type { NativeRuntimeContextSnapshot } from "../../vendor/paperclip-runner/index.js";
+import { SKILL_TEST_TOOL_NAMES, type NativeSkillTestPurpose, type NativeRuntimeContextSnapshot } from "../../vendor/paperclip-runner/index.js";
+import { assertNativeSkillTestBinding } from "./native-skill-test.js";
 import { assertCanManageIssueMonitor, eligibleIssueMonitorWait, prepareIssueMonitorUpdate, setTaskMonitorSchema, summarizeIssueMonitor } from "../issue-monitors.js";
 import { readTaskQuestionContext } from "../issue-question-context.js";
 import { isConversation } from "../agent-conversations.js";
@@ -150,6 +151,7 @@ const UNKNOWN_DOCUMENT_REVISION_BODY = "[Document revision content omitted: hist
 
 type Binding = {
   egmPurpose?: EgmExecutionPurpose;
+  skillTestPurpose?: NativeSkillTestPurpose;
   /** Server-derived scope for one addressed native completion review. */
   nativeReview?: NativeReviewAssignmentContext;
   companyId: string;
@@ -165,7 +167,7 @@ type Binding = {
   connectorAssignments?: Pick<ConnectorAssignment, "tools">[];
   assignedMcpTools?: Awaited<ReturnType<typeof createAssignedMcpTools>>;
   apiToolsEnabled?: boolean;
-  workMode?: "standard" | "planning" | "ask";
+  workMode?: "standard" | "planning" | "ask" | "skill_test";
   casesEnabled?: boolean;
   workspaceRoot?: string;
   workspaceBridge?: boolean;
@@ -246,6 +248,16 @@ export class PaperclipRunnerToolAuthority {
   constructor(readonly db: Db, readonly binding: Binding) {}
 
   definitions(): Array<Record<string, unknown>> {
+    if (this.binding.skillTestPurpose) {
+      const allowed = new Set<string>(SKILL_TEST_TOOL_NAMES);
+      return [
+        ...CAPABILITY_SEMANTIC_TOOL_CATALOG.filter(tool => allowed.has(tool.operationId))
+          .map(tool => ({ name: tool.operationId, description: tool.description, inputSchema: tool.inputSchema })),
+        ...runnerBridgeDefinitions({ workspace: false, skills: true, api: false, mode: "standard" })
+          .filter(tool => allowed.has(String(tool.name))),
+      ];
+    }
+    if (this.binding.workMode === "skill_test") return [];
     if (this.binding.egmPurpose) return EGM_REVIEW_TOOLS;
     if (this.binding.nativeReview) {
       // Scope Paperclip control-plane actions. Provider file and shell access
@@ -339,6 +351,7 @@ export class PaperclipRunnerToolAuthority {
     callId: string;
     arguments: unknown;
   }): Promise<unknown> {
+    if (this.binding.skillTestPurpose) return this.#executeSkillTestTool(call);
     if (this.binding.egmPurpose) {
       await this.#boundContext();
       return executeEgmReviewTool(this.db, this.binding, this.binding.egmPurpose, call.tool, call.arguments);
@@ -448,7 +461,10 @@ export class PaperclipRunnerToolAuthority {
     }
     if (this.binding.firstPartyOnly && (call.tool === READ_TOOL_RESULT || this.binding.assignedMcpTools?.has(call.tool) || isConnectorTool(call.tool)
       || RUNTIME_CONNECTION_TOOL_DEFINITIONS.some(tool => tool.name === call.tool))) throw forbidden("This Grok Bot connection exposes first-party Paperclip operations. Use your own provider apps under their existing permissions.");
-    if (call.tool === READ_TOOL_RESULT) return this.#readToolResult(call.arguments);
+    if (call.tool === READ_TOOL_RESULT) {
+      await this.#boundContext();
+      return this.#readToolResult(call.arguments);
+    }
     if (this.binding.assignedMcpTools?.has(call.tool)) {
       const current = await this.#boundContext();
       const result = await this.binding.assignedMcpTools.execute(call, current.issue.workMode as "standard" | "planning" | "ask");
@@ -810,6 +826,61 @@ export class PaperclipRunnerToolAuthority {
     }
   }
 
+  async #executeSkillTestTool(call: { tool: string; callId: string; arguments: unknown }): Promise<unknown> {
+    // A closed dispatch precedes all REST, workspace, connector and assigned-MCP
+    // paths. A guessed tool name never inherits ordinary company authority.
+    if (!this.definitions().some(tool => tool.name === call.tool)) throw forbidden("This skill test may only use its bound harness and pinned skill");
+    const context = await this.#boundContext();
+    const input = record(call.arguments);
+    if (call.tool === "get_task_context") {
+      if (Object.keys(input).length) throw badRequest("Skill test context takes no arguments");
+      const task = record(record(record(context.run.runnerProfileJson).nativeExecutionInput).task);
+      return { company: { id: this.binding.companyId }, activeTask: {
+        id: context.issue.id, identifier: context.issue.identifier, title: "Skill Studio test",
+        description: task.description, workMode: "skill_test", status: context.issue.status,
+      }, run: { id: context.run.id, status: context.run.status } };
+    }
+    if (call.tool === "list_assigned_skills" || call.tool === "read_assigned_skill") {
+      const runtimeContext = this.binding.runtimeContext;
+      if (!runtimeContext || runtimeContext.skills.length !== 1
+        || runtimeContext.skills[0]?.versionId !== this.binding.skillTestPurpose!.skillVersionId) {
+        throw forbidden("The pinned skill test bundle is unavailable");
+      }
+      if (call.tool === "list_assigned_skills") {
+        RUNNER_BRIDGE_SCHEMAS.get(call.tool)!.parse(call.arguments);
+        return runtimeContext.skills.map(skill => ({ key: skill.key, name: skill.runtimeName, versionId: skill.versionId, digest: skill.bundle.digest }));
+      }
+      const parsed = RUNNER_BRIDGE_SCHEMAS.get(call.tool)!.parse(call.arguments) as { path: string };
+      if (parsed.path !== "SKILL.md") throw forbidden("This skill test only exposes its pinned SKILL.md");
+      const result = await readAssignedSkill(runtimeContext, call.arguments);
+      if (result.sha256 !== this.binding.skillTestPurpose!.skillSha256 || result.byteSize > 64 * 1024) {
+        throw forbidden("The skill test content differs from its frozen version");
+      }
+      await this.#boundContext();
+      return result;
+    }
+    if (call.tool === "report_progress") {
+      if (Object.keys(input).some(key => !["body", "idempotencyKey"].includes(key))) throw badRequest("Report progress only for the bound skill test");
+      return this.#reportProgress(input);
+    }
+    if ((call.tool === "read_document" || call.tool === "write_document") && input.key !== "output") {
+      throw forbidden("This skill test may only access its output document");
+    }
+    if (call.tool === "write_document") {
+      if (Object.keys(input).some(key => !["key", "title", "body", "baseRevisionId", "changeSummary", "idempotencyKey"].includes(key))) {
+        throw badRequest("Write only the bound output document");
+      }
+      return this.#writeDocument(input);
+    }
+    if (call.tool === "read_document") {
+      if (Object.keys(input).some(key => key !== "key")) throw badRequest("Read only the bound output document");
+      const document = await documentService(this.db).getIssueDocumentByKey(this.binding.issueId, "output");
+      await this.#boundContext();
+      return { document };
+    }
+    throw forbidden("Tool is unavailable to this skill test");
+  }
+
   async #bridgeMutation(call: { tool: string; callId: string; arguments: unknown }, execute: () => Promise<unknown>) {
     if (!call.callId || call.callId.length > 500) throw badRequest("Use a stable bounded call ID");
     const key = createHash("sha256").update(call.callId).digest("hex");
@@ -845,6 +916,7 @@ export class PaperclipRunnerToolAuthority {
     issue: { workMode: string };
     run: { contextSnapshot: unknown };
   }) {
+    if (this.binding.skillTestPurpose) return { kind: "skill_test" as const, issueId: this.binding.issueId };
     const snapshot = record(context.run.contextSnapshot);
     const admittedKind = record(snapshot.paperclipAgentJwtScope).kind;
     const skillTest = admittedKind === "skill_test" || (admittedKind !== "standard"
@@ -1226,9 +1298,11 @@ export class PaperclipRunnerToolAuthority {
     return outcomes.filter(outcome => { const id = taskId(outcome); return typeof id === "string" && readable.has(id); });
   }
 
-  #privacyActor(run: { responsibleUserId: string | null }): AuthorizationActor {
+  #privacyActor(run: { responsibleUserId: string | null; contextSnapshot?: unknown }): AuthorizationActor {
     return { type: "agent", agentId: this.binding.agentId, companyId: this.binding.companyId,
       runId: this.binding.runId, source: "agent_jwt", onBehalfOfUserId: run.responsibleUserId,
+      keyScope: this.#apiScope({ issue: { workMode: this.binding.skillTestPurpose ? "skill_test" : this.binding.workMode ?? "standard" },
+        run: { contextSnapshot: run.contextSnapshot } }),
       ...(this.binding.museRuntime ? { authorizingUserId: this.binding.externalAuthorizingUserId } : {}) };
   }
 
@@ -1259,6 +1333,7 @@ export class PaperclipRunnerToolAuthority {
     ) {
       throw new Error("paperclip_runner_tool_binding_not_authorized");
     }
+    await this.#assertSkillTestScope(this.db, row);
     const [company] = await this.db.select().from(companies).where(eq(companies.id, this.binding.companyId));
     if (company?.status !== "active" || (company.budgetMonthlyCents > 0 && company.spentMonthlyCents >= company.budgetMonthlyCents)
       || (row.actor.budgetMonthlyCents > 0 && row.actor.spentMonthlyCents >= row.actor.budgetMonthlyCents)) throw forbidden("Company or budget authority unavailable");
@@ -1280,6 +1355,19 @@ export class PaperclipRunnerToolAuthority {
       resource: { type: "issue", companyId: this.binding.companyId, issueId: row.issue.id } });
     if (!privacy.allowed) throw forbidden("The task is no longer available to this run");
     return row;
+  }
+
+  async #assertSkillTestScope(db: Db, context: { issue: { workMode: string; harnessKind: string | null }; run: { contextSnapshot: unknown; runnerProfileJson: unknown } }) {
+    const persistedPurpose = record(record(record(context.run.runnerProfileJson).nativeExecutionInput).executionPurpose);
+    if (this.binding.skillTestPurpose || persistedPurpose.kind === "skill_test"
+      || context.issue.harnessKind === "skill_test" || this.#apiScope(context).kind === "skill_test") {
+      if (!this.binding.skillTestPurpose) throw forbidden("This skill test requires its frozen native execution binding");
+      const pinned = await assertNativeSkillTestBinding(db, this.binding, this.binding.skillTestPurpose);
+      const savedContext = record(record(record(pinned.run.runnerProfileJson).nativeExecutionInput).runtimeContext);
+      if (!this.binding.runtimeContext || savedContext.aggregateDigest !== this.binding.runtimeContext.aggregateDigest) {
+        throw forbidden("The skill-test runtime context differs from its admitted execution");
+      }
+    }
   }
 
   async #resolveReview(value: unknown) {
@@ -2526,6 +2614,7 @@ export class PaperclipRunnerToolAuthority {
     ) {
       throw new Error("paperclip_runner_tool_binding_not_authorized");
     }
+    await this.#assertSkillTestScope(tx, context);
     if (this.binding.museRuntime) {
       const decision = await authorizationService(tx).decide({
         actor: this.#privacyActor(context.run), action: "issue:mutate",

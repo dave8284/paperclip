@@ -963,6 +963,7 @@ export function createHeartbeatLifecycle(db: Db, dependencies: HeartbeatLifecycl
     const completedRun = await companySkills.completeTestRunForIssue({
       companyId: input.run.companyId,
       issueId: input.issueId,
+      expectedHeartbeatRunId: input.run.id,
       outcome: completion.outcome,
       error: completion.error,
     });

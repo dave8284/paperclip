@@ -867,3 +867,40 @@ describe("Claude effort input v9", () => {
     expect(() => parseNativeExecutionInput({ ...current, provider: { ...current.provider, agent: "codex", profile: QUALIFIED_ACPX_PROFILES.codex, claudeEffort: "high" } })).toThrow("Claude effort");
   });
 });
+
+
+describe("native skill-test V10 authority", () => {
+  function skillInput() {
+    const digest = "a".repeat(64), id = "10000000-0000-4000-8000-000000000001";
+    const bundle = { schema: NATIVE_RUNTIME_ASSET_SCHEMA, digest, manifestDigest: digest, rootPath: "/isolated/frozen", fileCount: 1, totalBytes: 20 };
+    const context = { prompt: { revision: PAPERCLIP_EXECUTION_PROMPT_REVISION, text: PAPERCLIP_EXECUTION_PROMPT, digest: nativeRuntimePromptDigest() },
+      instructions: { entryPath: "AGENTS.md", bundle }, skills: [{ key: "company/method", runtimeName: "tested-skill", versionId: id, bundle }],
+      mcp: { assignmentSetId: "skill-test", digest, bindingId: null } };
+    return { ...input, schema: "paperclip.native-execution-input.v10", task: { ...input.task, workMode: "skill_test" },
+      provider: { kind: "codex", model: "qualified-model", approvalPolicy: "never" }, credentialBindings: [], executionMode: "default", planningContext: null, homeMode: "isolated",
+      executionPurpose: { kind: "skill_test", testRunId: id, skillId: id, skillVersionId: id, inputSha256: digest, skillSha256: digest },
+      expectedCodexIdentity: { cliVersion: "0.160.0", model: "qualified-model" },
+      runtimeContext: { ...context, aggregateDigest: canonicalNativeRuntimeContextDigest(context) } };
+  }
+  it("retains the exact qualified identity and skill-test mode across persisted parsing and model projection", () => {
+    const raw = skillInput(), parsed = parseNativeExecutionInput(raw);
+    expect(parsed).toMatchObject({ schema: raw.schema, executionPurpose: raw.executionPurpose, expectedCodexIdentity: raw.expectedCodexIdentity });
+    expect(parseNativeExecutionInput(JSON.parse(JSON.stringify(parsed)))).toEqual(parsed);
+    expect(buildNativeModelEnvelope(parsed)).toMatchObject({ task: { workMode: "skill_test" } });
+  });
+  it("rejects mode relabelling, historical-schema promotion, missing binding and authority expansion", () => {
+    const raw = skillInput();
+    for (const override of [{ schema: NATIVE_EXECUTION_INPUT_SCHEMA_V9 }, { task: { ...raw.task, workMode: "standard" } },
+      { executionPurpose: undefined }, { executionPurpose: { ...raw.executionPurpose, inputSha256: "wrong" } },
+      { homeMode: "preconfigured" }, { session: { ...raw.session, lifecyclePolicy: { mode: "warm", idleTimeoutMs: 1000 } } },
+      { provider: { kind: "opencode", model: "other" } }, { credentialBindings: input.credentialBindings },
+      { workspace: { ...raw.workspace, repoUrl: "https://example.test/repository" } }, { initialCommunicationGuidance: "private history" },
+      { expectedCodexIdentity: { cliVersion: "0.160.0", model: "different-model" } }]) expect(() => parseNativeExecutionInput({ ...raw, ...override })).toThrow();
+    for (const change of [{ skills: [] }, { skills: [...raw.runtimeContext.skills, ...raw.runtimeContext.skills] },
+      { skills: [{ ...raw.runtimeContext.skills[0], versionId: "20000000-0000-4000-8000-000000000002" }] },
+      { mcp: { ...raw.runtimeContext.mcp, bindingId: "external" } }]) {
+      const context = { ...raw.runtimeContext, ...change };
+      expect(() => parseNativeExecutionInput({ ...raw, runtimeContext: { ...context, aggregateDigest: canonicalNativeRuntimeContextDigest(context) } })).toThrow();
+    }
+  });
+});

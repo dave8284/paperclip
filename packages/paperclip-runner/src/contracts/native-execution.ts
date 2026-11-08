@@ -11,6 +11,7 @@ import { explicitTaskSkillNames, parseNativeRuntimeContext, type NativeRuntimeCo
 export const NATIVE_EXECUTION_INPUT_SCHEMA_V1 = "paperclip.native-execution-input.v1" as const;
 export const NATIVE_EXECUTION_INPUT_SCHEMA_V2 = "paperclip.native-execution-input.v2" as const;
 export const NATIVE_EXECUTION_INPUT_SCHEMA_V3 = "paperclip.native-execution-input.v3" as const;
+export const NATIVE_EXECUTION_INPUT_SCHEMA_V10 = "paperclip.native-execution-input.v10" as const;
 export const NATIVE_EXECUTION_INPUT_SCHEMA_V9 = "paperclip.native-execution-input.v9" as const;
 export const NATIVE_EXECUTION_INPUT_SCHEMA_V8 = "paperclip.native-execution-input.v8" as const;
 export const NATIVE_EXECUTION_INPUT_SCHEMA_V6 = "paperclip.native-execution-input.v6" as const;
@@ -32,6 +33,29 @@ export interface NativeEgmPacketReviewPurpose {
   sourceDigests: Array<{ id: string; sha256: string }>;
 }
 export const EGM_PACKET_REVIEW_TOOL_NAMES = ["read_egm_source", "submit_egm_findings", "paperclip_finish"] as const;
+
+/** Immutable native Skill Studio authority; never confers ordinary task access. */
+export interface NativeSkillTestPurpose {
+  kind: "skill_test";
+  testRunId: string;
+  skillId: string;
+  skillVersionId: string;
+  inputSha256: string;
+  skillSha256: string;
+}
+export type NativeExecutionPurpose = NativeEgmPacketReviewPurpose | NativeSkillTestPurpose;
+export const SKILL_TEST_TOOL_NAMES = ["get_task_context", "read_document", "write_document", "report_progress",
+  "list_assigned_skills", "read_assigned_skill", "paperclip_finish", "paperclip_block"] as const;
+export function parseNativeSkillTestPurpose(value: unknown): NativeSkillTestPurpose {
+  const purpose = record(value, "input.executionPurpose");
+  exactKeys(purpose, ["kind", "testRunId", "skillId", "skillVersionId", "inputSha256", "skillSha256"], "input.executionPurpose");
+  if (purpose.kind !== "skill_test"
+    || [purpose.testRunId, purpose.skillId, purpose.skillVersionId].some(value => typeof value !== "string" || !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(value))
+    || [purpose.inputSha256, purpose.skillSha256].some(value => typeof value !== "string" || !/^[a-f0-9]{64}$/.test(value))) {
+    throw new NativeExecutionInputError("Invalid native skill-test execution purpose");
+  }
+  return purpose as unknown as NativeSkillTestPurpose;
+}
 
 export function parseNativeExecutionPurpose(value: unknown): NativeEgmPacketReviewPurpose {
   const purpose = record(value, "input.executionPurpose");
@@ -300,13 +324,19 @@ export interface NativeExecutionInputV9 extends Omit<NativeExecutionInputV7, "sc
   expectedCodexIdentity?: ExpectedCodexIdentity;
 }
 
+export interface NativeExecutionInputV10 extends Omit<NativeExecutionInputV9, "schema" | "task" | "executionPurpose"> {
+  schema: typeof NATIVE_EXECUTION_INPUT_SCHEMA_V10;
+  task: Omit<NativeExecutionInputV9["task"], "workMode"> & { workMode: "skill_test" };
+  executionPurpose: NativeSkillTestPurpose;
+}
+
 export interface NativeExecutionInputV8 extends Omit<NativeExecutionInputV6, "schema" | "provider" | "session"> {
   schema: typeof NATIVE_EXECUTION_INPUT_SCHEMA_V8;
   provider: { kind: "muse"; model: null; binding: MuseBindingSnapshot; bridgeRevision: "muse-v1" };
   session: Omit<NativeExecutionInputV6["session"], "driverKind"> & { driverKind: "muse_external" };
 }
 
-export type NativeExecutionInput = NativeExecutionInputV1 | NativeExecutionInputV2 | NativeExecutionInputV3 | NativeExecutionInputV4 | NativeExecutionInputV5 | NativeExecutionInputV6 | NativeExecutionInputV7 | NativeExecutionInputV8 | NativeExecutionInputV9;
+export type NativeExecutionInput = NativeExecutionInputV1 | NativeExecutionInputV2 | NativeExecutionInputV3 | NativeExecutionInputV4 | NativeExecutionInputV5 | NativeExecutionInputV6 | NativeExecutionInputV7 | NativeExecutionInputV8 | NativeExecutionInputV9 | NativeExecutionInputV10;
 
 /** The only task data that may enter provider-visible model input. */
 export interface NativeModelEnvelopeV1 {
@@ -334,7 +364,7 @@ export interface NativeModelEnvelopeV3 extends Omit<NativeModelEnvelopeV2, "sche
   requestedSkills: string[];
   constraints?: string[];
   schema: typeof NATIVE_MODEL_ENVELOPE_SCHEMA;
-  task: Pick<NativeExecutionInputV2["task"], "identifier" | "title" | "prompt" | "workMode">;
+  task: Pick<NativeExecutionInputV2["task"] | NativeExecutionInputV10["task"], "identifier" | "title" | "prompt" | "workMode">;
   completionContract: Omit<StrictCompletionContractInput, "criteria"> & {
     criteria: Array<{ id: string; requirement: string } | { id: string; source: NativeCompletionSource & { location: "task.prompt" } }>;
   };
@@ -450,7 +480,8 @@ export function parseNativeExecutionInput(value: unknown): NativeExecutionInput 
   const input = record(value, "input");
   if (input.schema === NATIVE_EXECUTION_INPUT_SCHEMA_V8) return parseMuseNativeExecutionInput(input);
   if (input.schema === NATIVE_EXECUTION_INPUT_SCHEMA_V6) return parseExternalNativeExecutionInput(input);
-  const isV9 = input.schema === NATIVE_EXECUTION_INPUT_SCHEMA_V9;
+  const isV10 = input.schema === NATIVE_EXECUTION_INPUT_SCHEMA_V10;
+  const isV9 = isV10 || input.schema === NATIVE_EXECUTION_INPUT_SCHEMA_V9;
   const isV7 = isV9 || input.schema === NATIVE_EXECUTION_INPUT_SCHEMA_V7;
   const isV5 = isV7 || input.schema === NATIVE_EXECUTION_INPUT_SCHEMA;
   const isV4 = isV5 || input.schema === NATIVE_EXECUTION_INPUT_SCHEMA_V4;
@@ -511,7 +542,7 @@ export function parseNativeExecutionInput(value: unknown): NativeExecutionInput 
   const contract = record(completionContract.contract, "input.completionContract.contract");
   exactKeys(contract, ["revision", "objective", "criteria"], "input.completionContract.contract");
 
-  if (task.workMode !== "standard" && (!isV2 || task.workMode !== "planning" && task.workMode !== "ask")) {
+  if (isV10 ? task.workMode !== "skill_test" : task.workMode !== "standard" && (!isV2 || task.workMode !== "planning" && task.workMode !== "ask")) {
     throw new NativeExecutionInputError("input.task.workMode must be standard, planning, or ask");
   }
   const executionMode: NativeExecutionMode = isV2 && input.executionMode === "plan" ? "plan" : "default";
@@ -932,10 +963,19 @@ export function parseNativeExecutionInput(value: unknown): NativeExecutionInput 
   const withRuntimeContext = { ...current, runtimeContext: parseNativeRuntimeContext(input.runtimeContext) };
   const expectedCodexIdentity = isV9 && input.expectedCodexIdentity !== undefined ? parseExpectedCodexIdentity(input.expectedCodexIdentity) : undefined;
   if (expectedCodexIdentity && (parsedProvider.kind !== "codex" || parsedProvider.model !== expectedCodexIdentity.model
-    || input.homeMode !== "isolated" || executionMode !== "default" || common.session.lifecyclePolicy.mode !== "per_turn" || input.executionPurpose !== undefined)) {
+    || input.homeMode !== "isolated" || executionMode !== "default" || common.session.lifecyclePolicy.mode !== "per_turn" || (!isV10 && input.executionPurpose !== undefined))) {
     throw new NativeExecutionInputError("Qualified Codex identity requires isolated per-turn Codex with the exact selected model");
   }
-  const executionPurpose = isV9 && input.executionPurpose !== undefined ? parseNativeExecutionPurpose(input.executionPurpose) : undefined;
+  const skillTestPurpose = isV10 ? parseNativeSkillTestPurpose(input.executionPurpose) : undefined;
+  const executionPurpose = !isV10 && isV9 && input.executionPurpose !== undefined ? parseNativeExecutionPurpose(input.executionPurpose) : undefined;
+  if (skillTestPurpose && (parsedProvider.kind !== "codex" || input.homeMode !== "isolated" || executionMode !== "default"
+    || common.session.lifecyclePolicy.mode !== "per_turn" || common.credentialBindings.length || common.interactionResponses.length
+    || common.workspace.repoUrl || common.workspace.repoRef || common.workspace.branchName
+    || withRuntimeContext.runtimeContext.skills.length !== 1
+    || withRuntimeContext.runtimeContext.skills[0]?.versionId !== skillTestPurpose.skillVersionId
+    || withRuntimeContext.runtimeContext.mcp.bindingId !== null || withRuntimeContext.runtimeContext.instructions.workingCopy
+    || withRuntimeContext.runtimeContext.connectionInstructions || input.continuationPrompt || input.initialCommunicationGuidance
+    )) throw new NativeExecutionInputError("Skill tests require isolated per-turn Codex, one exact pinned skill, and no undeclared authority");
   if (executionPurpose && (parsedProvider.kind !== "codex" || input.homeMode !== "isolated" || executionMode !== "default"
     || common.session.lifecyclePolicy.mode !== "per_turn" || common.credentialBindings.length !== 0 || common.interactionResponses.length !== 0
     || common.workspace.repoUrl !== null || common.workspace.repoRef !== null || common.workspace.branchName !== null
@@ -951,6 +991,10 @@ export function parseNativeExecutionInput(value: unknown): NativeExecutionInput 
     provider: parsedProvider as NativeProviderConfigV4,
   };
   if (!isV5) return { ...withPermissions, schema: NATIVE_EXECUTION_INPUT_SCHEMA_V4 };
+  if (isV10) return { ...withPermissions, schema: NATIVE_EXECUTION_INPUT_SCHEMA_V10,
+    task: { ...withPermissions.task, workMode: "skill_test" }, homeMode: "isolated",
+    provider: parsedProvider as NativeProviderConfigV9, executionPurpose: skillTestPurpose!,
+    ...(expectedCodexIdentity ? { expectedCodexIdentity } : {}) };
   if (isV9) return {
     ...withPermissions, schema: NATIVE_EXECUTION_INPUT_SCHEMA_V9, homeMode: input.homeMode as NativeHomeMode,
     provider: parsedProvider as NativeProviderConfigV9,
@@ -1024,7 +1068,7 @@ export function buildNativeModelEnvelope(input: NativeExecutionInput, options?: 
       interactionResponses: structuredClone(input.interactionResponses),
     };
   }
-  if (input.schema === NATIVE_EXECUTION_INPUT_SCHEMA || input.schema === NATIVE_EXECUTION_INPUT_SCHEMA_V6 || input.schema === NATIVE_EXECUTION_INPUT_SCHEMA_V7 || input.schema === NATIVE_EXECUTION_INPUT_SCHEMA_V8 || input.schema === NATIVE_EXECUTION_INPUT_SCHEMA_V9) {
+  if (input.schema === NATIVE_EXECUTION_INPUT_SCHEMA || input.schema === NATIVE_EXECUTION_INPUT_SCHEMA_V6 || input.schema === NATIVE_EXECUTION_INPUT_SCHEMA_V7 || input.schema === NATIVE_EXECUTION_INPUT_SCHEMA_V8 || input.schema === NATIVE_EXECUTION_INPUT_SCHEMA_V9 || input.schema === NATIVE_EXECUTION_INPUT_SCHEMA_V10) {
     const sourceBinding = input.completionSources;
     const references = sourceBinding?.contractRevision === input.completionContract.contract.revision
       && sourceBinding.promptSha256 === createHash("sha256").update(input.task.prompt).digest("hex")

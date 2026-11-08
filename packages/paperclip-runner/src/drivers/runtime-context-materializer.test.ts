@@ -31,6 +31,34 @@ import {
 
 const roots: string[] = [];
 
+it("requires subscription OAuth before materializing a frozen skill-test home", async () => {
+  const root = await mkdtemp(join(tmpdir(), "skill-test-subscription-"));
+  roots.push(root);
+  const source = join(root, "source");
+  await mkdir(source);
+  const auth = { tokens: { access_token: "synthetic-subscription-access", account_id: "synthetic-account" }, last_refresh: "2026-11-09T00:00:00Z" };
+  await writeFile(join(source, "auth.json"), JSON.stringify(auth));
+  await prepareIsolatedCodexHome({ context: null, codexHome: join(root, "accepted"), sourceCodexHome: source, subscriptionOnly: true });
+  expect(JSON.parse(await readFile(join(root, "accepted", "auth.json"), "utf8"))).toEqual(auth);
+  await expect(prepareIsolatedCodexHome({ context: null, codexHome: join(root, "explicit-api"), sourceCodexHome: source,
+    subscriptionOnly: true, apiKey: "synthetic-paid-key" })).rejects.toThrow("subscription_auth_required");
+  for (const [name, value] of [
+    ["api", { OPENAI_API_KEY: "synthetic-paid-key" }],
+    ["mixed", { ...auth, OPENAI_API_KEY: "synthetic-paid-key" }],
+    ["wrong-mode", { ...auth, auth_mode: "apikey" }],
+    ["empty", { tokens: {} }],
+  ] as const) {
+    await writeFile(join(source, "auth.json"), JSON.stringify(value));
+    await expect(prepareIsolatedCodexHome({ context: null, codexHome: join(root, name), sourceCodexHome: source,
+      subscriptionOnly: true })).rejects.toThrow("subscription_auth_required");
+    await expect(stat(join(root, name))).rejects.toThrow();
+  }
+  await writeFile(join(source, "auth.json"), JSON.stringify(auth));
+  await writeFile(join(source, "config.toml"), 'model_provider = "paperclip"\n[model_providers.paperclip]\nbase_url = "https://provider.example/v1"\nwire_api = "responses"\nrequires_openai_auth = false\nenv_key = "PAPERCLIP_AI_PROVIDER_KEY"\n');
+  await expect(prepareIsolatedCodexHome({ context: null, codexHome: join(root, "managed"), sourceCodexHome: source,
+    subscriptionOnly: true })).rejects.toThrow("subscription_auth_required");
+});
+
 async function makeWritable(root: string): Promise<void> {
   const info = await lstat(root).catch(() => null);
   if (!info || info.isSymbolicLink()) return;
