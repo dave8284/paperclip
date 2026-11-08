@@ -47,6 +47,48 @@ department-head label nor the existing project-lead label grants private-project
 access. Source: `server/src/services/agentos-departments.ts`,
 `server/src/services/company-deletion.ts`, `server/src/services/agent-deletion.ts`.
 
+Department mutations retain `applications:manage` and current native user/agent
+authority. The board or company CEO can create/remove departments and appoint heads.
+An appointed head manages only its own department and projects; it cannot replace
+heads, delete its own appointment, or move work into or out of another head's department. Friday cannot be
+appointed as a delivery head. A CEO can hire specialists directly without creating
+a department. Both native hire routes retain `agents:create` and approval gates;
+an appointed head's hires report to itself or a current manager in its own team,
+never another department's head, a foreign company, a reporting cycle, or a new
+CEO/top-level position. Appointment and authority are checked again within the
+hire transaction. These rules do not grant project visibility or change ordinary
+creators' existing native permissions.
+An employee reporting beneath a department head inherits the same ceiling for its
+own reporting subtree, including catalog imports and configuration. Default native
+creator/configuration grants cannot promote it to CEO, move its own reporting line
+outside the department or control another team. Current ancestry is checked again
+under the write locks; direct CEO specialists retain their existing native policy.
+For an appointed head, role/reporting changes through PATCH or a configuration
+revision rollback must keep an existing team member inside the same team; they
+cannot promote a CEO, take another team's employee, or change the head's own
+manager. The owning configuration transaction rechecks the current appointment
+and native configure permission before applying the graph change.
+Company workforce assignment and retirement also require the head's own reporting
+team. Broad native target grants do not permit taking or retiring another team's
+employees; board and CEO scope is retained. Retirement still requires its separate
+native target grant, and a head cannot retire its own executive appointment.
+Agent pause/termination through PATCH has the same board-only boundary as the
+dedicated lifecycle routes; the authorized workforce retirement path remains
+available. Agent resume, including PATCH to idle, retains explicit native configure
+authority and the head's current target scope within the existing lifecycle
+transaction. Normal lifecycle holds and budgets still apply.
+
+Evidence for these refinements: 44 controlled SQL-transport service checks and
+four listener-free lifecycle route-handler checks pass
+for ownership, reporting scope, revocation after a wait, native denial and privacy
+denial. Real PostgreSQL department/authority suites were attempted but blocked by
+`listen EPERM` before assertions; persistence, locking and the live head-led
+journey remain unverified. Sources:
+`server/src/services/agent-hiring-authority.ts`,
+`server/src/services/agent-hiring-authority.test.ts`,
+`server/src/services/agentos-departments-authority.test.ts`,
+`server/src/__tests__/agentos-department-authority.test.ts`.
+
 `GET /api/companies/{companyId}/friday/work` also projects accountability for
 authorized work on the current page: task owners remain on tasks, while project
 and department heads and their reporting chains appear in `accountability`.
@@ -137,8 +179,14 @@ API: `present` — representative operation IDs:
 Agent access: `partial` — Same-company CEO REST / native `call_api` / CLI exports
 and eligible same-company imports.
 
-Policy: Same-company CEO or board for identity/import operations; list/create/archive
-convenience endpoint is board-gated.
+Policy: Same-company CEO or board for company import/export operations. Agent
+imports retain the original native hiring actor and responsible-user ceiling;
+they cannot create another company, replace employees, grant arbitrary imported
+permissions or bypass individual hire approvals. The separate team catalog
+install path also permits native authorized creators. Appointed heads may install
+only staff explicitly anchored to their own current reporting team; CEO/top-level
+packages, cycles and another department's employees are rejected. Reporting links
+are created with each employee under current transaction-checked authority.
 
 Evidence: `source-only` — [implementation](../../server/src/routes/companies.ts#L1245)
 at the reviewed commit above.
@@ -150,6 +198,8 @@ remaining operations before qualifying the whole capability.
 
 Gaps: Exports use inline credential delivery and encrypted mutation receipts.
 New-company/ZIP import flows retain their board and transport constraints.
+Controlled SQL authorization and importer/route tests cover the new staffing
+boundary; live catalog installation remains unqualified.
 
 ## `decision-models`
 

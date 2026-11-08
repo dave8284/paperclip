@@ -52,6 +52,7 @@ export interface CatalogTeamActorContext {
 }
 
 export interface CatalogTeamImportOptions {
+  authorizationActor?: import("./authorization.js").AuthorizationActor;
   targetManagerAgentId?: string | null;
   targetManagerSlug?: string | null;
   include?: Partial<CompanyPortabilityInclude>;
@@ -63,6 +64,15 @@ export interface CatalogTeamImportOptions {
   secretValues?: CompanyPortabilityImport["secretValues"];
   sourcePolicy?: CatalogTeamSourcePolicy;
   actor?: CatalogTeamActorContext | null;
+}
+
+function assertCatalogActorContext(companyId: string, options: CatalogTeamImportOptions) {
+  if (options.actor?.actorType !== "agent") return;
+  if (options.authorizationActor?.type !== "agent"
+    || options.authorizationActor.companyId !== companyId
+    || options.authorizationActor.agentId !== (options.actor.agentId ?? options.actor.actorId)) {
+    throw forbidden("The original authenticated employee is required to install a team.");
+  }
 }
 
 export type CatalogTeamSkillPreparationAction =
@@ -843,11 +853,13 @@ export function teamsCatalogService(db: Db) {
     catalogRef: string,
     options: CatalogTeamImportOptions = {},
   ): Promise<CatalogTeamImportPreviewResult> {
+    assertCatalogActorContext(companyId, options);
     const prepared = await prepareCatalogTeamSource(companyId, catalogRef, options);
     const previewInput = buildPortabilityInput(companyId, prepared.source, options);
     const portabilityPreview = await portability.previewImport(previewInput, {
       mode: "agent_safe",
       sourceCompanyId: companyId,
+      authorizationActor: options.authorizationActor,
     });
     portabilityPreview.warnings.push(...prepared.warnings);
     portabilityPreview.errors.push(...prepared.errors);
@@ -904,6 +916,7 @@ export function teamsCatalogService(db: Db) {
     catalogRef: string,
     options: CatalogTeamImportOptions = {},
   ): Promise<CatalogTeamInstallResult> {
+    assertCatalogActorContext(companyId, options);
     const prepared = await prepareCatalogTeamSource(companyId, catalogRef, options);
     if (prepared.errors.length > 0) {
       throw unprocessable(`Catalog team source preparation failed: ${prepared.errors.join("; ")}`);
@@ -922,6 +935,7 @@ export function teamsCatalogService(db: Db) {
     const importPreview = await portability.previewImport(importInput, {
       mode: "agent_safe",
       sourceCompanyId: companyId,
+      authorizationActor: options.authorizationActor,
     });
     if (importPreview.errors.length > 0) {
       throw unprocessable(`Catalog team import preview has errors: ${importPreview.errors.join("; ")}`);
@@ -944,6 +958,7 @@ export function teamsCatalogService(db: Db) {
       {
         mode: "agent_safe",
         sourceCompanyId: companyId,
+        authorizationActor: options.authorizationActor,
       },
     );
     warnings.push(...await prepareSkillInstalls(companyId, prepared));

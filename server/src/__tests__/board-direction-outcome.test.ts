@@ -8,7 +8,7 @@ function fixture() {
   const company = randomUUID(), issue = randomUUID(), run = randomUUID(), agent = randomUUID(), review = randomUUID(), decision = randomUUID();
   const finished = new Date("2026-01-01T00:01:00Z"), resolved = new Date("2026-01-01T00:02:00Z");
   const runRow = [run, company, agent, issue, "succeeded", new Date("2026-01-01T00:00:00Z"), finished, true];
-  const reviewRow = [review, company, issue, run, "request_confirmation", "accepted",
+  const reviewRow: unknown[] = [review, company, issue, run, "request_confirmation", "accepted",
     { target: { type: "custom", key: "native_completion_review", revisionId: decision } }, `native-review:${decision}`, resolved, null, "independent-owner", null];
   const decisionRow = [decision, company, issue, run, "applied", "in_review"];
   return { company, issue, run, agent, review, decision, finished, resolved, runRow, reviewRow, decisionRow };

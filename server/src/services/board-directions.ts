@@ -7,10 +7,12 @@ import { conflict, forbidden, notFound } from "../errors.js";
 import { authorizationService, portfolioOwnerReadSqlConditions, type AuthorizationActor } from "./authorization.js";
 import { agentosPortfolioMandateService, assertPortfolioMandateActor } from "./agentos-portfolio-mandates.js";
 import { boardDirectionFingerprint, boardDirectionMatchesTask } from "./board-direction-intent.js";
-import { nativeHandoffSourceAuthority, nativeHandoffSourceContexts } from "./native-handoff-source-authority.js";
+import { authorizeBoardDirectionSource as sourceRun, boardDirectionTaskAccess as taskAccess, boardDirectionActor } from "./board-direction-source.js";
+import { recordBoardDirectionHandoff } from "./board-direction-return.js";
+export { boardDirectionActor } from "./board-direction-source.js";
 import { readBoardDirectionOutcome } from "./board-direction-outcome.js";
 import { matchesBoardDirectionGrant } from "./board-direction-grants.js";
-import { isFridayExecutiveTarget, fridayOwnConversationSql } from "./friday-board-role.js";
+import { isFridayExecutiveTarget } from "./friday-board-role.js";
 import { assertAssignableAgent } from "./agent-assignability.js";
 import { issueService } from "./issues.js";
 import { persistActivity, publishActivity, type ActivityPublication } from "./activity-log.js";
@@ -24,44 +26,14 @@ function receipt(row: BoardDirection, task: Pick<typeof issues.$inferSelect, "id
     taskStatus: task.status, currentAssigneeAgentId: task.assigneeAgentId, observedAt: new Date().toISOString(),
     createdAt: row.createdAt.toISOString(), dispatchedAt: row.dispatchedAt?.toISOString() ?? null };
 }
-export function boardDirectionActor(row: BoardDirection): AuthorizationActor {
-  return { type: "agent", source: "agent_jwt", companyId: row.sourceCompanyId, agentId: row.sourceAgentId,
-    runId: row.sourceRunId, onBehalfOfUserId: row.ownerUserId, authorizingUserId: row.authorizingUserId ?? undefined };
-}
-
 /** The mandate gateway owns foreign authority; task creation/execution retain
  * their native owners. No source agent is installed as a target-company member. */
 export function boardDirectionService(db: Db) {
-  function taskAccess(tx: Db, contexts: AuthorizationActor[], companyId: string, issueId: string) {
-    return and(eq(issues.id, issueId), eq(issues.companyId, companyId), ...contexts.map(actor => {
-      const rights = portfolioOwnerReadSqlConditions(actor);
-      return and(rights.issue, sql`(${issues.projectId} is null or exists (${tx.select({ id: projects.id }).from(projects)
-        .where(and(eq(projects.companyId, companyId), eq(projects.id, issues.projectId), rights.project))}))`);
-    }));
-  }
   function changing(error: unknown): never {
     const failure = error as { code?: string; cause?: { code?: string } };
     if (["55P03", "40P01", "40001"].includes(failure.cause?.code ?? failure.code ?? ""))
       throw conflict("Company authority or work is changing. Retry this request.", { retryable: true });
     throw error;
-  }
-  async function sourceRun(tx: Db, actor: AuthorizationActor, creating: boolean) {
-    if (actor.type !== "agent" || actor.source !== "agent_jwt" || !actor.agentId || !actor.runId || !actor.companyId
-      || !actor.onBehalfOfUserId || (actor.keyScope && actor.keyScope.kind !== "standard")) {
-      throw forbidden("Board directions require Friday's authenticated native conversation execution");
-    }
-    const [run] = await tx.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.id, actor.runId),
-      eq(heartbeatRuns.companyId, actor.companyId), eq(heartbeatRuns.agentId, actor.agentId))).for("share", { noWait: true });
-    if (!run || run.runtimeMode !== "native" || run.responsibleUserId !== actor.onBehalfOfUserId || (creating && run.status !== "running")
-      || ["cancelled", "timed_out", "interrupted"].includes(run.status)) throw forbidden("Friday's originating execution is unavailable");
-    const nativeAuthority = await nativeHandoffSourceAuthority(tx, run);
-    const [conversation] = await tx.select({ own: fridayOwnConversationSql({ companyId: actor.companyId, agentId: actor.agentId,
-      issueId: run.nativeIssueId ?? run.issueId ?? null }) }).from(agents).where(and(eq(agents.companyId, actor.companyId), eq(agents.id, actor.agentId)));
-    if (!conversation?.own) throw forbidden("Board directions must originate in Friday's own conversation");
-    const [chat] = await tx.select({ id: issues.id }).from(issues).where(and(eq(issues.id, run.nativeIssueId ?? run.issueId!),
-      eq(issues.companyId, actor.companyId), eq(issues.conversationUserId, actor.onBehalfOfUserId))).for("share", { noWait: true });
-    if (!chat) throw forbidden("The originating conversation must belong to the mandate owner");
-    return nativeHandoffSourceContexts(actor, nativeAuthority);
   }
   async function authority(tx: Db, actor: AuthorizationActor, sourceCompanyId: string,
     input: Pick<CreateBoardDirection, "mandateId" | "revision" | "grantId" | "targetCompanyId" | "executiveAgentId" | "projectId">, creating: boolean) {
@@ -135,6 +107,7 @@ export function boardDirectionService(db: Db) {
           grantId: input.grantId, targetCompanyId: input.targetCompanyId, executiveAgentId: input.executiveAgentId, issueId: task.id,
           expectedIssueStatusVersion: task.statusVersion, idempotencyKey: input.idempotencyKey, inputFingerprint: fingerprint,
           wakeupRequestId: randomUUID() }).returning();
+        if (!await recordBoardDirectionHandoff(tx, saved)) throw forbidden("The originating conversation generation is unavailable");
         publications.push((await persistActivity(tx, { companyId: sourceCompanyId, actorType: "agent", actorId: actor.agentId!, agentId: actor.agentId,
           runId: actor.runId, action: "agentos.board_direction_created", entityType: "agentos_board_direction", entityId: id,
           details: { targetCompanyId: input.targetCompanyId, issueId: task.id, executiveAgentId: input.executiveAgentId, mandateId: mandate.id, revision: mandate.revision } })).publication);

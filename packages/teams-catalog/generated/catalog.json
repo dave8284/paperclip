@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "packageName": "@paperclipai/teams-catalog",
   "packageVersion": "0.1.0",
-  "generatedAt": "2026-11-08T03:07:30.361Z",
+  "generatedAt": "2026-11-08T05:10:51.312Z",
   "teams": [
     {
       "id": "paperclipai:bundled:company-defaults:agentos-operators",
@@ -11,7 +11,7 @@
       "category": "company-defaults",
       "slug": "agentos-operators",
       "name": "AgentOS Operators",
-      "description": "Friday and a reusable cross-functional operating pool for existing applications and new products, with delegated project and pipeline ownership.",
+      "description": "A company CEO and reusable cross-functional specialists for existing applications and new products, with staffing depth chosen by the CEO.",
       "path": "catalog/bundled/company-defaults/agentos-operators",
       "entrypoint": "TEAM.md",
       "schema": "agentcompanies/v1",
@@ -38,10 +38,10 @@
         "externalSkillSources": 0
       },
       "rootAgentSlugs": [
-        "coordinator"
+        "ceo"
       ],
       "agentSlugs": [
-        "coordinator",
+        "ceo",
         "engineer",
         "marketing",
         "operations",
@@ -58,7 +58,7 @@
           "type": "catalog",
           "ref": "agentos-context-review",
           "agentSlugs": [
-            "coordinator",
+            "ceo",
             "engineer",
             "marketing",
             "operations",
@@ -99,7 +99,7 @@
           "type": "catalog",
           "ref": "issue-triage",
           "agentSlugs": [
-            "coordinator",
+            "ceo",
             "operations",
             "qa",
             "sales",
@@ -123,7 +123,7 @@
           "type": "catalog",
           "ref": "task-planning",
           "agentSlugs": [
-            "coordinator",
+            "ceo",
             "engineer",
             "marketing",
             "operations",
@@ -141,8 +141,8 @@
         {
           "path": "TEAM.md",
           "kind": "team",
-          "sizeBytes": 3167,
-          "sha256": "2fc49dd297fb610310a3002a1ac1f70a95fb8a774e656ef775aa26ec49bd4b7f"
+          "sizeBytes": 3730,
+          "sha256": "55f620230a1338f3eb5d8d7a55e41d320941e5d5f2d9ef8292c4f7f494b45cbc"
         },
         {
           "path": ".paperclip.yaml",
@@ -151,75 +151,75 @@
           "sha256": "f30d41b1a16f3ed0186c6bb1e2234d6a1b1f179ad7bd3d9d7a7a8f151da9617e"
         },
         {
-          "path": "agents/coordinator/AGENTS.md",
+          "path": "agents/ceo/AGENTS.md",
           "kind": "agent",
-          "sizeBytes": 30357,
-          "sha256": "42f61b2cb2cf21ac6668cf1b4b271818994d4f6453dd8780e6642efe5ad74df9"
+          "sizeBytes": 1293,
+          "sha256": "a8790c50fa3810328fc1f24cf541a03368d622530327597d22d22471088b55ef"
         },
         {
           "path": "agents/engineer/AGENTS.md",
           "kind": "agent",
-          "sizeBytes": 4621,
-          "sha256": "4b7e97df8d4c5178db33835dffeb9669d2adc9a0cd39140ae1df2d764891596b"
+          "sizeBytes": 4613,
+          "sha256": "bb056cfa15a30b49de65d4208263c316924bbaa043ea424c1b6e038b4ce22b40"
         },
         {
           "path": "agents/marketing/AGENTS.md",
           "kind": "agent",
-          "sizeBytes": 4669,
-          "sha256": "713029cf74fcf8ea083ecb6e507b3caf44874fed51b1b5ad259ba30133ef1d94"
+          "sizeBytes": 4759,
+          "sha256": "fcf5b264d06a7ff5b81a7c59d0883c1e094481cb02552d85d6800f17998a924f"
         },
         {
           "path": "agents/operations/AGENTS.md",
           "kind": "agent",
-          "sizeBytes": 4845,
-          "sha256": "3a77e34c22f15715988e746a2cadbb25762b74c75789f1a508c0b7d4975ecf17"
+          "sizeBytes": 4837,
+          "sha256": "6a61b637f3060529f5ddc2304914062a4fc468a9e5a54605196c297fdb66a802"
         },
         {
           "path": "agents/product/AGENTS.md",
           "kind": "agent",
-          "sizeBytes": 4737,
-          "sha256": "2be528a7c31e39d85c51e47cb37a2b6f2a163273275bbeda3ba3a94303892376"
+          "sizeBytes": 5027,
+          "sha256": "6132a6f7eb4a6720f8b0048ab1cb72b3b9c085afef05a9d820bb8b4728011878"
         },
         {
           "path": "agents/qa/AGENTS.md",
           "kind": "agent",
-          "sizeBytes": 4551,
-          "sha256": "005362617ab90c7ac5c1e059ebc38abcefce2b8069d86e672d9cb8191363e6b0"
+          "sizeBytes": 4543,
+          "sha256": "0d7992b834b38e0b41f28f4b073e28a845db6d6c1a61b5ef03807d91522b679b"
         },
         {
           "path": "agents/sales/AGENTS.md",
           "kind": "agent",
-          "sizeBytes": 4488,
-          "sha256": "7ec6c0ae113b5563193f3b1f303469c2bc95814554972771ed2e3a38060f772c"
+          "sizeBytes": 4480,
+          "sha256": "7fd95c09b2f5fa181da4ced5092b58c551340b165d0a6c398fcd13f5b7ff2a57"
         },
         {
           "path": "agents/support/AGENTS.md",
           "kind": "agent",
-          "sizeBytes": 4489,
-          "sha256": "2b77642cebf376567d4c8dc1f25991afdee5cb566f73b45c4df22fd7b37dc133"
+          "sizeBytes": 4481,
+          "sha256": "f084a3f0794fbab4cfda37cb2ddc97600e07c14a6ff569555b20b0daaff6c96a"
         },
         {
           "path": "projects/portfolio-operations/PROJECT.md",
           "kind": "project",
-          "sizeBytes": 460,
-          "sha256": "4a6dd07faed7718a3dba57b143105b4d7d0b0b451df8f46298302201eada3745"
+          "sizeBytes": 531,
+          "sha256": "2271f9bf0777e1d70426c909b572f780bc69d5893d144666a86f1281a4126648"
         },
         {
           "path": "projects/portfolio-operations/tasks/daily-portfolio-review/TASK.md",
           "kind": "task",
-          "sizeBytes": 955,
-          "sha256": "f00d76258e499238c739d9acb288f9ecd69800938c16d7b84128a980e75766b5"
+          "sizeBytes": 999,
+          "sha256": "87c886f7ee3b225cf327bd8a5fd1a829b19c8279de94daa269a5b58550210570"
         },
         {
           "path": "projects/portfolio-operations/tasks/weekly-role-review/TASK.md",
           "kind": "task",
-          "sizeBytes": 808,
-          "sha256": "7e98b3ec25be1dae399554b275a7c253154d3952b95e345d0752db3496aff525"
+          "sizeBytes": 800,
+          "sha256": "f7ec32fea9784e5069e5003889bfe957bf846a1625a9aa8ea617933594acc9d2"
         }
       ],
       "trustLevel": "assets",
       "compatibility": "compatible",
-      "contentHash": "sha256:5aa5b6e009aaecaecc5854f719f25fc2794c89cd11a6282c652bd8bd82be1dda"
+      "contentHash": "sha256:64f5f338e417ad8b98b9a0d202a5cbbe93fb128a32c4c6fa320caaf1c561d700"
     },
     {
       "id": "paperclipai:bundled:company-defaults:core-exec-team",
@@ -313,20 +313,20 @@
         {
           "path": "TEAM.md",
           "kind": "team",
-          "sizeBytes": 2011,
-          "sha256": "79d447e1f1f9e7014a8f13b58d7c5e33295ecdeaa23b67208b9c26bd9eb7e1bc"
+          "sizeBytes": 2309,
+          "sha256": "b1c245ffc82de01d86d743c3cd69cb60b3652151b7e5798b39030bc457713ca5"
         },
         {
           "path": "agents/ceo/AGENTS.md",
           "kind": "agent",
-          "sizeBytes": 262,
-          "sha256": "34d1d54c889cdf0122f40ed17b5e03266cd54c159467da33691f70928aa97c3d"
+          "sizeBytes": 1266,
+          "sha256": "1252e49a55cde0b659953998d14e58b66bae96eea7e53eb49995f6bf1fbbc479"
         },
         {
           "path": "agents/cto/AGENTS.md",
           "kind": "agent",
-          "sizeBytes": 279,
-          "sha256": "d33bfdecdf2edcedde25599c72c383445365c595430109469a3919bf9cb12a3d"
+          "sizeBytes": 877,
+          "sha256": "960a831d438fabbb195ac3dfb5f49b68971346cd3edc148bdf6c87ee6a51e2c4"
         },
         {
           "path": "agents/qa/AGENTS.md",
@@ -349,7 +349,7 @@
       ],
       "trustLevel": "markdown_only",
       "compatibility": "compatible",
-      "contentHash": "sha256:3dcb493bab3d16ee8f3071aca377bf1c232b207ac1aaba7cb320bc71523c0040"
+      "contentHash": "sha256:1ea5ef711d19dc2cf0c10a914291009aaee826659fb90aba95e6b2fb106cb5cd"
     },
     {
       "id": "paperclipai:bundled:product:product-design",

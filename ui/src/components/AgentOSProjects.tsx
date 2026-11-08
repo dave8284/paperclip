@@ -55,7 +55,7 @@ export function AgentOSProjects({ companyId, view, navigate, onCreate }: { compa
       <label className="block text-sm">Name<input className="mt-2 w-full rounded-lg border bg-background p-3" value={name} onChange={event => setName(event.target.value)} required maxLength={100} /></label>
       <label className="block text-sm">Purpose<textarea className="mt-2 w-full rounded-lg border bg-background p-3" value={description} onChange={event => setDescription(event.target.value)} maxLength={4000} /></label>
       <label className="block text-sm">Department head<select className="mt-2 w-full rounded-lg border bg-background p-3" value={leadAgentId} disabled={agents.isPending || !!agents.error} onChange={event => setLeadAgentId(event.target.value)}>{leadOptions(leadAgentId)}</select></label>
-      <p className="text-sm text-muted-foreground">The head coordinates this department’s projects. Private project access remains separately controlled.</p>
+      <p className="text-sm text-muted-foreground">The head manages this department’s staff and delivery within company permissions and budget. Private project access remains separately controlled.</p>
       <div className="flex justify-between"><Button type="button" variant="ghost" onClick={() => setEditing(null)}>Cancel</Button><Button disabled={save.isPending || !name.trim()} type="submit">Save department</Button></div>
     </form>}
     {view.panel === "departments" && <div className="agentos-project-grid">{rows.map(department => <section className="space-y-3 rounded-xl border p-5" key={department.id}>
@@ -64,7 +64,7 @@ export function AgentOSProjects({ companyId, view, navigate, onCreate }: { compa
       <div className="flex flex-wrap gap-2"><Button variant="ghost" size="sm" onClick={() => startEdit(department)}>Edit department</Button><Button variant="ghost" size="sm" onClick={() => setRemoving(department.id)}>Delete department</Button></div>
       {removing === department.id && <div className="space-y-2"><p className="text-sm">Delete this department? Its projects will remain, ungrouped.</p><div className="flex justify-between"><Button variant="ghost" size="sm" onClick={() => setRemoving(null)}>Cancel</Button><Button variant="destructive" size="sm" disabled={remove.isPending} onClick={() => remove.mutate(department)}>Delete</Button></div></div>}
     </section>)}</div>}
-    {view.panel === "departments" && !rows.length && !departments.isPending && <p className="agentos-empty">Create departments such as Marketing or Engineering, then group their projects.</p>}
+    {view.panel === "departments" && !rows.length && !departments.isPending && <p className="agentos-empty">The CEO can manage specialists directly for smaller tasks. Departments are optional for larger or ongoing work; each head manages their department’s staff and projects.</p>}
     {view.panel === "projects" && <>
       <div className="agentos-section-heading"><h2>{selected?.name ?? "All projects"}</h2><span>{visible.length} projects</span></div>
       {selected && <p className="text-sm text-muted-foreground">Department head · {employeeName(selected.leadAgentId)}</p>}

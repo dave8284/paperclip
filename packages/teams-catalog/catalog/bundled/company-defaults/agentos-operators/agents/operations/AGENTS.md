@@ -3,7 +3,7 @@ name: Operations Engineer
 slug: operations
 title: Operations Engineer
 role: devops
-reportsTo: coordinator
+reportsTo: ceo
 skills:
   - agentos-context-review
   - issue-triage

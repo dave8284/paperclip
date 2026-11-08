@@ -1,8 +1,8 @@
 import { agentAppearanceSchema, randomAgentAppearance } from "@paperclipai/shared";
 import { normalizePaperclipRunnerAdapterConfig } from "@paperclipai/adapter-utils/server-utils";
-import { agents, toolConnectionInstalls, principalPermissionGrants, type Db } from "@paperclipai/db";
+import { agents, companies, toolConnectionInstalls, principalPermissionGrants, type Db } from "@paperclipai/db";
 import { eq } from "drizzle-orm";
-import { unprocessable } from "../errors.js";
+import { conflict, unprocessable } from "../errors.js";
 import { agentRecordQueries, isPlainRecord, configPatchFromApprovalPayload, normalizeRuntimeConfigForNewAgent,
   deduplicateAgentName, type CreateAgentData, type CreateAgentOptions, type AgentConfigurationPatch, type AgentHireRecord } from "../lib/agent-records.js";
 import { normalizeAgentPermissions, permissionsImplyLowTrust, NEW_STANDARD_AGENT_DEFAULT_GRANT_KEYS,
@@ -13,9 +13,23 @@ import { agentCredentialService } from "./agent-credentials.js";
 import { agentIdentityService } from "./agent-identity.js";
 import { initializePrimaryAgent } from "./primary-agent.js";
 import { resolveNewAgentRunnerForCompany } from "./agent-runner-selection.js";
+import { resolveAgentHiringAuthority } from "./agent-hiring-authority.js";
 
 export async function prepareAgentHire(db: Db, companyId: string, input: CreateAgentData, options?: CreateAgentOptions): Promise<CreateAgentData> {
   const { runner, ...data } = input;
+  if (options?.hiringAuthority) {
+    const authority = await resolveAgentHiringAuthority(db, companyId, options.hiringAuthority.actor, data,
+      { lock: true, requireDepartmentHead: options.hiringAuthority.departmentHead, importedManagerIds: options.hiringAuthority.importedManagerIds });
+    data.reportsTo = authority.reportsTo;
+    if (options.hiringAuthority.importRequiresNoApproval) {
+      const [company] = await db.select({ requiresApproval: companies.requireBoardApprovalForNewAgents }).from(companies)
+        .where(eq(companies.id, companyId)).for("share", { noWait: true }).catch(error => {
+          if ((error?.cause?.code ?? error?.code) === "55P03") throw conflict("Company hiring policy is changing. Retry the import.", { retryable: true });
+          throw error;
+        });
+      if (!company || company.requiresApproval) throw conflict("This company requires individual hire approvals. Submit the employees through agent hires.");
+    }
+  }
   const selection = options?.runnerResolved
     ? { adapterType: data.adapterType ?? "process", adapterConfig: isPlainRecord(data.adapterConfig) ? data.adapterConfig : {} }
     : await resolveNewAgentRunnerForCompany(db, companyId, {

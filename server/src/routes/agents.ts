@@ -4,6 +4,7 @@ import { finishOwnerAiAccountConnection } from "../services/ai-workspace-account
 import { cancellationRequestId } from "../services/native-runtime/native-cancellation-request.js";
 import { agentHarnessType, isEnvironmentDriverSupportedForAdapter, normalizeClaudeRunnerOptions, type AgentConfigurationWarning, type AgentRunnerChoice } from "@paperclipai/shared";
 import { resolveNewAgentRunnerForCompany } from "../services/agent-runner-selection.js";
+import { resolveAgentHiringAuthority, resolveDepartmentConfigurationAuthority } from "../services/agent-hiring-authority.js";
 import { agentEnvironmentTestService } from "../services/agent-environment-test.js";
 import { qualifyAgentRunner } from "../services/agent-runner-qualification.js";
 import { createAgentLifecycle } from "../services/agent-lifecycle.js";
@@ -40,7 +41,8 @@ import { isAiConnectionCompatible } from "@paperclipai/shared";
 import { applyConnectorSkills, resolveConnectorAssignments, annotateConnectorSkills, isConnectorSkill } from "../services/connector-runtime.js";
 import { getExecutionBlocker } from "../services/execution-blocker.js";
 import { canRetryStoppedRun } from "../services/cancelled-native-startup.js";
-import { getNativeReviewAssignment, readNativeReviewAssignmentContext, type NativeReviewAssignmentContext } from "../services/native-runtime/native-review-participant.js";
+import { getNativeReviewAssignment, type NativeReviewAssignmentContext } from "../services/native-runtime/native-review-participant.js";
+import { readExactNativeReviewRetryContext } from "../services/native-runtime/native-review-retry.js";
 import { paperclipRunnerTransitionConfig, normalizeLegacyRunnerProvider, isPaperclipRunnerProvider } from "@paperclipai/adapter-utils";
 import { applyMcpReasoningEffort } from "../services/public-mcp/agent-config.js";
 import { executionProjectionForRun, executionProjectionsForRuns } from "../services/execution-projection.js";
@@ -104,6 +106,7 @@ import { inheritNativeRunnerAdapterConfig } from "../services/native-runtime/nat
 import { agentInstructionRevisionService } from "../services/agent-instruction-revisions.js";
 import { agentInstructionWorkingCopyService } from "../services/agent-instruction-working-copies.js";
 import { authorizeInstructionRead } from "../services/agent-instruction-authorization.js";
+import { recordInstructionChangeConsent } from "../services/agent-instruction-consent.js";
 import { instructionPath } from "../services/agent-instruction-files.js";
 import { agentInstructionsBundleMode, deriveBundleState } from "../services/agent-instructions.js";
 import {
@@ -2530,7 +2533,7 @@ export function agentRoutes(
       scope: changeScope,
     });
     if (decision.allowed) {
-      return;
+      return false;
     }
 
     if (decision.reason === "deny_missing_consent" && req.actor.type === "agent" && targetKeys.length > 0) {
@@ -2555,7 +2558,7 @@ export function agentRoutes(
         scope: { ...changeScope, consentedChange: true },
       });
       if (consentedDecision.allowed) {
-        return;
+        return true;
       }
       throw forbidden(consentedDecision.explanation, authorizationDeniedDetails(consentedDecision));
     }
@@ -2563,19 +2566,25 @@ export function agentRoutes(
     throw forbidden(decision.explanation, authorizationDeniedDetails(decision));
   }
 
-  async function assertCanManageInstructionsPath(req: Request, targetAgent: { id: string; companyId: string }) {
-    await assertCanApplyProtectedAgentChange(
+  async function assertCanManageInstructionsPath(req: Request, targetAgent: { id: string; companyId: string; role: string; reportsTo: string | null }) {
+    const consentedChange = await assertCanApplyProtectedAgentChange(
       req,
       targetAgent,
       [agentInstructionsChangeTargetKey(targetAgent.id)],
     );
+    if (req.actor.type !== "agent") return undefined;
+    const scope = await resolveDepartmentConfigurationAuthority(db, targetAgent, req.actor, {}, {
+      configurationRequiresChangeGrant: true, configurationConsentedChange: consentedChange,
+    });
+    return { actor: req.actor, departmentHead: scope.departmentHead, requiresChangeGrant: true, consentedChange,
+      instructionConsentReceipt: consentedChange ? recordInstructionChangeConsent(req.actor, targetAgent) : undefined };
   }
 
   async function assertCanApplyAgentProfileChange(
     req: Request,
     targetAgent: { id: string; companyId: string },
   ) {
-    await assertCanApplyProtectedAgentChange(
+    return assertCanApplyProtectedAgentChange(
       req,
       targetAgent,
       [agentProfileChangeTargetKey(targetAgent.id)],
@@ -4250,9 +4259,11 @@ export function agentRoutes(
     }
 
     const actor = getActorInfo(req);
+    const departmentScope = req.actor.type === "agent" ? await resolveDepartmentConfigurationAuthority(db, existing, req.actor, revision.afterConfig) : null;
     const updated = await svc.rollbackConfigRevision(id, revisionId, {
       agentId: actor.agentId,
       userId: actor.actorType === "user" ? actor.actorId : null,
+      departmentAuthority: departmentScope ? { actor: req.actor, departmentHead: departmentScope.departmentHead } : undefined,
     });
     if (!updated) {
       res.status(404).json({ error: "Revision not found" });
@@ -4361,6 +4372,8 @@ export function agentRoutes(
       runner: hireRunner,
       ...hireInput
     } = req.body;
+    const hiringScope = req.actor.type === "agent" ? await resolveAgentHiringAuthority(db, companyId, req.actor, hireInput) : null;
+    if (hiringScope) hireInput.reportsTo = hiringScope.reportsTo;
 
     if (setupAgentId) {
       assertBoard(req);
@@ -4562,6 +4575,7 @@ export function agentRoutes(
         },
         {
           ...(setupAgentId ? { setupAgentId } : {}),
+          hiringAuthority: hiringScope ? { actor: req.actor, departmentHead: hiringScope.departmentHead } : undefined,
           createdByUserId: req.actor.type === "board" ? req.actor.userId : null,
           runnerResolved: true,
           responsibleUserId: responsibleUserForAiRequest(req),
@@ -4760,6 +4774,8 @@ export function agentRoutes(
       runner: createRunner,
       ...createInput
     } = req.body;
+    const hiringScope = req.actor.type === "agent" ? await resolveAgentHiringAuthority(db, companyId, req.actor, createInput) : null;
+    if (hiringScope) createInput.reportsTo = hiringScope.reportsTo;
     const agentId = setupId ?? randomUUID();
     const requestedCreateConfig = (createInput.adapterConfig ?? {}) as Record<string, unknown>;
     assertProviderTraceSettingTransition(req, createInput.runtimeConfig);
@@ -4843,6 +4859,7 @@ export function agentRoutes(
       },
       {
         ...(setupId ? { setupOnly: true } : {}),
+        hiringAuthority: hiringScope ? { actor: req.actor, departmentHead: hiringScope.departmentHead } : undefined,
         createdByUserId: req.actor.type === "board" ? req.actor.userId : null,
         runnerResolved: true,
         responsibleUserId: responsibleUserForAiRequest(req),
@@ -5094,12 +5111,12 @@ export function agentRoutes(
     const id = req.params.id as string;
     const existing = await getAccessibleResource(req, res, svc.getById(id), "Agent not found");
     if (!existing) return;
-    await assertCanManageInstructionsPath(req, existing);
+    const departmentAuthority = await assertCanManageInstructionsPath(req, existing);
     assertExternalInstructionsAdmin(req, existing);
     if (req.body.mode === "external") assertInstanceAdmin(req);
 
     const actor = getActorInfo(req);
-    const { bundle, adapterConfig } = await instructions.updateBundle(existing, req.body);
+    const { bundle, adapterConfig } = await instructions.updateBundle(existing, req.body, departmentAuthority);
     const normalizedAdapterConfig = await secretsSvc.normalizeAdapterConfigForPersistence(
       existing.companyId,
       adapterConfig,
@@ -5109,6 +5126,7 @@ export function agentRoutes(
       id,
       { adapterConfig: normalizedAdapterConfig },
       {
+        departmentAuthority,
         recordRevision: {
           createdByAgentId: actor.agentId,
           createdByUserId: actor.actorType === "user" ? actor.actorId : null,
@@ -5184,10 +5202,10 @@ export function agentRoutes(
       if (req.body.baseHash !== undefined) req.body.baseRevisionId = req.body.baseHash === null ? null : agentFileTokenFromHash(req.body.baseHash);
       if (req.body.baseRevisionId === undefined) throw unprocessable("Read the entry and supply baseRevisionId (null for a new entry)", { code: "INSTRUCTION_BASE_REQUIRED" });
       // Clearing legacy prompt configuration remains a protected config change.
-      if (req.body.clearLegacyPromptTemplate) await assertCanManageInstructionsPath(req, existing);
+      const departmentAuthority = req.body.clearLegacyPromptTemplate ? await assertCanManageInstructionsPath(req, existing) : undefined;
       const receipt = await instructionRevisions.commit({ companyId: existing.companyId, agentId: existing.id,
         entryFile, content: req.body.content, baseRevisionId: req.body.baseRevisionId,
-        source: req.actor.type === "board" ? "board" : "api" }, req.actor);
+        source: req.actor.type === "board" ? "board" : "api" }, req.actor, departmentAuthority?.instructionConsentReceipt);
       if (req.actor.type === "agent" && req.actor.runId) {
         await instructionWorkingCopies.acknowledgeExplicitSave({ companyId: existing.companyId, agentId: existing.id,
           runId: req.actor.runId, entryFile: receipt.revision.entryFile, revisionId: receipt.revision.id,
@@ -5199,24 +5217,25 @@ export function agentRoutes(
           const adapterConfig = { ...asRecord(fresh.adapterConfig) };
           delete adapterConfig.promptTemplate;
           delete adapterConfig.bootstrapPromptTemplate;
-          await svc.update(existing.id, { adapterConfig });
+          await svc.update(existing.id, { adapterConfig }, { departmentAuthority });
         }
       }
       res.json(instructionFileDetail(receipt, receipt));
       return;
     }
-    await assertCanManageInstructionsPath(req, existing);
+    const departmentAuthority = await assertCanManageInstructionsPath(req, existing);
     assertExternalInstructionsAdmin(req, existing);
 
     if (agentInstructionsBundleMode(existing) === "managed" && req.body.path !== "promptTemplate.legacy.md") {
       if (req.body.baseHash === undefined) throw unprocessable("Read the file and supply baseHash (null for a new file)");
       await agentFiles.write({ companyId: existing.companyId, agentId: existing.id, path: req.body.path,
-        bytes: Buffer.from(req.body.content, "utf8"), baseHash: req.body.baseHash }, req.actor);
+        bytes: Buffer.from(req.body.content, "utf8"), baseHash: req.body.baseHash }, req.actor, departmentAuthority?.instructionConsentReceipt);
       res.json(await instructions.readFile(existing, req.body.path)); return;
     }
     const actor = getActorInfo(req);
     const result = await instructions.writeFile(existing, req.body.path, req.body.content, {
       clearLegacyPromptTemplate: req.body.clearLegacyPromptTemplate,
+      departmentAuthority,
     });
     const normalizedAdapterConfig = await secretsSvc.normalizeAdapterConfigForPersistence(
       existing.companyId,
@@ -5227,6 +5246,7 @@ export function agentRoutes(
       id,
       { adapterConfig: normalizedAdapterConfig },
       {
+        departmentAuthority,
         recordRevision: {
           createdByAgentId: actor.agentId,
           createdByUserId: actor.actorType === "user" ? actor.actorId : null,
@@ -5319,7 +5339,7 @@ export function agentRoutes(
     const id = req.params.id as string;
     const existing = await getAccessibleResource(req, res, svc.getById(id), "Agent not found");
     if (!existing) return;
-    await assertCanManageInstructionsPath(req, existing);
+    const departmentAuthority = await assertCanManageInstructionsPath(req, existing);
     assertExternalInstructionsAdmin(req, existing);
 
     const relativePath = typeof req.query.path === "string" ? req.query.path : "";
@@ -5331,11 +5351,12 @@ export function agentRoutes(
     if (agentInstructionsBundleMode(existing) === "managed") {
       const baseHash = typeof req.query.baseHash === "string" && /^[a-f0-9]{64}$/.test(req.query.baseHash) ? req.query.baseHash : null;
       if (baseHash === null) throw unprocessable("Read the file and supply baseHash before deleting it");
-      await agentFiles.write({ companyId: existing.companyId, agentId: existing.id, path: relativePath, bytes: null, baseHash }, req.actor);
+      await agentFiles.write({ companyId: existing.companyId, agentId: existing.id, path: relativePath, bytes: null, baseHash }, req.actor,
+        departmentAuthority?.instructionConsentReceipt);
       res.json(await instructions.getBundle(existing)); return;
     }
     const actor = getActorInfo(req);
-    const result = await instructions.deleteFile(existing, relativePath);
+    const result = await instructions.deleteFile(existing, relativePath, departmentAuthority);
     await logActivity(db, {
       companyId: existing.companyId,
       actorType: actor.actorType,
@@ -5402,6 +5423,11 @@ export function agentRoutes(
     const patchData = runtimeSettings
       ? prepareRuntimeSettingsPatch(existing, req.body)
       : { ...(req.body as Record<string, unknown>) };
+    if (patchData.status === "paused" || patchData.status === "terminated") assertBoard(req);
+    if (patchData.status === "idle") await assertCanResumeAgent(req, existing);
+    const departmentScope = req.actor.type === "agent"
+      ? await resolveDepartmentConfigurationAuthority(db, existing, req.actor, patchData as { role?: string; reportsTo?: string | null },
+        { configurationRequiresChangeGrant: patchData.status === "idle", configurationScopeOnly: true }) : null;
     const runner = patchData.runner as AgentRunnerChoice | undefined;
     delete patchData.runner;
     const requestedStatus = patchData.status;
@@ -5631,14 +5657,17 @@ export function agentRoutes(
     const profileOnlyChange = touchesProfileFields && Object.keys(patchData).every((key) =>
       (AGENT_PROFILE_CHANGE_CONSENT_FIELDS as readonly string[]).includes(key),
     );
+    let departmentConsentedChange = false;
     if (profileOnlyChange) {
-      await assertCanApplyAgentProfileChange(req, existing);
+      departmentConsentedChange = await assertCanApplyAgentProfileChange(req, existing);
     } else {
       await assertCanConfigureAgentSetup(req, existing);
     }
 
     const actor = getActorInfo(req);
     const updateOptions = {
+      departmentAuthority: departmentScope ? { actor: req.actor, departmentHead: departmentScope.departmentHead,
+        requiresChangeGrant: requestedStatus === "idle" || profileOnlyChange, consentedChange: departmentConsentedChange } : undefined,
       ...(runtimeSettings ? { expectedConfiguration: {
         adapterType: existing.adapterType, adapterConfig: existing.adapterConfig,
         runtimeConfig: existing.runtimeConfig, defaultEnvironmentId: existing.defaultEnvironmentId,
@@ -5735,7 +5764,10 @@ export function agentRoutes(
       });
       return;
     }
-    const agent = await svcLifecycle.resumeAgent(id);
+    const departmentScope = req.actor.type === "agent" ? await resolveDepartmentConfigurationAuthority(db, existing, req.actor, {}, { configurationRequiresChangeGrant: true }) : null;
+    const agent = departmentScope
+      ? await svcLifecycle.updateAndTransition(id, "resume", {}, { departmentAuthority: { actor: req.actor, departmentHead: departmentScope.departmentHead, requiresChangeGrant: true } })
+      : await svcLifecycle.resumeAgent(id);
     if (!agent) {
       res.status(404).json({ error: "Agent not found" });
       return;
@@ -6076,10 +6108,10 @@ export function agentRoutes(
           },
         });
         if (!decision.allowed) throw forbidden(decision.explanation, authorizationDeniedDetails(decision));
-        const savedReviewContext = readNativeReviewAssignmentContext(failedContext);
-        if (failedRun.runtimeMode === "native" && failedRun.status === "failed" &&
-            failedRun.errorCode === "native_provider_model_rejected" &&
-            failedRun.nativeIssueId === issue.id && savedReviewContext) {
+        const savedReviewContext = readExactNativeReviewRetryContext(failedRun, {
+          companyId: agent.companyId, agentId: agent.id, issueId: issue.id,
+        });
+        if (savedReviewContext) {
           const review = await getNativeReviewAssignment(db, {
             companyId: agent.companyId, issueId: issue.id, agentId: agent.id,
             contextSnapshot: savedReviewContext,

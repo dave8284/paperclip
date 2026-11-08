@@ -15,6 +15,7 @@ import {
   createToken,
   containsRedactedMarker,
   configPatchFromSnapshot,
+  type UpdateAgentOptions,
 } from "../lib/agent-records.js";
 import { createAgentLifecycle } from "./agent-lifecycle.js";
 import { fridayCoordinatorSql } from "./friday-board-role.js";
@@ -87,7 +88,7 @@ export function agentService(db: Db, budgetHooks: BudgetServiceHooks = {}) {
     rollbackConfigRevision: async (
       id: string,
       revisionId: string,
-      actor: { agentId?: string | null; userId?: string | null },
+      actor: { agentId?: string | null; userId?: string | null; departmentAuthority?: UpdateAgentOptions["departmentAuthority"] },
     ) => {
       const revision = await db
         .select()
@@ -101,6 +102,7 @@ export function agentService(db: Db, budgetHooks: BudgetServiceHooks = {}) {
 
       const patch = configPatchFromSnapshot(revision.afterConfig);
       return updateAgent(id, patch, {
+        departmentAuthority: actor.departmentAuthority,
         recordRevision: {
           createdByAgentId: actor.agentId ?? null,
           createdByUserId: actor.userId ?? null,

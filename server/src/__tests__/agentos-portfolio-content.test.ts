@@ -69,6 +69,7 @@ describe("portfolio private content contracts", () => {
     expect(call.params).not.toContain(actor.agentId);
     expect(call.text).toContain("instance_user_roles");
     expect(call.text).toContain("substring(coalesce(");
+    expect(call.text).toMatch(/from \$\d+::integer for \$\d+::integer\)/);
     expect(call.text).toContain("sha256(convert_to(");
     expect(call.text).toContain('"company_memberships"');
     expect(call.text).not.toMatch(/adapter_config|heartbeat_run|presentation|metadata|source_trust|execution_policy/);

@@ -29,7 +29,7 @@ requiredSkills:
 
 # Core Exec Team
 
-The Core Exec Team is the bundled default install for a new AgentOS company. It boots the smallest org that can take a board prompt, plan it, implement it, and verify it.
+The Core Exec Team is a bundled starter option for a new AgentOS company. Its CEO, CTO and QA roles offer one way to plan, deliver and verify a board direction; this structure is not required for every task. The CEO may manage specialists directly for smaller work or appoint department heads as the company's needs grow. Heads hire and manage their own staff within current company permissions, budgets and approval policy. Friday and the owner remain at board level.
 
 ## Contents
 

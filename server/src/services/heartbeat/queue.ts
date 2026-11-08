@@ -36,6 +36,7 @@ import {
   undeliveredLegacyUserCommentIds,
 } from "../explicit-native-continuation.js";
 import { canRetryStoppedRun } from "../cancelled-native-startup.js";
+import { readExactNativeReviewRetryContext } from "../native-runtime/native-review-retry.js";
 import { getExecutionBlocker, hasPendingRunCleanup } from "../execution-blocker.js";
 import { validateNativeWorkspaceReconstruction } from "../native-runtime/native-workspace-reconstruction.js";
 import { isConversationAdapter } from "../conversation-continuation.js";
@@ -2264,6 +2265,17 @@ export function createHeartbeatQueue(db: Db, dependencies: HeartbeatQueueDepende
           !(await canRetryStoppedRun(db, failed)) ||
           (failed.nativeIssueId ?? readNonEmptyString(failed.contextSnapshot?.issueId)) !== issueId) {
         throw conflict("The selected failed run cannot be retried for this task.");
+      }
+      const requestedReview = readNativeReviewAssignmentContext(enrichedContextSnapshot);
+      if (requestedReview || readNativeReviewAssignmentContext(failed.contextSnapshot)) {
+        const savedReview = readExactNativeReviewRetryContext(failed, { companyId: agent.companyId, agentId, issueId: issueId! });
+        if (!savedReview || (requestedReview && (requestedReview.nativeReviewInteractionId !== savedReview.nativeReviewInteractionId ||
+          requestedReview.nativeReviewDecisionId !== savedReview.nativeReviewDecisionId))) {
+          throw conflict("The selected failed run does not authorize this review retry.");
+        }
+        const review = await getNativeReviewAssignment(db, { companyId: agent.companyId, agentId, issueId: issueId!, contextSnapshot: savedReview });
+        if (review?.interaction.status !== "pending") throw conflict("The failed run's review is no longer current.");
+        Object.assign(enrichedContextSnapshot, savedReview);
       }
       if (!activeRunExecutions.has(failed.id) && !adapterExecutionControls.has(failed.id)) {
         await sweepPendingCleanupLeases({ explicitRetry: {

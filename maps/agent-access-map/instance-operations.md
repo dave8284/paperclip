@@ -162,8 +162,20 @@ an authorized separate target.
 Policy: Local machine operator and instance-administrator authority; distinct from
 company-scoped agent keys.
 
+New backup directories use `0700`; new SQL staging and compressed archive files
+use `0600` with exclusive creation. Existing paths are not recursively chmodded,
+and a colliding archive or staging file is neither overwritten nor removed by
+the failed attempt. These local file protections do not expand API authority.
+
 Evidence: `source-only` — [implementation](../../cli/src/index.ts#L91) at the reviewed
 commit above.
+
+File-creation evidence: `verified` — [backup implementation](../../packages/db/src/backup-lib.ts)
+and [controlled filesystem/transport checks](../../packages/db/src/backup-file-permissions.test.ts),
+8 November 2026 working tree. Real filesystem modes, compressed dump/JavaScript
+paths, fallback, collision preservation and verification-before-retention pass;
+database transport is stubbed. This is separate from API agent authorization and
+persisted backup/restore verification.
 
 Verification: `not-run` — assert the documented agent denial with an owned test fixture;
 verify any listed agent request/result path separately. A delegated operation needs its

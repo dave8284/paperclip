@@ -3,6 +3,8 @@ import { and, asc, eq, inArray, lte, sql } from "drizzle-orm";
 import { agents, agentWakeupRequests, chatCompletionDeliveries as deliveries, chatTaskHandoffs as handoffs,
   heartbeatRuns, issueComments, issueDocuments, issues, type Db } from "@paperclipai/db";
 import { instanceSettingsService } from "./instance-settings.js";
+import { authorizeBoardDirectionReturn, recordBoardDirectionHandoffForTask, recoverBoardDirectionReturns } from "./board-direction-return.js";
+import { forbidden } from "../errors.js";
 
 export const CHAT_COMPLETION_WAKE_REASON = "chat_task_completed";
 const MAX_ATTEMPTS = 5;
@@ -31,30 +33,50 @@ export async function recordChatHandoff(tx: Connection, task: Issue, actorRunId:
     conversationId: source.id, agentId: source.conversationAgentId, sessionGeneration: source.conversationSessionGeneration }).onConflictDoNothing();
 }
 
+/** Caller holds the task's status transaction/lock. Also repairs an admitted
+ * direction whose old completion predates the return producer. */
+export async function recordChatCompletionForTask(tx: Connection, task: Issue): Promise<boolean> {
+  if (task.status !== "done") return false;
+  let [handoff] = await tx.select().from(handoffs).where(eq(handoffs.taskId, task.id));
+  if (!handoff || handoff.companyId !== task.companyId || task.originKind === "board_direction") {
+    const directed = await recordBoardDirectionHandoffForTask(tx as unknown as Db, task);
+    if (!directed) return false;
+    handoff = directed;
+  }
+  await notifyDeliveryWork(tx, DELIVERY_QUEUES.chatCompletion);
+  // The return belongs to the source conversation. The native task and its
+  // private results remain wholly in the target company.
+  await tx.insert(deliveries).values({ companyId: handoff.companyId, taskId: task.id, statusVersion: task.statusVersion }).onConflictDoNothing();
+  return true;
+}
+
 /** Must run on the same transaction as status projection (including native arbitration). */
 export async function recordChatCompletion(tx: Connection, before: Issue, after: Issue): Promise<boolean> {
   if (before.status === after.status) return false;
   await tx.update(deliveries).set({ status: "superseded" }).where(and(eq(deliveries.taskId, after.id),
-    eq(deliveries.companyId, after.companyId), inArray(deliveries.status, [...pending])));
-  if (after.status !== "done") return false;
-  const [handoff] = await tx.select().from(handoffs).where(and(eq(handoffs.taskId, after.id), eq(handoffs.companyId, after.companyId)));
-  if (!handoff) return false;
-  await notifyDeliveryWork(tx, DELIVERY_QUEUES.chatCompletion);
-  await tx.insert(deliveries).values({ companyId: after.companyId, taskId: after.id, statusVersion: after.statusVersion }).onConflictDoNothing();
-  return true;
+    inArray(deliveries.status, [...pending])));
+  return after.status === "done" ? recordChatCompletionForTask(tx, after) : false;
+}
+
+function authorityDenied(error: unknown) {
+  return [403, 404].includes((error as { status?: number }).status ?? 0);
+}
+function authorityBusy(error: unknown) {
+  const failure = error as { code?: string; cause?: { code?: string }; details?: { retryable?: boolean } };
+  return failure.details?.retryable === true || ["55P03", "40P01", "40001"].includes(failure.cause?.code ?? failure.code ?? "");
 }
 
 async function loadAudience(tx: Connection, deliveryId: string) {
   const [row] = await tx.select({ delivery: deliveries, handoff: handoffs, task: issues }).from(deliveries)
     .innerJoin(handoffs, and(eq(handoffs.taskId, deliveries.taskId), eq(handoffs.companyId, deliveries.companyId)))
-    .innerJoin(issues, and(eq(issues.id, deliveries.taskId), eq(issues.companyId, deliveries.companyId)))
+    .innerJoin(issues, eq(issues.id, deliveries.taskId))
     .where(eq(deliveries.id, deliveryId));
   if (!row) return null;
   const [source] = await tx.select().from(issues).where(and(eq(issues.id, row.handoff.conversationId), eq(issues.companyId, row.handoff.companyId)));
   return { ...row, source };
 }
 function current(row: NonNullable<Awaited<ReturnType<typeof loadAudience>>>) {
-  return row.task.status === "done" && !["superseded", "exhausted"].includes(row.delivery.status) &&
+  return row.task.status === "done" && row.task.statusVersion === row.delivery.statusVersion && !["superseded", "exhausted"].includes(row.delivery.status) &&
     row.source?.conversationAgentId === row.handoff.agentId &&
     row.source.conversationSessionGeneration === row.handoff.sessionGeneration;
 }
@@ -68,6 +90,15 @@ async function taskResult(tx: Connection, task: Issue) {
   return { id: task.id, identifier: task.identifier, status: task.status,
     completedAt: task.completedAt, url: `/issues/${task.identifier ?? task.id}`,
     hasSavedDocuments: documents.length > 0 };
+}
+
+async function authorizedTaskResult(tx: Connection, row: NonNullable<Awaited<ReturnType<typeof loadAudience>>>) {
+  const boardDirection = await authorizeBoardDirectionReturn(tx as unknown as Db, { ...row, statusVersion: row.delivery.statusVersion });
+  if (!boardDirection) return taskResult(tx, row.task);
+  // No worker-authored content or private output is copied across companies.
+  // Friday must read the current evidence through the mandate-bound gateway.
+  return { id: row.task.id, identifier: row.task.identifier, status: row.task.status,
+    completedAt: row.task.completedAt, url: `/issues/${row.task.identifier ?? row.task.id}`, boardDirection };
 }
 
 /** A completed onboarding parent still owes the result of its own child handoff.
@@ -109,7 +140,7 @@ export async function prepareChatCompletionTurn(db: Db, run: Run): Promise<Run> 
         inArray(deliveries.status, [...pending]),
         sql`(${deliveries.targetRunId} is null or ${deliveries.targetRunId} = ${run.id})`))
       .orderBy(asc(deliveries.createdAt)).limit(20);
-    const updates: Awaited<ReturnType<typeof taskResult>>[] = [];
+    const updates: Awaited<ReturnType<typeof authorizedTaskResult>>[] = [];
     const accepted: string[] = [];
     for (const { delivery } of rows) {
       const row = await loadAudience(tx, delivery.id);
@@ -117,7 +148,13 @@ export async function prepareChatCompletionTurn(db: Db, run: Run): Promise<Run> 
         await tx.update(deliveries).set({ status: "superseded" }).where(eq(deliveries.id, delivery.id));
         continue;
       }
-      accepted.push(delivery.id); updates.push(await taskResult(tx, row.task));
+      try { updates.push(await authorizedTaskResult(tx, row)); }
+      catch (error) {
+        if (!authorityDenied(error)) throw error;
+        await tx.update(deliveries).set({ status: "superseded", error: "Return authority is unavailable" }).where(eq(deliveries.id, delivery.id));
+        continue;
+      }
+      accepted.push(delivery.id);
       await tx.update(deliveries).set({ status: "queued", targetRunId: run.id }).where(eq(deliveries.id, delivery.id));
     }
     if (accepted.length === 0) throw new Error("chat_completion_superseded");
@@ -129,32 +166,58 @@ export async function prepareChatCompletionTurn(db: Db, run: Run): Promise<Run> 
 
 export function chatCompletionInstruction(context: Record<string, unknown>) {
   if (!Array.isArray(context.chatCompletionUpdates) || !context.chatCompletionUpdates.length) return "";
-  return `\n\nDelegated work has completed. Tell the user in this conversation what finished and provide access using the supplied task links. Report completion only for the tasks listed in this update; other tasks receive their own completion updates. Use the recorded status and result locations; do not repeat a promise to do work that is already Done. Do not start more work or change these tasks. The following JSON contains server-recorded lifecycle facts and result locations:\n${JSON.stringify(context.chatCompletionUpdates)}`;
+  const boardReturns = context.chatCompletionUpdates.some(update => update && typeof update === "object" && "boardDirection" in update);
+  const boardInstruction = boardReturns ? " For boardDirection entries, the company has recorded its task Done; this is not proof of accepted business results. Read the supplied outcomePath with your current native identity, then read the CEO's current report and linked evidence through the mandate-bound portfolio gateway before summarizing it. Respect current mandate revisions and denials. Friday reports and asks for material decisions; never author the company's deliverable, reopen its work or bypass its executive." : "";
+  return `\n\nDelegated work has completed. Tell the user in this conversation what finished and provide access using the supplied task links. Report completion only for the tasks listed in this update; other tasks receive their own completion updates. Use the recorded status and result locations; do not repeat a promise to do work that is already Done. Do not start more work or change these tasks. The following JSON contains server-recorded lifecycle facts and result locations.${boardInstruction}\n${JSON.stringify(context.chatCompletionUpdates)}`;
 }
 
 /** Called under the comment transaction, before insertion. An event can publish only once. */
 export async function existingChatCompletionReply(tx: Connection, runId: string, issueId: string) {
   const [run] = await tx.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, runId));
   if (!run || ids(run).length === 0) return null;
-  const rows = await tx.select().from(deliveries).where(and(eq(deliveries.companyId, run.companyId), inArray(deliveries.id, ids(run))));
+  const rows = await tx.select().from(deliveries).where(and(eq(deliveries.companyId, run.companyId), inArray(deliveries.id, ids(run))))
+    .orderBy(asc(deliveries.createdAt), asc(deliveries.id));
+  let existingReply: typeof issueComments.$inferSelect | null = null;
+  let acknowledged = 0;
   for (const delivery of rows) {
     // Match the status writer's task-first lock order, then reload the outbox
     // row so a concurrent reopen cannot leave us with its pre-commit snapshot.
-    await tx.select({ id: issues.id }).from(issues).where(and(eq(issues.id, delivery.taskId), eq(issues.companyId, run.companyId))).for("update");
+    await tx.select({ id: issues.id }).from(issues).where(eq(issues.id, delivery.taskId)).for("update", { noWait: true });
     const row = await loadAudience(tx, delivery.id);
     if (!row || row.source?.id !== issueId || row.handoff.agentId !== run.agentId || !current(row)) throw new Error("chat_completion_superseded");
-    if (delivery.responseCommentId) {
-      const [comment] = await tx.select().from(issueComments).where(and(eq(issueComments.id, delivery.responseCommentId), eq(issueComments.issueId, issueId)));
-      if (comment) return comment;
+    const boardDirection = await authorizeBoardDirectionReturn(tx as unknown as Db, { ...row, statusVersion: row.delivery.statusVersion });
+    if (boardDirection && (run.runtimeMode !== "native" || run.nativeIssueId !== issueId ||
+      run.responsibleUserId !== row.source.conversationUserId)) {
+      throw forbidden("Board-direction results require the current owner's native Friday conversation execution");
     }
-    if (delivery.status !== "queued" || delivery.targetRunId !== runId) throw new Error("chat_completion_superseded");
+    if (row.delivery.responseCommentId) {
+      const [comment] = await tx.select().from(issueComments).where(and(eq(issueComments.id, row.delivery.responseCommentId),
+        eq(issueComments.companyId, run.companyId), eq(issueComments.issueId, issueId)));
+      if (!comment || (existingReply && existingReply.id !== comment.id)) throw new Error("chat_completion_superseded");
+      existingReply = comment;
+      acknowledged += 1;
+      continue;
+    }
+    if (row.delivery.status !== "queued" || row.delivery.targetRunId !== runId) throw new Error("chat_completion_superseded");
   }
   if (rows.length !== ids(run).length) throw new Error("chat_completion_superseded");
-  return null;
+  // A batched reply is one atomic receipt. Validate every current audience
+  // before reusing it; the first acknowledged item cannot mask later revocation.
+  if (acknowledged && acknowledged !== rows.length) throw new Error("chat_completion_superseded");
+  return existingReply;
 }
 export async function acknowledgeChatCompletionReply(tx: Connection, runId: string, commentId: string) {
   await tx.update(deliveries).set({ status: "delivered", responseCommentId: commentId, error: null })
     .where(and(eq(deliveries.targetRunId, runId), eq(deliveries.status, "queued")));
+}
+
+/** Tool/progress comments are not final delivery receipts, but they must retain
+ * the same current private-read ceiling as the eventual native final reply. */
+export async function assertBoardDirectionCompletionPublication(tx: Connection, run: Run, issueId: string) {
+  const updates = run.contextSnapshot?.chatCompletionUpdates;
+  if (!Array.isArray(updates) || !updates.some(value => value && typeof value === "object" && "boardDirection" in value)) return;
+  if (!ids(run).length) throw new Error("chat_completion_superseded");
+  await existingChatCompletionReply(tx, run.id, issueId);
 }
 
 export function chatCompletionDeliveryService(db: Db, heartbeat: { wakeup(agentId: string, options: {
@@ -168,13 +231,22 @@ export function chatCompletionDeliveryService(db: Db, heartbeat: { wakeup(agentI
       .returning().then(rows => rows[0]);
     if (!claimed) return;
     try {
-      const row = await loadAudience(db, id);
+      let row = await loadAudience(db, id);
       if (!row || !current(row)) {
         await db.update(deliveries).set({ status: "superseded" }).where(eq(deliveries.id, id)); return;
       }
       if (!(await instanceSettingsService(db).getExperimental()).enableAgentChat) return;
       const [agent] = await db.select().from(agents).where(and(eq(agents.id, row.handoff.agentId), eq(agents.companyId, claimed.companyId)));
       if (!agent || ["paused", "terminated"].includes(agent.status)) return;
+      row = await db.transaction(async tx => {
+        const audience = await loadAudience(tx, id);
+        if (!audience || !current(audience)) return null;
+        await authorizeBoardDirectionReturn(tx as unknown as Db, { ...audience, statusVersion: audience.delivery.statusVersion });
+        return audience;
+      });
+      if (!row) {
+        await db.update(deliveries).set({ status: "superseded" }).where(eq(deliveries.id, id)); return;
+      }
       const key = `chat-completion:${id}:${claimed.attempts}`;
       const wakes = await db.select().from(agentWakeupRequests).where(and(eq(agentWakeupRequests.companyId, claimed.companyId), eq(agentWakeupRequests.idempotencyKey, key)));
       const runId = claimed.targetRunId ?? wakes.find(w => w.runId)?.runId;
@@ -232,6 +304,22 @@ export function chatCompletionDeliveryService(db: Db, heartbeat: { wakeup(agentI
       if (run) await db.update(deliveries).set({ targetRunId: run.id, status: "queued" })
         .where(and(eq(deliveries.id, id), inArray(deliveries.status, [...pending]), sql`${deliveries.targetRunId} is null`));
     } catch (error) {
+      if (authorityDenied(error)) {
+        // Pause can race the preflight above. Preserve the actual owed return
+        // until resume; this does not bypass the next authority check.
+        const [recipient] = await db.select({ status: agents.status }).from(handoffs)
+          .innerJoin(agents, and(eq(agents.id, handoffs.agentId), eq(agents.companyId, handoffs.companyId)))
+          .where(and(eq(handoffs.taskId, claimed.taskId), eq(handoffs.companyId, claimed.companyId)));
+        if (recipient?.status === "paused") return;
+        await db.update(deliveries).set({ status: "superseded", error: "Return authority is unavailable" })
+          .where(and(eq(deliveries.id, id), inArray(deliveries.status, [...pending])));
+        return;
+      }
+      if (authorityBusy(error)) {
+        await db.update(deliveries).set({ error: "Return authority is changing" })
+          .where(and(eq(deliveries.id, id), inArray(deliveries.status, [...pending])));
+        return;
+      }
       const receipts = await db.select({ id: agentWakeupRequests.id }).from(agentWakeupRequests)
         .where(and(eq(agentWakeupRequests.companyId, claimed.companyId), eq(agentWakeupRequests.idempotencyKey, `chat-completion:${id}:${claimed.attempts}`)));
       await db.update(deliveries).set({ error: error instanceof Error ? error.message : String(error),
@@ -240,10 +328,19 @@ export function chatCompletionDeliveryService(db: Db, heartbeat: { wakeup(agentI
         .where(and(eq(deliveries.id, id), inArray(deliveries.status, [...pending])));
     }
   }
+  let startupRecovery: Promise<void> | null = null;
   async function sweepPending(scope?: { companyId: string; taskId: string }) {
+    if (!scope) {
+      startupRecovery ??= recoverBoardDirectionReturns(db, recordChatCompletionForTask).catch(error => {
+        startupRecovery = null;
+        throw error;
+      });
+      await startupRecovery;
+    }
     const due = await db.select({ id: deliveries.id }).from(deliveries)
       .where(and(inArray(deliveries.status, [...pending]), lte(deliveries.nextAttemptAt, new Date()),
-        ...(scope ? [eq(deliveries.companyId, scope.companyId), eq(deliveries.taskId, scope.taskId)] : [])))
+        ...(scope ? [eq(deliveries.taskId, scope.taskId), sql`exists (select 1 from ${issues}
+          where ${issues.id} = ${deliveries.taskId} and ${issues.companyId} = ${scope.companyId})`] : [])))
       .orderBy(asc(deliveries.nextAttemptAt)).limit(100);
     for (const row of due) await deliver(row.id);
   }

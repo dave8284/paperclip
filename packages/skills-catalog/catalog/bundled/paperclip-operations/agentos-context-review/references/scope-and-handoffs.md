@@ -1,20 +1,29 @@
 # Scope and handoffs
 
-Company → department → project → task is the work hierarchy. A department groups
-projects. Reporting relationships and context scopes express responsibility;
+Companies own projects and tasks; an optional department groups projects.
+The CEO chooses staffing depth: reuse or hire specialists directly for smaller,
+bounded work, or appoint department heads for larger, ongoing or multi-team
+work. Each appointed head hires and manages staff for their own department.
+Project leads are useful when coordination needs them, not mandatory layers.
+Direct specialists and heads report to the CEO; a head's staff report to that
+head. Executives decide these routine arrangements under current native grants,
+budgets and approval policy without requiring the owner to design the org chart.
+Record department appointments using the actual native `leadAgentId`.
+Reporting relationships and context scopes express responsibility;
 native grants, company membership and provider permissions enforce access.
 
 | Responsible role | Working context | Escalation |
 | --- | --- | --- |
 | Friday | Authorized portfolio observations, platform capabilities, company leads and unresolved decisions | User decisions, missing cross-company authority, requested platform changes |
-| Company CEO | One assigned company, departments, staffing assignments, budgets and company outcomes | Friday for portfolio dependencies or authority beyond that company |
-| Department/product/portfolio manager | The explicitly assigned department or authorized set of projects; priorities and dependencies across those projects | CEO for competing company commitments or staffing/budget limits |
-| Project lead | One project, its backlog, routines, deliverables, dependencies and assigned workers | Department/product manager for dependencies and trade-offs beyond the project |
-| Execution agent | One assigned task, acceptance checks, required inputs and approved tools | Project lead for missing context, blocked dependencies or a scope change |
+| Company CEO | One assigned company, direct specialist delivery or appointed heads, staffing, budgets and company outcomes | Friday for portfolio dependencies or authority beyond that company |
+| Department/product/portfolio manager | The explicitly assigned department or authorized set of projects; staffing, priorities and delivery within current grants | CEO for competing company commitments or staffing/budget limits |
+| Project lead | One project, its backlog, routines, deliverables, dependencies and assigned workers | Actual accountable CEO or department/product manager for dependencies beyond the project |
+| Execution agent | One assigned task, acceptance checks, required inputs and approved tools | Actual accountable CEO, head or project lead for missing context, dependencies or a scope change |
 | Fresh reviewer | Only the supplied plan revision, rubric and authorized source packet | Task owner for missing evidence; no authority to widen scope or publish |
 
-Friday can query project/department leads for current evidence, then consolidate
-their replies for the user. Ask in native linked tasks/handoffs so that the query,
+Friday and the owner act as the board. Friday directs the accountable company
+CEO or department head, queries that executive for current evidence, and
+consolidates their replies for the user. Ask in native linked tasks/handoffs so that the query,
 owner, source and answer are inspectable. Prefer an existing current report when
 it answers the question. Do not generate make-work or wake every employee just
 because a dashboard is opened.
@@ -36,9 +45,10 @@ a role title.
 Re-read the native task, project/department and responsible agent records before
 making an assignment or asking for an update. The snapshot is a routing aid,
 not proof of current activity or access. If current source evidence is
-insufficient, address a bounded native linked handoff/task to the actual project
-or department lead and retain its answer and source links. Missing ownership,
-inactive employees or unavailable authorization are explicit blockers. Do not
+insufficient, address a bounded native linked handoff/task to the actual
+accountable executive or lead and retain its answer and source links. Friday
+uses company CEOs or department heads and leaves staffing and delivery to them.
+Missing ownership, inactive employees or unavailable authorization are explicit blockers. Do not
 invent grants, substitute another company's agent or treat a `reportsTo` chain
 as permission to read every subordinate's private context.
 

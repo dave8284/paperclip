@@ -1,6 +1,6 @@
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { ArrowRight, Plus } from "lucide-react";
-import type { Agent, Company, FridayWork as WorkData } from "@paperclipai/shared";
+import { compareAttentionDecisionPriority, type Agent, type Company, type FridayWork as WorkData } from "@paperclipai/shared";
 import { agentsApi } from "@/api/agents";
 import { attentionApi } from "@/api/attention";
 import { fridayApi, fridayKey } from "@/api/friday";
@@ -39,12 +39,17 @@ function CompanyCard({ company, navigate }: { company: Company; navigate: Naviga
 
 export function AgentOSDecisionPeek({ companies, navigate }: { companies: Company[]; navigate: Navigation }) {
   const feeds = useQueries({ queries: companies.map(company => ({ queryKey: [...queryKeys.attention(company.id), "preview"], queryFn: () => attentionApi.list(company.id, { limit: 3, sort: "decide" }) })) });
-  const items = feeds.flatMap((feed, index) => feed.isSuccess && !feed.isFetching ? feed.data.items.filter(item => item.companyId === companies[index].id).map(item => ({ item, company: companies[index] })) : []).slice(0, 3);
+  const now = Date.now();
+  // These are bounded native candidates, not a full portfolio snapshot. Company
+  // list order must not hide another company's deadline or urgent work signal.
+  const items = feeds.flatMap((feed, index) => feed.isSuccess && !feed.isFetching ? feed.data.items.filter(item => item.companyId === companies[index].id).map(item => ({ item, company: companies[index] })) : [])
+    .sort((left, right) => compareAttentionDecisionPriority(left.item, right.item, now) || left.company.id.localeCompare(right.company.id))
+    .slice(0, 3);
   return <section className="agentos-home-decisions" aria-label="Decisions and blockers"><div className="agentos-section-heading"><h2>A few things to move forward</h2><button type="button" onClick={() => navigate(companies.length === 1 ? { panel: "attention", companyId: companies[0].id } : { panel: "attention", scope: "portfolio" })}>Review all <ArrowRight /></button></div>
     <div className="agentos-decision-cards">{items.map(({ item, company }) => <button type="button" key={`${company.id}:${item.id}`} onClick={() => navigate(fridayAttentionNavigation(company.id, item))}><span className="agentos-eyebrow">{company.name}{item.project ? ` / ${item.project.name}` : ""}</span><strong>{item.subject.title ?? item.whyNow}</strong><span>{attentionDecisionSummary(item)}<ArrowRight /></span></button>)}</div>
-    {feeds.some(feed => feed.isPending) && <p className="text-sm text-muted-foreground">Checking what needs you…</p>}
+    {feeds.some(feed => feed.isPending || feed.isFetching) && <p className="text-sm text-muted-foreground">Checking what needs you…</p>}
     {feeds.some(feed => feed.isError) && <p role="alert" className="text-sm text-destructive">Some companies could not be checked. Open Decisions to retry.</p>}
-    {!items.length && feeds.every(feed => feed.isSuccess) && <p className="agentos-empty">A little room to breathe. No decisions or blockers currently need you.</p>}
+    {!items.length && feeds.every(feed => feed.isSuccess && !feed.isFetching) && <p className="agentos-empty">A little room to breathe. No decisions or blockers currently need you.</p>}
   </section>;
 }
 

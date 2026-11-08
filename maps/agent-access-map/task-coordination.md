@@ -89,6 +89,10 @@ API: `present` — representative operation IDs:
   saves one revisioned findings document after complete source coverage. History,
   current-document reads, ordinary writes and `resolve_review` are denied in
   packet mode. The task stays in review for separate accountable-owner resolution.
+- `POST /api/agents/{id}/wakeup` with exact `failedRunId` and
+  `reason=retry_failed_run` retains the existing board-only retry path. The server
+  selects saved review identity; caller-supplied review/task overrides do not
+  authorize a new assignment.
 - `POST /api/companies/{companyId}/friday/platform-changes` prepares an explicit
   current platform owner's request in a selected internal application. Agents
   cannot authorize it. Native tasks, managed isolated workspace selection,
@@ -106,19 +110,45 @@ API: `present` — representative operation IDs:
   denied; the existing native attachment endpoint owns attachment reads.
 
 Agent access: `partial` — Native paperclip_finish/paperclip_block and assigned
-resolve_review; legacy agent REST disposition.
+resolve_review; legacy agent REST disposition. Exact failed-review retry remains
+restricted to the board actor. An agent cannot use this endpoint to grant itself
+another run or impersonate the owner.
 
 Policy: Task visibility/mutation, task-assignment and ownership policy; review audience
-independent; tree controls board-only.
+independent; tree controls board-only. For packet first admission, frozen binding
+validation precedes native selection; strict receipt admission follows the
+committed native identity before workspace synchronization/provider dispatch.
+Exact review retry requires the selected failed company/agent/task and a current
+pending native reviewer assignment. The preparation-failure exception requires
+the persisted native-runner claim, legacy/preparing state and no committed native
+selection, session, process or execution-input evidence. The failed run is not
+relabeled native. Route and queue rederive the saved review pair, while normal
+cleanup, pause, budget, task and native claim/dispatch gates remain authoritative.
+The task's worker assignee does not change; a provisional failed-run identity
+cannot authorize review receipt admission.
 
 Evidence: `source-only` —
 [implementation](../../server/src/routes/issue-tree-control.ts#L95) at the reviewed
-commit above.
+commit above. The 8 November source continuation adds
+[retry eligibility](../../server/src/services/native-runtime/native-review-retry.ts),
+[route authorization](../../server/src/routes/agents.ts),
+[queue revalidation](../../server/src/services/heartbeat/queue.ts) and
+[native selection ordering](../../server/src/services/heartbeat/runtime-selection.ts).
+Loaded-runtime and live qualification remain separate in the
+[execution checkpoint](../../doc/plans/2026-11-06-agentos-completion-ledger.md).
 
 Verification: `not-run` — exercise a listed permitted operation with actual agent
 credentials/run context; inspect its result and applicable persistence/attribution.
 Assert the relevant denied actor, owner, company or mode from Policy. Review the
 remaining operations before qualifying the whole capability.
+
+Focused source verification: saved-evidence and registered-route cases pass for
+the exact preselection failure and existing model-rejection path, including
+stale/resolved review, wrong company/agent/task, missing native-runner claim,
+already-selected/started execution and denied user access. PostgreSQL first-run
+selection and retry/duplicate/native-claim cases are authored and typechecked,
+but unrun under the current listener restrictions. Current native identity and
+review authority must still be demonstrated in the actual runtime.
 
 Gaps: Review policy determines final completion; formal board approval is a different
 boundary.

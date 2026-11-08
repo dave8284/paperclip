@@ -36,9 +36,13 @@ local agents, speech services or workers run while the Mac is off.
 | Attachments, artifacts, run logs, workspaces outside DB | Consistent backup/manifest; retain current paths/provider during DB cutover | Checksums and app-level reads; missing referenced objects block acceptance |
 | Supabase managed schemas | Preserve `auth`, `storage`, platform and extension ownership | Collision review; no broad clean/drop restore |
 
-The 7 November source inventory contained 320 Drizzle tables and migration head
-0393; 0394 was subsequently generated and remains unapplied. These are checkout
-observations, not a live database count or proof of activation.
+The 8 November checkout snapshot at migration 0395 contains 323 application
+tables. Native guarded recovery completed at 04:40:12 UTC with 0395 applied and
+no pending migrations; the subsequent 04:53:16 recovery also reported ready.
+These runtime observations are recorded in the [completion ledger](2026-11-06-agentos-completion-ledger.md).
+The latest retained backup inspected below is older: it contains 320 application
+tables and migration history through 0392. Checkout schema, loaded runtime and
+backup coverage are separate evidence.
 Inventory the actual source/target at execution time. The native client detects
 the journal schema; do not assume `drizzle` or `public`. Source migrations require
 `pg_trgm` and `fuzzystrmatch`; compare installed versions and all other actual
@@ -266,3 +270,86 @@ Private mode-0600 reports are at
 executed destination evidence only: source versions/sizes, current plan/backups,
 connector access, importer/restore parity and cutover approval remain outstanding.
 No application records were read or migrated, and no database settings changed.
+
+## Local source and retained backup inventory — 8 November 2026
+
+Read-only inspection at 05:05:27 UTC establishes the following local evidence.
+The private metadata report is
+`/private/tmp/agentos-c05-source-inventory-20261108.json` (mode 0600). It contains
+schema names, counts and archive identities, without application row payloads
+or credentials. No source or destination database settings changed.
+
+- **PostgreSQL source:** the native data directory's `PG_VERSION` is **18**.
+  The earlier destination query reported **17.11**. This version mismatch needs
+  explicit compatibility proof in the isolated restore/import rehearsal; the
+  source's exact minor version, current database size and live catalog/counts
+  were not queried by this inspection.
+- **Newest retained PostgreSQL archive:** of 158 archives in the native backup
+  directory, `paperclip-20261108-162803.sql.gz` was newest. Its internal creation
+  time is **03:28:03.994 UTC**, filesystem modification time **03:28:07.005 UTC**,
+  and compressed size **14,718,706 bytes**. A complete gzip read passed its CRC
+  check; file size/time/inode stayed stable, and the compressed SHA-256 is saved
+  in the report. Its native SQL contains **320 application tables plus the
+  `drizzle.__drizzle_migrations` journal**, with **13,791** announced rows matching
+  counted INSERT statements. This is archive inspection, not successful restore
+  or current live data parity. The existing archive is compressed SQL with mode
+  **0644**, not the encrypted recovery baseline required above.
+- **Archive migration coverage:** all **391** journal hashes resolve to current
+  SQL files, ending at `0392_thick_lizard`. Forty-seven journal entries differ
+  from a naive comparison by checkout timestamp: native migration ordering can
+  advance recorded timestamps beyond the file's nominal time, and one recorded
+  timestamp matches a different file's nominal time. The native client resolves
+  by hash. Preserve the actual journal; do not recreate it from checkout times.
+  The archive lacks `agentos_board_directions`, `ai_workspace_accounts` and
+  `ai_workspace_account_links`. It predates 0393–0395 activation and subsequent
+  work, so cannot establish current recovery coverage. It records `pg_trgm` and
+  `fuzzystrmatch` in `public`, but not their installed versions.
+- **Model Intelligence source:** a read-only SQLite transaction observed schema
+  **v5**, the expected **12 tables**, **9 indexes**, and **one routing receipt**;
+  the other tables were empty. Integrity and foreign-key checks passed. The
+  180,224-byte live database uses WAL; its directory also held an 8,272-byte WAL
+  and 32,768-byte SHM file. No standalone backup or manifest was present in that
+  directory. This proves the observed live schema and counts only. The offline
+  manifest tool was not run against this active store; a consistent backup that
+  includes committed WAL state remains required.
+
+Metadata-only external-file inventory at **05:06:25 UTC** found **80 files /
+598,814 bytes** in native `data/storage`, **42 files / 10,375,662 bytes** in
+`data/run-logs`, and **62 files / 211,579 bytes** in `runtime-context-assets`.
+No symlinks were followed. These mutable directory totals are not a consistent
+file manifest or proof that database references resolve. Company, project,
+workspace and protected-secret directories were confirmed present; their
+contents and credentials were not inspected or exported.
+
+Next source gates: capture the actual current PostgreSQL catalog, exact version,
+counts, ownership, extension versions and journal alongside drained execution/
+delivery state; create fresh encrypted PostgreSQL, consistent SQLite, file and
+key/configuration backups; verify referenced-object coverage and isolated
+restore/import parity. Retain the older archive as dated evidence. Effective
+destination API/connector restrictions, real PostgreSQL importer/locking checks,
+rehearsal and concrete cutover approval remain open. **C05 remains Not fixed.**
+
+At 05:18:16–05:18:21 UTC, the authorized native manual-backup endpoint produced
+`paperclip-20261108-181816.sql.gz` (15,997,900 bytes). A complete gzip CRC read
+passed; the archive contains 324 table definitions, including the migration
+journal, board directions and both shared-account tables, and 18,901 INSERT
+statements. Its compressed digest and metadata are retained privately in
+`/private/tmp/agentos-c05-fresh-backup-20261108.json`. The captured archive's
+permissions were tightened from 0644 to 0600. Backup creation defaults are being
+corrected separately. Execution was not drained and the archive has not been
+restored, encrypted or verified against all referenced files/keys. This newer
+archive advances recovery coverage; it is not the cutover baseline or proof of
+cross-version PostgreSQL compatibility.
+
+At 05:28:24 UTC a read-only SQLite source connection used SQLite's online backup
+API to capture committed Model Intelligence state into a new private offline
+file, including committed WAL data. The destination was converted to rollback
+journal mode and closed; integrity and foreign-key checks pass. The manifest
+tool initially refused a remaining destination-only SHM index. After confirming
+the closed offline file was in `delete` journal mode with no WAL or journal,
+that orphan index was removed; no live-source sidecars or settings changed.
+Native `--inspect` and `--verify` then both pass: schema v5, 12 tables, one row.
+Private snapshot/receipt: `/private/tmp/agentos-model-consistent-backup-20261108.{sqlite,json}`;
+manifest: `/private/tmp/agentos-model-consistent-manifest-20261108.json`.
+This establishes a consistent independent SQLite inventory, not a drained
+cross-store checkpoint, destination import, encryption or migration acceptance.

@@ -3,7 +3,7 @@ name: Software Engineer
 slug: engineer
 title: Software Engineer
 role: engineer
-reportsTo: coordinator
+reportsTo: ceo
 skills:
   - agentos-context-review
   - github-pr-workflow

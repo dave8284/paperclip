@@ -1,6 +1,7 @@
 import express from "express";
 import request from "supertest";
 import { Readable } from "node:stream";
+import { getTableName } from "drizzle-orm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { hoistModuleGraph } from "./helpers/hoist-module-graph.js";
 
@@ -30,10 +31,13 @@ const mockInstructionWorkingCopies = vi.hoisted(() => ({ list: vi.fn(), resolve:
 vi.mock("../services/agent-instruction-working-copies.js", () => ({ agentInstructionWorkingCopyService: () => mockInstructionWorkingCopies }));
 
 const mockDownloadAgentFile = vi.hoisted(() => vi.fn());
+const mockWriteAgentFile = vi.hoisted(() => vi.fn());
 vi.mock("../services/agent-file-store.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../services/agent-file-store.js")>();
-  return { ...actual, agentFileStore: (...args: Parameters<typeof actual.agentFileStore>) => ({ ...actual.agentFileStore(...args), download: mockDownloadAgentFile }) };
+  return { ...actual, agentFileStore: (...args: Parameters<typeof actual.agentFileStore>) => ({ ...actual.agentFileStore(...args), download: mockDownloadAgentFile, write: mockWriteAgentFile }) };
 });
+const mockDepartmentScope = vi.hoisted(() => vi.fn());
+vi.mock("../services/agent-hiring-authority.js", () => ({ resolveDepartmentConfigurationAuthority: mockDepartmentScope, resolveAgentHiringAuthority: vi.fn() }));
 
 const mockInstructionRevisions = vi.hoisted(() => ({ readCurrent: vi.fn(), commit: vi.fn(), restore: vi.fn(), history: vi.fn(), readRevision: vi.fn(), diff: vi.fn(), materializeCurrent: vi.fn() }));
 vi.mock("../services/agent-instruction-revisions.js", () => ({ agentInstructionRevisionService: () => mockInstructionRevisions }));
@@ -189,6 +193,7 @@ function makeReflectionCoachAgent(overrides: Record<string, unknown> = {}) {
 describe("agent instructions bundle routes", () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    mockDepartmentScope.mockResolvedValue({ departmentHead: false });
     mockSecretService.normalizeAdapterConfigForPersistence.mockImplementation(async (_companyId: string, config: Record<string, unknown>) => config);
     mockAuthorizeInstructionRead.mockImplementation(async (_db, actor) => actor);
     mockInstructionRevisions.readCurrent.mockResolvedValue(null);
@@ -586,9 +591,66 @@ describe("agent instructions bundle routes", () => {
     expect(res.status, JSON.stringify(res.body)).toBe(200);
     expect(mockInstructionRevisions.commit).toHaveBeenCalledWith(expect.objectContaining({
       agentId: "11111111-1111-4111-8111-111111111111", entryFile: "AGENTS.md", content: "# Updated Agent\n", baseRevisionId: null, source: "board",
-    }), expect.objectContaining({ type: "board" }));
+    }), expect.objectContaining({ type: "board" }), undefined);
     expect(mockAgentInstructionsService.writeFile).not.toHaveBeenCalled();
     expect(res.body.receipt.revision.id).toBe("33333333-3333-4333-8333-333333333333");
+  });
+
+  it.each(["entry with legacy cleanup", "supporting file", "supporting deletion"])("carries one native consent through the managed %s route and writer", async kind => {
+    const agent = { ...makeAgent(), adapterConfig: { instructionsBundleMode: "managed", promptTemplate: "legacy" } };
+    const actor = { type: "agent" as const, source: "agent_jwt" as const, companyId: agent.companyId,
+      agentId: "22222222-2222-4222-8222-222222222222", runId: "44444444-4444-4444-8444-444444444444", onBehalfOfUserId: "owner",
+      onBehalfOfMemberships: [{ companyId: agent.companyId, membershipRole: "owner", status: "active" }] };
+    const accepted = { id: "consent", sourceRunId: "previous-run", payload: {
+      target: { type: "custom", key: `agent:${agent.id}:instructions` }, detailsMarkdown: "```diff\n-old\n+new\n```",
+    }, result: { outcome: "accepted" } as Record<string, unknown> };
+    let consumed = 0;
+    const db = {
+      transaction: async (fn: (tx: unknown) => Promise<unknown>) => fn(db),
+      select: () => ({ from: (table: Parameters<typeof getTableName>[0]) => {
+        const name = getTableName(table);
+        const rows = name === "issue_thread_interactions" ? [accepted] : name === "agents" ? [agent]
+          : name === "heartbeat_runs" ? [{ id: actor.runId, companyId: agent.companyId, responsibleUserId: "owner", activeIdentityContextId: null }]
+          : name === "company_memberships" ? [{ userId: "owner" }] : [];
+        const query = { where: () => query, innerJoin: () => query, orderBy: () => query, limit: () => query,
+          for: async () => rows, then: (resolve: (rows: unknown[]) => unknown) => Promise.resolve(rows).then(resolve) };
+        return query;
+      } }),
+      update: () => ({ set: (patch: { result: Record<string, unknown> }) => ({ where: () => ({ returning: async () => {
+        accepted.result = patch.result; consumed += 1; return [{ id: accepted.id }];
+      } }) }) }),
+    };
+    const authorization = await vi.importActual<typeof import("../services/authorization.js")>("../services/authorization.js");
+    const native = vi.spyOn(authorization, "authorizationService").mockReturnValue({ decide: mockAccessService.decide } as never);
+    const { authorizeInstructionCommit } = await vi.importActual<typeof import("../services/agent-instruction-authorization.js")>("../services/agent-instruction-authorization.js");
+    const receipt = { revision: { id: "33333333-3333-4333-8333-333333333333", entryFile: "AGENTS.md", byteLength: 3 }, content: "new", changed: true, materialization: "current" };
+    const writer = kind === "entry with legacy cleanup" ? mockInstructionRevisions.commit : mockWriteAgentFile;
+    writer.mockImplementation(async (_input, authenticated, consent) => {
+      await authorizeInstructionCommit(db as never, authenticated, agent, consent);
+      return receipt;
+    });
+    mockAgentService.getById.mockResolvedValue(agent);
+    mockInstructionWorkingCopies.acknowledgeExplicitSave.mockResolvedValue(undefined);
+    mockAccessService.decide.mockImplementation(async input => ({ allowed: !["agent_config:update", "agent_instructions:update"].includes(input.action) || input.scope?.consentedChange === true,
+      reason: "deny_missing_consent", explanation: "Accepted native change consent is required" }));
+    const router = routeModules.value.agentRoutes(db as never);
+    const method = kind === "supporting deletion" ? "delete" : "put";
+    const layer = router.stack.find((entry: any) => entry.route?.path === "/agents/:id/instructions-bundle/file" && entry.route.methods[method]);
+    const response = { status: vi.fn().mockReturnThis(), json: vi.fn().mockReturnThis() };
+    try {
+      await layer!.route!.stack.at(-1)!.handle({ actor, params: { id: agent.id }, headers: {},
+        query: { path: "NOTES.md", baseHash: "a".repeat(64) },
+        body: kind === "entry with legacy cleanup" ? { path: "AGENTS.md", content: "new", baseRevisionId: null, clearLegacyPromptTemplate: true }
+          : { path: "NOTES.md", content: "new", baseHash: null },
+      } as never, response as never, vi.fn());
+      expect(response.json).toHaveBeenCalled();
+      expect(writer).toHaveBeenCalledOnce();
+      expect(consumed).toBe(1);
+      expect(mockDepartmentScope).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ id: agent.id }), expect.anything(), {},
+        expect.objectContaining({ lock: true, configurationConsentedChange: true }));
+      await expect(authorizeInstructionCommit(db as never, actor, agent, writer.mock.calls[0][2])).rejects.toMatchObject({ status: 403 });
+      expect(consumed).toBe(1);
+    } finally { native.mockRestore(); }
   });
 
   it("returns committed entry content independently of its disk copy", async () => {

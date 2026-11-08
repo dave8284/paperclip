@@ -46,7 +46,9 @@ export function portfolioPrivateContentProjection(db: Db, actor: AuthorizationAc
     const body = sql`coalesce(${column}, '')`;
     const hash = sql<string>`encode(sha256(convert_to(${body}, 'UTF8')), 'hex')`;
     return { fields: {
-      body: sql<string>`substring(${body} from ${query.offset + 1} for ${query.limit})`,
+      // Untyped bound parameters can select PostgreSQL's (text, text, text)
+      // regexp overload, interpreting a page length as an invalid escape string.
+      body: sql<string>`substring(${body} from ${query.offset + 1}::integer for ${query.limit}::integer)`,
       bodySha256: hash, bodyCharacters: sql<number>`char_length(${body})`,
     }, version: query.bodySha256 ? sql`${hash} = ${query.bodySha256}` : undefined };
   }

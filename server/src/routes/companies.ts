@@ -1164,6 +1164,7 @@ export function companyRoutes(db: Db, storage?: StorageService, options?: Compan
     const preview = await portability.previewImport(body, {
       mode: "agent_safe",
       sourceCompanyId: companyId,
+      authorizationActor: req.actor,
     });
     res.json(preview);
   });
@@ -1183,6 +1184,7 @@ export function companyRoutes(db: Db, storage?: StorageService, options?: Compan
       mode: "agent_safe",
       sourceCompanyId: companyId,
       pauseAutomations: body.pauseAutomations === true,
+      authorizationActor: req.actor,
     });
     await logActivity(db, {
       companyId: result.company.id,

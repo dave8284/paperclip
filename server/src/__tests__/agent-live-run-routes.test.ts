@@ -1003,7 +1003,7 @@ describe("agent live run routes", () => {
     expect(mockHeartbeatService.wakeup).toHaveBeenCalledWith(routeAgentId, expect.objectContaining({ manualUserWake: true }));
   });
 
-  describe("exact native model-rejected review retry", () => {
+  describe("exact native review retry", () => {
     const reviewContext = {
       nativeReviewInteractionId: "55555555-5555-4555-8555-555555555555",
       nativeReviewDecisionId: "66666666-6666-4666-8666-666666666666",
@@ -1016,6 +1016,29 @@ describe("agent live run routes", () => {
     };
     const selectedIssue = { id: failedChatIssueId, companyId: "company-1", status: "in_review", assigneeAgentId: "worker", assigneeUserId: null };
     const retryBody = { failedRunId: failedChatRunId, reason: "retry_failed_run" };
+    // Exercise the registered route handler without opening a test listener.
+    // Request validation and HTTP transport have their existing route coverage.
+    async function retryRequest(db: Record<string, unknown>, actor?: Record<string, unknown>, body: Record<string, unknown> = retryBody) {
+      const { agentRoutes } = await vi.importActual<typeof import("../routes/agents.js")>("../routes/agents.js");
+      const router = agentRoutes(db as any);
+      const layer = router.stack.find((entry: any) => entry.route?.path === "/agents/:id/wakeup" && entry.route.methods.post);
+      if (!layer?.route) throw new Error("Wakeup route missing");
+      const result: { status: number; body: unknown } = { status: 200, body: undefined };
+      const response = {
+        status: vi.fn((status: number) => { result.status = status; return response; }),
+        json: vi.fn((value: unknown) => { result.body = value; return response; }),
+      };
+      try {
+        await layer.route.stack.at(-1)!.handle({
+          actor: actor ?? { type: "board", userId: "local-board", companyIds: ["company-1"], source: "local_implicit", isInstanceAdmin: false },
+          params: { id: routeAgentId }, body, query: {}, headers: {},
+        } as any, response as any, vi.fn());
+      } catch (error) {
+        result.status = (error as { status?: number }).status ?? 500;
+        result.body = { error: error instanceof Error ? error.message : String(error) };
+      }
+      return result;
+    }
     beforeEach(() => {
       mockAgentService.getById.mockResolvedValue({ id: routeAgentId, companyId: "company-1" });
       mockHeartbeatService.getRun.mockResolvedValue(selectedRun);
@@ -1025,9 +1048,9 @@ describe("agent live run routes", () => {
 
     it("permits the Board to retry the exact pending review using only saved context", async () => {
       const fixture = createFailedChatRetryDb(false);
-      const res = await requestApp(await createApp(fixture.db), url => request(url).post(`/api/agents/${routeAgentId}/wakeup`).send({
+      const res = await retryRequest(fixture.db, undefined, {
         ...retryBody, payload: { issueId: "forged", nativeReviewInteractionId: "forged", nativeReviewDecisionId: "forged" },
-      }));
+      });
       expect(res.status, JSON.stringify(res.body)).toBe(202);
       expect(mockNativeReviewAssignment).toHaveBeenCalledExactlyOnceWith(fixture.db, {
         companyId: "company-1", issueId: failedChatIssueId, agentId: routeAgentId, contextSnapshot: reviewContext,
@@ -1053,14 +1076,58 @@ describe("agent live run routes", () => {
         if (scenario === "stale" || scenario === "changed-reviewer") mockNativeReviewAssignment.mockResolvedValue(null);
         if (scenario === "resolved") mockNativeReviewAssignment.mockResolvedValue({ interaction: { status: "accepted" } });
         const fixture = createFailedChatRetryDb(false);
-        const res = await requestApp(await createApp(fixture.db, actor), url => request(url).post(`/api/agents/${routeAgentId}/wakeup`).send({
+        const res = await retryRequest(fixture.db, actor, {
           ...retryBody, payload: { ...reviewContext },
-        }));
+        });
         expect(res.status).toBe(["agent-caller", "denied-task"].includes(scenario) ? 403 : ["foreign-company", "foreign-agent"].includes(scenario) ? 404 : 409);
         expect(mockHeartbeatService.wakeup).not.toHaveBeenCalled();
         if (["agent-caller", "denied-task", "foreign-company", "foreign-agent", "foreign-issue", "legacy", "unknown-error", "missing-context"].includes(scenario)) {
           expect(mockNativeReviewAssignment).not.toHaveBeenCalled();
         }
+      },
+    );
+
+    function preparationFailure() {
+      return { ...selectedRun, runtimeMode: "legacy", nativeIssueId: null, issueId: failedChatIssueId,
+        executionStage: "preparing", errorCode: "adapter_failed",
+        runtimeModeResolvedAt: null, runtimeModeResolverVersion: null,
+        runnerProfileJson: { adapterDispatch: { adapterType: "paperclip_runner" } },
+        nativeSessionId: null, nativePhase: null, runnerInstanceId: null, driverKind: null,
+        processPid: null, processGroupId: null, processStartedAt: null, sessionIdAfter: null };
+    }
+
+    it("retries the exact preparation failure with current reviewer authority and leaves the task assigned to its worker", async () => {
+      const failed = preparationFailure();
+      mockHeartbeatService.getRun.mockResolvedValue(failed);
+      const fixture = createFailedChatRetryDb(false);
+      const res = await retryRequest(fixture.db);
+      expect(res.status, JSON.stringify(res.body)).toBe(202);
+      expect(mockNativeReviewAssignment).toHaveBeenCalledExactlyOnceWith(fixture.db, {
+        companyId: "company-1", issueId: failedChatIssueId, agentId: routeAgentId, contextSnapshot: reviewContext,
+      });
+      expect(mockHeartbeatService.wakeup).toHaveBeenCalledExactlyOnceWith(routeAgentId, expect.objectContaining({
+        failedRunId: failedChatRunId, reason: "retry_failed_run", payload: { issueId: failedChatIssueId },
+        requestedByActorType: "user", contextSnapshot: expect.objectContaining(reviewContext),
+      }));
+      expect(selectedIssue.assigneeAgentId).toBe("worker");
+      expect(failed).toMatchObject({ runtimeMode: "legacy", nativeIssueId: null, runtimeModeResolvedAt: null });
+    });
+
+    it.each(["stale", "resolved", "denied-task", "already-selected", "already-started", "other-task", "wrong-adapter"])(
+      "rejects an unauthorized or already-dispatched preparation retry (%s)", async scenario => {
+        const failed = preparationFailure();
+        if (scenario === "stale") mockNativeReviewAssignment.mockResolvedValue(null);
+        if (scenario === "resolved") mockNativeReviewAssignment.mockResolvedValue({ interaction: { status: "accepted" } });
+        if (scenario === "denied-task") mockAccessService.decide.mockImplementation(async ({ action }) => ({ allowed: action !== "issue:comment", explanation: "Denied" }));
+        mockHeartbeatService.getRun.mockResolvedValue({ ...failed,
+          ...(scenario === "already-selected" ? { runtimeModeResolvedAt: new Date() } : {}),
+          ...(scenario === "already-started" ? { processPid: 123 } : {}),
+          ...(scenario === "other-task" ? { issueId: "another-task" } : {}),
+          ...(scenario === "wrong-adapter" ? { runnerProfileJson: { adapterDispatch: { adapterType: "codex_local" } } } : {}),
+        });
+        const res = await retryRequest(createFailedChatRetryDb(false).db);
+        expect(res.status, JSON.stringify(res.body)).toBe(scenario === "denied-task" ? 403 : 409);
+        expect(mockHeartbeatService.wakeup).not.toHaveBeenCalled();
       },
     );
   });

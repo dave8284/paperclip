@@ -2,7 +2,7 @@
   "schema": "agentos.delegation-acceptance.v1",
   "companyName": "Orbit Test Company",
   "objectiveTitle": "Prepare a reviewed launch plan for the fictional DeskBuddy service",
-  "brief": "DeskBuddy is a fictional recurring desk-cleaning service for small offices. Produce a launch recommendation from the supplied facts, with transparent arithmetic, an operating plan, draft customer messages, risks and a clear go/no-go recommendation. This exercise uses no real customers, outreach, payments, publication or production changes. The owner and Friday act as the board. Friday briefs the company CEO and reports the evidence. The CEO owns the plan, appoints an accountable lead, delegates specialist work and obtains independent review. All work and files belong to this test company.",
+  "brief": "DeskBuddy is a fictional recurring desk-cleaning service for small offices. Produce a launch recommendation from the supplied facts, with transparent arithmetic, an operating plan, draft customer messages, risks and a clear go/no-go recommendation. This exercise uses no real customers, outreach, payments, publication or production changes. The owner and Friday act as the board. Friday briefs the company CEO and reports the evidence. The CEO owns the plan and chooses the staffing depth: directly manage suitable specialists for bounded work, or appoint department heads who hire and manage their own staff when useful. No additional management layer is required. The CEO obtains independent review and reports the evidence. All work and files belong to this test company.",
   "facts": {
     "currency": "NZD",
     "pricePerBooking": 35,
@@ -26,7 +26,7 @@
   "acceptanceGates": [
     "The owner request and Friday direction retain their original native actor/run identities.",
     "Friday delegates only to the test company's actual CEO or responsible department head.",
-    "The CEO or head appoints a lead; at least two specialists own distinct tasks.",
+    "The CEO delegates directly to specialists or appoints a department head who delegates to their staff; at least two specialists own distinct tasks. An intermediate lead is optional and no role is added merely to satisfy this test.",
     "Provider identity and subscription-only account authorization are observed; no paid API fallback is used.",
     "Every task, workspace, attachment and provider execution remains company-local.",
     "Deliverable files/documents exist with immutable hashes or revision IDs and are read by the reviewer.",

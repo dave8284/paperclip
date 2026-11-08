@@ -1,8 +1,8 @@
-import { createReadStream, createWriteStream, existsSync, mkdirSync, readdirSync, statSync, unlinkSync } from "node:fs";
+import { createReadStream, existsSync, mkdirSync, readdirSync, statSync, unlinkSync } from "node:fs";
 import { basename, resolve } from "node:path";
 import { createInterface } from "node:readline";
 import { spawn } from "node:child_process";
-import { open as openFile } from "node:fs/promises";
+import { open as openFile, type FileHandle } from "node:fs/promises";
 import { pipeline } from "node:stream/promises";
 import { createGunzip, createGzip } from "node:zlib";
 import postgres from "postgres";
@@ -323,7 +323,7 @@ async function waitForChildExit(child: ReturnType<typeof spawn>, label: string):
 
 async function runPgDumpBackup(opts: {
   connectionString: string;
-  backupFile: string;
+  archive: FileHandle;
   connectTimeout: number;
 }): Promise<void> {
   const pgDumpBin = process.env.PAPERCLIP_PG_DUMP_PATH || "pg_dump";
@@ -351,7 +351,7 @@ async function runPgDumpBackup(opts: {
   }
 
   await Promise.all([
-    pipeline(child.stdout, createGzip(), createWriteStream(opts.backupFile)),
+    pipeline(child.stdout, createGzip(), opts.archive.createWriteStream()),
     waitForChildExit(child, pgDumpBin),
   ]);
 }
@@ -447,7 +447,11 @@ async function* readRestoreStatements(backupFile: string): AsyncGenerator<string
 }
 
 export function createBufferedTextFileWriter(filePath: string, maxBufferedBytes = DEFAULT_BACKUP_WRITE_BUFFER_BYTES) {
-  const filePromise = openFile(filePath, "w");
+  let fileCreated = false;
+  const filePromise = openFile(filePath, "wx", 0o600).then(file => { fileCreated = true; return file; });
+  // Opening starts immediately. The owning operation observes a rejection at
+  // drain/close; attach a handler while it prepares the first buffered write.
+  void filePromise.catch(() => {});
   const flushThreshold = Math.max(1, Math.trunc(maxBufferedBytes));
   let bufferedLines: string[] = [];
   let bufferedBytes = 0;
@@ -492,6 +496,7 @@ export function createBufferedTextFileWriter(filePath: string, maxBufferedBytes 
       }
       flushBufferedLines();
       await pendingWrite;
+      await filePromise;
     },
     async writeRaw(chunk: string | Buffer) {
       if (closed) {
@@ -517,7 +522,7 @@ export function createBufferedTextFileWriter(filePath: string, maxBufferedBytes 
       bufferedBytes = 0;
       await pendingWrite.catch(() => {});
       await filePromise.then((file) => file.close()).catch(() => {});
-      if (existsSync(filePath)) {
+      if (fileCreated && existsSync(filePath)) {
         try {
           unlinkSync(filePath);
         } catch {
@@ -544,31 +549,43 @@ export async function runDatabaseBackup(opts: RunDatabaseBackupOptions): Promise
     sqlClosed = true;
     await sql.end();
   };
-  mkdirSync(opts.backupDir, { recursive: true });
+  mkdirSync(opts.backupDir, { recursive: true, mode: 0o700 });
   // Initial and final sleep checks can run within the same second. A failed
   // second checkpoint must never overwrite the first verified recovery point.
   const checkpointSuffix = opts.verifyBeforePrune ? `-${randomUUID()}` : "";
   const sqlFile = resolve(opts.backupDir, `${filenamePrefix}-${timestamp()}${checkpointSuffix}.sql`);
   const backupFile = `${sqlFile}.gz`;
   const writer = createBufferedTextFileWriter(sqlFile);
+  let sqlCreated = false;
+  let archiveCreated = false;
+  const createArchive = async () => {
+    const archive = await openFile(backupFile, "wx", 0o600);
+    archiveCreated = true;
+    return archive;
+  };
 
   try {
+    // Reserve the private staging path before any engine runs. A collision is
+    // not ours to overwrite, remove during cleanup, or retry through fallback.
+    await writer.drain();
+    sqlCreated = true;
     if (backupEngine === "pg_dump" || (backupEngine === "auto" && canUsePgDump)) {
       await sql`SELECT 1`;
       let dumped = false;
       try {
         await closeSql();
-        await runPgDumpBackup({
-          connectionString: opts.connectionString,
-          backupFile,
-          connectTimeout,
-        });
+        const archive = await createArchive();
+        try {
+          await runPgDumpBackup({ connectionString: opts.connectionString, archive, connectTimeout });
+        } finally {
+          await archive.close();
+        }
         dumped = true;
       } catch (error) {
-        if (existsSync(backupFile)) {
-          try { unlinkSync(backupFile); } catch { /* ignore */ }
+        if (archiveCreated && existsSync(backupFile)) {
+          try { unlinkSync(backupFile); archiveCreated = false; } catch { /* ignore */ }
         }
-        if (backupEngine === "pg_dump") {
+        if (backupEngine === "pg_dump" || (error as NodeJS.ErrnoException)?.code === "EEXIST") {
           throw error;
         }
         effectiveBackupEngine = "javascript";
@@ -1060,9 +1077,12 @@ export async function runDatabaseBackup(opts: RunDatabaseBackupOptions): Promise
     await writer.close();
 
     // Compress the SQL file with gzip
-    const sqlReadStream = createReadStream(sqlFile);
-    const gzWriteStream = createWriteStream(backupFile);
-    await pipeline(sqlReadStream, createGzip(), gzWriteStream);
+    const archive = await createArchive();
+    try {
+      await pipeline(createReadStream(sqlFile), createGzip(), archive.createWriteStream());
+    } finally {
+      await archive.close();
+    }
     unlinkSync(sqlFile);
 
     const sizeBytes = statSync(backupFile).size;
@@ -1076,10 +1096,10 @@ export async function runDatabaseBackup(opts: RunDatabaseBackupOptions): Promise
     };
   } catch (error) {
     await writer.abort();
-    if (existsSync(backupFile)) {
+    if (archiveCreated && existsSync(backupFile)) {
       try { unlinkSync(backupFile); } catch { /* ignore */ }
     }
-    if (existsSync(sqlFile)) {
+    if (sqlCreated && existsSync(sqlFile)) {
       try { unlinkSync(sqlFile); } catch { /* ignore */ }
     }
     throw error;

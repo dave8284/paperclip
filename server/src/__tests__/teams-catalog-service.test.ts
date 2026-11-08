@@ -116,7 +116,7 @@ describe("teamsCatalogService", () => {
     expect(prepared.source.files[".paperclip.yaml"]).toEqual(expect.stringContaining("reportsToExistingAgentSlug: \"engineering-manager\""));
   });
 
-  it.each(["core-exec-team", "product-engineering", "product-design", "content-machine"])(
+  it.each(["agentos-operators", "core-exec-team", "product-engineering", "product-design", "content-machine"])(
     "preserves %s role files and canonical skill references through catalog import",
     async (teamRef) => {
       const svc = teamsCatalogService({} as any);
@@ -148,6 +148,30 @@ describe("teamsCatalogService", () => {
         .toEqual(requiredCatalogIds);
     },
   );
+
+  it("prepares company operators under their CEO without importing Friday or assigning her operating work", async () => {
+    const svc = teamsCatalogService({} as any);
+    const prepared = await svc.prepareCatalogTeamSource("company-1", "agentos-operators", {
+      targetManagerAgentId: "manager-1",
+    });
+    expect(prepared.errors).toEqual([]);
+    expect(prepared.team.rootAgentSlugs).toEqual(["ceo"]);
+    expect(prepared.team.agentSlugs).not.toContain("coordinator");
+    const files = prepared.source.files;
+    expect(Object.keys(files).some(file => file.includes("coordinator") || file.includes("friday"))).toBe(false);
+    for (const file of prepared.team.files) {
+      const entry = files[file.path];
+      if (typeof entry !== "string") continue;
+      const { frontmatter } = parseFrontmatterMarkdown(entry);
+      if (file.kind === "agent") {
+        expect(frontmatter.name).not.toBe("Friday");
+        expect(frontmatter.reportsTo).toBe(frontmatter.slug === "ceo" ? null : "ceo");
+      }
+      if (file.kind === "project") expect(frontmatter.owner).toBe("ceo");
+      if (file.kind === "task") expect(frontmatter.assignee).toBe("ceo");
+    }
+    expect(files[".paperclip.yaml"]).toEqual(expect.stringContaining('reportsToExistingAgentId: "manager-1"'));
+  });
 
   it("resolves target-manager slug against same-company agents before rendering reparent metadata", async () => {
     mockAgentService.list.mockResolvedValue([
@@ -402,8 +426,28 @@ describe("teamsCatalogService", () => {
         secretValues: { "agent:ceo:OPENAI_API_KEY": "sk-imported" },
       }),
       null,
-      { mode: "agent_safe", sourceCompanyId: "company-1" },
+      { mode: "agent_safe", sourceCompanyId: "company-1", authorizationActor: undefined },
     );
+  });
+
+  it("carries authenticated agent authority separately from audit context into previews and installation", async () => {
+    const authorizationActor = { type: "agent" as const, source: "agent_jwt" as const, companyId: "company-1", agentId: "head", onBehalfOfUserId: "owner" };
+    const svc = teamsCatalogService({} as never);
+    await svc.installCatalogTeam("company-1", "product-engineering", {
+      targetManagerAgentId: "manager-1", authorizationActor,
+      actor: { actorType: "agent", actorId: "head", agentId: "head" },
+    });
+    expect(mockCompanyPortabilityService.previewImport).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ authorizationActor }));
+    expect(mockCompanyPortabilityService.importBundle).toHaveBeenCalledWith(expect.anything(), null, expect.objectContaining({ authorizationActor }));
+  });
+
+  it("does not treat an agent audit identity as an authenticated installer", async () => {
+    const svc = teamsCatalogService({} as never);
+    await expect(svc.installCatalogTeam("company-1", "core-exec-team", {
+      actor: { actorType: "agent", actorId: "head", agentId: "head" },
+    })).rejects.toMatchObject({ status: 403 });
+    expect(mockCompanyPortabilityService.previewImport).not.toHaveBeenCalled();
+    expect(mockCompanyPortabilityService.importBundle).not.toHaveBeenCalled();
   });
 
   describe("readCatalogTeamProvenance", () => {

@@ -3,7 +3,7 @@ name: Quality Reviewer
 slug: qa
 title: Quality Reviewer
 role: qa
-reportsTo: coordinator
+reportsTo: ceo
 skills:
   - agentos-context-review
   - qa-acceptance

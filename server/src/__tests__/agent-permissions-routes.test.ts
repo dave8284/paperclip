@@ -54,6 +54,7 @@ const mockAgentService = vi.hoisted(() => ({
   getChainOfCommand: vi.fn(),
   resolveByReference: vi.fn(),
 }));
+const mockStaffingAuthority = vi.hoisted(() => ({ hiring: vi.fn(), configuration: vi.fn() }));
 
 const mockBuiltInAgentService = vi.hoisted(() => ({
   ensureCompanyDefaultAgentGrants: vi.fn(),
@@ -160,6 +161,12 @@ function registerModuleMocks() {
 
   vi.doMock("../services/access.js", () => ({
     accessService: () => mockAccessService,
+  }));
+  // This route suite controls native authorization and dispatch. Actual current
+  // department/reporting decisions are exercised by the staffing service tests.
+  vi.doMock("../services/agent-hiring-authority.js", () => ({
+    resolveAgentHiringAuthority: mockStaffingAuthority.hiring,
+    resolveDepartmentConfigurationAuthority: mockStaffingAuthority.configuration,
   }));
 
   vi.doMock("../services/approvals.js", () => ({
@@ -307,6 +314,8 @@ describe("agent permission routes", () => {
 
   beforeEach(() => {
     vi.resetAllMocks();
+    mockStaffingAuthority.hiring.mockImplementation(async (_db, _companyId, _actor, input) => ({ departmentHead: false, reportsTo: input.reportsTo }));
+    mockStaffingAuthority.configuration.mockResolvedValue({ departmentHead: false });
     mockAgentService.getById.mockReset();
     mockAgentService.getConfigRevision.mockReset();
     mockAgentService.listConfigRevisions.mockReset();
@@ -421,6 +430,44 @@ describe("agent permission routes", () => {
       censorUsernameInLogs: false,
     });
     mockLogActivity.mockResolvedValue(undefined);
+  });
+
+  async function invokeLifecycleRoute(path: string, method: "post" | "patch", body: Record<string, unknown>) {
+    const router = routeModules.value.agentRoutes(createDbStub() as any);
+    const layer = router.stack.find((entry: any) => entry.route?.path === path && entry.route.methods[method]);
+    if (!layer?.route) throw new Error("Lifecycle route missing");
+    const handler = layer.route.stack.at(-1)!.handle;
+    const actor = { type: "agent", agentId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", companyId, source: "agent_key" };
+    const response = { status: vi.fn().mockReturnThis(), json: vi.fn().mockReturnThis() };
+    return handler({ actor, params: { id: agentId }, body, query: {}, headers: {} } as any, response as any, vi.fn());
+  }
+
+  it.each(["paused", "terminated"])("blocks agent lifecycle PATCH %s consistently with its board-only route", async status => {
+    await expect(invokeLifecycleRoute("/agents/:id", "patch", { status })).rejects.toMatchObject({ status: 403 });
+    expect(mockStaffingAuthority.configuration).not.toHaveBeenCalled();
+    expect(mockLogActivity).not.toHaveBeenCalled();
+  });
+
+  it.each(["patch", "post"] as const)("enforces current head target scope before agent lifecycle resume (%s)", async method => {
+    mockStaffingAuthority.configuration.mockRejectedValue(Object.assign(new Error("Employee is outside this head's team"), { status: 403 }));
+    await expect(invokeLifecycleRoute(method === "patch" ? "/agents/:id" : "/agents/:id/resume", method,
+      method === "patch" ? { status: "idle" } : {})).rejects.toMatchObject({ status: 403 });
+    expect(mockStaffingAuthority.configuration).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ id: agentId }),
+      expect.objectContaining({ type: "agent" }), expect.anything(), expect.objectContaining({ configurationRequiresChangeGrant: true }));
+    expect(mockLogActivity).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { runtimeConfig: { heartbeat: { enabled: false } } },
+    { adapterConfig: { model: "test-model" } },
+    { capabilities: "Updated specialist responsibilities" },
+  ])("enforces current head target scope before nongraph configuration %j", async body => {
+    mockStaffingAuthority.configuration.mockRejectedValue(Object.assign(new Error("Employee is outside this head's team"), { status: 403 }));
+    await expect(invokeLifecycleRoute("/agents/:id", "patch", body)).rejects.toMatchObject({ status: 403 });
+    expect(mockStaffingAuthority.configuration).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ id: agentId }),
+      expect.objectContaining({ type: "agent" }), expect.objectContaining(body), expect.anything());
+    expect(mockAgentService.update).not.toHaveBeenCalled();
+    expect(mockLogActivity).not.toHaveBeenCalled();
   });
 
   it("redacts agent detail for authenticated company members without agent admin permission", async () => {

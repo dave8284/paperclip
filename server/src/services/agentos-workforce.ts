@@ -8,6 +8,7 @@ import { persistActivity, publishActivity, type ActivityPublication, type LogAct
 import { withAccountingTransaction } from "./accounting-transaction.js";
 import { terminateAgentInTransaction } from "./agent-lifecycle.js";
 import { logger } from "../middleware/logger.js";
+import { assertDepartmentWorkforceTarget } from "./agent-hiring-authority.js";
 
 type Who = Pick<LogActivityInput, "actorType" | "actorId" | "agentId" | "runId">;
 type Portfolio = typeof agentosPortfolios.$inferSelect;
@@ -70,7 +71,7 @@ export function agentosWorkforceService(db: Db) {
         .where(and(eq(agentosPortfolioCompanies.companyId, companyId), eq(agentosPortfolios.ownerUserId, ownerId(actor))));
       if (!linked || !(await companyAccess(connection, actor, companyId, true))) throw notFound("Company workforce not found");
       await portfolio(connection, actor, linked.portfolio.id, true);
-      return { portfolio: linked.portfolio, actor };
+      return { portfolio: linked.portfolio, actor, departmentHead: false };
     }
     // A company executive is not a portfolio-wide principal. Resolve the
     // owner from authenticated run context, never from the request body.
@@ -115,13 +116,14 @@ export function agentosWorkforceService(db: Db) {
       action: "users:manage_permissions", permissionKey: "users:manage_permissions",
     });
     if (!homeMembership || homeMembership.membershipRole === "viewer" || !ownerAuthority.allowed) throw notFound("Company workforce not found");
-    return { portfolio: linked.portfolio, actor: effectiveActor };
+    return { portfolio: linked.portfolio, actor: effectiveActor, departmentHead: manager.role !== "ceo" && !!department };
   }
 
   async function lockCompanyStaffingAuthority(tx: Db, actor: AuthorizationActor, companyId: string, portfolioId: string, targetAgentId: string) {
     // Match the binding owner's lock order before waiting for the target. All
     // definitive authorization reads happen after this wait, under row locks.
     await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`agentos-assignment:${companyId}`}, 0))`);
+    await tx.execute(sql`select pg_advisory_xact_lock_shared(hashtextextended(${`department-management:${companyId}`}, 0))`);
     await tx.execute(sql`select pg_advisory_xact_lock_shared(hashtextextended(${`operating-profile:${companyId}`}, 0))`);
     const [target] = await tx.select({ id: agents.id, reportsTo: agents.reportsTo }).from(agents)
       .where(and(eq(agents.id, targetAgentId), eq(agents.companyId, companyId))).for("update");
@@ -273,6 +275,7 @@ export function agentosWorkforceService(db: Db) {
           const decision = await access.decide({ actor: authorized.actor, action, resource: { type: "agent", companyId, agentId: input.agentId }, scope: { targetAgentId: input.agentId } });
           if (!decision.allowed) throw notFound("Company agent not found or not configurable");
         }
+        await assertDepartmentWorkforceTarget(tx, companyId, authorized.actor, input.agentId, "agent_config:update", preliminary.departmentHead);
         return bindAssignment(tx, publications, who, authorized.portfolio.id, { ...input, companyId });
       }).catch(error => {
         if ((error?.cause?.code ?? error?.code) === "55P03") throw conflict("Staffing authority is changing. Retry the request.", { retryable: true });
@@ -296,6 +299,7 @@ export function agentosWorkforceService(db: Db) {
             resource: { type: "agent", companyId, agentId: known.agentId }, scope: { targetAgentId: known.agentId } });
           if (!decision.allowed) throw forbidden("Target assignment retirement requires workforce:retire authority for the agent and its responsible owner");
         }
+        await assertDepartmentWorkforceTarget(tx, companyId, authorized.actor, known.agentId, "workforce:retire", preliminary.departmentHead);
         return retireAssignment(tx, publications, who, companyId, authorized.portfolio.id, assignmentId, input, known.agentId);
       }).catch(error => {
         if ((error?.cause?.code ?? error?.code) === "55P03") throw conflict("Staffing authority is changing. Retry the request.", { retryable: true });

@@ -65,6 +65,14 @@ unfinished application write must still prevent sleep after its client leaves.
 
 Automated: [experimental settings](../../ui/src/pages/InstanceExperimentalSettings.test.tsx) and [database backup routes](../../server/src/__tests__/instance-database-backups-routes.test.ts) cover their UI/API contracts.
 
+The [backup file checks](../../packages/db/src/backup-file-permissions.test.ts)
+exercise real files, gzip and controlled dump subprocesses with database
+transport stubbed: newly created SQL staging files and archives use owner-only
+`0600` permissions, newly created backup directories use `0700`, and filename
+collisions preserve existing data. Dump fallback, failed verification and
+retention keep their cleanup boundaries. These checks do not prove a database
+restore or deployed filesystem permissions.
+
 Manual: Change a harmless experimental setting, reload, and confirm the affected route honors it. Back up a disposable instance, inspect the reported file and metadata, and restore using the documented procedure into a second isolated target. Verify a known record after restoration.
 
 Cloud staging: On a managed `*.staging.paperclip.app` instance, verify experiments
@@ -100,6 +108,9 @@ Sources: [Runtime CLI](../../cli/src/commands/runtime.ts), [instance-config bypa
   identity, not automatically to an owned foreground dev server.
 
 - A successful backup write does not prove restoration works.
+- Backup creation does not change permissions on existing directories or older
+  archives. Inspect those separately during migration/backup inventory; new
+  archives and staging files are created privately without overwriting a collision.
 - Settings visibility and mutability differ for cloud-managed and self-hosted instances.
 - Keep the three data paths distinct: first-party Telemetry, operator-configured OpenTelemetry, and local run logs.
 

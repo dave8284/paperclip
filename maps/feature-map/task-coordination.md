@@ -14,6 +14,13 @@ with frozen-source reads and structured findings. Findings remain separate from
 the owner's resolution and task approval. Other provider/runtime combinations
 fail closed; source and protocol checks are separate from real-account qualification.
 
+First admission validates the frozen packet before runtime selection, then retains
+its review receipt only after the run's native task identity commits and before
+workspace synchronization or provider dispatch. A preparation failure preserves
+the historical failed run. The owner can retry that exact run through the existing
+run retry control if the saved reviewer assignment is still pending. The retry
+creates a new attempt; the company's task remains assigned to its worker.
+
 Internal platform applications also expose an owner request form that prepares
 a native backlog task, isolated repository selection, independent review stage
 and locked request document. Artefact detail also lets the owner review and edit
@@ -69,7 +76,24 @@ Manual: Block one task on another, finish the prerequisite, and observe the depe
 
 Automated: [execution policy](../../server/src/__tests__/issue-execution-policy.test.ts), [tree control](../../server/src/__tests__/issue-tree-control-service.test.ts), and [signoff browser suite](../../tests/e2e/signoff-policy.spec.ts) target these layers. A linked suite is not a claim that its current run is green.
 
+The source continuation's [saved retry evidence](../../server/src/services/native-runtime/native-review-retry.test.ts)
+and focused [registered route checks](../../server/src/__tests__/agent-live-run-routes.test.ts)
+pass without a listener. They cover preselection preparation failure, existing
+model-rejection retry, exact saved identity, current pending assignment and denied
+caller/task access. The [database retry scenario](../../server/src/services/native-runtime/native-provider-failure.integration.test.ts)
+adds saved-context recovery, forged-context rejection, duplicate receipt and
+native reviewer claim while retaining the worker assignee. It is authored and
+typechecked but unrun here. The fresh-run [selection fixture](../../server/src/services/heartbeat/runtime-selection.test.ts)
+starts with legacy/null native identity; its PostgreSQL execution and real-account
+first admission/retry remain separate acceptance checks.
+
 Manual: Complete implementation under a review-required policy and confirm it waits for the required review outcome. Exercise rejection and later approval. Pause the parent while child work is pending, then verify resumption respects budget and ownership gates.
+
+For a review that fails before provider dispatch, retry the selected failed run
+once and inspect its new attempt, unchanged historical record and unchanged task
+assignee. Resolve or reassign the review before a second attempt and verify the
+stale retry is rejected. Native session, process, cleanup, pause, budget and task
+holds remain enforced; retry acknowledgement alone does not prove execution.
 
 ## Gotchas
 

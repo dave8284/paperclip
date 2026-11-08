@@ -33,13 +33,18 @@ staffing and instruction-change approvals remain in their native controls.
 
 1. **Bound the work.** Read the assigned task, its company/project, native grants
    and owning manager. Use [scope and handoff rules](references/scope-and-handoffs.md)
-   for portfolio → company → department → project → task delegation. A role title
+   for company-scoped delegation at the staffing depth the CEO chooses; a
+   department or project lead is optional for bounded work. A role title
    never grants access. Keep private company facts in their company context.
 2. **Prepare a reviewable plan.** The accountable owner is the Elephant. Save the
    outcome, requirements, relevant evidence, dependencies, limits, decisions,
    acceptance checks and rollback in the native task's `plan` document. Record its
    exact revision. Do not ship the preceding conversation as the specification.
 3. **Verify fresh-context support.** Inspect the actual harness capabilities.
+   For native Codex, use the [frozen packet preparation and native review
+   admission](references/review-dispatch.md#native-preparation-api) before the
+   author submits completion. An ordinary child task in a shared workspace does
+   not select this isolated path. Preparation is not proof of execution.
    Create a fresh reviewer with no conversation/history inheritance and no
    persistent employee/company memory injection. Disable automatic inherited
    context where supported; provide only the bounded review packet and required

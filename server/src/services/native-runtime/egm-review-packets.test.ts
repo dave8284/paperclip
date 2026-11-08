@@ -3,7 +3,7 @@ import { getTableName, type SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 import { beforeEach, expect, it, vi } from "vitest";
 import { prepareEgmPacketSchema } from "@paperclipai/shared";
-import { egmReviewPacketService, egmBindingForReviewer, bindEgmPacketInteraction, retainEgmReviewPreparation } from "./egm-review-packets.js";
+import { egmReviewPacketService, egmBindingForReviewer, bindEgmPacketInteraction, preparedEgmReviewPacket, retainEgmReviewPreparation } from "./egm-review-packets.js";
 import { parseRetainedEgmPacket } from "./egm-packet-content.js";
 import { egmCreatorAuthority, refreshEgmActor } from "./egm-packet-authority.js";
 
@@ -155,6 +155,28 @@ it("retains exact reviewer receipt, rejects stale generation and forged preparat
   forged.target.body = "Replacement";
   expect(() => parseRetainedEgmPacket(forged)).toThrow("digest does not match");
   expect(() => parseRetainedEgmPacket({ ...forged, isolated: true })).toThrow("invalid");
+});
+it("can inspect the bound packet before selecting the reviewer runtime without admitting a provisional run", async () => {
+  await service().prepare(actor, scope, request);
+  const binding = await egmBindingForReviewer(state.db, { companyId, issueId, sourceRunId, reviewerAgentId });
+  await bindEgmPacketInteraction(state.db, binding!, interactionId, decisionId);
+  const before = state.mutations.length;
+  expect(preparedEgmReviewPacket(assignment() as never)?.requestSha256).toBe(binding!.requestSha256);
+  expect(state.mutations).toHaveLength(before);
+  expect(state.reviewRun.runnerProfileJson.nativeEgmPacketReceipt).toBeUndefined();
+  // Final admission still rechecks the actual current assignment; inspection
+  // cannot override a revoked or not-yet-native reviewer binding.
+  boundary.assignment.mockResolvedValue(null);
+  await expect(retainEgmReviewPreparation(state.db, reviewRunId, assignment() as never, true)).rejects.toMatchObject({ status: 409 });
+  expect(state.reviewRun.runnerProfileJson.nativeEgmPacketReceipt).toBeUndefined();
+});
+it("rejects stale packet bindings before runtime selection", async () => {
+  await service().prepare(actor, scope, request);
+  const binding = await egmBindingForReviewer(state.db, { companyId, issueId, sourceRunId, reviewerAgentId });
+  await bindEgmPacketInteraction(state.db, binding!, interactionId, decisionId);
+  const review = assignment();
+  review.sourceDecision.id = id(99);
+  expect(() => preparedEgmReviewPacket(review as never)).toThrow("does not match");
 });
 it("rechecks responsible-user ceilings and drops cached membership evidence after waiting", async () => {
   const original = { ...actor, onBehalfOfUserId: "author-responsible", onBehalfOfMemberships: [{ companyId, status: "active" }], __responsibleUserSnapshotMemo: new Map() };

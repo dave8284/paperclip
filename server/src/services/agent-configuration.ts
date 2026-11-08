@@ -11,9 +11,16 @@ import { secretService, assertClaudeOAuthBindingInvariant } from "./secrets.js";
 import { agentCredentialService } from "./agent-credentials.js";
 import { clearPrimaryAgent } from "./primary-agent.js";
 import { budgetServiceInTransaction } from "./budgets.js";
+import { resolveDepartmentConfigurationAuthority } from "./agent-hiring-authority.js";
 
 export async function prepareAgentConfiguration(db: Db, existing: AgentConfigurationRecord, data: AgentConfigurationPatch, options?: UpdateAgentOptions): Promise<AgentConfigurationPatch> {
   const id = existing.id;
+  if (options?.departmentAuthority) {
+    await resolveDepartmentConfigurationAuthority(db, existing, options.departmentAuthority.actor, data,
+      { lock: true, requireDepartmentHead: options.departmentAuthority.departmentHead,
+        configurationRequiresChangeGrant: options.departmentAuthority.requiresChangeGrant,
+        configurationConsentedChange: options.departmentAuthority.consentedChange });
+  }
   const { ensureManager, assertNoCycle, assertCompanyShortnameAvailable, assertBuiltInAgentMetadataMutationAllowed } = agentRecordQueries(db);
   if (existing.status === "pending_approval" && !options?.allowPendingApprovalConfigUpdate) {
     const changedFields = changedPendingApprovalConfigFields(agentRecordQueries(db).normalizeAgentRow(existing), data);

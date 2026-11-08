@@ -11,6 +11,7 @@ import { REDACTED_EVENT_VALUE, sanitizeRecord } from "../redaction.js";
 import { normalizeAgentPermissions } from "./agent-permissions.js";
 import { builtInAgentMarkersEqual, readBuiltInAgentMarker } from "./built-in-agent-metadata.js";
 import { fridayCoordinatorSql } from "../services/friday-board-role.js";
+import type { AuthorizationActor } from "../services/authorization.js";
 
 type AgentPresentationRow = typeof agents.$inferSelect & { isBoardCoordinator?: boolean };
 
@@ -77,6 +78,7 @@ export interface ClaudeLoginContext {
 }
 
 export interface UpdateAgentOptions {
+  departmentAuthority?: { actor: AuthorizationActor; departmentHead: boolean; requiresChangeGrant?: boolean; consentedChange?: boolean };
   expectedConfiguration?: Pick<AgentConfigurationRecord, "adapterType" | "adapterConfig" | "runtimeConfig" | "defaultEnvironmentId">;
   recordRevision?: RevisionMetadata;
   allowBuiltInAgentMetadata?: boolean;
@@ -91,6 +93,8 @@ export type AgentConfigurationPatch = Partial<Pick<typeof agents.$inferInsert, t
 export type AgentHireRecord = Pick<typeof agents.$inferSelect, "id" | "companyId" | "adapterType" | "adapterConfig" | "permissions" | "metadata" | "status">;
 
 export interface CreateAgentOptions {
+  // Server-derived admission only; never accepted from hire request data.
+  hiringAuthority?: { actor: AuthorizationActor; departmentHead: boolean; importedManagerIds?: readonly string[]; importRequiresNoApproval?: boolean };
   setupOnly?: boolean;
   setupAgentId?: string;
   runnerResolved?: boolean;

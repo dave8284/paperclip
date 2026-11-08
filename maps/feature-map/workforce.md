@@ -28,7 +28,7 @@ Agent access: [companion](../agent-access-map/workforce.md).
 - `awareness`: `workforce/awareness` — read current shared-employee assignment evidence under the caller's native company and private-work access.
 - `capabilities`: `workforce/capabilities` — publish reviewed Markdown releases and independently adopt, refuse or roll back exact versions in each company.
 - `portfolio-read`: `workforce/portfolio-read` — explicitly grant one source agent bounded work summaries in selected portfolio companies, with an explicit private scope for current Friday.
-- `board-directions`: `workforce/board-directions` — separately authorize Friday to submit company-owned executive tasks with durable native admission and current status receipts.
+- `board-directions`: `workforce/board-directions` — separately authorize Friday to submit company-owned executive tasks, read current receipts and receive completion returns in the originating owner conversation.
 
 ## How to get to it (user POV)
 
@@ -148,8 +148,33 @@ Friday submits one company's task to its actual CEO or responsible department
 head; the read grant itself never permits writes. A changed read mandate
 invalidates write authority. Revocation stops pending handoffs; already admitted
 work remains company-owned. The direction receipt distinguishes saved work,
-native admission and current task status. Persisted/live external-broker authority and
-independent outcome reporting remain open; this source is not live acceptance.
+native admission and current task status.
+
+When the directed company's task reaches Done, the existing durable conversation
+outbox wakes Friday in the original owner's conversation. The return carries
+task identity and an authorized outcome link; it does not copy private task
+bodies between companies. Friday reads the current executive report and evidence
+through that link, then reports to the owner. Done alone is not business
+acceptance, and Friday does not produce the company's deliverable.
+
+Current owner, Friday designation, mandate, native resource access and conversation
+generation are checked again before the wake and before comments publish. Pause
+retains the pending return for resumption; revocation or a conversation reset
+prevents stale publication. Duplicate delivery reuses the existing receipt;
+startup recovery reconstructs missing historical returns without recurring
+history polling. Same-company task handoffs keep their existing behavior.
+
+Verification recipe: direct one disposable company's CEO, retain its task and
+source conversation, and complete the task through its native delivery/review
+path. Inspect one return and its current evidence; retry delivery and restart
+without a second response. Separately pause/resume Friday, reset the conversation,
+revoke the mandate, and remove private task/project access before publication.
+Each stale audience must be denied, including a later revoked item in a batched
+return. [Focused return checks](../../server/src/__tests__/board-direction-return.test.ts)
+pass; [database scenarios](../../server/src/__tests__/board-directions.integration.test.ts)
+are authored and typechecked but unrun in this sandbox. Loaded-runtime and live
+executive-to-Friday acceptance remain recorded separately in the
+[execution checkpoint](../../doc/plans/2026-11-06-agentos-completion-ledger.md).
 
 ### `reviewed-capabilities`
 

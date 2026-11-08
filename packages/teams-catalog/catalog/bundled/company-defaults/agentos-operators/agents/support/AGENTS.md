@@ -3,7 +3,7 @@ name: Customer Support Analyst
 slug: support
 title: Customer Support Analyst
 role: general
-reportsTo: coordinator
+reportsTo: ceo
 skills:
   - agentos-context-review
   - issue-triage

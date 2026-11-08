@@ -6,6 +6,8 @@ import { agentInstructionHeads, agents, type Db } from "@paperclipai/db";
 import { instructionPath, assertInstructionPathSafe, instructionBytes, readInstructionBytes } from "./agent-instruction-files.js";
 import { notFound, unprocessable } from "../errors.js";
 import { resolveHomeAwarePath, resolvePaperclipInstanceRoot } from "../home-paths.js";
+import type { UpdateAgentOptions } from "../lib/agent-records.js";
+import { resolveDepartmentConfigurationAuthority } from "./agent-hiring-authority.js";
 
 const ENTRY_FILE_DEFAULT = "AGENTS.md";
 const MODE_KEY = "instructionsBundleMode";
@@ -586,7 +588,7 @@ export function agentInstructionsService(db?: Db) {
     };
   }
 
-  async function updateBundle(
+  async function updateBundleUnversioned(
     agent: AgentLike,
     input: {
       mode?: BundleMode;
@@ -645,7 +647,7 @@ export function agentInstructionsService(db?: Db) {
     agent: AgentLike,
     relativePath: string,
     content: string,
-    options?: { clearLegacyPromptTemplate?: boolean },
+    options?: { clearLegacyPromptTemplate?: boolean; departmentAuthority?: UpdateAgentOptions["departmentAuthority"] },
   ): Promise<{
     bundle: AgentInstructionsBundle;
     file: AgentInstructionsFileDetail;
@@ -707,24 +709,37 @@ export function agentInstructionsService(db?: Db) {
 
   // Reload configuration under the commit lock: a previously supporting file
   // may have become the configured entry since the route loaded its agent.
-  async function withCurrentAgent<T>(agent: AgentLike, relativePath: string, operation: (current: AgentLike) => Promise<T>) {
-    if (!db) return operation(agent);
+  async function withCurrentAgent<T>(agent: AgentLike, relativePath: string | null, operation: (current: AgentLike) => Promise<T>,
+    authority?: UpdateAgentOptions["departmentAuthority"]) {
+    if (!db) {
+      if (authority) throw unprocessable("Authenticated instruction changes require the database-backed instructions service");
+      return operation(agent);
+    }
     return db.transaction(async (tx) => {
       const [current] = await tx.select().from(agents)
         .where(and(eq(agents.id, agent.id), eq(agents.companyId, agent.companyId))).for("update");
       if (!current) throw notFound("Agent not found");
-      if (relativePath !== LEGACY_PROMPT_TEMPLATE_PATH) {
+      if (authority) await resolveDepartmentConfigurationAuthority(tx as unknown as Db, current, authority.actor, {}, {
+        lock: true, requireDepartmentHead: authority.departmentHead, configurationRequiresChangeGrant: authority.requiresChangeGrant,
+        configurationConsentedChange: authority.consentedChange,
+      });
+      if (relativePath !== null && relativePath !== LEGACY_PROMPT_TEMPLATE_PATH) {
         // Historical entries also remain projections if the configured entry changes.
         await assertUnversionedEntry(current, normalizeRelativeFilePath(relativePath), tx);
       }
       return operation(current);
     });
   }
-  async function writeFile(...args: Parameters<typeof writeFileUnversioned>) {
-    return withCurrentAgent(args[0], args[1], (current) => writeFileUnversioned(current, args[1], args[2], args[3]));
+  async function updateBundle(agent: AgentLike, input: Parameters<typeof updateBundleUnversioned>[1],
+    authority?: UpdateAgentOptions["departmentAuthority"]) {
+    if (!authority) return updateBundleUnversioned(agent, input);
+    return withCurrentAgent(agent, null, current => updateBundleUnversioned(current, input), authority);
   }
-  async function deleteFile(...args: Parameters<typeof deleteFileUnversioned>) {
-    return withCurrentAgent(args[0], args[1], (current) => deleteFileUnversioned(current, args[1]));
+  async function writeFile(...args: Parameters<typeof writeFileUnversioned>) {
+    return withCurrentAgent(args[0], args[1], (current) => writeFileUnversioned(current, args[1], args[2], args[3]), args[3]?.departmentAuthority);
+  }
+  async function deleteFile(agent: AgentLike, relativePath: string, authority?: UpdateAgentOptions["departmentAuthority"]) {
+    return withCurrentAgent(agent, relativePath, (current) => deleteFileUnversioned(current, relativePath), authority);
   }
 
   async function exportFiles(agent: AgentLike, options?: { rejectSymlinks?: boolean }): Promise<{

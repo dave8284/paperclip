@@ -117,6 +117,8 @@ import {
 } from "./native-runtime/provider-profile.js";
 import { managedAgentProfileService } from "./managed-agent-profiles.js";
 import { remoteAgentProfileService } from "./remote-agent-profiles.js";
+import type { AuthorizationActor } from "./authorization.js";
+import { prepareAgentImportStaffing } from "./company-import-staffing-authority.js";
 
 const EXPORT_READ_CONCURRENCY = 8;
 const EXPORT_ISSUE_READ_CONCURRENCY = 2;
@@ -761,6 +763,8 @@ type ImportBehaviorOptions = {
   mode?: ImportMode;
   sourceCompanyId?: string | null;
   pauseAutomations?: boolean;
+  /** Original authenticated actor, supplied by the route, not the bundle. */
+  authorizationActor?: AuthorizationActor;
 };
 
 type AgentLike = {
@@ -5249,7 +5253,19 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
     options?: ImportBehaviorOptions,
   ): Promise<CompanyPortabilityPreviewResult> {
     const plan = await buildPreview(input, options);
+    if (plan.preview.errors.length === 0) await prepareImportStaffing(input, plan, options);
     return plan.preview;
+  }
+
+  async function prepareImportStaffing(input: CompanyPortabilityPreview, plan: ImportPlanInternal, options?: ImportBehaviorOptions) {
+    const actor = options?.authorizationActor;
+    if (actor?.type !== "agent") return undefined;
+    if (input.target.mode !== "existing_company" || actor.companyId !== input.target.companyId)
+      throw forbidden("Agent imports must stay within the employee's company. A board member creates companies.");
+    return prepareAgentImportStaffing(db, {
+      actor, companyId: input.target.companyId, agents: plan.selectedAgents,
+      plans: plan.preview.plan.agentPlans, existing: await agents.list(input.target.companyId),
+    });
   }
 
   async function importBundle(
@@ -5268,6 +5284,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
     if (plan.preview.errors.length > 0) {
       throw unprocessable(`Import preview has errors: ${plan.preview.errors.join("; ")}`);
     }
+    const importStaffing = await prepareImportStaffing(input, plan, options);
     if (
       mode === "agent_safe"
       && (
@@ -5584,7 +5601,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
       }
 
       if (include.agents) {
-        for (const planAgent of plan.preview.plan.agentPlans) {
+        for (const planAgent of importStaffing?.plans ?? plan.preview.plan.agentPlans) {
           const manifestAgent = plan.selectedAgents.find((agent) => agent.slug === planAgent.slug);
           if (!manifestAgent) continue;
           if (planAgent.action === "skip") {
@@ -5677,7 +5694,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
             icon: manifestAgent.icon,
             ...(manifestAgent.appearance ? { appearance: portableAgentAppearance(manifestAgent.appearance, warnings, manifestAgent.slug) } : {}),
             capabilities: manifestAgent.capabilities,
-            reportsTo: null,
+            reportsTo: importStaffing?.managerId(planAgent.slug, importedSlugToAgentId) ?? null,
             adapterType: normalizedAdapter.adapterType,
             adapterConfig: normalizedAdapter.adapterConfig,
             runtimeConfig: sanitizeImportedAgentRuntimeConfig(manifestAgent.runtimeConfig),
@@ -5751,7 +5768,16 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
             runner: agentRunner(patch.adapterType),
             ...automationPausePatch,
             status: pauseAutomations ? "paused" : "idle",
-          }, { createdByUserId: actorUserId });
+          }, {
+            createdByUserId: actorUserId,
+            ...(importStaffing && options?.authorizationActor ? {
+              responsibleUserId: options.authorizationActor.onBehalfOfUserId ?? options.authorizationActor.authorizingUserId ?? null,
+              hiringAuthority: {
+                actor: options.authorizationActor, departmentHead: importStaffing.departmentHead,
+                importedManagerIds: [...importedSlugToAgentId.values()], importRequiresNoApproval: true,
+              },
+            } : {}),
+          });
           await access.ensureMembership(targetCompany.id, "agent", created.id, "member", "active");
           await access.setPrincipalPermission(
             targetCompany.id,
@@ -5795,6 +5821,9 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
 
         // Apply reporting links once all imported agent ids are available.
         for (const manifestAgent of plan.selectedAgents) {
+          // Agent installs create their native reporting link at birth and
+          // recheck current hiring authority in that transaction.
+          if (importStaffing) break;
           const agentId = importedSlugToAgentId.get(manifestAgent.slug);
           if (!agentId) continue;
           const managerSlug = manifestAgent.reportsToSlug;

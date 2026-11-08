@@ -1,8 +1,9 @@
 import { and, asc, eq, isNull, lte, or, sql } from "drizzle-orm";
-import { agentosBoardDirections, agentWakeupRequests, heartbeatRuns, type Db } from "@paperclipai/db";
+import { agentosBoardDirections, agentWakeupRequests, heartbeatRuns, issues, type Db } from "@paperclipai/db";
 import { boardDirectionService, type BoardDirection } from "./board-directions.js";
 import type { heartbeatService } from "./heartbeat.js";
 import { persistActivity, publishActivity } from "./activity-log.js";
+import { recordChatCompletionForTask } from "./chat-completion-delivery.js";
 
 type State = "dispatched" | "cancelled";
 type DeliveryPort = {
@@ -56,6 +57,11 @@ export function boardDirectionDeliveryService(db: Db, options: { heartbeat: Pick
       const [saved] = await tx.update(agentosBoardDirections).set({ dispatchState: state, leaseExpiresAt: null,
         dispatchedAt: state === "dispatched" ? now() : null, lastErrorCode: code ?? null, updatedAt: now() }).where(lease(row)).returning();
       if (!saved) return null;
+      if (state === "dispatched") {
+        const [task] = await tx.select().from(issues).where(and(eq(issues.id, row.issueId), eq(issues.companyId, row.targetCompanyId)))
+          .for("update", { noWait: true });
+        if (task?.status === "done") await recordChatCompletionForTask(tx, task);
+      }
       return (await persistActivity(tx, { companyId: row.sourceCompanyId, actorType: "system", actorId: "board-direction",
         action: `agentos.board_direction_${state}`, entityType: "agentos_board_direction", entityId: row.id,
         details: { targetCompanyId: row.targetCompanyId, issueId: row.issueId, code: code ?? null } })).publication;

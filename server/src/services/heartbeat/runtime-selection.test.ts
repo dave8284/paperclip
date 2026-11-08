@@ -190,7 +190,9 @@ describe.skipIf(!support.supported)("heartbeat runtime selection boundary", () =
     await db.insert(companyMemberships).values({ companyId, principalType: "user", principalId: userId, status: "active", membershipRole: "owner" });
     await db.update(issues).set({ responsibleUserId: userId, executionRunId: run.id }).where(eq(issues.id, issue.id));
     await db.update(heartbeatRuns).set({ responsibleUserId: userId, contextSnapshot: { issueId: issue.id } }).where(eq(heartbeatRuns.id, sourceRun.id));
-    await db.update(heartbeatRuns).set({ responsibleUserId: userId, runtimeMode: "native", nativeIssueId: issue.id }).where(eq(heartbeatRuns.id, run.id));
+    // A newly admitted reviewer has not selected native execution yet. Marking
+    // this native in the fixture concealed the real first-admission failure.
+    await db.update(heartbeatRuns).set({ responsibleUserId: userId, runtimeMode: "legacy", nativeIssueId: null }).where(eq(heartbeatRuns.id, run.id));
     const documents = documentService(db);
     const packetDoc = await documents.upsertIssueDocument({ issueId: issue.id, key: "context-packet", format: "markdown", body: "Review only the frozen target against the selected standard.", createdByUserId: userId });
     const target = await documents.upsertIssueDocument({ issueId: issue.id, key: "plan", format: "markdown", body: "The plan omits a rollback decision.", createdByUserId: userId });
@@ -206,6 +208,7 @@ describe.skipIf(!support.supported)("heartbeat runtime selection boundary", () =
       schema: "agentos.egm-review-binding.v1", sourceRunId: sourceRun.id, requestSha256: packet.requestSha256,
     } } }).where(eq(issueThreadInteractions.id, interaction.id));
     input.run = await read(run.id);
+    expect(input.run).toMatchObject({ runtimeMode: "legacy", nativeIssueId: null });
     input.task.context = { ...input.task.context, paperclipWake: { privateHistory: "EXCLUDED_PARENT_MARKER" }, paperclipCase: { privateMemory: "EXCLUDED_MEMORY_MARKER" } };
     input.config.runtimeConfig = { paperclipConnectionInstructions: { text: "EXCLUDED_CONNECTION_MARKER", digest: "0".repeat(64) } };
     input.config.managedAiRuntime = { attribution: { method: "subscription", provider: "openai" } } as never;

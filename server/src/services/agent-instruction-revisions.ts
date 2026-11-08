@@ -36,6 +36,7 @@ import {
   authorizeInstructionRead,
 } from "./agent-instruction-authorization.js";
 import type { AuthorizationActor } from "./authorization.js";
+import type { InstructionChangeConsentReceipt } from "./agent-instruction-consent.js";
 
 type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
 type Revision = typeof revisions.$inferSelect;
@@ -217,6 +218,7 @@ export function agentInstructionRevisionService(db: Db) {
         }),
     actor: RevisionActor,
     configuredEntryFile?: string,
+    consent?: InstructionChangeConsentReceipt,
   ): Promise<AgentInstructionCommitReceipt> {
     instructionPath(input.entryFile);
     const bytes = "content" in input ? instructionBytes(input.content) : null;
@@ -224,7 +226,7 @@ export function agentInstructionRevisionService(db: Db) {
       const state = await lockTarget(tx, input, actor.type === "plugin" ? undefined : actor);
       const bound = actor.type === "plugin"
         ? await authorizePluginReset(tx, actor, input, state.agent)
-        : await authorizeInstructionCommit(tx, actor, state.agent);
+        : await authorizeInstructionCommit(tx, actor, state.agent, consent);
       if (bound.type === "plugin") {
         if (input.entryFile !== bound.declaredEntryFile) throw forbidden("Plugin reset must restore its declared entry file");
         if (configuredEntryFile !== state.entryFile) throw conflict("Configured instruction entry changed; read the current entry and retry", { code: "INSTRUCTION_ENTRY_CHANGED", entryFile: state.entryFile });
@@ -413,8 +415,8 @@ export function agentInstructionRevisionService(db: Db) {
     history,
     diff,
     materializeCurrent,
-    commit: (input: InstructionCommitInput, actor: AuthorizationActor) =>
-      commitInternal(input, actor),
+    commit: (input: InstructionCommitInput, actor: AuthorizationActor, consent?: InstructionChangeConsentReceipt) =>
+      commitInternal(input, actor, undefined, consent),
     restore: (
       input: InstructionTarget & {
         entryFile: string;

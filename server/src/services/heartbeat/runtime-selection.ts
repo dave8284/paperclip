@@ -17,8 +17,7 @@ import {
   readNativeReviewAssignmentContext,
 } from "../native-runtime/native-review-participant.js";
 import { buildNativeReviewRequest } from "../native-runtime/native-review-prompt.js";
-import { retainEgmReviewPreparation } from "../native-runtime/egm-review-packets.js";
-import { parseRetainedEgmPacket } from "../native-runtime/egm-packet-content.js";
+import { preparedEgmReviewPacket, retainEgmReviewPreparation } from "../native-runtime/egm-review-packets.js";
 import { buildEgmReviewRequest, egmPurposeForPacket } from "../native-runtime/egm-review-execution.js";
 import { buildEgmRuntimeContext } from "../native-runtime/runtime-context.js";
 import { materializeEgmReviewWorkspace } from "../isolated-task-directory.js";
@@ -299,13 +298,12 @@ export async function selectHeartbeatRuntime(db: Db, input: HeartbeatRuntimeSele
     const packetRuntimeSupported = nativeRuntimeResolution.profile.backend === "codex_app_server"
       && executionTarget?.kind !== "remote"
       && runtimeConfig.homeMode !== "preconfigured" && managedAiRuntime?.attribution.method === "subscription";
-    const hasEgmPacket = nativeReview && await retainEgmReviewPreparation(db, run.id, nativeReview, packetRuntimeSupported);
-    if (hasEgmPacket && !packetRuntimeSupported) {
+    const egmPacket = nativeReview ? preparedEgmReviewPacket(nativeReview) : null;
+    if (egmPacket && !packetRuntimeSupported) {
       throw new ConfigurationIncompleteFailure("The frozen EGM packet is prepared. Independent review execution is unavailable until this runtime enforces packet-only context and tools.", {
         configurationIncomplete: { reason: "independent_review_unavailable", actionUrl: `/issues/${issueRef.id}` },
       });
     }
-    const egmPacket = hasEgmPacket ? parseRetainedEgmPacket(nativeReview!.sourceRun.runnerProfileJson?.nativeEgmPacketPreparation) : null;
     const egmWorkspace = egmPacket ? await materializeEgmReviewWorkspace({ companyId: agent.companyId, issueId: issueRef.id, runId: run.id }) : null;
     const nativeReviewRequest = egmPacket ? buildEgmReviewRequest(egmPacket) : nativeReview
       ? buildNativeReviewRequest({
@@ -1087,6 +1085,10 @@ export async function selectHeartbeatRuntime(db: Db, input: HeartbeatRuntimeSele
       return true;
     });
     if (!nativeSelected) return { selected: false };
+    // A new run still has runtimeMode=legacy and nativeIssueId=null until the
+    // selection transaction commits. Receipt admission must follow that write;
+    // its current-run/assignment checks must never accept a provisional identity.
+    if (egmPacket) await retainEgmReviewPreparation(db, run.id, nativeReview!, packetRuntimeSupported);
     stopControllerLease();
     nativeWorkspaceSync = await measureRunPhase("runtime_selection.workspace_sync", () => prepareNativeWorkspaceSync({
       db,

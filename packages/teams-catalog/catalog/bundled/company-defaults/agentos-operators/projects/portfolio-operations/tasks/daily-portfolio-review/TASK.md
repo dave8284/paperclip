@@ -1,12 +1,12 @@
 ---
-name: Daily Portfolio Review
+name: Daily Company Review
 slug: daily-portfolio-review
-assignee: coordinator
+assignee: ceo
 project: portfolio-operations
 recurring: true
 ---
 
-Read the accessible managed-application portfolio and its current native tasks, blockers, recent outputs, routines and budgets. For each application with active work, verify the next action and owner. Reconcile the plan with observed outcomes. Delegate only needed work to the existing pool; use existing open tasks before creating duplicates.
+Read this company's accessible applications and current native tasks, blockers, recent outputs, routines and budgets. For each application with active work, verify the next action and owner. Reconcile the plan with observed outcomes. Delegate only needed work to suitable specialists directly or through appointed department heads; use existing employees and open tasks before creating duplicates.
 
 Check that required connections and scheduled obligations are ready; distinguish disconnected, idle, blocked, waiting for review and executing. Escalate missing authority with one concrete request. Keep archived or explicitly paused work out of new execution.
 

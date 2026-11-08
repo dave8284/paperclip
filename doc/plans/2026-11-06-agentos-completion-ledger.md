@@ -12,7 +12,7 @@ Those requirements remain in scope; the rows below do not replace or erase them.
 The owner requested simple **Fixed / Not fixed** tracking in the existing
 [93-item worksheet](2026-11-03-agentos-requirements-reconciliation.md).
 Update those rows as work completes; do not create another backlog.
-**Current total: 37 Fixed / 56 Not fixed.** Partial implementation and unverified
+**Current total: 38 Fixed / 55 Not fixed.** Partial implementation and unverified
 live acceptance remain Not fixed. This checkpoint was refreshed at the owner's
 request on 7 November; the tables below the current checkpoint are historical.
 
@@ -152,6 +152,15 @@ request on 7 November; the tables below the current checkpoint are historical.
   probe passed at 04:54:16 with model `gpt-6.1-sol`, using the shared subscription.
   This establishes actual account reuse, not qualified multi-job throughput.
   Logs: `/private/tmp/agentos-retained-capacity-{final,build,tsc,final-compile}-20261108.log`.
+- **R02 Fixed — actual selected-account execution:** the successful Orbit
+  final CEO run `b5cf399e-9537-41e8-b608-6211ca9d6ff3` is native and retains
+  the shared subscription alias, canonical owner-account binding, actual
+  `gpt-6.1-sol` usage and `subscription_included` accounting receipt
+  `60a7298d-560a-4db4-8d67-5847836603d3`. Together with the native account
+  probe, completed specialist work, enforced subscription-only policy and local
+  speech roundtrip, this closes current-account subscription use. No paid API
+  fallback occurred. This does not close model comparison, physical voice,
+  bounded multi-job capacity, business acceptance or the entire delegation flow.
 - **R05 live delegation started — 8 November:** Orbit CEO
   `46a30242-1c03-421f-a46f-0311c9fd9761` was created with the Orbit alias,
   managed company instructions and native CEO grants; lifecycle reached ready.
@@ -161,9 +170,130 @@ request on 7 November; the tables below the current checkpoint are historical.
   1. The owner-authorized fictional brief was posted once in the actual owner's
   Friday chat (comment `ecc3b8f6-6fcc-4ec4-b4da-471f7e138b93`, request key
   `d7181460-40ae-454e-a31d-c91564d3c4e2`). Friday's native run
-  `633e3fd5-ef3b-4175-b0be-05155bda0286` is running. The CEO must staff and
-  delegate, a separate reviewer must check exact outputs, and Friday must report
-  evidence. No delivered/reviewed/owner-accepted outcome is claimed yet.
+  `633e3fd5-ef3b-4175-b0be-05155bda0286` succeeded at 04:57:52. Its native
+  direction `ea296b1a-18e0-4dae-8f6a-54cd997c234c` created ORB-1 for the CEO;
+  the CEO run then hired two specialists and a separate reviewer, authored the
+  company delivery plan and delegated ORB-2/ORB-3/ORB-4. The CEO retained
+  integration accountability and yielded behind native dependencies. Observed
+  shared capacity: one active, one waiting, with the wait warning represented.
+  Exact output review and Friday's return report remain open; no owner-accepted
+  outcome is claimed.
+- **R05 delivered content and isolated-review follow-up — 8 November:** ORB-1
+  through ORB-5 are Done. The CEO's final integration run
+  `b5cf399e-9537-41e8-b608-6211ca9d6ff3` succeeded at 05:13:01 UTC. The five
+  company-owned outputs exist with exact attachment/document revisions; native
+  specialist and board work-product verdicts came from the separate QA agent.
+  Direct reads confirm the expected 10/20/15 NZD labour/cost/contribution,
+  2,240/1,280/960 month-one totals and 40% utilization. The reviewer correctly
+  disclosed **shared_context_review**, not isolated EGM or business acceptance.
+  Current Friday/CEO instruction files were updated through the native API,
+  preserving file-token conflict checks. Friday's previous live instructions
+  still described direct hiring/execution; they now enforce the board-only role
+  and optional CEO staffing depth. Token hashes are retained in the private API
+  receipts, not represented as newly inserted historical revision rows.
+  A stale bundled EGM reference incorrectly claimed only preparation existed;
+  guidance now describes the implemented isolated native Codex path, source/read
+  receipts and separate finding resolution. Fourteen portfolio content checks
+  pass after correcting an actual live PostgreSQL substring overload error:
+  bound page offsets/lengths now explicitly use integer types. The failed live
+  reads remain in native logs. The fix is not yet loaded. The follow-up brief
+  `bc5e79d7-4786-40b3-bc0d-4529feae78f2` asks Friday to commission one bounded
+  packet review through the CEO, with an exact idempotent direction replay.
+  Automatic return delivery, isolated review and owner acceptance remain open.
+  Catalog checks passed 20/21 initially; packaging failed only because npm's
+  default cache was outside permitted writes. Its single rerun passes with a
+  private temporary cache. Logs: `/private/tmp/agentos-review-guidance-{tests,package-r2}-20261108.log`
+  and `/private/tmp/agentos-portfolio-content-page-casts-20261108.log`.
+- **C05 current source coverage — 8 November:** metadata-only source inventory
+  and all 391 archived migration hashes were reconciled without rewriting the
+  native journal. Source PostgreSQL 18 versus destination 17.11 requires restore
+  compatibility proof. A fresh native archive at 05:18:21 now includes 0393–0395
+  tables and current account/delegation data. Full gzip inspection passes;
+  encrypted/drained backups, referenced-file/key coverage and restore remain
+  open. See the existing full migration plan for the exact evidence and limits.
+- **A05/R05 isolated first-admission failure retained — 8 November:** Friday's
+  supplemental direction `920d4bd8-0f31-4fb4-a1eb-1096a5d9c6b9` created ORB-6;
+  its exact replay returned the same direction/task without duplicate creation.
+  CEO source run `0687e1cb-d38c-4d31-bb7e-e1dd4f1885e4` prepared the frozen
+  source views and pending review `ffe22f29-61a9-44d9-a596-5bcda112aaea`.
+  The authorized test clarification limits coverage to those frozen document
+  views: earlier review conclusions are excluded from the derived board view,
+  original attachments remain unchanged, and document normalization is disclosed.
+  This is neither whole-file coverage nor owner business acceptance.
+  Reviewer run `4cff245e-0ea3-4c45-81b0-0ae0efb99483` failed at 05:28:44 UTC
+  before provider dispatch: receipt admission ran before runtime selection had
+  written the new run's native task identity. The source fix inspects the frozen
+  packet without admitting a provisional run, then retains its receipt only after
+  native selection commits, before workspace synchronization or provider calls.
+  Strict current assignment/authority checks remain. **36 focused checks pass**;
+  direct server semantic checking passes and independent review found no blocker.
+  The real PostgreSQL fixture now starts with the actual legacy/null first-run
+  state; it remains unrun under listener restrictions. Exact failed-review retry
+  also needs its native retry gate corrected before activation and live retry.
+  Logs: `/private/tmp/agentos-egm-selection-order-tests{,-r2}-20261108.log` and
+  `/private/tmp/agentos-staffing-egm-semantic-20261108.log`. Source is not loaded.
+- **O04 staffing clarification — 8 November:** the CEO may hire specialists
+  directly for smaller work, or appoint department heads for a larger team.
+  Heads hire/manage their own department staff. Do not require an extra manager
+  for every task or turn this choice into owner choreography. The current Orbit
+  direct-specialist route remains valid. Native department ownership and hiring
+  scope, reusable role guidance and catalog defaults are being corrected and
+  verified. Source changes are not yet loaded into the running application.
+- **O04 scoped staffing source ready — 8 November:** CEO/board appointment and
+  removal are separate from a head managing its own department. Native hire,
+  configuration, instruction, lifecycle and catalog/import writers retain current
+  native grants, owner ceilings and locked reporting ancestry. A head cannot
+  remove its own appointment; descendants inherit the same department ceiling,
+  so a newly hired specialist cannot escape it through its native default grants.
+  Direct CEO specialists retain existing native policy. Imports validate topology
+  before writes and create manager links at hire. Instruction consent crosses
+  route/writer checks through one internal, actor/run/target-bound receipt.
+  **71 staffing, 116 portability, 47 catalog/helper, two catalog-route, 61
+  instruction/authority/filesystem, seven configuration-route and three actual
+  instruction-route checks pass** (overlapping selections, not an aggregate).
+  The initial portability fixture leaked a persistent mock; the corrected full
+  rerun passes. An initial route import timed out; the focused rerun passes.
+  PostgreSQL race/authority cases are authored and typechecked, not run. A direct
+  read-only connection probe to the existing local PostgreSQL service also failed
+  `connect EPERM`; no alternative test database or sandbox bypass was attempted.
+  Head-led live acceptance remains open. Logs: `/private/tmp/agentos-inherited-staffing-{tests,typecheck}.log`,
+  `agentos-import-regression-tests.log`, `agentos-catalog-{authority,route}-tests.log`,
+  `agentos-department-configuration-r4-20261108.log`,
+  `agentos-department-configuration-routes-r2-20261108.log` and
+  `agentos-instruction-route-consent-r2-20261108.log`.
+- **D01 bounded preview and C05 private backups — source checked:** the portfolio
+  preview now merges company candidates using native deadline/expiry/severity
+  order before selecting its top three; loading/refresh failure cannot present
+  stale inaccessible attention. **75 focused checks pass**; this does not claim
+  full proactive proposal generation. New backup directories are private and SQL
+  staging/gzip files are created exclusively with mode 0600. Collisions do not
+  overwrite or delete another archive; fallback/cleanup retain file ownership.
+  **14 real filesystem/gzip/controlled-subprocess checks pass**, with DB semantic
+  checking and maps. Live creation under the loaded fix remains open.
+  Logs: `/private/tmp/agentos-portfolio-attention-ranking-r2-20261108.log` and
+  `/private/tmp/agentos-backup-private-files{,-tsc,-maps}-20261108.log`.
+- **A05/R05 return/retry source checked:** automatic board-direction returns use
+  the native conversation outbox and recheck current owner, Friday, mandate,
+  resource privacy and conversation generation through publication. Startup
+  reconstructs older completed directions once; settled history does not poll.
+  Exact failed-review retry preserves the historical failed run and worker
+  assignee, derives saved review identity, and requires the current pending
+  reviewer assignment before normal native admission. **63 direction/outcome/
+  return checks and 49 retry evidence/route checks pass**, with semantic checks.
+  Nineteen board-direction PostgreSQL cases and first-admission/retry scenarios
+  are authored/typechecked but unrun under retained restrictions. The final
+  integrated server build, earlier current UI build and module/map/token/diff
+  gates pass. Runtime activation and live retry/return remain next.
+  Logs: `/private/tmp/agentos-board-return-*`,
+  `/private/tmp/agentos-native-review-retry-*`,
+  `/private/tmp/agentos-staffing-return-integrated-build-20261108.log`,
+  `/private/tmp/agentos-staffing-attention-ui-build-20261108.log` and
+  `/private/tmp/agentos-staffing-return-token-gates-20261108.log`.
+- **Remote-access detour cancelled — 8 November:** owner clarified Codex runs
+  inside Cursor, then explicitly cancelled the remote/Vercel connection work and
+  asked to continue the full AgentOS build. No deployment, tunnel or new remote
+  control connection was activated. Do not pursue that detour or its unanswered
+  company/tool question; retain the existing hosting deferral.
 - **Git delivery:** owner asked whether completed changes are pushed with logs.
   Commit/push verified work with a reviewable validation summary and explicit
   unrun/live limits; exclude credentials/private payloads. **`57a5de0ae` is committed
@@ -172,8 +302,13 @@ request on 7 November; the tables below the current checkpoint are historical.
   **`fa5bdf7c1` is also pushed**: destination extension/capacity/default-grant
   checks, verified against the real Supabase destination; evidence paths and
   remaining limits are in its commit body.
-  The remaining application continuation is still uncommitted; preserve that
-  working tree and review/test each coherent slice before delivery.
+  **`436b9b0fd` is committed and pushed to `origin/agentos/platform`**: the
+  reviewed continuation checkpoint includes isolated board delegation, shared
+  owner accounts, model evidence/routing and PostgreSQL migration preparation,
+  with tests/maps/records. Native account reuse and probe evidence are recorded;
+  live delivery, throughput and remaining database/browser/voice acceptance are
+  explicitly unfinished. Local and remote refs match. Private captures and
+  runtime/credential files remain excluded.
 
 - **8 November — continued after owner correction:** keep progressing through
   unblocked source work when runtime acceptance is blocked; a source checkpoint

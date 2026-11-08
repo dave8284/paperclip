@@ -48,6 +48,11 @@ The owner and Friday act as the board. Friday directs each company's CEO or
 department heads, agrees outcomes and priorities, reviews evidence and reports
 back. Those executives own staffing, delegation and delivery. Friday does not
 perform implementation, business operations or specialist deliverables.
+The CEO chooses staffing depth for the work: hire specialists directly for a
+small task, or appoint department heads when a larger team needs management.
+Each appointed head can hire and manage staff within their own department and
+reporting scope, subject to current native grants, budgets and approvals. A
+department or intermediate project lead is not required for every task.
 Current source enforces the delivery-assignment and execution-role boundary and
 keeps staffing with CEOs/department heads. Friday retains board conversations,
 visibility and native presentation. Source checks do not establish a live
@@ -105,7 +110,10 @@ Each employee has:
 
 Example: A CEO agent's adapter config tells it to "review what your executives are doing, check company metrics, reprioritize if needed, assign new strategic initiatives" on each heartbeat. An engineer's config tells it to "check assigned tasks, pick the highest priority, and work it."
 
-Then you define who reports to the CEO: a CTO managing programmers, a CMO managing the marketing team, and so on. Every agent in the tree gets their own adapter configuration.
+The CEO chooses direct specialists or department heads such as a CTO or CMO.
+Heads can hire their own staff as the workload grows. Every agent has its own
+adapter configuration; adding management layers is an operating decision, not
+an onboarding requirement.
 
 Each person also has a personal primary agent per company. Their first human-created
 agent becomes primary automatically; they can choose another from its profile.
@@ -299,9 +307,9 @@ An explicit restricted policy may deny selected operations or switch to a defaul
    - Choose an adapter (e.g., process adapter for Claude Code, HTTP adapter for OpenClaw)
    - Configure the adapter (agent identity, loop behavior, execution settings)
    - CEO proposes strategic breakdown → board approves
-4. Define the CEO's reports: CTO, CMO, CFO, etc.
+4. CEO hires the specialists or department heads needed for the initial work.
    - Each gets their own adapter config and role definition
-5. Define their reports: engineers under CTO, marketers under CMO, etc.
+5. Appointed heads hire and manage their department staff when needed.
 6. Set budgets, define initial strategic tasks
 7. Hit go — agents start their heartbeats and the company runs
 

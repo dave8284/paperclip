@@ -3,7 +3,7 @@ name: Sales Operator
 slug: sales
 title: Sales Operator
 role: general
-reportsTo: coordinator
+reportsTo: ceo
 skills:
   - agentos-context-review
   - task-planning

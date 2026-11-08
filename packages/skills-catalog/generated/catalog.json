@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "packageName": "@paperclipai/skills-catalog",
   "packageVersion": "0.3.1",
-  "generatedAt": "2026-11-06T11:01:01.461Z",
+  "generatedAt": "2026-11-08T05:17:03.239Z",
   "skills": [
     {
       "id": "paperclipai:bundled:docs:doc-maintenance",
@@ -70,8 +70,8 @@
         {
           "path": "SKILL.md",
           "kind": "skill",
-          "sizeBytes": 4679,
-          "sha256": "5c6f687bb7af94e3292f664945b280d113d0754d6dd9a1f23e0db9762b090fb1"
+          "sizeBytes": 5042,
+          "sha256": "aa959ac2b407506b946a9f2db22fa264a4b2bd1a51801860180a54867c1fdb6b"
         },
         {
           "path": "references/evidence-and-learning.md",
@@ -88,14 +88,14 @@
         {
           "path": "references/review-dispatch.md",
           "kind": "reference",
-          "sizeBytes": 6080,
-          "sha256": "3b124eff036fcf65ab5e38e65ae7b9cd82d92fdc03f6c68dba44ccd0fcec88f7"
+          "sizeBytes": 7363,
+          "sha256": "09a77acc88432a12bd4b9a3bf1de2e41f8e7595973dfead10e59532e10e2dc2e"
         },
         {
           "path": "references/scope-and-handoffs.md",
           "kind": "reference",
-          "sizeBytes": 4944,
-          "sha256": "c987cbe760b3403b10f81ca640da94dce7a54722855bbe9c5b3e14ecbe2844fc"
+          "sizeBytes": 5775,
+          "sha256": "bb0a31376f48d565c7219971246717a2dfe623db09d0c0ccc9250a8d2e6a72fb"
         },
         {
           "path": "references/source.md",
@@ -158,7 +158,7 @@
           "sha256": "0a01013bd363a8d744f8372b65495892360d7339e4e35c767003ae38f48e6799"
         }
       ],
-      "contentHash": "sha256:b462edcf99e95a2adb9b6df5e5e82487f98937df123a4e1277b6dc9903bf2a1d"
+      "contentHash": "sha256:9442d1fc6f3dea2992ca8f335ba765f5fb81c83b9115306673c963853fa1f259"
     },
     {
       "id": "paperclipai:bundled:paperclip-operations:issue-triage",

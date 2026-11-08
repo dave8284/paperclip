@@ -50,7 +50,7 @@ describe("native completed failure diagnostics", () => {
   });
   afterAll(async () => { await temporary?.cleanup(); });
 
-  it.each(["committed", "duplicate", "pending-review", "superseded-review", "resolved-review", "reassigned", "successor-race", "different-turn", "unknown-error", "opencode-lost-server", "untrusted-source", "untrusted-run", "untrusted-session", "succeeded", "cancelled"] as const)(
+  it.each(["committed", "duplicate", "pending-review", "preparation-review", "superseded-review", "resolved-review", "reassigned", "successor-race", "different-turn", "unknown-error", "opencode-lost-server", "untrusted-source", "untrusted-run", "untrusted-session", "succeeded", "cancelled"] as const)(
     "preserves accepted results and only labels the matching provider rejection (%s)", async (scenario) => {
       const issueId = randomUUID();
       const runId = randomUUID();
@@ -222,7 +222,7 @@ describe("native completed failure diagnostics", () => {
         expect(wakes.filter(wake => wake.payload?.issueId === issueId)).toHaveLength(ownerChanged ? 1 : 0);
         if (!ownerChanged) expect(await heartbeatService(db).dispatchPendingNativeStatusWakeups({ companyId })).toEqual({ scanned: 0, dispatched: 0, recovered: 0, deferred: 0 });
         expect(provider.execute).toHaveBeenCalledTimes(1);
-        if (scenario === "pending-review") {
+        if (scenario === "pending-review" || scenario === "preparation-review") {
           const reviewContext = readNativeReviewAssignmentContext(finalRun.contextSnapshot)!;
           expect(finalIssue).toMatchObject({ lastStatusDecisionId: reviewContext.nativeReviewDecisionId, executionRunId: null, checkoutRunId: null });
           const originalReview = await getNativeReviewAssignment(db, { companyId, issueId, agentId, contextSnapshot: reviewContext });
@@ -252,13 +252,36 @@ describe("native completed failure diagnostics", () => {
           // starting a provider. The normal atomic review claim follows below.
           const occupiedRunId = randomUUID();
           await db.insert(heartbeatRuns).values({ id: occupiedRunId, companyId, agentId, status: "running", startedAt: new Date() });
-          const retryRun = await heartbeatService(db, { runtimeEnv: {} }).wakeup(agentId, {
-            failedRunId: runId, source: "on_demand", triggerDetail: "manual", reason: "retry_failed_run",
-            requestedByActorType: "user", requestedByActorId: "review-repair-operator",
-            payload: { issueId }, contextSnapshot: { ...reviewContext },
-          });
-          expect(retryRun).toMatchObject({ status: "queued", retryOfRunId: runId, contextSnapshot: { issueId, ...reviewContext } });
+          let selectedFailureId = runId;
+          if (scenario === "preparation-review") {
+            // A later reviewer preparation can fail before native selection.
+            // Its stored claim and review tuple survive; no provider or native
+            // session evidence is invented for that historical failed attempt.
+            selectedFailureId = randomUUID();
+            await db.insert(heartbeatRuns).values({ id: selectedFailureId, companyId, agentId, issueId,
+              status: "failed", runtimeMode: "legacy", executionStage: "preparing", errorCode: "adapter_failed",
+              invocationSource: "assignment", finishedAt: new Date(), contextSnapshot: { issueId, ...reviewContext },
+              runnerProfileJson: { adapterDispatch: { adapterType: "paperclip_runner" } },
+            });
+          }
+          const retryOptions = {
+            failedRunId: selectedFailureId, source: "on_demand" as const, triggerDetail: "manual" as const, reason: "retry_failed_run",
+            requestedByActorType: "user" as const, requestedByActorId: "review-repair-operator",
+            payload: { issueId }, contextSnapshot: scenario === "preparation-review" ? {} : { ...reviewContext },
+          };
+          if (scenario === "preparation-review") {
+            await expect(heartbeatService(db, { runtimeEnv: {} }).wakeup(agentId, { ...retryOptions,
+              contextSnapshot: { ...reviewContext, nativeReviewDecisionId: randomUUID() },
+            })).rejects.toThrow("does not authorize this review retry");
+          }
+          const retryRun = await heartbeatService(db, { runtimeEnv: {} }).wakeup(agentId, retryOptions);
+          expect(retryRun).toMatchObject({ status: "queued", retryOfRunId: selectedFailureId, contextSnapshot: { issueId, ...reviewContext } });
           const retryRunId = retryRun!.id;
+          if (scenario === "preparation-review") {
+            expect(await heartbeatService(db, { runtimeEnv: {} }).wakeup(agentId, retryOptions)).toMatchObject({ id: retryRunId });
+            expect(await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, selectedFailureId)))
+              .toMatchObject([{ runtimeMode: "legacy", runtimeModeResolvedAt: null, nativeIssueId: null, nativeSessionId: null, status: "failed" }]);
+          }
           await db.update(heartbeatRuns).set({ status: "cancelled", finishedAt: new Date() }).where(eq(heartbeatRuns.id, occupiedRunId));
           expect(await claimQueuedNativeReviewRun(db, { run: retryRun!, agentNameKey: "reviewer", claimedAt: new Date(), claimValues: { nativeIssueId: issueId, runtimeMode: "native" } }))
             .toMatchObject({ id: retryRunId, status: "running" });

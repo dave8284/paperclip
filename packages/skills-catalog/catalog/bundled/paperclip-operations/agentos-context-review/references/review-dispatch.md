@@ -43,12 +43,32 @@ uses native review cancellation. Prepare while the author run is active, then
 name the same reviewer in its native completion request; another reviewer
 conflicts instead of silently running an ordinary review.
 
-This API currently returns `independent_review_unavailable`. It prepares and
-binds evidence but does not launch a packet-only review. The native reviewer run
-retains preparation references and refuses ordinary dispatch for this opt-in.
-Do not describe the packet as delivered, read, isolated or successfully reviewed.
-Use ordinary review explicitly only after clearing/cancelling this opt-in, and
-label it ordinary. The qualification requirements below still apply.
+Preparation returns `stage: server_prepared`, `execution:
+pending_native_admission` and `providerDelivery: not_observed`. The retained
+packet's conservative `independent_review_unavailable` field describes
+preparation alone. It is not the final execution verdict. Native Codex supports
+the separate packet-review path: isolated home, a private empty workspace,
+per-turn session, no inherited conversation/planning/employee memory, and only
+`read_egm_source` and `submit_egm_findings` tools. Other or ordinary execution
+paths reject an opted-in packet rather than silently dropping isolation.
+
+After preparation, use the native completion tool with
+`reportedWorkDisposition: needs_review` and an attention request
+`{ "kind": "review", "ownerClass": "agent", "targetAgentId": "<same reviewer>",
+"summary": "Review the prepared frozen packet" }`. Supply the other fields
+required by the actual completion contract. Wait for its receipt and yield;
+creating a separate ordinary review task does not activate this packet path.
+
+Inspect the admitted reviewer run, frozen source-read receipts, findings
+document and execution evidence before describing isolation or success. A
+preparation response, configured profile or successful process alone proves
+neither. The packet reviewer records findings against the exact target; it does
+not approve the task or resolve the native review interaction. The accountable
+owner records finding dispositions and any corrected revisions separately.
+Missing sources, unsupported execution or an interrupted review remain blocked
+or `not_run`. An explicitly chosen ordinary review requires clearing/cancelling
+the packet opt-in and must retain its weaker classification. The qualification
+requirements below still apply.
 
 ### Review contents
 

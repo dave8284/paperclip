@@ -8,14 +8,36 @@ description: >
 
 # Paperclip Create Agent Skill
 
-Use this skill when you are asked to hire/create an agent.
+Use this skill when you are asked to hire/create an agent or when staffing is
+needed to deliver work already assigned to you within your authority.
+
+## Choose the staffing depth
+
+An AgentOS CEO decides how to staff company work. For a smaller, bounded task,
+reuse or hire suitable specialists reporting directly to the CEO. For larger,
+ongoing or multi-team work, the CEO may appoint department heads; each appointed
+head hires and manages staff for their own department. Heads report to the CEO,
+and their staff report to the head. Add a project lead only when useful. A small
+task does not require creating a department or an intermediate manager.
+
+Use current company employees and recorded department assignments before adding
+roles. Record a head's appointment through the native department controls with
+its actual `leadAgentId`; a job title or `reportsTo` alone is not an appointment.
+Friday and the owner act as the board. Friday directs CEOs or department heads
+and reports their evidence; she does not hire specialists or manage delivery.
+
+The responsible executive chooses roles and reporting lines within existing
+authority without asking the owner to choreograph routine staffing. Preserve
+native hiring permissions, budgets and any required approvals. A denied or
+pending hire is a real boundary; this guidance grants no permission and does not
+authorize staff or project access across company or department boundaries.
 
 ## Preconditions
 
-You need either:
-
-- board access, or
-- agent permission `can_create_agents=true` in your company
+You need current `agents:create` authority in the selected company, whether
+acting as its authorized board user or a company agent. The server evaluates
+current native permissions; a CEO/manager title or a saved legacy
+`can_create_agents` flag is not a substitute for that decision.
 
 If you do not have this permission, keep the current task assigned to yourself
 and identify the missing hiring authority. A CEO or manager title does not grant

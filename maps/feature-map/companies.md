@@ -48,6 +48,13 @@ trail, Saved displays and Settings remain reachable beside long Audit results.
 Mobile group expansion keeps the menu open until a destination is selected.
 Assign department heads in
 Departments and project leads in Projects; these labels do not expand access.
+The CEO can hire specialists directly for a small task or appoint department heads
+to build larger teams. A head manages its own department and hires within its
+reporting team. Creating/removing departments or changing their heads belongs to the CEO
+or board; heads cannot take another department's projects. An employee beneath a
+head can manage only its own reporting subtree. Native hiring grants, approval
+gates and project visibility still apply. Friday gives direction and
+receives reports as the board coordinator.
 Friday can read the associated ownership/reporting chain through the work
 awareness API before asking an authorized lead for more context. The bundled
 Agent OS context/review skill records scoped handoffs and review evidence in
@@ -152,6 +159,10 @@ Capability ID: `companies/portability`.
 Scope: ui
 Storybook: Import/export preview, conflict choice, warnings, async progress/failure/success and restricted managed deployment.
 Production: Apply real small package to disposable target; inspect counts/references/conflicts, source immutability and credential exclusions; imported task requires separate runnable-account proof.
+Agent team installation preserves native hiring grants and approval gates. A
+department head must attach selected staff to its own reporting team; a company
+root or CEO package requires executive/board authority. Agent imports stay in the
+current company and explicit imported permission grants require board installation.
 Sources: Source: [CompanyImport.tsx](../../ui/src/pages/CompanyImport.tsx), [CompanyExport.tsx](../../ui/src/pages/CompanyExport.tsx), [companies.ts](../../ui/src/api/companies.ts). Tests: [CompanyImport.test.tsx](../../ui/src/pages/CompanyImport.test.tsx), [CompanyExport.test.tsx](../../ui/src/pages/CompanyExport.test.tsx), [company-portability-routes.test.ts](../../server/src/__tests__/company-portability-routes.test.ts), [company-import-export-e2e.test.ts](../../cli/src/__tests__/company-import-export-e2e.test.ts)
 
 ### Documentation scope: Company and instance administration

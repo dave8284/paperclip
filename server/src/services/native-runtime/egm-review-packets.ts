@@ -177,14 +177,30 @@ export async function bindEgmPacketInteraction(db: Db, binding: EgmPacketBinding
   await db.update(heartbeatRuns).set({ runnerProfileJson: sql`jsonb_set(coalesce(${heartbeatRuns.runnerProfileJson}, '{}'::jsonb), '{nativeEgmPacketBinding}', ${JSON.stringify(linked)}::jsonb)` }).where(eq(heartbeatRuns.id, binding.sourceRunId));
 }
 
-/** Retain a receipt before the unavailable execution boundary. No provider call. */
-export async function retainEgmReviewPreparation(db: Db, runId: string, review: NativeReviewAssignment, packetExecution = false) {
+/** Inspect the frozen source before choosing a runtime. This does not admit a
+ * reviewer or claim that the not-yet-selected run has a native task binding. */
+export function preparedEgmReviewPacket(review: NativeReviewAssignment) {
   const raw = record(review.interaction.payload).egmPacketPreparation;
   if (raw === undefined) {
     if (record(review.sourceRun.runnerProfileJson).nativeEgmPacketPreparation) throw conflict("The explicit EGM preparation has no matching review binding");
-    return false;
+    return null;
   }
   const binding = egmPacketBindingSchema.parse(raw);
+  const packet = parseRetainedEgmPacket(record(review.sourceRun.runnerProfileJson).nativeEgmPacketPreparation);
+  const linked = record(record(review.sourceRun.runnerProfileJson).nativeEgmPacketBinding);
+  assertSourceBinding(packet, review.sourceRun, review.interaction.issueId);
+  if (binding.sourceRunId !== review.sourceRun.id || binding.requestSha256 !== packet.requestSha256
+    || packet.request.reviewerAgentId !== review.interaction.addresseeAgentId
+    || linked.interactionId !== review.interaction.id || linked.decisionId !== review.sourceDecision.id
+    || linked.requestSha256 !== packet.requestSha256) throw conflict("The frozen EGM packet does not match this review");
+  return packet;
+}
+
+/** Retain the receipt after native runtime selection, before provider dispatch.
+ * Current assignment checks remain strict; no provisional native identity. */
+export async function retainEgmReviewPreparation(db: Db, runId: string, review: NativeReviewAssignment, packetExecution = false) {
+  if (!preparedEgmReviewPacket(review)) return false;
+  const binding = egmPacketBindingSchema.parse(record(review.interaction.payload).egmPacketPreparation);
   await db.transaction(async transaction => {
     const tx = transaction as unknown as Db;
     await tx.select({ id: issues.id }).from(issues).where(and(eq(issues.id, review.interaction.issueId), eq(issues.companyId, review.interaction.companyId))).for("update");

@@ -7,6 +7,7 @@ const mockAgentService = vi.hoisted(() => ({
 }));
 
 const mockAccessService = vi.hoisted(() => ({
+  decide: vi.fn(),
   canUser: vi.fn(),
   hasPermission: vi.fn(),
 }));
@@ -87,6 +88,7 @@ describe("teams catalog routes", () => {
     registerModuleMocks();
     vi.clearAllMocks();
     mockAccessService.canUser.mockResolvedValue(true);
+    mockAccessService.decide.mockResolvedValue({ allowed: true });
     mockAccessService.hasPermission.mockResolvedValue(false);
     mockAgentService.getById.mockResolvedValue({
       id: "agent-1",
@@ -296,6 +298,7 @@ describe("teams catalog routes", () => {
   });
 
   it("blocks same-company agents without management permission from installing catalog teams", async () => {
+    mockAccessService.decide.mockResolvedValue({ allowed: false, explanation: "Missing permission: agents:create" });
     mockAgentService.getById.mockResolvedValue({
       id: "agent-1",
       companyId,
@@ -315,5 +318,26 @@ describe("teams catalog routes", () => {
 
     expect(res.status, JSON.stringify(res.body)).toBe(403);
     expect(mockTeamsCatalogService.installCatalogTeam).not.toHaveBeenCalled();
+  });
+
+  it.each([false, true])("preserves native installer admission and original actor without a test listener (denied=%s)", async denied => {
+    const actor = { type: "agent" as const, agentId: "agent-1", companyId, onBehalfOfUserId: "responsible-owner", source: "agent_jwt", runId: "run-1",
+      onBehalfOfMemberships: [{ companyId, membershipRole: "owner", status: "active" }] };
+    const { teamsCatalogRoutes } = await vi.importActual<typeof import("../routes/teams-catalog.js")>("../routes/teams-catalog.js");
+    const router = teamsCatalogRoutes({} as never);
+    const route = router.stack.find(layer => layer.route?.path === "/companies/:companyId/teams/catalog/:catalogId/install")!.route!;
+    const req = { actor, params: { companyId, catalogId: "product-engineering" }, query: {}, body: { authorizationActor: { type: "board" } } };
+    const res = { status: vi.fn().mockReturnThis(), json: vi.fn() };
+    mockAccessService.decide.mockResolvedValue({ allowed: !denied, explanation: "Responsible user lost access" });
+    const call = route.stack.at(-1)!.handle(req as never, res as never, vi.fn());
+    if (denied) {
+      await expect(call).rejects.toMatchObject({ status: 403 });
+      expect(mockTeamsCatalogService.installCatalogTeam).not.toHaveBeenCalled();
+    } else {
+      await call;
+      expect(mockTeamsCatalogService.installCatalogTeam).toHaveBeenCalledWith(companyId, "product-engineering", expect.objectContaining({ authorizationActor: actor }));
+      expect(res.status).toHaveBeenCalledWith(201);
+    }
+    expect(mockAccessService.decide).toHaveBeenCalledWith({ actor, action: "agents:create", resource: { type: "company", companyId } });
   });
 });

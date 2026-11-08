@@ -9,6 +9,8 @@ import type { CompanyPortabilityFileEntry } from "@paperclipai/shared";
 import { runnerApiResponseReservations } from "@paperclipai/db";
 
 const runnerTarget = vi.hoisted(() => ({ driver: "local", platform: "linux", architecture: "x64" }));
+const importStaffing = vi.hoisted(() => ({ prepare: vi.fn() }));
+vi.mock("../services/company-import-staffing-authority.js", () => ({ prepareAgentImportStaffing: importStaffing.prepare }));
 
 vi.mock("../services/agent-runner-selection.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../services/agent-runner-selection.js")>();
@@ -547,6 +549,66 @@ describe("company portability", () => {
     expect(lines[0]).toBe("tasks:");
     expect(lines[1]).toBe('  - "issue-0"');
     expect(lines.at(-1)).toBe('  - "issue-129999"');
+  });
+
+  it("agent import creates parent-first native reporting links and keeps original authority through every hire", async () => {
+    const actor = { type: "agent" as const, source: "agent_jwt" as const, companyId: "company-1", agentId: "head", onBehalfOfUserId: "owner" };
+    const files = {
+      "COMPANY.md": "---\nschema: agentcompanies/v1\nname: Staff\n---\n",
+      "agents/child/AGENTS.md": "---\nname: Child\nrole: engineer\nreportsTo: lead\n---\nDo the task.\n",
+      "agents/lead/AGENTS.md": "---\nname: Lead\nrole: manager\n---\nManage staff.\n",
+    };
+    importStaffing.prepare.mockImplementation(async (_db, input) => ({
+      departmentHead: true,
+      plans: [...input.plans].sort((a, b) => a.slug === "lead" ? -1 : b.slug === "lead" ? 1 : 0),
+      managerId: (slug: string, ids: Map<string, string>) => slug === "lead" ? "head" : ids.get("lead"),
+    }));
+    const createImported = async (_company: string, data: Record<string, unknown>) => ({ ...data, id: `created-${String(data.name).toLowerCase()}`, companyId: "company-1" });
+    agentSvc.create.mockImplementationOnce(createImported).mockImplementationOnce(createImported);
+    agentSvc.update.mockResolvedValueOnce(null).mockResolvedValueOnce(null);
+    const portability = companyPortabilityService({} as never);
+    await portability.importBundle({ source: { type: "inline", files },
+      target: { mode: "existing_company", companyId: "company-1" },
+      include: { company: false, agents: true, projects: false, issues: false, skills: false },
+      collisionStrategy: "rename", agents: "all",
+      adapterOverrides: { lead: { adapterType: "claude_local" }, child: { adapterType: "claude_local" } },
+    }, null, { mode: "agent_safe", sourceCompanyId: "company-1", authorizationActor: actor });
+    expect(importStaffing.prepare).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ actor }));
+    expect(agentSvc.create).toHaveBeenNthCalledWith(1, "company-1", expect.objectContaining({ name: "Lead", reportsTo: "head" }), expect.objectContaining({
+      responsibleUserId: "owner", hiringAuthority: { actor, departmentHead: true, importedManagerIds: [], importRequiresNoApproval: true },
+    }));
+    expect(agentSvc.create).toHaveBeenNthCalledWith(2, "company-1", expect.objectContaining({ name: "Child", reportsTo: "created-lead" }), expect.objectContaining({
+      hiringAuthority: { actor, departmentHead: true, importedManagerIds: ["created-lead"], importRequiresNoApproval: true },
+    }));
+    expect(agentSvc.update.mock.calls.some(([, patch]) => Object.hasOwn(patch, "reportsTo"))).toBe(false);
+  });
+
+  it("rejects an agent creating a new company before any import mutation", async () => {
+    const portability = companyPortabilityService({} as never);
+    await expect(portability.importBundle({ source: { type: "inline", files: { "COMPANY.md": "---\nname: New Company\n---\n" } },
+      target: { mode: "new_company" }, include: { company: true, agents: false, projects: false, issues: false, skills: false },
+      collisionStrategy: "rename",
+    }, null, { mode: "agent_safe", sourceCompanyId: "company-1", authorizationActor: {
+      type: "agent", companyId: "company-1", agentId: "ceo", source: "agent_jwt",
+    } })).rejects.toMatchObject({ status: 403 });
+    expect(companySvc.create).not.toHaveBeenCalled();
+    expect(agentSvc.create).not.toHaveBeenCalled();
+    expect(secretSvc.create).not.toHaveBeenCalled();
+  });
+
+  it("fails a denied native agent import before writing employees, credentials, skills or projects", async () => {
+    importStaffing.prepare.mockRejectedValueOnce(Object.assign(new Error("Department appointment changed"), { status: 403 }));
+    const portability = companyPortabilityService({} as never);
+    await expect(portability.importBundle({ source: { type: "inline", files: {
+      "COMPANY.md": "---\nschema: agentcompanies/v1\nname: Staff\n---\n",
+      "agents/worker/AGENTS.md": "---\nname: Worker\nrole: engineer\n---\nDo the task.\n",
+    } }, target: { mode: "existing_company", companyId: "company-1" },
+      include: { company: false, agents: true, projects: false, issues: false, skills: false }, collisionStrategy: "rename", agents: "all",
+    }, null, { mode: "agent_safe", authorizationActor: { type: "agent", source: "agent_jwt", companyId: "company-1", agentId: "head" } })).rejects.toMatchObject({ status: 403 });
+    expect(agentSvc.create).not.toHaveBeenCalled();
+    expect(secretSvc.create).not.toHaveBeenCalled();
+    expect(companySkillSvc.importPackageFiles).not.toHaveBeenCalled();
+    expect(projectSvc.create).not.toHaveBeenCalled();
   });
 
   it("renders high-volume frontmatter arrays without overflowing the call stack", () => {

@@ -2,7 +2,7 @@ import { randomUUID, createHash } from "node:crypto";
 import { Readable } from "node:stream";
 import express from "express";
 import request from "supertest";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { agents, assets, issueAttachments, cases, caseAttachments, caseAccessSources, agentApiKeys, authUsers, companies, companyMemberships, companyOperatingProfiles, principalPermissionGrants, activityLog, agentosAssignments, agentosEmployees,
   companySkills, companySkillVersions, companySkillTestRuns, companySkillPolicies, issues, issueComments, documents, issueDocuments, projects, projectAccessMembers, instanceUserRoles, agentosCapabilityDecisions, agentosPortfolioMandates, agentosDepartments, agentosDepartmentProjects, createDb } from "@paperclipai/db";
@@ -482,6 +482,7 @@ describe("Agent OS shared workforce", () => {
     if (departmentHead) {
       await db.update(agents).set({ role: "general" }).where(eq(agents.id, f.manager.id));
       await db.insert(agentosDepartments).values({ companyId: f.two.id, name: "Delivery", leadAgentId: f.manager.id });
+      await db.update(agents).set({ reportsTo: f.manager.id }).where(inArray(agents.id, [f.second.id, f.target.id]));
     }
     const path = `${f.companyPath}/assignments/${f.assignments[1].id}/retire`;
     const intent = { expectedRevision: 1, reason: "Company trial completed" };
@@ -514,6 +515,23 @@ describe("Agent OS shared workforce", () => {
     if (departmentHead) await db.update(agentosDepartments).set({ leadAgentId: null }).where(eq(agentosDepartments.companyId, f.two.id));
     else await db.update(agents).set({ role: "general" }).where(eq(agents.id, f.manager.id));
     await request(f.delegated).post(path).send(intent).expect(403);
+  });
+  it("limits a head's workforce changes to its own staff even with broad native grants", async () => {
+    const f = await delegatedSeed();
+    await db.update(agents).set({ role: "general" }).where(eq(agents.id, f.manager.id));
+    await db.insert(agentosDepartments).values({ companyId: f.two.id, name: "Delivery", leadAgentId: f.manager.id });
+    await grantRetirement(f);
+    const path = `${f.companyPath}/assignments/${f.assignments[1].id}/retire`;
+    const intent = { expectedRevision: 1, reason: "Own department retirement" };
+    await request(f.delegated).post(path).send(intent).expect(403);
+    await request(f.delegated).post(`${f.companyPath}/assignments`).send(f.binding).expect(403);
+    await db.update(agents).set({ reportsTo: f.manager.id }).where(inArray(agents.id, [f.second.id, f.target.id]));
+    const [otherDepartment] = await db.insert(agentosDepartments).values({ companyId: f.two.id, name: "Separate department", leadAgentId: f.second.id }).returning();
+    await request(f.delegated).post(path).send(intent).expect(403);
+    await db.delete(agentosDepartments).where(eq(agentosDepartments.id, otherDepartment.id));
+    await request(f.delegated).post(`${f.companyPath}/assignments`).send(f.binding).expect(201);
+    await request(f.delegated).post(path).send(intent).expect(200);
+    expect((await db.select().from(agents).where(eq(agents.id, f.first.id)))[0].lifecycleState).toBe("ready");
   });
   it("enforces the responsible owner's retirement grant even under legacy shadow mode", async () => {
     const previousMode = process.env.PAPERCLIP_RESPONSIBLE_USER_AUTHZ_MODE;

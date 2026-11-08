@@ -1,7 +1,7 @@
 ---
 name: Weekly Role Review
 slug: weekly-role-review
-assignee: coordinator
+assignee: ceo
 project: portfolio-operations
 recurring: true
 ---

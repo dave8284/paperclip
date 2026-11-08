@@ -26,7 +26,12 @@ import {
   projects,
   projectWorkspaces,
 } from "@paperclipai/db";
-import { deriveProjectUrlKey, isAttentionProposal, isAttentionWorkItem } from "@paperclipai/shared";
+import {
+  deriveProjectUrlKey, isAttentionProposal, isAttentionWorkItem,
+  attentionDecideOrder as decideOrder,
+  compareAttentionActivity as compareAttentionItems,
+  compareAttentionDecisionPriority as compareDecideItems,
+} from "@paperclipai/shared";
 import type {
   AttentionDecisionVerb,
   AttentionFeed,
@@ -80,27 +85,6 @@ const ATTENTION_SOURCE_KINDS: AttentionSourceKind[] = [
   "budget_alert",
   "agent_error_alert",
 ];
-
-const SEVERITY_RANK: Record<AttentionSeverity, number> = {
-  critical: 0,
-  high: 1,
-  medium: 2,
-  low: 3,
-};
-
-const SOURCE_RANK: Record<AttentionSourceKind, number> = {
-  failed_run: 0,
-  recovery_action: 1,
-  blocker_attention: 2,
-  budget_alert: 3,
-  agent_error_alert: 4,
-  approval: 5,
-  decision: 6,
-  issue_thread_interaction: 7,
-  review: 8,
-  productivity_review: 9,
-  join_request: 10,
-};
 
 const PENDING_INTERACTION_STATUSES = ["pending"] as const;
 const OPEN_RECOVERY_STATUSES = ["active", "escalated"] as const;
@@ -420,16 +404,6 @@ function createItem(input: CreateAttentionItemInput): AttentionItem {
   };
 }
 
-function compareAttentionItems(left: AttentionItem, right: AttentionItem) {
-  const timeDiff = timestamp(right.activityAt) - timestamp(left.activityAt);
-  if (timeDiff !== 0) return timeDiff;
-  const severityDiff = SEVERITY_RANK[left.severity] - SEVERITY_RANK[right.severity];
-  if (severityDiff !== 0) return severityDiff;
-  const sourceDiff = SOURCE_RANK[left.sourceKind] - SOURCE_RANK[right.sourceKind];
-  if (sourceDiff !== 0) return sourceDiff;
-  return left.dedupKey.localeCompare(right.dedupKey);
-}
-
 function blockedTaskCount(item: AttentionItem) {
   return item.sourceKind === "blocker_attention"
     && item.detail?.kind === "blocker"
@@ -480,26 +454,6 @@ function endOfUtcDay(now: number) {
   return startOfUtcDay(now) + 24 * 60 * 60 * 1_000 - 1;
 }
 
-function endOfUtcWeek(now: number) {
-  const start = startOfUtcDay(now);
-  const weekday = new Date(start).getUTCDay();
-  // Use an ISO-style Monday-Sunday week. Sunday (0) is already the last
-  // day of the current week; every other day advances only to that Sunday.
-  const daysUntilSunday = weekday === 0 ? 0 : 7 - weekday;
-  return start + (daysUntilSunday + 1) * 24 * 60 * 60 * 1_000 - 1;
-}
-
-function decideOrder(item: AttentionItem, now: number): [number, number] {
-  if (item.decideBy === "today") return [0, endOfUtcDay(now)];
-  if (item.decideBy === "this_week") return [0, endOfUtcWeek(now)];
-  if (item.decideBy && /^\d{4}-\d{2}-\d{2}$/.test(item.decideBy)) {
-    const deadline = Date.parse(`${item.decideBy}T23:59:59.999Z`);
-    if (Number.isFinite(deadline)) return [0, deadline];
-  }
-  if (item.decideBy === "whenever") return [1, Number.MAX_SAFE_INTEGER];
-  return [2, Number.MAX_SAFE_INTEGER];
-}
-
 function isDecideNow(item: AttentionItem, now: number) {
   const [bucket, deadline] = decideOrder(item, now);
   return bucket === 0 && deadline <= endOfUtcDay(now);
@@ -509,21 +463,6 @@ function isDecideNow(item: AttentionItem, now: number) {
 function isNewToday(item: AttentionItem, now: number) {
   const ts = timestamp(item.createdAt);
   return ts > 0 && ts >= startOfUtcDay(now);
-}
-
-function compareDecideItems(left: AttentionItem, right: AttentionItem, now: number) {
-  const [leftBucket, leftDeadline] = decideOrder(left, now);
-  const [rightBucket, rightDeadline] = decideOrder(right, now);
-  if (leftBucket !== rightBucket) return leftBucket - rightBucket;
-  if (leftDeadline !== rightDeadline) return leftDeadline - rightDeadline;
-
-  const leftExpiry = left.expiresAt ? timestamp(left.expiresAt) : Number.MAX_SAFE_INTEGER;
-  const rightExpiry = right.expiresAt ? timestamp(right.expiresAt) : Number.MAX_SAFE_INTEGER;
-  if (leftExpiry !== rightExpiry) return leftExpiry - rightExpiry;
-
-  const severityDiff = SEVERITY_RANK[left.severity] - SEVERITY_RANK[right.severity];
-  if (severityDiff !== 0) return severityDiff;
-  return compareAttentionItems(left, right);
 }
 
 function encodeCursor(sort: AttentionSortMode, item: AttentionItem) {

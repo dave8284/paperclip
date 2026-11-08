@@ -6,7 +6,7 @@ import {
   catalogTeamPreviewSchema,
 } from "@paperclipai/shared";
 import { validate } from "../middleware/validate.js";
-import { accessService, agentService } from "../services/index.js";
+import { accessService } from "../services/index.js";
 import {
   getCatalogTeamOrThrow,
   listCatalogTeams,
@@ -18,14 +18,8 @@ import { assertAuthenticated, assertCompanyAccess, getActorInfo } from "./authz.
 
 export function teamsCatalogRoutes(db: Db) {
   const router = Router();
-  const agents = agentService(db);
   const access = accessService(db);
   const svc = teamsCatalogService(db);
-
-  function canCreateAgents(agent: { permissions: Record<string, unknown> | null | undefined }) {
-    if (!agent.permissions || typeof agent.permissions !== "object") return false;
-    return Boolean((agent.permissions as Record<string, unknown>).canCreateAgents);
-  }
 
   function firstQueryString(value: unknown): string | undefined {
     if (typeof value === "string") return value;
@@ -36,30 +30,8 @@ export function teamsCatalogRoutes(db: Db) {
   async function assertCanInstallCatalogTeam(req: Request, companyId: string) {
     assertCompanyAccess(req, companyId);
 
-    if (req.actor.type === "board") {
-      if (req.actor.source === "local_implicit" || req.actor.isInstanceAdmin) return;
-      const allowed = await access.canUser(companyId, req.actor.userId, "agents:create");
-      if (!allowed) {
-        throw forbidden("Missing permission: agents:create");
-      }
-      return;
-    }
-
-    if (!req.actor.agentId) {
-      throw forbidden("Agent authentication required");
-    }
-
-    const actorAgent = await agents.getById(req.actor.agentId);
-    if (!actorAgent || actorAgent.companyId !== companyId) {
-      throw forbidden("Agent key cannot access another company");
-    }
-
-    const allowedByGrant = await access.hasPermission(companyId, "agent", actorAgent.id, "agents:create");
-    if (allowedByGrant || canCreateAgents(actorAgent)) {
-      return;
-    }
-
-    throw forbidden("Missing permission: can create agents");
+    const decision = await access.decide({ actor: req.actor, action: "agents:create", resource: { type: "company", companyId } });
+    if (!decision.allowed) throw forbidden(decision.explanation);
   }
 
   router.get("/teams/catalog", async (req, res) => {
@@ -101,6 +73,7 @@ export function teamsCatalogRoutes(db: Db) {
       const result = await svc.previewCatalogTeamImport(companyId, catalogRef, {
         ...req.body,
         actor: getActorInfo(req),
+        authorizationActor: req.actor,
       });
       res.json(result);
     },
@@ -116,6 +89,7 @@ export function teamsCatalogRoutes(db: Db) {
       const result = await svc.installCatalogTeam(companyId, catalogRef, {
         ...req.body,
         actor: getActorInfo(req),
+        authorizationActor: req.actor,
       });
       res.status(201).json(result);
     },

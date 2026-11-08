@@ -1,6 +1,7 @@
 import { and, eq, isNull } from "drizzle-orm";
 import {
   agentApiKeys,
+  agents,
   authUsers,
   companyMemberships,
   heartbeatRuns,
@@ -17,6 +18,8 @@ import {
   agentInstructionsChangeTargetKey,
   changeConsentGateService,
 } from "./change-consent-gate.js";
+import { resolveDepartmentConfigurationAuthority } from "./agent-hiring-authority.js";
+import { consumeInstructionChangeConsent, type InstructionChangeConsentReceipt } from "./agent-instruction-consent.js";
 
 type Connection = Db | Parameters<Parameters<Db["transaction"]>[0]>[0];
 
@@ -164,8 +167,10 @@ export async function authorizeInstructionCommit(
   db: Connection,
   actor: AuthorizationActor,
   target: { companyId: string; id: string },
+  consent?: InstructionChangeConsentReceipt,
 ) {
   const bound = await resolveInstructionActor(db, actor);
+  let consentedChange = consumeInstructionChangeConsent(consent, bound, target);
   const access = authorizationService(db);
   const input = {
     actor: bound,
@@ -175,7 +180,7 @@ export async function authorizeInstructionCommit(
       companyId: target.companyId,
       agentId: target.id,
     },
-    scope: { targetAgentId: target.id, requiresChangeGrant: true },
+    scope: { targetAgentId: target.id, requiresChangeGrant: true, ...(consentedChange ? { consentedChange: true } : {}) },
   };
   let decision = await access.decide(input);
   if (
@@ -193,8 +198,18 @@ export async function authorizeInstructionCommit(
       ...input,
       scope: { ...input.scope, consentedChange: true },
     });
+    consentedChange = decision.allowed;
   }
   if (!decision.allowed)
     throw forbidden(decision.explanation, authorizationDeniedDetails(decision));
+  if (bound.type === "agent") {
+    const [current] = await db.select({ id: agents.id, companyId: agents.companyId, role: agents.role, reportsTo: agents.reportsTo })
+      .from(agents).where(and(eq(agents.id, target.id), eq(agents.companyId, target.companyId))).for("share", { noWait: true });
+    if (!current) throw forbidden("The instruction target is unavailable");
+    // Every managed entry, supporting file and restored revision shares this
+    // locked writer. Recheck grants without consuming the one-use consent twice.
+    await resolveDepartmentConfigurationAuthority(db as Db, current, bound, {}, { lock: true,
+      targetAction: "agent_instructions:update", configurationRequiresChangeGrant: true, configurationConsentedChange: consentedChange });
+  }
   return bound;
 }
