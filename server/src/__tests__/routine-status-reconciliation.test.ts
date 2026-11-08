@@ -3,6 +3,7 @@ import { eq, sql } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { companies, createDb, issues, routineRuns, routines } from "@paperclipai/db";
 import { routineService } from "../services/routines.js";
+import { issueService } from "../services/issues.js";
 import { getEmbeddedPostgresTestSupport, startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
 
 const support = await getEmbeddedPostgresTestSupport();
@@ -22,6 +23,25 @@ if (!support.supported) console.warn(`Skipping routine status database tests: ${
       linkedIssueId: issue!.id, source: "schedule", status: "issue_created", triggerPayload: { retainedInput: true } }).returning();
     return { companyId, routine: routine!, issue: issue!, run: run! };
   }
+  it("settles the cycle inside the common issue writer used by native decisions", async () => {
+    const f = await seed("in_progress");
+    await issueService(db).update(f.issue.id, { status: "done" });
+    const [run] = await db.select().from(routineRuns).where(eq(routineRuns.id, f.run.id));
+    expect(run).toMatchObject({ status: "completed", linkedIssueId: f.issue.id });
+    expect(run!.completedAt).toBeInstanceOf(Date);
+    await routineService(db).syncRunStatusForIssue(f.issue.id);
+    expect((await db.select().from(routineRuns).where(eq(routineRuns.id, f.run.id)))[0]).toEqual(run);
+  });
+  it("rolls the task and cycle back together when the native outer transaction fails", async () => {
+    const f = await seed("in_progress");
+    await expect(db.transaction(async tx => {
+      await issueService(tx as unknown as typeof db).update(f.issue.id, { status: "done" }, tx, []);
+      expect((await tx.select().from(routineRuns).where(eq(routineRuns.id, f.run.id)))[0]!.status).toBe("completed");
+      throw new Error("outer decision failed");
+    })).rejects.toThrow("outer decision failed");
+    expect((await db.select().from(issues).where(eq(issues.id, f.issue.id)))[0]!.status).toBe("in_progress");
+    expect((await db.select().from(routineRuns).where(eq(routineRuns.id, f.run.id)))[0]).toEqual(f.run);
+  });
   it.each(["done", "blocked", "cancelled"])("repairs missed %s status using normal owning-service transitions", async status => {
     const f = await seed(status); const service = routineService(db);
     expect(await service.reconcileExecutionRunStatuses()).toEqual({ scanned: 1, settled: 1, deferred: 0 });

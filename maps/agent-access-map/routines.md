@@ -27,6 +27,12 @@ API: `present` — representative operation IDs:
 Agent access: `available` — Agent REST / native `call_api` / CLI routine create/update;
 optional installed MCP generic request.
 
+Project-bound agents denied company enumeration may read a concretely scoped
+routine only when current native membership and every project/parent-task read
+succeed. Missing membership or other company denials cannot use this exception.
+Global routines still require company enumeration. Scope is evaluated per request;
+no cached grant or actor substitution is added.
+
 Policy: Company admission and native project/parent-task read checks gate routine
 reads and changes. Agents may only create/manage routines assigned to themselves.
 New relationship references and historical restore targets are reauthorized;

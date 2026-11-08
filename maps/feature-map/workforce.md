@@ -106,7 +106,14 @@ and [discovery tests](../../server/src/services/native-runtime/runner-api.test.t
 pass 2,198 checks on 8 November. These controlled-dependency checks cover current
 identity/authority, denied targets before pagination, stale assignment/mandate
 revisions, bounded continuations, rollback publication and unchanged local reads.
-Real PostgreSQL contention and live model answers remain separate acceptance.
+Subsequent native SQL pagination/private exclusion/revocation and actual assignment-lock
+contention pass in the 72-case workforce/privacy/project/routine suite. Loaded
+`cb110a1eb` also passed native ORB-11 multi-company chat, mandate revocation and
+independent retirement. Both company agents executed separate arithmetic tasks;
+private fixture markers stayed absent from the authorized report and observed
+native events. The retained Codex audit attachment is
+`aed3acb1-10a0-4c7b-bd4a-e904cda452cc`. These checks do not establish learned
+capability transfer, hidden provider context or owner business acceptance.
 
 ## Known gaps
 

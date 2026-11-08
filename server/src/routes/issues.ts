@@ -201,7 +201,6 @@ import {
   logActivity,
   publishActivity,
   projectService,
-  routineService,
   workProductService,
 } from "../services/index.js";
 import {
@@ -3635,9 +3634,6 @@ export function issueRoutes(
     syncCommentReferences: (commentId, tx) => issueReferencesSvc.syncComment(commentId, tx),
     deleteCommentReferenceSource: (commentId, tx) => issueReferencesSvc.deleteCommentSource(commentId, tx),
     syncCommentExternalObjectsSafely: (commentId, tx) => externalObjectsSvc.syncCommentSafely(commentId, tx),
-  });
-  const routinesSvc = routineService(db, {
-    pluginWorkerManager: opts.pluginWorkerManager,
   });
   const environmentRuntime = environmentRuntimeService(db, {
     pluginWorkerManager: opts.pluginWorkerManager,
@@ -10191,8 +10187,6 @@ export function issueRoutes(
         publishActivity(publication);
       await flushIssuePostCommitActions(postCommitIssueActions);
 
-      await routinesSvc.syncRunStatusForIssue(result.issue.id);
-
       if (sourceIssueStatus && existing.status !== result.issue.status) {
         await logActivity(db, {
           companyId: result.issue.companyId,
@@ -14895,8 +14889,6 @@ export function issueRoutes(
         blocks: visibleUpdatedRelations.blocks,
         };
       }
-      await routinesSvc.syncRunStatusForIssue(issue.id);
-
       if (actor.runId) {
         await heartbeat
           .reportRunActivity(actor.runId)

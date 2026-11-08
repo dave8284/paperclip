@@ -81,7 +81,18 @@ Evidence: `source-only` — [service](../../server/src/services/employee-awarene
 
 Verification: `passed` — 2,198 combined awareness, mandate and discovery checks on 8 November, with server/UI semantic checks. These exercise controlled dependencies and compiled SQL predicates, not actual PostgreSQL contention or live model responses.
 
-Gaps: loaded-runtime multi-company chat, revocation and assignment retirement acceptance remain. Identity and read permission never confer foreign writes or prove transferred learned capability.
+Native acceptance: loaded `cb110a1eb` direct chat ORB-11 reports the two separate
+assignments, excludes the private fixture and records current observation/scope.
+Revocation produces empty discovery and 403 for the old mandate; local work
+remains visible. Retiring the Lab assignment terminates only its native agent,
+while Orbit remains ready. New actual PostgreSQL continuation/private exclusion/
+revocation/lock cases pass within the 72-case workforce/privacy/project/routine
+suite. Source-only metadata above describes the original check boundary; this
+native journey supplies the additional operating evidence.
+
+Gaps: identity and read permission never confer foreign writes or prove transferred
+learned capability. No browser rendering, physical voice, hidden provider context
+or owner business acceptance is asserted.
 
 ## `capabilities`
 

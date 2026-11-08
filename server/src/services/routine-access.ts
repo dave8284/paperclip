@@ -1,4 +1,4 @@
-import { routineRevisions, type Db } from "@paperclipai/db";
+import { companyMemberships, routineRevisions, type Db } from "@paperclipai/db";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import type { RoutineDetail, RoutineListItem, RoutineRevision, RoutineRunSummary } from "@paperclipai/shared";
 import { authorizationService, type AuthorizationActor } from "./authorization.js";
@@ -32,8 +32,27 @@ export function routineAccessService(db: Db) {
     });
     if (!resources.size) return [];
     const decisions = await access.decideReads(actor, [...resources.values()]);
-    const allowed = new Set([...resources.keys()].filter((_key, index) => decisions[index]?.allowed));
-    return rows.filter((_row, index) => keys[index]!.every(key => allowed.has(key)));
+    const byKey = new Map([...resources.keys()].map((key, index) => [key, decisions[index]]));
+    const scopeOnly = actor.type === "agent" && actor.companyId && actor.agentId
+      && byKey.get(`company:${actor.companyId}`)?.reason === "deny_low_trust_boundary";
+    // Authentication admission may predate a membership change. Low-trust
+    // resource decisions describe containment, so repeat current membership
+    // before using them without the broader company enumeration decision.
+    const [membership] = scopeOnly ? await db.select({ id: companyMemberships.id }).from(companyMemberships)
+      .where(and(eq(companyMemberships.companyId, actor.companyId!), eq(companyMemberships.principalType, "agent"),
+        eq(companyMemberships.principalId, actor.agentId!), eq(companyMemberships.status, "active"))).limit(1) : [];
+    return rows.filter((_row, index) => {
+      const [companyKey, ...scopedKeys] = keys[index]!;
+      const company = byKey.get(companyKey!);
+      // A project-bound employee intentionally cannot enumerate the company.
+      // Its native project AND parent-task decisions still admit this specific
+      // routine. Never substitute scope for a missing membership/user ceiling,
+      // unknown denial, or a routine without a concrete authorized resource.
+      const scopedEmployee = membership && companyKey === `company:${actor.companyId}`
+        && company?.reason === "deny_low_trust_boundary" && scopedKeys.length > 0;
+      return (company?.allowed || scopedEmployee)
+        && scopedKeys.every(key => byKey.get(key)?.allowed);
+    });
   }
   async function filterRuns(actor: AuthorizationActor, rows: RoutineRunSummary[]) {
     const revisionIds = [...new Set(rows.flatMap(run => run.routineRevisionId ? [run.routineRevisionId] : []))];

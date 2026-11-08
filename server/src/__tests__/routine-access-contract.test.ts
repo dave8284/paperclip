@@ -36,6 +36,21 @@ it("deduplicates scope references and filters private routine list rows", async 
   expect(res.json.mock.calls[0][0].map((row: { id: string }) => row.id)).toEqual(["open"]);
   expect(native.decideReads).toHaveBeenCalledExactlyOnceWith(actor, [{ type: "company", companyId }, { type: "project", companyId, projectId }]);
 });
+it("admits only the concrete native project/task scope of an employee denied company enumeration", async () => {
+  const employee = { type: "agent", companyId, agentId: "employee" } as const;
+  native.decideReads.mockImplementation(async (_actor, resources) => resources.map((resource: { type: string; issueId?: string }) =>
+    resource.type === "company" ? { allowed: false, reason: "deny_low_trust_boundary" }
+      : { allowed: resource.issueId !== hiddenIssueId }));
+  const service = routineAccessService(drizzle(async () => ({ rows: [["active-membership"]] })) as never);
+  expect(await service.filterScopes(employee, [routine, { ...routine, id: "global", projectId: null },
+    { ...routine, id: "hidden-parent", parentIssueId: hiddenIssueId }])).toEqual([routine]);
+  expect(await service.filterScopes(actor, [routine])).toEqual([]);
+  for (const reason of ["deny_missing_membership", "deny_policy_restricted", "deny_responsible_user", undefined]) {
+    native.decideReads.mockImplementation(async (_actor, resources) => resources.map((resource: { type: string }) =>
+      resource.type === "company" ? { allowed: false, reason } : { allowed: true }));
+    expect(await service.filterScopes(employee, [routine])).toEqual([]);
+  }
+});
 it("checks native resource access before loading detail or historical cycles", async () => {
   native.decideReads.mockResolvedValue([{ allowed: true }, { allowed: false }]);
   for (const path of ["/routines/:id", "/routines/:id/runs"]) await expect(call(path)).rejects.toMatchObject({ status: 404 });

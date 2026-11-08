@@ -180,8 +180,10 @@ describe("Agent OS shared workforce", () => {
     const [task, hidden, chat, otherChat] = await db.insert(issues).values([
       { companyId: f.two.id, title: "Owner work", description: "Private description", visibility: "private", responsibleUserId: f.owner },
       { companyId: f.two.id, title: "Other work", description: "Hidden body", visibility: "private" },
-      { companyId: f.two.id, title: "Owner chat", conversationAgentId: f.second.id, conversationUserId: f.owner },
-      { companyId: f.two.id, title: "Other chat", conversationAgentId: f.second.id, conversationUserId: "other-user" },
+      { companyId: f.two.id, title: "Owner chat", conversationAgentId: f.second.id, conversationUserId: f.owner,
+        assigneeAgentId: f.second.id, conversationState: "waiting" },
+      { companyId: f.two.id, title: "Other chat", conversationAgentId: f.second.id, conversationUserId: "other-user",
+        assigneeAgentId: f.second.id, conversationState: "waiting" },
     ]).returning();
     const [comment, deleted] = await db.insert(issueComments).values([
       { companyId: f.two.id, issueId: task.id, body: "Readable comment", authorUserId: f.owner, metadata: { privateCredential: "not-a-response-field" } as never },
@@ -648,7 +650,9 @@ describe("Agent OS shared workforce", () => {
     await db.delete(principalPermissionGrants).where(and(eq(principalPermissionGrants.principalId, f.manager.id), eq(principalPermissionGrants.permissionKey, "agents:configure")));
     await request(f.delegated).post(`${f.companyPath}/assignments`).send(f.binding).expect(404);
     await db.delete(principalPermissionGrants).where(and(eq(principalPermissionGrants.principalId, f.manager.id), eq(principalPermissionGrants.permissionKey, "applications:manage")));
-    await request(f.delegated).get(f.companyPath).expect(403);
+    // Company reads remain available; revoked management cannot bind staff.
+    await request(f.delegated).get(f.companyPath).expect(200);
+    await request(f.delegated).post(`${f.companyPath}/assignments`).send(f.binding).expect(403);
   });
   it("honors target-scoped configure grants for both the delegate and responsible owner", async () => {
     const f = await delegatedSeed(), access = accessService(db);
@@ -745,7 +749,10 @@ describe("Agent OS shared workforce", () => {
       release(); await holder;
       expect((await binding).status).toBe(retiring ? 200 : 201); await revocation;
       if (retiring) await request(f.delegated).post(path).send(intent).expect(403);
-      else await request(f.delegated).get(f.companyPath).expect(403);
+      else {
+        await request(f.delegated).get(f.companyPath).expect(200);
+        await request(f.delegated).post(path).send(intent).expect(403);
+      }
       expect(await db.select().from(activityLog).where(and(eq(activityLog.entityId, f.binding.id),
         eq(activityLog.action, retiring ? "agentos.assignment_retired" : "agentos.assignment_created")))).toHaveLength(1);
     } finally {
@@ -827,6 +834,57 @@ describe("Agent OS shared workforce", () => {
     expect(denied.body).not.toHaveProperty("assignments");
     expect(JSON.stringify(denied.body)).not.toContain(f.employeeInput.id);
     expect(JSON.stringify(denied.body)).not.toContain(f.first.id);
+  });
+  it("reads only the same employee's authorized shared work and fences stale continuation and revocation", async () => {
+    const f = await mandateFixture();
+    const [open, privateProject] = await db.insert(projects).values([
+      { companyId: f.two.id, name: "Visible assignment project" },
+      { companyId: f.two.id, name: "Private assignment project", visibility: "private" },
+    ]).returning();
+    const visible = await db.insert(issues).values(Array.from({ length: 26 }, (_, i) => ({ companyId: f.two.id,
+      projectId: open.id, assigneeAgentId: f.second.id, title: `Assigned shared task ${i}` }))).returning();
+    const [privateTask, unrelated] = await db.insert(issues).values([
+      { companyId: f.two.id, projectId: privateProject.id, assigneeAgentId: f.second.id, title: "Hidden assigned work" },
+      { companyId: f.two.id, projectId: open.id, title: "Another employee's task" },
+    ]).returning();
+    const path = `/api/companies/${f.one.id}/friday/agents/${f.first.id}/awareness`;
+    const query = { mandateId: f.intent.id, revision: 1 };
+    const response = await request(f.runtime).get(path).query(query).expect(200);
+    expect(response.body.scope).toBe("authorized_assignments");
+    const target = response.body.assignments.find((row: { company: { id: string } }) => row.company.id === f.two.id);
+    expect(target.agent.id).toBe(f.second.id);
+    expect(target.work.tasks).toHaveLength(25); expect(target.work.nextOffset).toBe(25);
+    expect(target.work.projectCount).toBe(1);
+    expect(JSON.stringify(response.body)).not.toContain(privateProject.id);
+    expect(JSON.stringify(response.body)).not.toContain(privateTask.id);
+    expect(JSON.stringify(response.body)).not.toContain(unrelated.id);
+    const continuation = { ...query, assignmentId: f.assignments[1].id, assignmentRevision: 1, workOffset: 25 };
+    const next = await request(f.runtime).get(path).query(continuation).expect(200);
+    expect(next.body.assignments).toHaveLength(1);
+    expect(new Set([...target.work.tasks, ...next.body.assignments[0].work.tasks].map((row: { id: string }) => row.id)))
+      .toEqual(new Set(visible.map(row => row.id)));
+    await db.update(agentosAssignments).set({ revision: 2 }).where(eq(agentosAssignments.id, f.assignments[1].id));
+    await request(f.runtime).get(path).query(continuation).expect(409);
+    await request(f.api).post(`${f.base}/read-mandates/${f.intent.id}/revoke`).send({ expectedRevision: 1 }).expect(200);
+    await request(f.runtime).get(path).query(query).expect(403);
+    const local = await request(f.runtime).get(path).expect(200);
+    expect(local.body.assignments.map((row: { company: { id: string } }) => row.company.id)).toEqual([f.one.id]);
+  });
+  it("returns a retryable conflict while the exact shared assignment is changing", async () => {
+    const f = await mandateFixture();
+    let entered!: () => void, release!: () => void;
+    const acquired = new Promise<void>(resolve => { entered = resolve; });
+    const gate = new Promise<void>(resolve => { release = resolve; });
+    const holding = db.transaction(async tx => {
+      await tx.select().from(agentosAssignments).where(eq(agentosAssignments.id, f.assignments[1].id)).for("update");
+      entered(); await gate;
+    });
+    try {
+      await acquired;
+      const response = await request(f.runtime).get(`/api/companies/${f.one.id}/friday/agents/${f.first.id}/awareness`)
+        .query({ mandateId: f.intent.id, revision: 1 }).expect(409);
+      expect(JSON.stringify(response.body)).not.toContain(f.second.id);
+    } finally { release(); await holding; }
   });
   it("retires only one company assignment, revokes its key and records native termination atomically", async () => {
     const f = await seed();

@@ -10,6 +10,8 @@ import { errorHandler } from "../middleware/error-handler.js";
 import { assertTaskWorkspaceSourceProjectAccess } from "../services/task-workspace-access.js";
 import { taskInterruptionPresentation } from "../services/task-interruption-presentation.js";
 import { ProjectAccessDeniedError } from "../services/project-access-denial.js";
+import { routineAccessService } from "../services/routine-access.js";
+import { authorizationService } from "../services/authorization.js";
 import { startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
 
 describe("additive project access", () => {
@@ -42,6 +44,20 @@ describe("additive project access", () => {
     registerAgentProjectAccessRoutes(app, db); app.use(errorHandler); return app;
   }
   const board = { type: "board" as const, source: "local_implicit" as const };
+
+  it("permits project-bound routine reads without company enumeration or access outside the boundary", async () => {
+    const f = await seed();
+    const actor = { type: "agent" as const, source: "agent_key" as const, agentId: f.agentId, companyId: f.companyId };
+    const access = routineAccessService(db);
+    expect((await authorizationService(db).decideReads(actor, [{ type: "company", companyId: f.companyId }]))[0])
+      .toMatchObject({ allowed: false, reason: "deny_low_trust_boundary" });
+    expect(await access.canRead(actor, { companyId: f.companyId, projectId: f.selected[0]!.id })).toBe(true);
+    expect(await access.canRead(actor, { companyId: f.companyId, projectId: f.selected[1]!.id })).toBe(false);
+    expect(await access.canRead(actor, { companyId: f.companyId })).toBe(false);
+    await db.update(companyMemberships).set({ status: "suspended" }).where(and(eq(companyMemberships.companyId, f.companyId),
+      eq(companyMemberships.principalId, f.agentId)));
+    expect(await access.canRead(actor, { companyId: f.companyId, projectId: f.selected[0]!.id })).toBe(false);
+  });
 
   it("preserves containment, audits concurrent additions, and changes the persisted denial into an explicit retry", async () => {
     const f = await seed();

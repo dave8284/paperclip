@@ -68,6 +68,18 @@ Automated: [trigger wizard](../../ui/src/components/routine-triggers/TriggerWiza
 
 Manual: Set a near-term disposable schedule or authorized test webhook, verify one eligible execution and its source trigger, then disable it and confirm further invocations stop. Inspect a failed execution without losing its history. Remove the temporary trigger after testing.
 
+Native task completion now settles the exact linked routine cycle in the same
+issue transaction, including native status decisions that do not use HTTP issue
+routes. Replays retain the original completion timestamp; unrelated dispatch
+failures remain intact. The routine-status owner is
+[routine-execution-status.ts](../../server/src/services/routine-execution-status.ts).
+The actual PostgreSQL routine/status suites pass 96 checks, including common
+writer settlement, outer rollback and lock contention. Project-bound employees
+can read only routines whose native project and parent-task checks both pass,
+with current company membership; they cannot enumerate global routines or use
+scope to bypass membership/user denials. Controlled and PostgreSQL cases cover
+this path; the existing live ORB-10 cycle still needs loaded-build settlement.
+
 ## Gotchas
 
 - Saving a schedule does not prove the scheduler invoked it.

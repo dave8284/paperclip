@@ -83,14 +83,13 @@ import { queueIssueAssignmentWakeup, type IssueAssignmentWakeupDeps } from "./is
 import { logActivity } from "./activity-log.js";
 import type { PluginWorkerManager } from "./plugin-worker-manager.js";
 import { runtimePublicOrigin } from "./cloud-runtime-identity.js";
+import { syncRoutineRunStatusForIssue } from "./routine-execution-status.js";
 
 const OPEN_ISSUE_STATUSES = ["backlog", "todo", "in_progress", "in_review", "blocked"];
 const LIVE_HEARTBEAT_RUN_STATUSES = ["queued", "running", "scheduled_retry"];
 const TERMINAL_ISSUE_STATUSES = new Set(["done", "cancelled"]);
 const MAX_CATCH_UP_RUNS = 25;
 const MAX_ROUTINE_REVISIONS = 100;
-const EXECUTION_ISSUE_TRANSIENT_FAILURE_CODE = "execution_issue_status";
-const EXECUTION_ISSUE_TRANSIENT_FAILURE_STATUSES = ["blocked", "cancelled"] as const;
 const ACTIVITY_GATE_IGNORED_ACTIONS = [
   "issue.read_marked",
   "issue.read_unmarked",
@@ -114,36 +113,6 @@ export function routineWebhookUrl(publicId: string): string {
   return `${baseUrl.replace(/\/+$/, "")}/api/routine-triggers/public/${publicId}/fire`;
 }
 
-type ExecutionIssueTransientFailureStatus = (typeof EXECUTION_ISSUE_TRANSIENT_FAILURE_STATUSES)[number];
-
-function executionIssueTransientFailureReason(status: ExecutionIssueTransientFailureStatus) {
-  return `Execution issue moved to ${status}`;
-}
-
-function executionIssueTransientFailureStatusFromPayload(payload: unknown): ExecutionIssueTransientFailureStatus | null {
-  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return null;
-  const transientFailure = (payload as Record<string, unknown>).transientFailure;
-  if (!transientFailure || typeof transientFailure !== "object" || Array.isArray(transientFailure)) return null;
-  const record = transientFailure as Record<string, unknown>;
-  if (record.code !== EXECUTION_ISSUE_TRANSIENT_FAILURE_CODE) return null;
-  return EXECUTION_ISSUE_TRANSIENT_FAILURE_STATUSES.find((status) => record.status === status) ?? null;
-}
-
-function executionIssueTransientFailureClearedAtFromPayload(payload: unknown): string | null {
-  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return null;
-  const transientFailure = (payload as Record<string, unknown>).transientFailure;
-  if (!transientFailure || typeof transientFailure !== "object" || Array.isArray(transientFailure)) return null;
-  const clearedAt = (transientFailure as Record<string, unknown>).clearedAt;
-  return typeof clearedAt === "string" ? clearedAt : null;
-}
-
-function legacyExecutionIssueTransientFailureStatus(
-  failureReason: string | null,
-): ExecutionIssueTransientFailureStatus | null {
-  return EXECUTION_ISSUE_TRANSIENT_FAILURE_STATUSES.find(
-    (status) => failureReason === executionIssueTransientFailureReason(status),
-  ) ?? null;
-}
 
 async function resolveCompanyDefaultResponsibleUserId(db: Db, companyId: string) {
   const company = await db
@@ -2043,91 +2012,9 @@ export function routineService(
 
   let statusReconcileCursor: string | null = null;
 
-  async function syncRunStatusForIssue(issueId: string, executor: Db = db) {
-    const issue = await executor
-      .select({
-        id: issues.id,
-        companyId: issues.companyId,
-        status: issues.status,
-        originKind: issues.originKind,
-        originRunId: issues.originRunId,
-      })
-      .from(issues)
-      .where(eq(issues.id, issueId))
-      .then((rows) => rows[0] ?? null);
-    if (!issue || issue.originKind !== "routine_execution" || !issue.originRunId) return null;
-    const run = await executor
-      .select({
-        id: routineRuns.id,
-        status: routineRuns.status,
-        failureReason: routineRuns.failureReason,
-        triggerPayload: routineRuns.triggerPayload,
-      })
-      .from(routineRuns)
-      .innerJoin(routines, and(eq(routines.id, routineRuns.routineId), eq(routines.companyId, issue.companyId)))
-      .where(and(eq(routineRuns.id, issue.originRunId), eq(routineRuns.companyId, issue.companyId)))
-      .then((rows) => rows[0] ?? null);
-    if (!run) return null;
-    if (issue.status === "done") {
-      const transientFailureStatus = executionIssueTransientFailureStatusFromPayload(run.triggerPayload)
-        ?? legacyExecutionIssueTransientFailureStatus(run.failureReason);
-      const transientFailureClearedAt = executionIssueTransientFailureClearedAtFromPayload(run.triggerPayload);
-      return finalizeRun(issue.originRunId, {
-        status: "completed",
-        failureReason: null,
-        completedAt: new Date(),
-        ...(transientFailureStatus
-          ? {
-            triggerPayload: {
-              ...(run.triggerPayload ?? {}),
-              transientFailure: {
-                code: EXECUTION_ISSUE_TRANSIENT_FAILURE_CODE,
-                status: transientFailureStatus,
-                reason: executionIssueTransientFailureReason(transientFailureStatus),
-                clearedAt: transientFailureClearedAt ?? new Date().toISOString(),
-              },
-            },
-          }
-          : {}),
-      }, executor);
-    }
-    if (issue.status === "blocked" || issue.status === "cancelled") {
-      const failureReason = executionIssueTransientFailureReason(issue.status);
-      return finalizeRun(issue.originRunId, {
-        status: "failed",
-        failureReason,
-        completedAt: new Date(),
-        triggerPayload: {
-          ...(run.triggerPayload ?? {}),
-          transientFailure: {
-            code: EXECUTION_ISSUE_TRANSIENT_FAILURE_CODE,
-            status: issue.status,
-            reason: failureReason,
-            recordedAt: new Date().toISOString(),
-          },
-        },
-      }, executor);
-    }
-    const transientFailureStatus = executionIssueTransientFailureStatusFromPayload(run.triggerPayload)
-      ?? legacyExecutionIssueTransientFailureStatus(run.failureReason);
-    if (run.status === "failed" && transientFailureStatus) {
-      return finalizeRun(issue.originRunId, {
-        status: "issue_created",
-        failureReason: null,
-        completedAt: null,
-        triggerPayload: {
-          ...(run.triggerPayload ?? {}),
-          transientFailure: {
-            code: EXECUTION_ISSUE_TRANSIENT_FAILURE_CODE,
-            status: transientFailureStatus,
-            reason: executionIssueTransientFailureReason(transientFailureStatus),
-            clearedAt: new Date().toISOString(),
-          },
-        },
-      }, executor);
-    }
-    return null;
-  }
+  const syncRunStatusForIssue = (issueId: string, executor: Db = db) =>
+    syncRoutineRunStatusForIssue(executor, issueId);
+
 
 
   return {

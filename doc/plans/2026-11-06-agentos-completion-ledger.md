@@ -12,7 +12,7 @@ Those requirements remain in scope; the rows below do not replace or erase them.
 The owner requested simple **Fixed / Not fixed** tracking in the existing
 [93-item worksheet](2026-11-03-agentos-requirements-reconciliation.md).
 Update those rows as work completes; do not create another backlog.
-**Current total: 40 Fixed / 53 Not fixed.** Partial implementation and unverified
+**Current total: 42 Fixed / 51 Not fixed.** Partial implementation and unverified
 live acceptance remain Not fixed. This checkpoint was refreshed at the owner's
 request on 7 November; the tables below the current checkpoint are historical.
 
@@ -578,6 +578,63 @@ request on 7 November; the tables below the current checkpoint are historical.
   is done. ORB-7 stays blocked; neither limitation is waived or hidden. Next:
   correct native settlement and establish actual scoped access, then let the CEO
   finish the existing review and Friday return. No second cycle is authorized.
+
+- **O05/O09 Fixed — native employee journey verified:** `cb110a1eb` was pushed
+  and loaded by guarded restart `cbf3dfe7-8717-41fd-b4bd-96b05171abf9`, startup
+  ready 09:42:59 UTC, clean boot, no pending migrations/restart. Shared employee
+  `f5f20014-446d-4960-85ac-51cd1a94677c` linked two separate agents and company
+  assignments. Lab native run `38733cac-9f1c-46a0-bd9f-90cca4177b9b` completed
+  fictional 336/133/203 arithmetic in its own session/workspace. Source employee
+  chat run `14492ac6-df41-444c-84db-6518209bee23` read actual authorized work
+  and saved separate assignment/project/task identities on ORB-11. Its shared
+  projection excluded the private fixture, including title/body/identity and
+  counts. Revoking mandate `9f99408b-9b34-4a3d-89fe-dc618da79ba1` at revision 2
+  produced empty discovery and 403 for the old revision in native follow-up
+  `69419d97-3965-4bb4-b14d-3faa4dd114cf`; local work remained readable. Native
+  retirement revision 2 terminated only Lab agent `9cd4a4b1-e208-4114-9ead-941dfe725980`.
+  Orbit agent remained ready and the active source assignment/history survived.
+  Status document `58c08883-54f3-4907-ba0f-b8532cd8a24e`, revision
+  `fab3e53c-1872-45e3-a17e-65a0f29adeab`, and separate revocation document remain
+  on ORB-11. Codex audit attachment `aed3acb1-10a0-4c7b-bd4a-e904cda452cc`
+  is a native work product; it explicitly excludes owner acceptance, learned
+  capability transfer, hidden-context attestation and browser/voice claims.
+- **Environment restriction lifted, database qualification resumed:** the new
+  permission profile enables local processes/listeners. The agent ran the
+  retained account script: **262 checks pass across six suites**, including
+  account reuse/credential recovery/shared capacity/subscription/access/OpenAPI.
+  Log `/private/tmp/agentos-account-reuse-database.y34CFzhL`. This supersedes the
+  earlier execution blocker; historical failed logs remain. The initial workforce
+  rerun found three stale fixture expectations: incomplete native conversation
+  identity and management-revocation expectations on a read-only endpoint. Fixes
+  retain read visibility and explicitly assert mutation denial. Fresh same-employee
+  native SQL pagination/private exclusion/revocation and actual lock-contention
+  cases were added; the corrected combined workforce/privacy/project/routine
+  suite passes. A first project-bound routine read test caught missing current
+  membership enforcement in the proposed scope-only path; that path now checks
+  current membership and the actual suspended-member case passes. No live grant
+  was relaxed to make a test pass. Logs:
+  `/private/tmp/agentos-employee-awareness-pg-regression-20261108.log`,
+  `agentos-routine-scoped-access-native-tests-20261108.log`,
+  `agentos-workforce-routine-pg-r2-20261108.log`.
+
+- **Routine settlement and scoped access repaired in checked source:** the live
+  cycle exposed status synchronization placed only in HTTP routes. Native status
+  decisions use the common issue writer, so they could finish a task without its
+  routine row. The extracted routine-owned projection now runs inside that
+  transaction, binds exact company/routine/task/run, preserves independent failure
+  evidence and leaves completion time unchanged on replay. Redundant post-commit
+  route synchronization is removed. No scheduler or idle scan was added. Actual
+  PostgreSQL routine/status suites pass **96 checks**, including commit/outer
+  rollback and contention; focused settlement/authority/arbiter checks pass **69**.
+  The initial focused case selected the later replay-read predicate instead of
+  the write predicate; its corrected assertion passes and failure log remains.
+  The low-trust routine read path now permits only concretely authorized scopes
+  with current membership, never company enumeration or a different native denial.
+  Combined workforce/privacy/project/routine checks pass **72**, with native
+  status corpus separately exercised. Current server semantic checks pass. Next:
+  finish build/activation, restrict the existing analyst through native controls,
+  verify actual allowed/denied access and settle ORB-10 without another cycle.
+  Logs: `/private/tmp/agentos-routine-native-settlement-{pg,tests,tests-r2,tsc-r2}-20261108.log`.
 
 - **8 November — continued after owner correction:** keep progressing through
   unblocked source work when runtime acceptance is blocked; a source checkpoint
