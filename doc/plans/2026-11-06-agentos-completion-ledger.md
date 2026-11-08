@@ -12,11 +12,11 @@ Those requirements remain in scope; the rows below do not replace or erase them.
 The owner requested simple **Fixed / Not fixed** tracking in the existing
 [93-item worksheet](2026-11-03-agentos-requirements-reconciliation.md).
 Update those rows as work completes; do not create another backlog.
-**Current total: 48 Fixed / 45 Not fixed.** Partial implementation and unverified
+**Current total: 49 Fixed / 44 Not fixed.** Partial implementation and unverified
 live acceptance remain Not fixed. This checkpoint was refreshed at the owner's
 request on 7 November; the tables below the current checkpoint are historical.
 
-- **M04 configured native model/attempt projection repaired, activation pending:**
+- **M04 Fixed — configured native model/attempt projection loaded and browser-verified:**
   the administration audit previously omitted each native run's selected model
   when no Model Intelligence selection receipt existed. It now projects only
   bound frozen profile metadata, separately from observed provider usage and
@@ -28,8 +28,26 @@ request on 7 November; the tables below the current checkpoint are historical.
   server/UI semantics, tokens, maps and diff checks pass. A real READ ONLY source
   query inspected 50 runs in three companies/20 SQL statements in 193 ms, including
   the original analyst, CEO and Friday models and three actual continuation links.
-  This is measured request-local evidence, not a performance guarantee or loaded
-  API acceptance. Commit/build/restart and current browser proof follow.
+  This is measured request-local evidence, not a performance guarantee. Commit
+  `9831584b74f52833d992d35e1a4898c2857fe456` is pushed. Changed shared/server
+  TypeScript and UI builds pass without rebuilding unchanged native vendor assets
+  during the broader regression. Guarded restart
+  `a1b62c42-3b59-4c66-b9ef-9401f63c2967` started the new process at
+  11:18:32.456 UTC; ready at 11:18:37.104, matching startup commit, no pending
+  migrations or required restart. The supervisor skipped one preflight CEO run
+  as `native_restart_recovery_owned`; the same run `26cc6dbb` then committed
+  successfully at 11:18:50.889 with attempt 1 and no successor. No run was lost.
+  Health's top-level build commit can change before a restart, so activation is
+  bound to the new process/startup commit and actual API, not that field alone.
+  Current API/browser shows the exact three requested/actual model pairs,
+  subscription-included billing and attempt 1. Genuine predecessor/successor
+  links open the correct employee/run. Missing routing reasons, qualification
+  and quality remain explicitly unknown. One pre-existing optional Friday
+  plan-document 404 was retained; no model page error or mutation occurred.
+  Root inspected the actual analyst card screenshot. Evidence:
+  `/private/tmp/agentos-model-browser-20261108/verification-report.json`,
+  `agentos-m04-{shared-build,server-emit,ui-build}-20261109.log`,
+  `agentos-m04-{restart-request,loaded-health,restart-ceo-run}-20261109.json`.
 - **O06 live qualification exposed native Skill Studio admission gap:** root
   submitted the bounded fictional request in Friday chat by comment
   `f9cf75a6-11ad-4789-8a95-8db64d456095`. Friday run `30b305e7` succeeded
