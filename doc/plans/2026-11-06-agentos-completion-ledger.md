@@ -16,6 +16,25 @@ Update those rows as work completes; do not create another backlog.
 live acceptance remain Not fixed. This checkpoint was refreshed at the owner's
 request on 7 November; the tables below the current checkpoint are historical.
 
+- **Checked batch pushed and loaded — 9 November NZDT (8 November UTC):**
+  `0e1dbd5ac2ef1aaa7dfb978a5d6e095b3eec57ec` contains completion replay,
+  administrative withdrawal, published-test retention, truthful routine labels,
+  the full migration plan and their verification records. Guarded restart
+  `cd588b6a-8ceb-4179-8ade-5f691b1e5721` was requested at 10:59:59.726 UTC;
+  new process started 11:00:15.553 and startup became ready at 11:00:20.595.
+  Matching report completed 11:00:18.673 with no adopted/lost/skipped runs;
+  authenticated health shows this exact commit, no pending migrations, no
+  required restart and no active runs. The existing blocked:1 recovery summary
+  includes the historical cancelled CEO attempt, not a newly lost run. Source
+  audit confirms terminal/blocked history is intentionally retained and excluded
+  from active restart recovery; all recovery-action/cleanup holds were not newly
+  audited. Do not erase history to make that counter zero. Captures:
+  `/private/tmp/agentos-handoff-capability-{restart-request,loaded-health}-20261108.json`;
+  committed-source build: `agentos-handoff-capability-committed-build-20261108.log`.
+  Next: native O06 evaluation and M04 selected/actual execution visibility.
+  Current native runs retain their frozen selected model, but the admin view
+  currently projects only Model Intelligence selection receipts and misses that
+  configured-profile provenance; the bounded projection repair is underway.
 - **O03/O04/W03 Fixed; native company handoff completed:** review-preservation
   commit `3aafdf738` is pushed and loaded through guarded restart
   `44b8fda4-27cd-43a7-b86c-c738b4c302e2`, ready at 10:33:18 UTC, no lost runs.
@@ -53,7 +72,7 @@ request on 7 November; the tables below the current checkpoint are historical.
   production data moved and cloud hosting remains deferred. See the
   [full migration plan](2026-11-07-agentos-supabase-full-migration.md) and private
   `agentos-pg-restore-rehearsal-report-20261108.json`.
-- **Completion receipt and withdrawal source repairs checked, not yet loaded:**
+- **Completion receipt and withdrawal repairs checked (loaded above):**
   replaying a committed completion previously superseded its own pending Friday
   return before the duplicate insert was ignored. Only older receipt versions
   are now superseded. A Done task's ownership-only change carries an outstanding
