@@ -632,9 +632,52 @@ request on 7 November; the tables below the current checkpoint are historical.
   with current membership, never company enumeration or a different native denial.
   Combined workforce/privacy/project/routine checks pass **72**, with native
   status corpus separately exercised. Current server semantic checks pass. Next:
-  finish build/activation, restrict the existing analyst through native controls,
-  verify actual allowed/denied access and settle ORB-10 without another cycle.
+  completed build and guarded activation are recorded below.
   Logs: `/private/tmp/agentos-routine-native-settlement-{pg,tests,tests-r2,tsc-r2}-20261108.log`.
+
+- **O04/W03/W04 corrections loaded; CEO handoff repair in progress:** pushed
+  `e5586ad1b` loaded through guarded restart `07b3ab4d-ce2d-46c3-98a4-01db5762adf8`,
+  startup ready at 10:16:55 UTC, clean boot, zero pending migrations/lost runs.
+  Native analyst permissions now restrict low-trust work to Pilot Operations;
+  broad assignment/hiring/skill-creation permissions are absent. An actual analyst
+  key read its project/routine (200), was denied another project/task and outside
+  task creation (404), and created an own-project backlog probe (201). Probe
+  ORB-12 was cancelled without execution; the key was revoked and removed.
+  Original cycle `11ccde00-d869-45d1-81eb-d8abec907677` settled at 10:17:25.806 UTC
+  through the common task writer. Replay retains its exact completion time;
+  one cycle remains and scheduling stays disabled. The original execution
+  preceded the narrower policy, so historical strict confinement is not claimed.
+  Codex audit attachment `42dd6ab6-bb1d-4dc1-9976-7c09a964a0c5` and work product
+  `eb4338e9-5416-4b76-aa49-f9fdb638e517` retain this limit on ORB-7.
+  CEO run `3bac9a28-24a3-4c6d-aa3a-9cd9cd247862` confirmed content/current-cycle
+  acceptance in `ceo-corrected-review`, but its conversation cannot approve a
+  task-bound review. Native inspection found the original queued reviewer was
+  cancelled after a late head child-result run replaced its decision pointer
+  while leaving its review pending. Source repair belongs to native arbitration:
+  waiting on existing governance must preserve the review's decision/version,
+  not grant a different chat run review authority. A real PostgreSQL reproduction
+  demonstrates the lost binding; live repair/review/Friday return remain open.
+  Logs: `/private/tmp/agentos-review-binding-reproduction-20261108.log`;
+  native diagnosis: `agentos-native-review-recovery-diagnosis-20261108.json`.
+  Policy v13 now preserves this existing in_review projection in both finalizer
+  arbitration and attention routing. **122 checks pass** across the PostgreSQL
+  control-plane/corpus and reviewer/arbiter suites, including the late-turn
+  reproduction followed by actual reviewer claim/resolution. The first fix run
+  passed 121/122; one unrelated assertion still expected policy v12. Updating
+  that explicit version and rerunning its full 23-case suite passes. Server
+  semantic checking, integrated build and module/map/diff gates pass. Logs:
+  `agentos-review-binding-{fixed,arbiter-r2,tsc,build}-20261108.log`.
+  The health recovery count of one is the explicitly interrupted CEO run
+  `fae5a6dc-79e7-4bdd-9c2d-28e38408fb81`, retained as terminal failure with
+  `explicit_user_continuation`; it is not a newly lost active process. Its
+  successful successor and original stop receipt remain separate history.
+- **O04/C05 additional actual database checks:** 50 department authority,
+  hierarchy and import checks passed in four suites
+  (`/private/tmp/agentos-department-import-pg-current-20261108.log`). The ten
+  Model Intelligence migration integration cases now pass against isolated
+  PostgreSQL (`agentos-model-postgres-live-fixture-20261108.log`), superseding
+  their earlier listener blocker. This does not prove the PostgreSQL 18-to-17
+  full-source restore or authorize a Supabase cutover.
 
 - **8 November — continued after owner correction:** keep progressing through
   unblocked source work when runtime acceptance is blocked; a source checkpoint

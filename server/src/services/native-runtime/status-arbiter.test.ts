@@ -44,6 +44,18 @@ function arbitrate(
 }
 
 describe("native status authority", () => {
+  it.each([false, true])("preserves an existing review binding while governance waits (response=%s)", (responseWait) => {
+    const decision = arbitrate({
+      priorIssueStatus: "in_review",
+      governanceGate: { kind: "interaction", id: "pending-review" },
+      assessment: responseWait ? assessment({ reportedDisposition: "yielded", continuation: {
+        kind: "response_wake", summary: "Wait for the reviewer", idempotencyKey: "review-wait",
+      } }) : assessment(),
+    });
+    expect(decision).toMatchObject({ statusAction: "preserve", toStatus: "in_review" });
+    expect(decision.effects).toContainEqual({ kind: "create_interaction", gate: { kind: "interaction", id: "pending-review" } });
+  });
+
   it("waits on a published external review without creating human attention", () => {
     const wait = assessment({ reportedDisposition: "yielded",
       continuation: { kind: "response_wake", summary: "Wait for the PR update", idempotencyKey: "pr-wait" } });
@@ -565,7 +577,7 @@ describe("native status authority", () => {
       expect.objectContaining({
         statusAction: "blocked",
         toStatus: "blocked",
-        policyVersion: "phase6-v12",
+        policyVersion: "phase6-v13",
         reasonCode: "current_track_blocker_waiting",
         unblockDescriptor: {
           owner: "board",

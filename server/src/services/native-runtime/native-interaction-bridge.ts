@@ -908,7 +908,7 @@ export function resolveNativeAttentionStatus(input: {
   if (input.facts.governanceGate) {
     return {
       policyVersion: NATIVE_STATUS_ARBITER_POLICY_VERSION,
-      statusAction: "in_review",
+      statusAction: input.priorIssueStatus === "in_review" ? "preserve" : "in_review",
       toStatus: "in_review",
       reasonCode: "governed_gate_pending",
       unblockDescriptor: null,

@@ -1897,6 +1897,14 @@ describe("P6-31 Section 18.13 executable status-authority corpus", () => {
     }
   }, 60_000);
 
+  it("preserves review identity when attention encounters an existing pending gate", () => {
+    expect(resolveNativeAttentionStatus({
+      facts: { companyScopeValid: true, responseState: "none", route: "human",
+        summary: "Review remains pending", governanceGate: { kind: "interaction", id: "pending-review" } },
+      priorIssueStatus: "in_review", agentId,
+    })).toMatchObject({ statusAction: "preserve", toStatus: "in_review", reasonCode: "governed_gate_pending" });
+  });
+
   it("fails mapped fixtures when live entrypoints or owning actions are removed despite matching policy labels", async () => {
     const byId = (id: string) => {
       const fixture = corpus.fixtures.find((candidate) => candidate.id === id);

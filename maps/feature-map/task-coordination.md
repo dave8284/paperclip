@@ -56,6 +56,12 @@ Open the task’s parent/child and dependency links in task detail.
 
 ### `review-and-controls`
 
+Native governance waits preserve an already pending review's status decision and
+version. A late child-result turn must not invalidate the queued reviewer while
+leaving its card pending. The PostgreSQL control-plane fixture exercises that
+sequence through subsequent reviewer admission/resolution; current live proof is
+tracked in the AgentOS completion ledger.
+
 Inspect the task’s execution policy and available review, pause, resume, or stop controls.
 
 ## Driving it with Playwright and the Paperclip API

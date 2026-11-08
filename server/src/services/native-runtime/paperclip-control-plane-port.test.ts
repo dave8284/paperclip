@@ -1421,6 +1421,39 @@ describe("PaperclipControlPlanePort conformance", () => {
       nativeReviewInteractionId: agentReview.id,
       nativeReviewDecisionId: (agentReview.payload as { target: { revisionId: string } }).target.revisionId,
     };
+    // A late child-result turn may finish while this review waits in the queue.
+    // It must retain the original decision/version, or the real reviewer loses
+    // authority even though its pending card and assignee have not changed.
+    const [beforeLateTurn] = await db.select().from(issues).where(eq(issues.id, issueId));
+    const lateRunId = randomUUID();
+    const lateRunnerId = randomUUID();
+    await db.insert(heartbeatRuns).values({
+      id: lateRunId, companyId: identity.companyId, agentId: identity.agentId,
+      status: "running", runtimeMode: "native", nativeIssueId: issueId,
+      nativeSessionId: identity.sessionId, runnerInstanceId: lateRunnerId,
+      completionContractId: localContractId, completionContractSha256: "native-review-contract",
+      contextSnapshot: { issueId, wakeReason: "issue_children_completed" },
+    });
+    const latePort = new PaperclipControlPlanePort(db, {
+      ...identity, issueId, runId: lateRunId, completionContractId: localContractId,
+      completionContractSha256: "native-review-contract", sourceInstanceId: lateRunnerId,
+      controlPlaneSourceInstanceId: "late-child-result",
+    });
+    await latePort.openRun({ identity: { ...identity, issueId, runId: lateRunId }, backendKind: "mock", sourceInstanceId: lateRunnerId });
+    await latePort.completeRun({
+      result: { ...structuredClone(CONTROL_PLANE_CONFORMANCE_RESULT), completionClaim: {
+        ...CONTROL_PLANE_CONFORMANCE_RESULT.completionClaim, contractRevision: "phase6-v1",
+      } },
+      terminal: CONTROL_PLANE_CONFORMANCE_TERMINAL, callerResultId: "late-child-result",
+    });
+    await finalizeNativeRun({ db, runId: lateRunId, workspaceFinalizeStatus: "succeeded" });
+    await expect(db.select().from(issues).where(eq(issues.id, issueId))).resolves.toMatchObject([{
+      status: "in_review", statusVersion: beforeLateTurn!.statusVersion,
+      lastStatusDecisionId: nativeReview.nativeReviewDecisionId,
+    }]);
+    await expect(getNativeReviewAssignment(db, {
+      companyId: identity.companyId, issueId, agentId: reviewerAgentId, contextSnapshot: nativeReview,
+    })).resolves.toMatchObject({ interaction: { id: agentReview.id } });
     await db.update(agentWakeupRequests).set({ runId: reviewRunId }).where(eq(agentWakeupRequests.id, reviewWakes[0]!.id));
     const [reviewRun] = await db.insert(heartbeatRuns).values({
       id: reviewRunId, companyId: identity.companyId, agentId: reviewerAgentId,

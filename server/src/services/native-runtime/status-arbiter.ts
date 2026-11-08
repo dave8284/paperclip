@@ -1,7 +1,7 @@
 import type { NativeEvidenceAssessment } from "./evidence-classifier.js";
 import { NATIVE_MODEL_REJECTION_MESSAGE, NATIVE_PROVIDER_CAPACITY_MAX_RETRIES, NATIVE_PROVIDER_OVERLOADED_CODE, NATIVE_PROVIDER_OVERLOADED_MESSAGE } from "./native-provider-failure.js";
 
-export const NATIVE_STATUS_ARBITER_POLICY_VERSION = "phase6-v12";
+export const NATIVE_STATUS_ARBITER_POLICY_VERSION = "phase6-v13";
 
 export type NativeAuthoritativeIssueStatus =
   | "backlog"
@@ -273,13 +273,16 @@ export function arbitrateNativeStatus(input: {
     };
   }
   if (input.governanceGate) {
+    // Waiting again is not a new review submission. Preserve the original
+    // decision/version to which the pending review and reviewer wake are bound.
+    const statusAction = input.priorIssueStatus === "in_review" ? "preserve" : "in_review";
     if (
       input.assessment.reportedDisposition === "yielded" &&
       input.assessment.continuation?.kind === "response_wake"
     ) {
       return {
         policyVersion: NATIVE_STATUS_ARBITER_POLICY_VERSION,
-        statusAction: "in_review",
+        statusAction,
         toStatus: "in_review",
         reasonCode: "governed_response_waiting",
         unblockDescriptor: null,
@@ -291,7 +294,7 @@ export function arbitrateNativeStatus(input: {
     }
     return {
       policyVersion: NATIVE_STATUS_ARBITER_POLICY_VERSION,
-      statusAction: "in_review",
+      statusAction,
       toStatus: "in_review",
       reasonCode: "governed_gate_pending",
       unblockDescriptor: null,

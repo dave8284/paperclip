@@ -126,6 +126,10 @@ relabeled native. Route and queue rederive the saved review pair, while normal
 cleanup, pause, budget, task and native claim/dispatch gates remain authoritative.
 The task's worker assignee does not change; a provisional failed-run identity
 cannot authorize review receipt admission.
+An already pending governance wait preserves its current status decision/version,
+including late child-result finalization and attention routing. This preserves
+the original review assignment; it does not authorize a reviewer in an unrelated
+conversation run or relax company, assignee, revision or execution-lock checks.
 
 Evidence: `source-only` —
 [implementation](../../server/src/routes/issue-tree-control.ts#L95) at the reviewed
