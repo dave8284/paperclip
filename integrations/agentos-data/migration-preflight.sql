@@ -27,6 +27,30 @@ SELECT jsonb_build_object(
   'extensions', coalesce((SELECT jsonb_agg(jsonb_build_object(
     'name', e.extname, 'version', e.extversion, 'schema', n.nspname
   ) ORDER BY e.extname) FROM pg_extension e JOIN pg_namespace n ON n.oid=e.extnamespace), '[]'::jsonb),
+  'required_extensions_available', coalesce((SELECT jsonb_agg(jsonb_build_object(
+    'name', name, 'default_version', default_version, 'installed_version', installed_version
+  ) ORDER BY name) FROM pg_available_extensions WHERE name IN ('pg_trgm','fuzzystrmatch')), '[]'::jsonb),
+  'connection_settings', coalesce((SELECT jsonb_object_agg(name,setting) FROM pg_settings
+    WHERE name IN ('max_connections','superuser_reserved_connections','reserved_connections',
+      'statement_timeout','idle_in_transaction_session_timeout','max_locks_per_transaction')), '{}'::jsonb),
+  -- Deliberately select only these non-secret settings, never whole role config.
+  -- Role overrides alone do not establish the effective PostgREST API config.
+  'postgrest_role_overrides', coalesce((SELECT jsonb_agg(jsonb_build_object(
+    'role', r.rolname, 'database', coalesce(d.datname,'all'), 'setting', value
+  ) ORDER BY r.rolname,d.datname,value)
+    FROM pg_db_role_setting s JOIN pg_roles r ON r.oid=s.setrole
+    LEFT JOIN pg_database d ON d.oid=s.setdatabase
+    CROSS JOIN LATERAL unnest(s.setconfig) AS config(value)
+    WHERE r.rolname='authenticator' AND split_part(value,'=',1)
+      IN ('pgrst.db_schemas','pgrst.db_extra_search_path','pgrst.db_anon_role')), '[]'::jsonb),
+  'api_default_privileges', coalesce((SELECT jsonb_agg(jsonb_build_object(
+    'owner', pg_get_userbyid(d.defaclrole), 'schema', coalesce(n.nspname,'all'),
+    'object_type', d.defaclobjtype, 'grantee', coalesce(r.rolname,'PUBLIC'),
+    'privilege', a.privilege_type, 'grantable', a.is_grantable
+  ) ORDER BY d.defaclrole,n.nspname,d.defaclobjtype,a.grantee,a.privilege_type)
+    FROM pg_default_acl d LEFT JOIN pg_namespace n ON n.oid=d.defaclnamespace
+    CROSS JOIN LATERAL aclexplode(d.defaclacl) a LEFT JOIN pg_roles r ON r.oid=a.grantee
+    WHERE a.grantee=0 OR r.rolname IN ('anon','authenticated','service_role')), '[]'::jsonb),
   'schemas', coalesce((SELECT jsonb_agg(jsonb_build_object(
     'name', n.nspname, 'owner', pg_get_userbyid(n.nspowner),
     'public_privileges', coalesce((SELECT jsonb_agg(a.privilege_type ORDER BY a.privilege_type)
