@@ -12,10 +12,24 @@ Those requirements remain in scope; the rows below do not replace or erase them.
 The owner requested simple **Fixed / Not fixed** tracking in the existing
 [93-item worksheet](2026-11-03-agentos-requirements-reconciliation.md).
 Update those rows as work completes; do not create another backlog.
-**Current total: 49 Fixed / 44 Not fixed.** Partial implementation and unverified
+**Current total: 50 Fixed / 43 Not fixed.** Partial implementation and unverified
 live acceptance remain Not fixed. This checkpoint was refreshed at the owner's
 request on 7 November; the tables below the current checkpoint are historical.
 
+- **S03 Fixed — loaded administration lifecycle passed:** the exact disposable
+  `example.invalid` identity was preapproved/revoked through the native UI, then
+  explicitly seeded pending/unverified without credentials or a session. The UI
+  approved it, granted only Orbit access, suspended/reapproved it, removed access
+  and deleted it by exact email. Native revisions 1–6 and eight audit events
+  corroborate each operation. Cleanup verifies zero fixture identity, auth
+  account/session/key/role/grant/preapproval; one archived Orbit membership and
+  audit remain as native history. Original two approved users and one admin are
+  unchanged. No external email/request, company work or agent job occurred.
+  Current M04 analytics were already browser-verified. A screenshot detached
+  during a query refresh; state was read before resuming, without duplicate
+  writes. Final browser journey has no app/page/HTTP errors. This is admin
+  control evidence, not Google registration/sign-in (S01/S02 remain open).
+  Report: `/private/tmp/agentos-admin-browser-20261109/verification-report.json`.
 - **M04 Fixed — configured native model/attempt projection loaded and browser-verified:**
   the administration audit previously omitted each native run's selected model
   when no Model Intelligence selection receipt existed. It now projects only

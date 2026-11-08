@@ -13,7 +13,7 @@ Explicit deferrals stay **Not fixed**, with the deferral retained in the row.
 Older detail is reference material; new updates need only status and the next
 required action. Do not recreate this list or ask the owner to repeat it.
 
-Current total: **49 Fixed / 44 Not fixed — all 93 requirements retained**.
+Current total: **50 Fixed / 43 Not fixed — all 93 requirements retained**.
 The one approved dashboard screenshot and charcoal overlay are complete and live.
 Model qualification controls and explicit component publication are implemented
 and active; their remaining real-work acceptance stays open in M03 and A04.
@@ -279,7 +279,7 @@ the current conversation, not invented additions to its historical numbering.
 | P01 | **Not fixed** | Company Performance shows revenue, recorded costs, profit/loss, views, engagement and publication results, with department/project filters and evidence. | U123–U124 | Persisted scope/data checks and current-browser empty report, project/department filters pass without type errors. Next: live connected-source collection; unknown values remain unreported. |
 | S01 | **Not fixed** | Public landing page supports open registration; new people wait for owner approval before receiving assigned company access. | U93–U94, U98 | Implemented foundation; real browser registration/approval journey pending. |
 | S02 | **Not fixed** | Google sign-in/sign-out and profile switching work using the dedicated AgentOS Google project and correct client/redirect configuration. | U93, U95–U97, U100–U111, U143–U146 | Client ID/secret configured privately and private Google authentication active. Owner claim and actual login/logout remain pending; do not ask for credentials again. |
-| S03 | **Not fixed** | `/admin` manages additions, approvals, company access, deletion/suspension and administrative visibility, including model-learning analytics. | U93–U94 | Admin refresh failures now hide cached account/grant details; analytics timestamp 500 repaired. Seventeen native database/audit and eleven admin UI checks pass. Next: current loaded admin screens and remaining account journey. |
+| S03 | **Fixed** | `/admin` manages additions, approvals, company access, deletion/suspension and administrative visibility, including model-learning analytics. | U93–U94 | Loaded 9831584 browser verifies preapproval/revocation, approval, Orbit-only access, suspension/reapproval, access removal and exact-email deletion using one explicit pending-user fixture. Eight native audit events and revisions 1–6 are retained; fixture identity/credentials/grants/preapproval are removed, archived membership history remains, and the original two users/one admin are unchanged. Current model analytics passed under M04. No email, external request or provider job; Google registration/login remains separate S01/S02 work. |
 | S04 | **Fixed** | Use the owner's intended provider accounts/projects; do not reuse unrelated application projects or silently switch provider accounts. | U95–U97, U100–U111, U126–U133 | Constraint; preserve existing selected bindings. CLI preference applies where suitable. |
 
 ## Execution, reliability and release
