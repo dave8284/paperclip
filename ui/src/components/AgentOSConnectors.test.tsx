@@ -11,6 +11,7 @@ vi.mock("@/api/tools", () => ({ toolsApi: { ...api,
   listGallery: async () => ({ apps: [{ slug: "higgsfield", name: "Higgsfield", description: "Create marketing assets" }, { slug: "supabase", name: "Supabase", description: "Data and storage" }, { slug: "google-workspace", name: "Google Workspace", description: "Gmail, Calendar and Drive" }, { slug: "slack", name: "Slack", description: "Team chat" }] }),
 } }));
 vi.mock("@/lib/router", () => ({ Link: ({ to, children }: { to: string; children: React.ReactNode }) => <a href={to}>{children}</a> }));
+vi.mock("./AiWorkspaceAccounts", () => ({ AiWorkspaceAccounts: () => null, useAiWorkspaceAccounts: () => ({ owned: [] }) }));
 it("distinguishes pending provider sign-in from connected seats and checks disconnect authority", async () => {
   const host = document.createElement("div"), root = createRoot(host), client = new QueryClient({ defaultOptions: { queries: { retry: false } } }); document.body.append(host);
   try {

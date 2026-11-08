@@ -7,6 +7,8 @@ import type { ModelProfileQualification, ModelProfileQualificationEvidence, Mode
 import { ApiError } from "@/api/client";
 import { agentosModelsKey } from "@/api/agentos-models";
 import { AgentOSModelSettings } from "./AgentOSModelSettings";
+vi.mock("./ModelComparisonPreparation", () => ({ ModelComparisonPreparation: () => <section aria-label="Prepare model comparison" /> }));
+vi.mock("./ModelRoutingControls", () => ({ ModelRoutingControls: () => <section aria-label="Automatic model routing" /> }));
 
 const mocks = vi.hoisted(() => ({ accounts: vi.fn(), catalog: vi.fn(), qualifications: vi.fn(), register: vi.fn(), revoke: vi.fn(),
   identity: { userId: "owner", settled: true, failed: false } }));

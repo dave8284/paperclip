@@ -84,7 +84,7 @@ test("real HTTP upgrade and credential replacement preserve data and revoke exac
     assert.equal((await service.request(tokenA, "/v1/datasets", dataset)).status, 200);
     await service.stop(); service = null;
     const upgradedDb = new DatabaseSync(database);
-    assert.equal(upgradedDb.prepare("PRAGMA user_version").get().user_version, 2);
+    assert.equal(upgradedDb.prepare("PRAGMA user_version").get().user_version, 5);
     upgradedDb.close();
 
     // A fresh process retains the audit while replacing host A and removing

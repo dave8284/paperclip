@@ -71,6 +71,34 @@ The [qualification checks](../../server/src/__tests__/model-profile-qualificatio
 exercise native evidence, expiry, revocation and selection against a disposable
 database. These checks do not qualify a live subscription or production model.
 
+Settings → Models also offers native preparation of preregistered comparisons.
+Choose an available case, baseline or candidate arm, and a matching fresh backlog
+task with its assigned employee. Preparation locks the assignment and preserves
+the native task's normal Start and review controls. It does not execute work or
+authorize a model, account or policy change. Source/check access is rechecked;
+unavailable private cases and stale cached choices remain hidden.
+Native reviewed outcome delivery is separate from manual administrator feedback.
+Unknown results remain unknown, and process success alone cannot pass a case.
+The source now binds admission to the prepared arm and freezes native outcome
+delivery for idempotent recovery. Complete native histories supply provider-turn/repair
+counts and queue-through-review latency, including failed attempts. Incomplete
+histories remain unmeasured. Delivered context remains incomplete, so these
+outcomes cannot qualify canary readiness. Persisted native
+and live acceptance remain blocked/unverified in the completion ledger.
+Content-free tool transport receipts now distinguish persisted results from
+bytes actually written to the provider. Missing delivery and unverified provider
+acceptance/use remain explicit; these receipts do not supply the missing actual
+context qualification or add ordinary chat messages.
+
+Settings → Models also offers company/task-family routing enrollment, pins to
+adopted versions and rollback. Changes preserve revision and retry identity;
+access loss hides cached policy details. Automatic routing requires a complete
+controlled comparison and bounded observed canary, rather than observational
+scores alone. Current owner authority, native audit and account qualification
+remain mandatory. The new source pipeline preserves outcomes through restart
+and expires missing observations using actual deadlines. Unknown native context
+still blocks qualification; no live policy or release was enabled by this work.
+
 ### `shared-execution-capacity`
 
 Open Administration → AI capacity. Create a named group, choose its provider,
@@ -136,6 +164,14 @@ Sources: [Cost notice](../../ui/src/components/CostDataQualityNotice.tsx), [cost
 ## Gotchas
 
 ### Model Intelligence audit
+
+The same policy logic now supports an explicitly accepted PostgreSQL evidence
+store through asynchronous host/HTTP access; SQLite keeps its synchronous API.
+Startup never imports or activates a destination. Native delivery acknowledgements
+wait for commit, and existing reconciliation refreshes scheduled deadlines.
+Controlled storage/lifecycle checks pass; actual PostgreSQL migration, locking,
+report parity and live runtime acceptance remain unverified. See the
+[migration plan](../../doc/plans/2026-11-07-agentos-supabase-full-migration.md).
 
 Source checks: [joined model audit](../../server/src/__tests__/agentos-model-audit.test.ts)
 and [administrator UI](../../ui/src/components/AdminModelIntelligence.test.tsx)

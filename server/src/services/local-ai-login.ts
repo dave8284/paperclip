@@ -9,6 +9,7 @@ import type { AiConnectionLoginIntent, LocalAiLoginAttempt, LocalAiLoginStatus }
 import { resolvePaperclipInstanceRoot } from "../home-paths.js";
 import { notFound, unprocessable } from "../errors.js";
 import { aiConnectionService } from "./ai-connections.js";
+import { finishOwnerAiAccountConnection } from "./ai-workspace-account-setup.js";
 import { readVerifiedLocalAiCredential } from "./local-ai-credentials.js";
 import { logActivity } from "./activity-log.js";
 import { startLocalBrowserLogin, type LocalBrowserLoginState } from "./local-ai-browser-login.js";
@@ -232,7 +233,7 @@ export function localAiLoginService(db: Db) {
     // Failed cleanup can be retried by the same completed attempt or reaper.
     stopBrowserLogin(id);
     await rm(loginHome(id), { recursive: true, force: true });
-    return result;
+    return { ...result, aiAccountSetup: await finishOwnerAiAccountConnection(db, { ...result, companyId, userId }) };
   }
 
   async function cancel(companyId: string, userId: string, id: string) {

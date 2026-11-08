@@ -824,6 +824,8 @@ export async function resolveRunScopedMentionedSkillKeys(input: {
 
 
 export interface WakeupOptions {
+  /** Internal company-owned board direction receipt; never accepted from public payloads. */
+  durableBoardDirectionRequest?: { directionId: string; wakeupRequestId: string; issueId: string; expectedIssueStatusVersion: number };
   /** Internal durable case assignment receipt. Never accepted from public wake payloads. */
   durableCaseHandoffRequest?: { handoffId: string; wakeupRequestId: string; issueId: string; expectedIssueStatusVersion: number };
   /** Set only by authenticated board wake routes; never copied from caller payloads. */

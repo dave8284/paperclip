@@ -33,6 +33,7 @@ import { legacyDispositionEpisode, legacyDispositionFingerprint } from "../../..
 import { appendHeartbeatRunEvent } from "../../../services/heartbeat-run-events.js";
 import { emitAgentTaskRun } from "../../../services/agent-task-run-telemetry.js";
 import { issueService } from "../../../services/issues.js";
+import { fridayCoordinatorSql, fridayOwnConversationSql, FRIDAY_DELIVERY_BLOCK_REASON } from "../../../services/friday-board-role.js";
 import {
   issueTreeControlService,
   isVerifiedIssueTreeControlInteractionWake,
@@ -1247,7 +1248,14 @@ export function createPostgresRunDispatchAdapter(
         || claim.admittedAt !== admission.claim.admittedAt || claim.handedOffAt)
         return { dispatched: false as const, cancellation: { outcome: "lost_race" as const } };
 
+      // Serialize the current designation with operatingProfileService.update,
+      // including the first profile insert. The provider callback below still
+      // enters synchronously under the final native ownership gate.
+      await tx.execute(sql`select pg_advisory_xact_lock_shared(hashtextextended(${`operating-profile:${run.companyId}`}, 0))`);
       const [scope] = await tx.select({ companyStatus: companies.status, agentStatus: agents.status,
+        isBoardCoordinator: fridayCoordinatorSql(agents.companyId, agents.id),
+        ownConversation: fridayOwnConversationSql({ companyId: run.companyId, agentId: run.agentId,
+          issueId: run.nativeIssueId ?? run.issueId ?? readNonEmptyString(parseObject(run.contextSnapshot).issueId) }),
         lifecycleState: agents.lifecycleState, reservationId: budgetReservations.id,
         projectId: budgetReservations.projectId, currentProjectId: projects.id, projectPausedAt: projects.pausedAt })
         .from(companies).innerJoin(agents, and(eq(agents.companyId, companies.id), eq(agents.id, run.agentId)))
@@ -1262,6 +1270,8 @@ export function createPostgresRunDispatchAdapter(
       if (scope.companyStatus !== "active" || scope.projectPausedAt || scope.lifecycleState !== "ready"
         || ["paused", "terminated", "pending_approval"].includes(scope.agentStatus))
         return { dispatched: false as const, admissionBlockReason: "Execution scope is paused or no longer ready for work" };
+      if (scope.isBoardCoordinator && !scope.ownConversation)
+        return { dispatched: false as const, admissionBlockReason: FRIDAY_DELIVERY_BLOCK_REASON };
 
       if (input.enforceContinuationOwnership !== false) {
         const contextSnapshot = parseObject(run.contextSnapshot);

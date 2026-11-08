@@ -5,7 +5,7 @@ import type { InboxAgentPolicy, InboxAgentPolicyMode } from "@paperclipai/shared
 import { agentsApi } from "@/api/agents";
 import { inboxAgentPolicyApi } from "@/api/inbox-agent-policy";
 import { queryKeys } from "@/lib/queryKeys";
-import { isAgentTaskTarget } from "@/lib/company-members";
+import { isAgentInteractionTarget } from "@/lib/company-members";
 import { AgentMultiSelect } from "@/components/AgentMultiSelect";
 import { Button } from "@/components/ui/button";
 import { RadioCardGroup, type RadioCardOption } from "@/components/ui/radio-card";
@@ -62,7 +62,7 @@ export function InboxAgentPolicyControl({ companyId }: { companyId: string | nul
     enabled: !!companyId,
   });
   const selectableAgents = useMemo(
-    () => (agentsQuery.data ?? []).filter(isAgentTaskTarget),
+    () => (agentsQuery.data ?? []).filter(isAgentInteractionTarget),
     [agentsQuery.data],
   );
   const agentOptions = useMemo(

@@ -1,6 +1,6 @@
 import { type BudgetServiceHooks } from "./budgets.js";
 
-import { and, desc, eq, inArray, ne } from "drizzle-orm";
+import { and, desc, eq, getTableColumns, inArray, ne } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import { agents, agentConfigRevisions, agentApiKeys, heartbeatRuns } from "@paperclipai/db";
 import { isUuidLike, normalizeAgentApiKeyScope, normalizeAgentUrlKey, type AgentApiKeyScope } from "@paperclipai/shared";
@@ -17,6 +17,7 @@ import {
   configPatchFromSnapshot,
 } from "../lib/agent-records.js";
 import { createAgentLifecycle } from "./agent-lifecycle.js";
+import { fridayCoordinatorSql } from "./friday-board-role.js";
 
 export { hasAgentShortnameCollision, deduplicateAgentName } from "../lib/agent-records.js";
 
@@ -36,7 +37,7 @@ export function agentService(db: Db, budgetHooks: BudgetServiceHooks = {}) {
         conditions.push(ne(agents.status, "terminated"));
       }
       const [rows, allCompanyRows] = await Promise.all([
-        db.select().from(agents).where(and(...conditions)),
+        db.select({ ...getTableColumns(agents), isBoardCoordinator: fridayCoordinatorSql(agents.companyId, agents.id) }).from(agents).where(and(...conditions)),
         listCompanyAgentRows(companyId),
       ]);
       const hydrated = await hydrateAgentSpend(rows);

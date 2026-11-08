@@ -169,6 +169,8 @@ export interface AiManagedConnectionSummary {
   id: string;
   grantId: string;
   companyId: string;
+  /** Lifecycle belongs to the connected AgentOS account, not this company copy. */
+  workspaceAccountManaged?: boolean;
   provider: AiProvider;
   method: AiAuthMethod;
   name: string;

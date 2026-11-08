@@ -4,8 +4,35 @@
   "type": "module",
   "description": "Auditable, evidence-gated model profile selection with independent storage and HTTP API",
   "license": "MIT",
-  "exports": { ".": { "types": "./src/index.d.ts", "import": "./src/index.mjs" } },
-  "files": ["src", "README.md"],
-  "engines": { "node": ">=22.16.0" },
-  "scripts": { "start": "node src/server.mjs", "test": "node --test src/*.test.mjs", "build": "node --check src/index.mjs && node --check src/comparisons.mjs && node --check src/http-auth.mjs && node --check src/http-handler.mjs && node --check src/server.mjs", "typecheck": "node --check src/index.mjs && node --check src/comparisons.mjs && node --check src/http-auth.mjs && node --check src/http-handler.mjs && node --check src/server.mjs" }
+  "exports": {
+    ".": {
+      "types": "./src/index.d.ts",
+      "import": "./src/index.mjs"
+    },
+    "./migration-manifest": {
+      "types": "./src/migration-manifest.d.ts",
+      "import": "./src/migration-manifest.mjs"
+    },
+    "./migration": {
+      "types": "./src/migration.d.ts",
+      "import": "./src/migration.mjs"
+    },
+    "./postgres": {
+      "types": "./src/postgres.d.ts",
+      "import": "./src/postgres.mjs"
+    }
+  },
+  "files": [
+    "src",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=22.16.0"
+  },
+  "scripts": {
+    "start": "node src/server.mjs",
+    "test": "node --test src/*.test.mjs",
+    "build": "node --check src/index.mjs && node --check src/comparisons.mjs && node --check src/migration-manifest.mjs && node --check src/migration-import.mjs && node --check src/postgres-migration-target.mjs && node --check src/migration-schema.mjs && node --check src/migration-digest.mjs && node --check src/migration-errors.mjs && node --check src/rollouts.mjs && node --check src/http-auth.mjs && node --check src/http-handler.mjs && node --check src/server.mjs && node --check src/model-policy.mjs && node --check src/sqlite-schema.mjs && node --check src/storage-effects.mjs && node --check src/async-store.mjs && node --check src/postgres-query.mjs && node --check src/postgres.mjs",
+    "typecheck": "node --check src/index.mjs && node --check src/comparisons.mjs && node --check src/migration-manifest.mjs && node --check src/migration-import.mjs && node --check src/postgres-migration-target.mjs && node --check src/migration-schema.mjs && node --check src/migration-digest.mjs && node --check src/migration-errors.mjs && node --check src/rollouts.mjs && node --check src/http-auth.mjs && node --check src/http-handler.mjs && node --check src/server.mjs && node --check src/model-policy.mjs && node --check src/sqlite-schema.mjs && node --check src/storage-effects.mjs && node --check src/async-store.mjs && node --check src/postgres-query.mjs && node --check src/postgres.mjs"
+  }
 }

@@ -8,6 +8,7 @@ import { healthApi } from "@/api/health";
 import { LocalProviderLoginInstructions } from "./AdapterLoginChrome";
 import { useLocalAiLogin } from "./ai-connections/useLocalAiLogin";
 import { aiConnectionsApi } from "@/api/ai-connections";
+import { AiCompanyAccountSetup } from "./AiAccountSetupNotice";
 import { AiConnectionField, aiProviderForAdapter } from "./ai-connections/AiConnectionField";
 import { useConnectionModelsState } from "./ai-connections/useConnectionModels";
 import { PAPERCLIP_RUNNER_ACPX_PROFILES } from "@paperclipai/adapter-utils";
@@ -585,6 +586,7 @@ function OnboardingWizardInner({
   useEffect(() => { lastStep.current = step; }, [step]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [aiSetupRevision, setAiSetupRevision] = useState(0);
   const [modelOpen, setModelOpen] = useState(false);
   const [modelSearch, setModelSearch] = useState("");
 
@@ -2327,6 +2329,7 @@ function OnboardingWizardInner({
       // fight it — and would leave the customer on a company they never
       // navigated to.
       if (!canCommitCreatedCompany(companyIdAtStart, company.id)) return;
+      if (company.aiAccountSetup) setAiSetupRevision(value => value + 1);
       setCreatedCompanyId(company.id);
       // Keep the mirror current rather than waiting for the next render:
       // anything downstream that asks `stillTheSameCompany` in this tick would
@@ -2432,8 +2435,9 @@ function OnboardingWizardInner({
         if (!apiKeyStored || !isCurrent()) return;
       }
       if (credentialMode !== "api" && canUseLocalLogin && managedProvider && !managedBindingForStep() && !savedSubscription && !savedKeys.storedLogin.data) {
-        await localLogin.connect();
+        const savedAccount = await localLogin.connect();
         if (!isCurrent()) return;
+        if (savedAccount.aiAccountSetup) setAiSetupRevision(value => value + 1);
         managedSubscriptionRef.current = { companyId: createdCompanyId, binding: { provider: managedProvider, method: "subscription", mode: "responsible_user" } };
       }
       const managedBinding = managedBindingForStep();
@@ -3264,7 +3268,15 @@ function OnboardingWizardInner({
                             phaseBeforeSubmitRef.current === "ready" ? "ready" : "waiting",
                           );
                         }}
-                        onConnected={() => {
+                        onConnected={(sessionId) => {
+                          if (sessionId) {
+                            const attempt = connectAttemptRef.current;
+                            void aiConnectionsApi.loginResult(createdCompanyId, sessionId).then(result => {
+                              if (attempt === connectAttemptRef.current && stillTheSameCompany(createdCompanyId) && result.aiAccountSetup) setAiSetupRevision(value => value + 1);
+                            }).catch(() => {
+                              if (attempt === connectAttemptRef.current && stillTheSameCompany(createdCompanyId)) setError("Your sign-in was saved, but company account setup could not be checked. Retry setup status below.");
+                            });
+                          }
                           if (managedSubscriptionProvider) managedSubscriptionRef.current = { companyId: createdCompanyId, binding: { provider: managedSubscriptionProvider, method: "subscription", mode: "responsible_user" } };
                           setConnectAuthUrl(null);
                           // Not into a card the customer has left. The panel is
@@ -3486,6 +3498,7 @@ function OnboardingWizardInner({
                   checklist restating those in three rows only asked the
                   customer to audit work they watched happen. */}
 
+              {createdCompanyId && <AiCompanyAccountSetup key={createdCompanyId} companyId={createdCompanyId} refreshKey={aiSetupRevision} />}
               {/* Error */}
               {visibleError && (
                 <div className="mt-3">

@@ -9,6 +9,8 @@ import { AgentOSConnectors } from "./AgentOSConnectors";
 
 const api = vi.hoisted(() => ({ listSeats: vi.fn(), listConnections: vi.fn(), listGallery: vi.fn(),
   listConnectionGrants: vi.fn(), archiveConnection: vi.fn(), activeRuns: vi.fn() }));
+const accounts = vi.hoisted(() => ({ owned: [] as Array<{ id: string; provider: string; sourceConnectionId: string; enabled: boolean; available: boolean; links: Array<{ connectionId: string }> }> }));
+vi.mock("./AiWorkspaceAccounts", () => ({ AiWorkspaceAccounts: () => <section id="agentos-ai-accounts">AgentOS AI accounts</section>, useAiWorkspaceAccounts: () => accounts }));
 vi.mock("@/api/ai-connections", () => ({ aiConnectionsApi: { list: api.listSeats, activeRuns: api.activeRuns } }));
 vi.mock("@/api/tools", () => ({ toolsApi: api }));
 vi.mock("@/lib/router", () => ({ Link: ({ to, children }: { to: string; children: React.ReactNode }) => <a href={to}>{children}</a> }));
@@ -21,6 +23,7 @@ beforeEach(() => {
   api.listConnectionGrants.mockResolvedValue({ capabilities: { canConfigure: true } });
   api.activeRuns.mockResolvedValue([]);
   api.archiveConnection.mockResolvedValue({});
+  accounts.owned = [];
 });
 async function fixture() {
   const host = document.createElement("div"), root = createRoot(host);
@@ -102,5 +105,25 @@ it("resets pending management when the settings company changes", async () => {
     expect(view.host.textContent).toContain("Other company seat");
     expect(api.archiveConnection).not.toHaveBeenCalled();
     expect([...view.host.querySelectorAll(".agentos-project-grid h3")].map(row => row.textContent)).toEqual(AGENTOS_CONNECTORS.map(row => row.name));
+  } finally { await view.close(); }
+});
+
+it("routes registered source and company accounts to workspace management without generic disconnect", async () => {
+  api.listSeats.mockResolvedValue({ connections: [{ ...seat, workspaceAccountManaged: true }] });
+  const view = await fixture();
+  try {
+    expect(view.host.querySelector('a[href="/apps/seat/permissions"]')).toBeNull();
+    expect([...view.host.querySelectorAll("button")].some(row => row.textContent === "Disconnect")).toBe(false);
+    expect(view.host.querySelector('a[href="#agentos-ai-accounts"]')?.textContent).toBe("Manage AI account");
+  } finally { await view.close(); }
+});
+
+it("offers the existing workspace subscription before another provider sign-in", async () => {
+  api.listSeats.mockResolvedValue({ connections: [] });
+  accounts.owned = [{ id: "account", provider: "openai", sourceConnectionId: "source", enabled: true, available: true, links: [] }];
+  const view = await fixture();
+  try {
+    expect(view.host.querySelector('a[href="/apps/connect?source=openai"]')).toBeNull();
+    expect([...view.host.querySelectorAll('a[href="#agentos-ai-accounts"]')].some(row => row.textContent === "Use existing account")).toBe(true);
   } finally { await view.close(); }
 });

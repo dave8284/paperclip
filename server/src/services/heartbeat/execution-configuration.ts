@@ -1,4 +1,5 @@
 import { observeSelectedModelAccountAccess, selectCompanyModelProfile } from "../model-intelligence.js";
+import { assertAdmittedModelComparisonCurrent, claimNativeModelComparison, readNativeModelComparison } from "../model-comparison-admission.js";
 import { readLocalCodexIdentity } from "../../vendor/paperclip-runner/index.js";
 import { modelProfileQualificationService } from "../model-profile-qualifications.js";
 import { modelAccountFingerprint } from "../model-profile-binding.js";
@@ -10,6 +11,7 @@ import { agentObservabilityService, unavailableAgentObservability, type Resolved
 import { agentObservabilityLaunch } from "../agent-observability-launch.js";
 import { withSkillActor } from "../skill-access.js";
 import type { AuthorizationActor } from "../authorization.js";
+import { assertFridayRunEligible } from "../friday-board-role.js";
 import { eq, sql } from "drizzle-orm";
 import { heartbeatRuns, type Db, type agents, type projects } from "@paperclipai/db";
 import type { AiConnectionBinding } from "@paperclipai/shared";
@@ -94,7 +96,12 @@ export async function prepareHeartbeatExecutionConfiguration(db: Db, input: Hear
   const { run, agent, onFailureSecretsResolved, onManagedAiRuntimeAcquired, onIdentityRedactorPrepared } = input;
   const time = createHeartbeatPreparationTiming(run.id);
   const { issueId, context, responsibleUserId, acceptedPlanContinuationWake, acceptedPlanWakeRoutingDecision, taskProjectContext, routineEnvContext } = input.task;
+  await assertFridayRunEligible(db, { companyId: agent.companyId, agentId: agent.id, issueId });
   const { selectedEnvironmentId, selectedEnvironmentForConfig, resolvedInstanceSettings, persistedNativeExecutionInput } = input.environment;
+  const comparison = persistedNativeExecutionInput ? null : await claimNativeModelComparison(db, {
+    runId: run.id, companyId: agent.companyId, agentId: agent.id, issueId,
+    reviewOnly: Boolean(context.nativeReviewInteractionId),
+  });
   let sourceWorkspaceConfig = agent.adapterType === "paperclip_runner"
     ? { ...input.config.sourceWorkspaceConfig,
         homeMode: bindHeartbeatRunnerHomeMode(parseObject(agent.adapterConfig), persistedNativeExecutionInput).homeMode }
@@ -234,7 +241,21 @@ export async function prepareHeartbeatExecutionConfiguration(db: Db, input: Hear
       throw new ConfigurationIncompleteFailure("The AI account changed while this native run was suspended. Start a new execution.", { configurationIncomplete: { reason: "ai_connection_changed", actionUrl: `/agents/${agent.id}/runtime` } });
     }
     const currentAccount = managedAiRuntime;
-    modelSelection = await selectCompanyModelProfile(db, { runId: run.id, issueId, agent, config: sourceWorkspaceConfig, binding: aiBinding,
+    const restoredComparison = persistedNativeExecutionInput ? readNativeModelComparison(run) : null;
+    if (restoredComparison) {
+      const assertAccountCurrent = currentAccount.assertCurrent;
+      currentAccount.assertCurrent = async () => {
+        await assertAccountCurrent({ model: restoredComparison.assignment.profile.model });
+        await assertAdmittedModelComparisonCurrent(db, restoredComparison);
+        const identity = await readLocalCodexIdentity({ environment: { ...process.env, ...parseObject(currentAccount.config.env) } as NodeJS.ProcessEnv,
+          workingDirectory: typeof resolvedConfig.cwd === "string" ? resolvedConfig.cwd : undefined });
+        if (identity.cliVersion !== restoredComparison.assignment.cliVersion) throw new ConfigurationIncompleteFailure("The comparison executable changed while this run was suspended.", {
+          configurationIncomplete: { reason: "model_comparison_runtime_changed" },
+        });
+      };
+      await currentAccount.assertCurrent();
+    }
+    modelSelection = await selectCompanyModelProfile(db, { runId: run.id, issueId, agent, config: sourceWorkspaceConfig, binding: aiBinding, comparison,
       resumed: !!persistedNativeExecutionInput || !!run.sessionIdBefore,
       account: { attribution: currentAccount.attribution, sessionIdentity: currentAccount.sessionIdentity, assertCurrent: currentAccount.assertCurrent,
         ...((!selectedEnvironmentForConfig || selectedEnvironmentForConfig.driver === "local") && initialHarness === "codex_local"

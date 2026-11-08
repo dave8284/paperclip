@@ -56,7 +56,7 @@ export function agentosAdministrationRoutes(db: Db, options: { deploymentMode: "
   router.get("/admin/model-intelligence", async (req, res) => res.json(await modelIntelligenceAnalytics(db, principal(req))));
   router.get("/admin/model-intelligence/learning", async (req, res) => {
     await assertAdministration(db, principal(req));
-    res.json(modelIntelligenceProduct()?.analytics() ?? null);
+    res.json(await modelIntelligenceProduct()?.analytics() ?? null);
   });
   router.post("/admin/model-intelligence/evaluations", async (req, res) => {
     await assertAdministration(db, principal(req));
@@ -69,7 +69,7 @@ export function agentosAdministrationRoutes(db: Db, options: { deploymentMode: "
     const input = z.object({ namespace: z.string().uuid(), candidateId: z.string().min(1).max(300), action: z.enum(["block", "restore"]), reason: z.string().trim().min(10).max(300) }).strict().parse(req.body);
     assertCompanyAccess(req, input.namespace);
     const engine = modelIntelligenceProduct(); if (!engine) throw conflict("Model Intelligence is not configured");
-    const event = engine.policy(input);
+    const event = await engine.policy(input);
     await logActivity(db, { ...getActorInfo(req), companyId: input.namespace, action: "model_intelligence.policy_changed", entityType: "model_policy", entityId: event.id, details: { candidateId: input.candidateId, action: input.action, reason: input.reason } });
     res.json(event);
   });

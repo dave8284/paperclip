@@ -37,6 +37,50 @@ async function call(handler, { method = "GET", path = "/v1/analytics", credentia
 }
 const post = (handler, path, body, credential = tokenA) => call(handler, { method: "POST", path, body, credential });
 
+test("asynchronous storage is awaited before acknowledging writes and returning reports", async t => {
+  const f = setup(t);
+  let release, entered;
+  const gate = new Promise(resolve => { release = resolve; });
+  const started = new Promise(resolve => { entered = resolve; });
+  const asynchronous = new Proxy(f.store, { get(target, key) {
+    const value = target[key];
+    return typeof value === "function" ? async (...args) => { entered(); await gate; return value(...args); } : value;
+  } });
+  const handler = createHttpHandler(asynchronous, createHttpAuthority({ hostCredentials: hosts() }));
+  let acknowledged = false;
+  const pending = post(handler, "/v1/select", selection()).then(result => { acknowledged = true; return result; });
+  await started;
+  assert.equal(acknowledged, false); assert.equal(f.engine.analytics("a").counts.selections, 0);
+  release();
+  const selected = await pending;
+  assert.equal(selected.value.id, "selection");
+  assert.equal((await post(handler, "/v1/evaluations", evaluation())).value.passed, true);
+  assert.equal((await post(handler, "/v1/policy", policy())).value.action, "block");
+  assert.equal((await post(handler, "/v1/datasets", dataset())).value.id, "dataset");
+  assert.equal((await post(handler, "/v1/comparisons", comparison())).value.id, "comparison");
+  assert.equal((await call(handler, { path: "/v1/analytics?namespace=a" })).value.counts.selections, 1);
+  assert.equal((await call(handler, { path: "/v1/comparisons/report?namespace=a&comparisonId=comparison" })).value.status, "not_ready");
+  assert.deepEqual((await call(handler, { path: "/v1/routing/rollouts?namespace=a&taskType=support.triage" })).value, { policy: null, releases: [], events: [] });
+  const before = f.calls.length;
+  assert.equal((await post(handler, "/v1/select", selection("b"))).status, 403);
+  assert.equal(f.calls.length, before);
+});
+
+test("rejected asynchronous reads and writes use the error boundary instead of returning successful empty receipts", async () => {
+  const store = new Proxy({}, { get() { return async () => { throw new Error("Storage operation rejected"); }; } });
+  const handler = createHttpHandler(store, createHttpAuthority({ hostCredentials: hosts() }));
+  const responses = await Promise.all([
+    post(handler, "/v1/select", selection()),
+    call(handler, { path: "/v1/analytics?namespace=a" }),
+    call(handler, { path: "/v1/comparisons/report?namespace=a&comparisonId=comparison" }),
+    call(handler, { path: "/v1/routing/rollouts?namespace=a&taskType=support.triage" }),
+  ]);
+  for (const response of responses) {
+    assert.equal(response.status, 400);
+    assert.deepEqual(response.value, { error: "Storage operation rejected" });
+  }
+});
+
 test("legacy operator mode keeps all-namespace analytics and existing selection/evaluation/policy APIs", async t => {
   const f = setup(t, { operatorToken });
   for (const namespace of ["a", "b"]) {
@@ -65,13 +109,32 @@ test("host-only credentials authorize exact namespaces and never aggregate analy
 
 test("every write and comparison read rejects a foreign namespace before store access", async t => {
   const f = setup(t);
-  for (const path of ["/v1/select", "/v1/evaluations", "/v1/policy", "/v1/datasets", "/v1/comparisons", "/v1/comparison-outcomes"]) {
+  for (const path of ["/v1/select", "/v1/evaluations", "/v1/policy", "/v1/datasets", "/v1/comparisons", "/v1/comparison-outcomes",
+    "/v1/routing/policy", "/v1/routing/releases", "/v1/routing/rollback", "/v1/routing/outcomes"]) {
     assert.equal((await post(f.handler, path, { namespace: "b" })).status, 403);
     assert.equal((await post(f.handler, path, { namespace: "a" }, tokenB)).status, 403);
     assert.equal((await post(f.handler, path, {})).status, 400);
   }
   assert.equal((await call(f.handler, { path: "/v1/comparisons/report?namespace=b&comparisonId=anything" })).status, 403);
+  assert.equal((await call(f.handler, { path: "/v1/routing/rollouts?namespace=b&taskType=support.triage" })).status, 403);
   assert.equal(f.calls.length, 0);
+});
+
+test("routing HTTP policy revisions and reports stay scoped and cannot create an unqualified release", async t => {
+  const f = setup(t);
+  const input = { namespace: "a", id: "policy", taskType: "support.triage", expectedRevision: 0, mode: "automatic", pinnedReleaseId: null,
+    limits: { canaryPercent: 5, maximumPending: 2, minimumObservations: 5, observationTimeoutMs: 60_000, qualityLowerBound: .7,
+      maximumMedianIterations: 2, minimumLatencyImprovement: .15 }, reason: "Enroll this company" };
+  const first = await post(f.handler, "/v1/routing/policy", input);
+  assert.equal(first.status, 200); assert.equal(first.value.revision, 1);
+  assert.deepEqual((await post(f.handler, "/v1/routing/policy", input)).value, first.value);
+  assert.equal((await post(f.handler, "/v1/routing/policy", { ...input, id: "stale" })).status, 400);
+  const report = await call(f.handler, { path: "/v1/routing/rollouts?namespace=a&taskType=support.triage" });
+  assert.equal(report.status, 200); assert.equal(report.value.policy.revision, 1); assert.deepEqual(report.value.releases, []);
+  assert.equal((await post(f.handler, "/v1/routing/releases", { namespace: "a", id: "release", comparisonId: "unknown", expectedPolicyRevision: 1, reason: "Publish" })).status, 400);
+  assert.equal((await post(f.handler, "/v1/routing/outcomes", { namespace: "a", id: "claimed", receiptId: "unknown", outcome: "passed",
+    iterations: 1, latencyMs: 100, observedVariant: variant("candidate"), source: "human", evaluator: "owner", evidenceRef: "review" })).status, 400);
+  assert.equal((await call(f.handler, { path: "/v1/routing/rollouts?namespace=a&taskType=support.triage&taskType=other" })).status, 400);
 });
 
 test("comparison HTTP contracts preserve scoped immutable evidence, failure history and policy gates", async t => {

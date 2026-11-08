@@ -48,13 +48,12 @@ import {
   isUuidLike,
 } from "@paperclipai/shared";
 import { formatAttachmentSize, MAX_ATTACHMENT_BYTES, normalizeContentType } from "../attachment-types.js";
-import { HttpError, badRequest, conflict, forbidden, notFound, unprocessable } from "../errors.js";
+import { HttpError, badRequest, conflict, notFound, unprocessable } from "../errors.js";
 import { validate } from "../middleware/validate.js";
-import { instanceSettingsService } from "../services/instance-settings.js";
 import { documentAnnotationService, logActivity } from "../services/index.js";
 import type { StorageService } from "../storage/types.js";
 import { authorizationService, issueReadSqlCondition, type AuthorizationActor } from "../services/authorization.js";
-import { assertActorCanReadCase, assertActorCanWriteCase, caseReadSqlCondition, filterCasesForActor, retainCaseAccessSource } from "../services/case-access.js";
+import { assertCasesEnabled, assertActorCanReadCase, assertActorCanWriteCase, caseReadSqlCondition, filterCasesForActor, retainCaseAccessSource } from "../services/case-access.js";
 import { enrichCaseWork } from "../services/case-work-summary.js";
 import { listCaseTaskDocuments } from "../services/case-task-documents.js";
 import { authorizeCaseCreation, authorizeCaseMutation } from "../services/case-mutation-authorization.js";
@@ -72,13 +71,6 @@ function eventActorValues(actor: CaseActor) {
     actorAgentId: actor.agentId,
     runId: actor.runId && isUuidLike(actor.runId) ? actor.runId : null,
   };
-}
-
-async function assertCasesEnabled(db: Db) {
-  const experimental = await instanceSettingsService(db).getExperimental();
-  if (!experimental.enableCases) {
-    throw forbidden("Cases are disabled");
-  }
 }
 
 async function lockCaseUpsertKey(db: CaseRouteDb, input: { companyId: string; caseType: string; key: string | null | undefined }) {

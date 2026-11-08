@@ -21,5 +21,5 @@ export const agentosPortfolioMandates = pgTable("agentos_portfolio_mandates", {
   source: foreignKey({ name: "agentos_portfolio_mandates_source_fk", columns: [table.portfolioId, table.sourceCompanyId], foreignColumns: [agentosPortfolioCompanies.portfolioId, agentosPortfolioCompanies.companyId] }).onDelete("cascade"),
   agent: foreignKey({ name: "agentos_portfolio_mandates_agent_fk", columns: [table.sourceCompanyId, table.sourceAgentId], foreignColumns: [agents.companyId, agents.id] }).onDelete("cascade"),
   delegate: unique("agentos_portfolio_mandates_delegate_uq").on(table.sourceAgentId),
-  scope: check("agentos_portfolio_mandates_scope_check", sql`${table.action} = 'portfolio_work:read' and ${table.readScope} = 'company_shared_only' and ${table.revision} > 0 and jsonb_typeof(${table.targetCompanyIds}) = 'array' and jsonb_array_length(${table.targetCompanyIds}) between 1 and 50`),
+  scope: check("agentos_portfolio_mandates_scope_check", sql`${table.action} = 'portfolio_work:read' and ${table.readScope} in ('company_shared_only', 'owner_accessible_private') and ${table.revision} > 0 and jsonb_typeof(${table.targetCompanyIds}) = 'array' and jsonb_array_length(${table.targetCompanyIds}) between 1 and 50`),
 }));

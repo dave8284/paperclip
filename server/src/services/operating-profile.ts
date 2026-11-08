@@ -5,6 +5,7 @@ import { conflict, forbidden, notFound } from "../errors.js";
 import { accessService } from "./access.js";
 import { persistActivity, publishActivity, type LogActivityInput } from "./activity-log.js";
 import type { AuthorizationActor } from "./authorization.js";
+import { agentExecutionsHaveStopped } from "./agent-execution-stop.js";
 
 type MutationActor = Pick<LogActivityInput, "actorType" | "actorId" | "agentId" | "runId">;
 
@@ -20,8 +21,8 @@ export function operatingProfileService(db: Db) {
       const result = await db.transaction(async transaction => {
         const tx = transaction as unknown as Db;
         const access = accessService(tx);
-        // Binding Friday also grants portfolio mutation, so permission management
-        // belongs to the same authority as other native principal grants.
+        // Binding changes the board-role ceiling. It requires native permission
+        // management authority, but never grants operational write permissions.
         const decision = await access.decide({ actor, action: "users:manage_permissions", resource: { type: "company", companyId } });
         if (!decision.allowed) throw forbidden(decision.explanation);
         await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`operating-profile:${companyId}`}, 0))`);
@@ -37,8 +38,15 @@ export function operatingProfileService(db: Db) {
           }
         }
         if (current.fridayAgentId === input.fridayAgentId) return { profile: current, publication: null };
-        if (current.fridayAgentId) await access.setPrincipalPermission(companyId, "agent", current.fridayAgentId, "applications:manage", false, actor.userId ?? null);
-        if (input.fridayAgentId) await access.setPrincipalPermission(companyId, "agent", input.fridayAgentId, "applications:manage", true, actor.userId ?? null);
+        // Final native provider entry takes this same configuration lock in
+        // shared mode. A new coordinator must first finish its existing work;
+        // terminal status alone is not proof that providers/resources stopped.
+        // Reuse lifecycle evidence without cancelling work or clearing owners.
+        if (input.fridayAgentId && !await agentExecutionsHaveStopped(tx, [input.fridayAgentId], { readOnly: true })) {
+          throw conflict("Wait for this employee's current work and cleanup to finish before making them Friday.", {
+            code: "friday_execution_pending",
+          });
+        }
         const profile = { companyId, fridayAgentId: input.fridayAgentId, revision: current.revision + 1 };
         await tx.insert(companyOperatingProfiles).values(profile).onConflictDoUpdate({
           target: companyOperatingProfiles.companyId, set: { ...profile, updatedAt: new Date() },

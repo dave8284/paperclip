@@ -929,6 +929,7 @@ fn codex_dynamic_tool_round_trips_through_the_provider_boundary() {
                         is_error: false,
                     })
                     .is_err());
+                assert!(provider.written_tool_result_receipt().is_none());
                 assert!(provider
                     .deliver_tool_result(&ToolResult {
                         call_id: call_id.clone(),
@@ -945,6 +946,26 @@ fn codex_dynamic_tool_round_trips_through_the_provider_boundary() {
                         is_error: false,
                     })
                     .expect("deliver correlated semantic result");
+                let receipt = provider.written_tool_result_receipt().unwrap().clone();
+                assert_eq!(receipt["stage"], "transport_written");
+                assert_eq!(receipt["callId"], "semantic-call-1");
+                assert_eq!(receipt["operationId"], "get_task_context");
+                assert_eq!(receipt["source"], "tool/result");
+                assert_eq!(receipt["resultSha256"].as_str().unwrap().len(), 64);
+                assert_eq!(
+                    receipt["resultBytes"],
+                    r#"{"ok":true,"task":{"id":"task-1"}}"#.len()
+                );
+                assert!(!receipt.to_string().contains("task-1"));
+                assert!(provider
+                    .deliver_tool_result(&ToolResult {
+                        call_id: "missing-call".to_owned(),
+                        operation_id: "get_task_context".to_owned(),
+                        result: json!({"private":"not delivered"}),
+                        is_error: false,
+                    })
+                    .is_err());
+                assert_eq!(provider.written_tool_result_receipt(), Some(&receipt));
                 delivered = true;
             }
             Some(CodexProviderEvent::Notification { method, .. }) if method == "turn/completed" => {
@@ -956,6 +977,15 @@ fn codex_dynamic_tool_round_trips_through_the_provider_boundary() {
     }
     assert!(delivered, "Codex emitted its authorized tool call");
     assert!(completed, "Codex completed after the semantic result");
+    {
+        use sha2::{Digest, Sha256};
+        let observed = recorded_tool_responses(&directory);
+        assert_eq!(observed.len(), 1);
+        assert_eq!(
+            provider.written_tool_result_receipt().unwrap()["resultSha256"],
+            format!("{:x}", Sha256::digest(observed[0].as_bytes()))
+        );
+    }
     provider.shutdown().expect("stop provider");
     fs::remove_dir_all(directory).expect("remove Codex integration-test directory");
 }
@@ -3332,6 +3362,7 @@ fn durable_backend_routes_a_semantic_tool_result_back_to_codex() {
     assert_eq!(delivered.result["status"], "delivered");
 
     let mut result_seen = false;
+    let mut written_seen = false;
     let mut terminal_seen = false;
     let completion_deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
     while std::time::Instant::now() < completion_deadline {
@@ -3339,15 +3370,29 @@ fn durable_backend_routes_a_semantic_tool_result_back_to_codex() {
         result_seen |= events
             .iter()
             .any(|event| event.event_type == "semantic_tool.result");
+        written_seen |= events.iter().any(|event| {
+            if event.payload["code"] != "context.tool_result_written" {
+                return false;
+            }
+            assert_eq!(event.event_type, "harness.diagnostic");
+            assert_eq!(
+                event.payload["contextReceipt"]["stage"],
+                "transport_written"
+            );
+            assert_eq!(event.payload["contextReceipt"]["callId"], "semantic-call-1");
+            assert!(!event.payload.to_string().contains("task-1"));
+            true
+        });
         terminal_seen |= events
             .iter()
             .any(|event| event.event_type == "turn.completed");
-        if result_seen && terminal_seen {
+        if result_seen && written_seen && terminal_seen {
             break;
         }
         std::thread::sleep(std::time::Duration::from_millis(1));
     }
     assert!(result_seen);
+    assert!(written_seen);
     assert!(terminal_seen);
     executor.shutdown().expect("stop provider");
     fs::remove_dir_all(directory).expect("remove Codex integration-test directory");
@@ -7011,8 +7056,17 @@ fn qualified_codex_observes_session_identity_and_rechecks_model_on_resume() {
     let directory = temporary_directory("qualified-observation");
     let config = qualified_codex_config(&directory, &["--returned-effort", "high"]);
     let mut provider = CodexProvider::start(&config, None).unwrap();
+    let mut identity = serde_json::to_value(provider.observed_codex_identity()).unwrap();
+    let receipt = identity
+        .as_object_mut()
+        .unwrap()
+        .remove("contextReceipt")
+        .unwrap();
+    assert_eq!(receipt["stage"], "thread_accepted");
+    assert_eq!(receipt["source"], "thread/start");
+    assert_eq!(receipt["instructionsSha256"].as_str().unwrap().len(), 64);
     assert_eq!(
-        serde_json::to_value(provider.observed_codex_identity()).unwrap(),
+        identity,
         json!({
             "cliVersion":"0.160.0", "model":"test-model", "reasoningEffort":"high", "source":"thread/start"
         })
@@ -7071,13 +7125,23 @@ fn qualified_codex_durable_restore_retains_identity_and_rejects_model_override()
     let opened = executor
         .execute(&command("open", 2, "session.open", json!({})))
         .unwrap();
+    let mut observed = opened
+        .events
+        .iter()
+        .find(|event| event.0 == "session.started")
+        .unwrap()
+        .2["providerDescriptor"]["observedCodexIdentity"]
+        .clone();
+    let context = observed
+        .as_object_mut()
+        .unwrap()
+        .remove("contextReceipt")
+        .unwrap();
+    assert_eq!(context["stage"], "thread_accepted");
+    assert_eq!(context["source"], "thread/start");
+    assert_eq!(context["parametersSha256"].as_str().unwrap().len(), 64);
     assert_eq!(
-        opened
-            .events
-            .iter()
-            .find(|event| event.0 == "session.started")
-            .unwrap()
-            .2["providerDescriptor"]["observedCodexIdentity"],
+        observed,
         json!({
             "cliVersion":"0.160.0", "model":"test-model", "reasoningEffort":null, "source":"thread/start"
         })
@@ -7110,20 +7174,48 @@ fn qualified_codex_durable_restore_retains_identity_and_rejects_model_override()
     let resumed = restored
         .execute(&command("resume", 5, "session.open", json!({})))
         .unwrap();
+    let mut observed = resumed
+        .events
+        .iter()
+        .find(|event| event.0 == "session.resumed")
+        .unwrap()
+        .2["providerDescriptor"]["observedCodexIdentity"]
+        .clone();
+    let context = observed
+        .as_object_mut()
+        .unwrap()
+        .remove("contextReceipt")
+        .unwrap();
+    assert_eq!(context["stage"], "thread_accepted");
+    assert_eq!(context["source"], "thread/resume");
     assert_eq!(
-        resumed
-            .events
-            .iter()
-            .find(|event| event.0 == "session.resumed")
-            .unwrap()
-            .2["providerDescriptor"]["observedCodexIdentity"],
+        observed,
         json!({
             "cliVersion":"0.160.0", "model":"test-model", "reasoningEffort":null, "source":"thread/resume"
         })
     );
-    restored
-        .execute(&command("turn", 6, "turn.start", json!({"text":"Do work"})))
+    let envelope = json!({"schema":"paperclip.native-model-envelope.v3", "task":{"prompt":"Private ☃\nsource", "title":"Classify"}});
+    let accepted = restored
+        .execute(&command(
+            "turn",
+            6,
+            "turn.start",
+            json!({"text":envelope.to_string()}),
+        ))
         .unwrap();
+    use sha2::{Digest, Sha256};
+    let receipt = &accepted
+        .events
+        .iter()
+        .find(|event| event.0 == "turn.accepted")
+        .unwrap()
+        .2["inputReceipt"];
+    assert_eq!(receipt["stage"], "turn_accepted");
+    assert_eq!(
+        receipt["modelEnvelopeSha256"],
+        format!("{:x}", Sha256::digest(envelope.to_string().as_bytes()))
+    );
+    assert!(!receipt.to_string().contains("Private"));
     restored.shutdown().unwrap();
     fs::remove_dir_all(directory).unwrap();
 }

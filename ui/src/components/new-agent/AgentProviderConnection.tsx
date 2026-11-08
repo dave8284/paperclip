@@ -1,7 +1,8 @@
 import { healthApi } from "@/api/health";
 import { aiConnectionsApi } from "@/api/ai-connections";
 import { useLocalAiLogin } from "../ai-connections/useLocalAiLogin";
-import type { AiConnectionBinding, AiConnectionLoginIntent } from "@paperclipai/shared";
+import type { AiConnectionBinding, AiConnectionLoginIntent, AiWorkspaceAccountSetupResult } from "@paperclipai/shared";
+import { AiAccountSetupNotice } from "../AiAccountSetupNotice";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Cable } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
@@ -122,7 +123,17 @@ export function AgentProviderConnection({
   const storedLogin = managedAccount
     ? { ...savedKeys.storedLogin, data: undefined, isPending: false, isError: false }
     : savedKeys.storedLogin;
-  const savedManagedAccount = useRef<{ connectionId: string; grantId: string } | null>(null);
+  const savedManagedAccount = useRef<{ connectionId: string; grantId: string; aiAccountSetup?: AiWorkspaceAccountSetupResult } | null>(null);
+  const [pendingSetup, setPendingSetup] = useState<{ result: AiWorkspaceAccountSetupResult; complete: () => void; epoch: number } | null>(null);
+  useEffect(() => {
+    epoch.current++;
+    savedManagedAccount.current = null;
+    setPendingSetup(null);
+  }, [companyId]);
+  const finish = (result: { aiAccountSetup?: AiWorkspaceAccountSetupResult }, complete: () => void) => {
+    if (result.aiAccountSetup?.status === "pending") setPendingSetup({ result: result.aiAccountSetup, complete, epoch: epoch.current });
+    else complete();
+  };
   const method = methodChoice ?? (
     (savedKeys.subscriptions.length > 0 || (adapterType === "claude_local" && !savedSubscription && storedLogin.data))
       ? "subscription" : savedKeys.options.length ? "api" : "subscription"
@@ -173,7 +184,7 @@ export function AgentProviderConnection({
           : localLogin.connect(managedIntent));
         savedManagedAccount.current = result;
         setApiKey("");
-        if (run === epoch.current) managedAccount.onComplete({ ...result, method: method === "api" ? "api_key" : "subscription" });
+        if (run === epoch.current) finish(result, () => managedAccount.onComplete({ connectionId: result.connectionId, grantId: result.grantId, method: method === "api" ? "api_key" : "subscription" }));
         return;
       }
       let connection: ProviderConnection =
@@ -211,7 +222,7 @@ export function AgentProviderConnection({
       }
       const connected = await testConnection(connection);
       if (run !== epoch.current) return;
-      if (connected) onConnected(connection);
+      if (connected) finish(savedManagedAccount.current ?? {}, () => onConnected(connection));
       else
         setError(
           "The provider did not respond. Check the connection and try again.",
@@ -248,6 +259,12 @@ export function AgentProviderConnection({
     setStoredConnection(null);
     setError(null);
   };
+  if (pendingSetup) return <AiAccountSetupNotice result={pendingSetup.result} onChange={result => {
+    if (pendingSetup.epoch !== epoch.current) return;
+    if (savedManagedAccount.current) savedManagedAccount.current.aiAccountSetup = result;
+    if (result.status === "pending") setPendingSetup({ ...pendingSetup, result });
+    else { setPendingSetup(null); pendingSetup.complete(); }
+  }} onContinue={() => { if (pendingSetup.epoch === epoch.current) { setPendingSetup(null); pendingSetup.complete(); } }} />;
   return (
     <div className="min-w-0 max-w-full">
       <ModelSourceTiles
@@ -384,7 +401,10 @@ export function AgentProviderConnection({
                     const run = epoch.current;
                     setLoginPhase("connecting");
                     void aiConnectionsApi.loginResult(companyId, sessionId).then((result) => {
-                      if (run === epoch.current) managedAccount.onComplete({ ...result, method: "subscription" });
+                      if (run === epoch.current) {
+                        savedManagedAccount.current = result;
+                        finish(result, () => managedAccount.onComplete({ connectionId: result.connectionId, grantId: result.grantId, method: "subscription" }));
+                      }
                     }).catch(() => {
                       if (run !== epoch.current) return;
                       setLoginPhase("ready");
@@ -393,8 +413,15 @@ export function AgentProviderConnection({
                     return;
                   }
                   const connection: ProviderConnection = { env: {}, aiConnection: { provider: aiProvider, method: "subscription", mode: "responsible_user" } };
-                  setStoredConnection(connection);
-                  onConnected(connection);
+                  if (sessionId) {
+                    const run = epoch.current;
+                    void aiConnectionsApi.loginResult(companyId, sessionId).then(result => {
+                      if (run !== epoch.current) return;
+                      savedManagedAccount.current = result;
+                      setStoredConnection(connection);
+                      finish(result, () => onConnected(connection));
+                    }).catch(() => { if (run === epoch.current) setError("Could not retrieve account setup. Retry the saved sign-in."); });
+                  } else { setStoredConnection(connection); onConnected(connection); }
                 }}
               />
             ) : savedSubscription ? null : canUseLocalLogin && !storedLogin.data ? (

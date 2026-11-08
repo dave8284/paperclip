@@ -10,11 +10,11 @@ function review(engine,id,model,latency,passed=true) {
  engine.select(input(id,{defaultCandidateId:model,candidates:[candidates.find(row=>row.id===model)]}));
  engine.evaluate({namespace:"company-a",id,receiptId:id,passed,iterations:1,latencyMs:latency,source:"human",evaluator:"owner",evidenceRef:`task:${id}:acceptance`});
 }
-test("holds baseline without quality evidence; only measured qualified improvement wins",()=>{
+test("observational evidence remains visible but cannot bypass versioned company rollout",()=>{
  const engine=createModelIntelligence(":memory:");
  assert.equal(engine.select(input("initial")).candidate.id,"strong");
  for(let i=0;i<5;i++){review(engine,`strong${i}`,"strong",1000);review(engine,`fast${i}`,"fast",400);}
- const receipt=engine.select(input("learned"));assert.equal(receipt.candidate.id,"fast");assert.equal(receipt.evidence.evaluations,5);
+ const receipt=engine.select(input("learned"));assert.equal(receipt.candidate.id,"strong");assert.equal(receipt.evidence.evaluations,5);
  assert.equal(engine.select(input("complex",{complexity:"complex"})).candidate.id,"strong");
  assert.equal(engine.select(input("other-task-type",{taskType:"engineering"})).candidate.id,"strong");
  assert.equal(engine.select(input("other-company",{namespace:"company-b"})).candidate.id,"strong");
@@ -22,16 +22,16 @@ test("holds baseline without quality evidence; only measured qualified improveme
  assert.throws(()=>engine.select(input("learned",{taskType:"engineering"})),/different inputs/);
  engine.close();
 });
-test("active tasks stay pinned, quality regressions remove automatic preference, rollback fails closed",()=>{
+test("active tasks stay pinned and profile blocking prevents continuation",()=>{
  const engine=createModelIntelligence(":memory:");engine.select(input("pin"));
  for(let i=0;i<5;i++){review(engine,`strong${i}`,"strong",1000);review(engine,`fast${i}`,"fast",400);}
  assert.equal(engine.select(input("resume",{taskKey:"pin"})).candidate.id,"strong");
- assert.equal(engine.select(input("winner")).candidate.id,"fast");
+ assert.equal(engine.select(input("winner",{defaultCandidateId:"fast"})).candidate.id,"fast");
  review(engine,"fail1","fast",400,false);review(engine,"fail2","fast",400,false);
  assert.equal(engine.select(input("after-regression")).candidate.id,"strong");
  engine.policy({namespace:"company-a",candidateId:"fast",action:"block",reason:"Failed independent quality review"});
  assert.throws(()=>engine.select(input("winner-resume",{taskKey:"winner"})),/Pinned profile is unavailable/);
- assert.equal(engine.analytics("company-a").events.length,2);engine.close();
+ assert.equal(engine.analytics("company-a").events.length,1);engine.close();
 });
 test("feedback requires a real receipt, deduplicates and survives restart",()=>{
  const dir=mkdtempSync(join(tmpdir(),"agentos-model-test-")),path=join(dir,"intelligence.sqlite");

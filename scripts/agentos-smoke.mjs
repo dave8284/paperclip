@@ -59,13 +59,18 @@ try {
   assert.equal(profile.modelBilling, "subscription_only");
   const key = await api(`/agents/${coordinator.id}/keys`, "POST", { name: "Disposable coordination verification" });
   assert.equal(typeof key.token, "string");
-  const delegated = await api(`${base}/managed-applications/${first.application.id}`, "PATCH", { brief: "Updated through Friday's native permission" }, 200, key.token);
-  assert.equal(delegated.brief, "Updated through Friday's native permission");
-  const hire = await api(`${base}/agent-hires`, "POST", { name: "Verification project lead", role: "general", reportsTo: coordinator.id,
-    adapterType: "paperclip_runner", inheritRuntimeFrom: "caller", sourceIssueId: first.task.id,
-    instructionsBundle: { entryFile: "AGENTS.md", files: { "AGENTS.md": "Own this disposable project's plan, delegate bounded work, and report evidence to Friday. Do not run external actions." } } }, undefined, key.token);
+  await api(`${base}/managed-applications/${first.application.id}`, "PATCH", { brief: "Friday must not manage the registry" }, 403, key.token);
+  await api(`${base}/agent-hires`, "POST", { name: "Forbidden Friday hire", role: "general", adapterType: "paperclip_runner" }, 403, key.token);
+  // Board-created fixtures exercise the native API contract only. They are not
+  // evidence that a CEO delegated or a provider completed the real R05 journey.
+  const executive = await api(`${base}/agents`, "POST", { name: "Verification CEO", role: "ceo", adapterType: "paperclip_runner", adapterConfig: { provider: "codex" } });
+  const managed = await api(`${base}/managed-applications/${first.application.id}`, "PATCH", { brief: "Owner-managed test fixture" });
+  assert.equal(managed.brief, "Owner-managed test fixture");
+  const hire = await api(`${base}/agent-hires`, "POST", { name: "Verification project lead", role: "general", reportsTo: executive.id,
+    adapterType: "paperclip_runner", adapterConfig: { provider: "codex" }, sourceIssueId: first.task.id,
+    instructionsBundle: { entryFile: "AGENTS.md", files: { "AGENTS.md": "Own this disposable project's plan, delegate bounded work and report evidence to the CEO. The CEO reports to Friday and the owner. Do not run external actions." } } });
   assert(hire.agent?.id, "Native hiring should return the created lead");
-  const project = await api(`/projects/${first.project.id}`, "PATCH", { leadAgentId: hire.agent.id }, 200, key.token);
+  const project = await api(`/projects/${first.project.id}`, "PATCH", { leadAgentId: hire.agent.id }, 200);
   assert.equal(project.leadAgentId, hire.agent.id);
   await api(`${base}/operating-profile`, "PUT", { fridayAgentId: null, expectedRevision: 0 }, 409);
   await api(`${base}/managed-applications/${first.application.id}`, "PATCH", { kind: "platform" });
@@ -81,14 +86,14 @@ try {
   const form = new FormData();
   form.set("file", new Blob([html], { type: "text/html" }), "verification.html");
   const upload = await fetch(new URL(`/api${base}/issues/${first.task.id}/attachments`, origin), {
-    method: "POST", headers: { Origin: origin.origin, Authorization: `Bearer ${key.token}` }, body: form,
+    method: "POST", headers: { Origin: origin.origin }, body: form,
   });
   assert(upload.ok, `Artifact upload failed: ${upload.status}`);
   const attachment = await upload.json();
   const canvas = await api(`/issues/${first.task.id}/work-products`, "POST", {
     type: "artifact", provider: "paperclip", title: "Verification display", status: "ready_for_review",
     externalId: "friday-display-verification", metadata: { attachmentId: attachment.id },
-  }, undefined, key.token);
+  });
   assert.equal(canvas.metadata.attachmentId, attachment.id);
   assert.equal(canvas.metadata.contentType, "text/html");
   const content = await fetch(new URL(`/api/attachments/${attachment.id}/content`, origin));
@@ -100,13 +105,13 @@ try {
   assert.equal(JSON.parse((await api(documentPath, "GET", undefined, undefined, key.token)).body).attachmentId, attachment.id);
   await api(documentPath, "PUT", { format: "markdown", title: "Stale overwrite", baseRevisionId: null, body: "stale" }, 409);
   // Friday's read model includes projects outside the application registry.
-  const initiative = await api(`${base}/projects`, "POST", { name: "Unregistered initiative", leadAgentId: coordinator.id, idempotencyKey: randomUUID() }, undefined, key.token);
+  const initiative = await api(`${base}/projects`, "POST", { name: "Unregistered initiative", leadAgentId: hire.agent.id, idempotencyKey: randomUUID() });
   const awareness = await api(`${base}/friday/work?limit=1`, "GET", undefined, undefined, key.token);
   assert.equal(awareness.projectCount, 3);
   assert.equal(awareness.counts.done, 2);
   assert.equal(awareness.tasks.length, 1);
   assert.equal(awareness.nextOffset, 1);
-  const ownWork = await api(`${base}/friday/work?agentId=${coordinator.id}`, "GET", undefined, undefined, key.token);
+  const ownWork = await api(`${base}/friday/work?agentId=${hire.agent.id}`, "GET", undefined, undefined, key.token);
   assert(ownWork.projects.some(item => item.id === initiative.id));
   const scoped = await api(`${base}/friday/work?projectId=${first.project.id}`, "GET", undefined, undefined, key.token);
   assert(scoped.evidence.some(item => item.id === canvas.id && item.kind === "artifact"));
@@ -115,12 +120,13 @@ try {
   const shown = await api(viewPath, "PUT", { format: "markdown", title: "Current work view", body: JSON.stringify(view), baseRevisionId: null }, undefined, key.token);
   assert.deepEqual(JSON.parse(shown.body), view);
   await api(viewPath, "PUT", { format: "markdown", title: "Stale view", body: "{}", baseRevisionId: null }, 409, key.token);
-  const routine = await api(`${base}/routines`, "POST", { title: "Verification feedback loop", projectId: initiative.id, assigneeAgentId: coordinator.id, status: "paused", description: "Disposable paused routine; no external operations." }, undefined, key.token);
+  await api(`${base}/routines`, "POST", { title: "Forbidden Friday routine", projectId: initiative.id, assigneeAgentId: coordinator.id, status: "paused" }, 409);
+  const routine = await api(`${base}/routines`, "POST", { title: "Verification feedback loop", projectId: initiative.id, assigneeAgentId: hire.agent.id, status: "paused", description: "Disposable paused routine; no external operations." });
   assert.equal(routine.status, "paused");
   assert((await api(`${base}/routines?projectId=${initiative.id}`)).some(item => item.id === routine.id));
   await api(`${base}/attention?projectId=${first.project.id}`, "GET", undefined, 200);
   await api(`${base}/attention`, "GET", undefined, 403, key.token);
-  console.log("PASS: registration/replay, native aggregation, Friday binding, authenticated delegation/hiring, platform separation, galaxy, publication, shared awareness, revision-controlled displays/views, and agent-created paused routines.");
+  console.log("PASS: registration/replay, native aggregation, Friday board-role denials, owner fixture hiring, platform separation, galaxy, publication, shared awareness, revision-controlled displays/views and paused team routines. Real delegation acceptance remains separate.");
 } finally {
   if (company) {
     await api(`/companies/${company.id}`, "DELETE");

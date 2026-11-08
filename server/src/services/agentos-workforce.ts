@@ -1,5 +1,5 @@
 import { and, eq, inArray, ne, or, sql } from "drizzle-orm";
-import { agents, authUsers, companies, companyMemberships, companyOperatingProfiles, principalPermissionGrants, instanceUserRoles, agentosPortfolios, agentosPortfolioCompanies, agentosEmployees, agentosAssignments, type Db } from "@paperclipai/db";
+import { agents, authUsers, companies, companyMemberships, companyOperatingProfiles, principalPermissionGrants, instanceUserRoles, agentosPortfolios, agentosPortfolioCompanies, agentosEmployees, agentosAssignments, agentosDepartments, type Db } from "@paperclipai/db";
 import type { AgentosWorkforce, CreateAgentosPortfolio, CreateAgentosEmployee, CreateAgentosAssignment, RetireAgentosAssignment } from "@paperclipai/shared";
 import { conflict, forbidden, notFound } from "../errors.js";
 import { accessService } from "./access.js";
@@ -58,7 +58,7 @@ export function agentosWorkforceService(db: Db) {
     return row;
   }
 
-  async function companyStaffingAuthority(connection: Db, actor: AuthorizationActor, companyId: string) {
+  async function companyStaffingAuthority(connection: Db, actor: AuthorizationActor, companyId: string, write = true) {
     actor = await refreshWorkforceBoardActor(connection, actor);
     // A request may already have resolved a responsible-user snapshot before
     // waiting for a database lock. Staffing always uses the current rows.
@@ -72,7 +72,7 @@ export function agentosWorkforceService(db: Db) {
       await portfolio(connection, actor, linked.portfolio.id, true);
       return { portfolio: linked.portfolio, actor };
     }
-    // A company coordinator is not a portfolio-wide principal. Resolve the
+    // A company executive is not a portfolio-wide principal. Resolve the
     // owner from authenticated run context, never from the request body.
     const responsibleUserId = actor.onBehalfOfUserId?.trim();
     if (actor.type !== "agent" || actor.companyId !== companyId || !actor.agentId || !responsibleUserId
@@ -84,11 +84,19 @@ export function agentosWorkforceService(db: Db) {
     if (!membership || membership.membership.membershipRole === "viewer") throw forbidden("The responsible portfolio owner is unavailable for staffing");
     const [manager] = await connection.select().from(agents).where(and(eq(agents.id, actor.agentId), eq(agents.companyId, companyId)));
     const [profile] = await connection.select().from(companyOperatingProfiles).where(eq(companyOperatingProfiles.companyId, companyId));
-    if (!manager || !["active", "idle", "running", "error"].includes(manager.status) || manager.lifecycleState !== "ready"
-      || (manager.role !== "ceo" && profile?.fridayAgentId !== manager.id)) throw forbidden("Only the current company coordinator or CEO can manage its workforce");
+    if (!manager || !["active", "idle", "running", "error"].includes(manager.status) || manager.lifecycleState !== "ready")
+      throw forbidden("An available company executive is required");
+    const isFriday = profile?.fridayAgentId === manager.id;
+    const [department] = !isFriday && manager.role !== "ceo"
+      ? await connection.select({ id: agentosDepartments.id }).from(agentosDepartments)
+        .where(and(eq(agentosDepartments.companyId, companyId), eq(agentosDepartments.leadAgentId, manager.id))).limit(1)
+      : [];
+    if (isFriday ? write : manager.role !== "ceo" && !department)
+      throw forbidden("Friday directs company executives; the CEO or department head manages staffing");
     const effectiveActor: AuthorizationActor = { ...actor, onBehalfOfMemberships: [membership.membership] };
     const access = accessService(connection);
-    for (const action of ["applications:manage", "agents:create"] as const) {
+    const actions = write ? ["applications:manage", "agents:create"] as const : ["company_scope:read"] as const;
+    for (const action of actions) {
       const decision = await access.decide({ actor: effectiveActor, action, resource: { type: "company", companyId } });
       if (!decision.allowed) throw forbidden(decision.explanation);
     }
@@ -114,6 +122,7 @@ export function agentosWorkforceService(db: Db) {
     // Match the binding owner's lock order before waiting for the target. All
     // definitive authorization reads happen after this wait, under row locks.
     await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`agentos-assignment:${companyId}`}, 0))`);
+    await tx.execute(sql`select pg_advisory_xact_lock_shared(hashtextextended(${`operating-profile:${companyId}`}, 0))`);
     const [target] = await tx.select({ id: agents.id, reportsTo: agents.reportsTo }).from(agents)
       .where(and(eq(agents.id, targetAgentId), eq(agents.companyId, companyId))).for("update");
     if (!target) throw notFound("Company agent not found");
@@ -148,6 +157,9 @@ export function agentosWorkforceService(db: Db) {
       .where(eq(companyOperatingProfiles.companyId, companyId)).for("share", lock);
     if (actor.type === "agent" && actor.agentId) await tx.select({ id: agents.id }).from(agents)
       .where(and(eq(agents.id, actor.agentId), eq(agents.companyId, companyId))).for("share", lock);
+    if (actor.type === "agent" && actor.agentId) await tx.select({ id: agentosDepartments.id }).from(agentosDepartments)
+      .where(and(eq(agentosDepartments.companyId, companyId), eq(agentosDepartments.leadAgentId, actor.agentId)))
+      .orderBy(agentosDepartments.id).for("share", lock);
     // Native configure grants may name an ancestor's subtree. Keep the target's
     // reporting path stable, without locking unrelated company employees.
     let ancestorId = target.reportsTo;
@@ -239,7 +251,7 @@ export function agentosWorkforceService(db: Db) {
       });
     },
     async readCompany(actor: AuthorizationActor, companyId: string) {
-      const authorized = await companyStaffingAuthority(db, actor, companyId);
+      const authorized = await companyStaffingAuthority(db, actor, companyId, false);
       const rows = await db.select({ assignment: agentosAssignments, employee: {
         id: agentosEmployees.id, name: agentosEmployees.name, specialty: agentosEmployees.specialty, revision: agentosEmployees.revision,
       } }).from(agentosAssignments).innerJoin(agentosEmployees, eq(agentosEmployees.id, agentosAssignments.employeeId))

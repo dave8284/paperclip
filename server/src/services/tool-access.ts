@@ -1,4 +1,5 @@
 import { restConnectorFor } from "./connectors/rest-registry.js";
+import { assertAiConnectionNotRemoved, assertNotWorkspaceAccountConnection } from "./ai-workspace-account-guards.js";
 import { createConnectionCredentialValidation } from "./tool-access/connections/credential-validation.js";
 import { createConnectionGrants } from "./tool-access/connections/grants.js";
 import { createConnectionInstalls } from "./tool-access/connections/installs.js";
@@ -4581,6 +4582,9 @@ export function toolAccessService(
       input: UpdateToolConnection,
     ): Promise<ToolConnection> => {
       const existing = await getConnectionRow(connectionId);
+      if (existing.connectionPurpose === "ai" && (input.enabled !== undefined || input.status !== undefined)) {
+        await assertNotWorkspaceAccountConnection(db, existing.companyId, existing.id);
+      }
       if (existing.connectionPurpose === "ai" && (input.config || input.transportConfig || input.credentialRefs || input.credentialSecretRefs || (input.credentialPolicy && input.credentialPolicy !== existing.credentialPolicy))) throw badRequest("Use AI account reconnect to change credentials. Provider, sign-in method, and ownership cannot be changed.");
       const config = normalizeGoogleSheetsConnectionConfig(
         input.config ?? input.transportConfig ?? existing.config,
@@ -4607,7 +4611,13 @@ export function toolAccessService(
       ]);
       const write = (database: Db) => database
         .update(toolConnections)
-        .set({
+        .set(existing.connectionPurpose === "ai" ? {
+          ...(input.name !== undefined ? { name: input.name } : {}),
+          ...(input.status !== undefined ? { status: input.status } : {}),
+          ...(input.enabled !== undefined ? { enabled: input.enabled } : {}),
+          ...(input.agentInstructions !== undefined ? { agentInstructions: input.agentInstructions } : {}),
+          updatedAt: new Date(),
+        } : {
           name: input.name ?? existing.name,
           status: input.status ?? existing.status,
           enabled: input.enabled ?? existing.enabled,
@@ -4624,7 +4634,15 @@ export function toolAccessService(
         })
         .where(eq(toolConnections.id, connectionId))
         .returning();
-      const [row] = existing.transport === "chat_sdk"
+      const [row] = existing.connectionPurpose === "ai" && (input.enabled !== undefined || input.status !== undefined)
+        ? await db.transaction(async tx => {
+            await assertNotWorkspaceAccountConnection(tx as unknown as Db, existing.companyId, existing.id, { mutation: true });
+            if (input.enabled === true || (input.status !== undefined && input.status !== "archived")) {
+              await assertAiConnectionNotRemoved(tx as unknown as Db, existing.companyId, existing.id);
+            }
+            return write(tx as unknown as Db);
+          })
+        : existing.transport === "chat_sdk"
         ? await db.transaction(async tx => {
             await notifyChatEndpointWork(tx, existing.id);
             const rows = await write(tx as unknown as Db);

@@ -1,5 +1,6 @@
 import type {
   Company,
+  CreatedCompany,
   CompanyPortabilityExportRequest,
   CompanyPortabilityExportPreviewResult,
   CompanyPortabilityExportResult,
@@ -98,7 +99,7 @@ export const companiesApi = {
     description?: string | null;
     budgetMonthlyCents?: number;
   }) =>
-    api.post<Company>("/companies", data),
+    api.post<CreatedCompany>("/companies", data),
   update: (
     companyId: string,
     data: Partial<

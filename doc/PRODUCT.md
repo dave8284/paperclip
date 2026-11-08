@@ -1,5 +1,58 @@
 # Paperclip — Product Definition
 
+AgentOS owner subscriptions connect once. An owner account references one native
+credential; authorized companies receive local grants and sessions. Company work,
+access and usage remain separate, and all aliases share actual seat capacity.
+Company access, global disable and reconnect retain current owner authority and
+must settle pending provider credential writes. Personal login choices are not
+silently broadened. Source support is distinct from live provider qualification.
+
+AgentOS controlled comparison source (2026-11-07): an approved current instance
+administrator prepares an exact registered case/arm on a fresh backlog task.
+Preparation does not start execution. Native admission revalidates its authority,
+account and profile; native task controls retain capacity, pause and dispatch.
+Exact independent review supplies quality, and the run row retains a frozen
+outcome outbox for idempotent cross-store recovery. Complete native event histories
+now supply provider-turn/repair counts; queue-through-independent-review timing
+and failed-attempt chains supply acceptance latency. Missing evidence stays null.
+Delivered context is still incompletely bound and prevents canary readiness.
+Persisted/live acceptance remains open in the completion ledger.
+
+AgentOS versioned routing source (2026-11-07) replaces observational promotion
+with company/family enrollment, complete controlled evidence, bounded canaries,
+observed adoption, pins and rollback. Native policy audit/current owner authority
+and current account/profile qualification remain mandatory. Frozen run-row outcomes
+and indexed observation deadlines use the existing shared worker lifecycle. The
+independent store is schema v5; source support does not establish a live release.
+M05's unknown implicit/retrieved context still prevents native canary readiness.
+
+AgentOS portfolio access now supports an explicit private scope for the
+current Friday, bounded by the owner's current rights in selected companies and
+any external authorizer. Existing shared-only grants remain unchanged. Separate
+bounded gateways read task/project descriptions, ordinary task documents,
+nondeleted comments and the owner's personal chats. Content pages retain exact
+body hashes and untrusted-reference marking, without response artifacts. Ordinary
+task attachments have separate version-bound reads capped at 64 KiB. Current
+rights and attachment identity are checked again after storage; original upload
+task privacy is retained. A partial read proves only its chunk hash, and full-file
+integrity requires all bytes. Case-owned files and run/tool captures remain outside
+these reads. Source support does not establish live authorization or acceptance.
+
+The owner's company-isolation clarification (2026-11-07): Friday can coordinate
+across all companies and employees, but work belongs to one company at a time.
+Projects, tasks, assignments, private work and execution are never merged across
+companies. Friday's broad visibility grants no access to other employees;
+company budgets, permissions and applicable action approvals remain in force.
+
+The owner and Friday act as the board. Friday directs each company's CEO or
+department heads, agrees outcomes and priorities, reviews evidence and reports
+back. Those executives own staffing, delegation and delivery. Friday does not
+perform implementation, business operations or specialist deliverables.
+Current source enforces the delivery-assignment and execution-role boundary and
+keeps staffing with CEOs/department heads. Friday retains board conversations,
+visibility and native presentation. Source checks do not establish a live
+company-to-executive handoff; that journey remains open in the completion ledger.
+
 AgentOS operating-loop edits retain native revision history and can change the
 project and parent objective for future cycles. Routine reads, historical cycles,
 restores and trigger management inherit project/task access. Historical annotation

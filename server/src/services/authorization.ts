@@ -3,6 +3,7 @@ import type { Db } from "@paperclipai/db";
 import { withHumanDirectedWork } from "./human-directed-work.js";
 import { hasOwnerChatInstructionAuthority } from "./owner-chat-instruction-authority.js";
 import { canonicalExecutionUuid } from "./execution-identity.js";
+import { fridayCoordinatorSql, isFridayExecutiveTarget } from "./friday-board-role.js";
 import {
   agents,
   approvals,
@@ -276,6 +277,7 @@ type AgentAuthorizationRow = {
   status: string;
   reportsTo: string | null;
   permissions: Record<string, unknown> | null | undefined;
+  isBoardCoordinator?: boolean;
 };
 type ProjectAuthorizationRow = {
   id: string;
@@ -645,6 +647,34 @@ export function companySharedIssueReadSqlCondition(actor: AuthorizationActor): S
 }
 export function companySharedProjectReadSqlCondition(actor: AuthorizationActor): SQL<boolean> {
   return sql<boolean>`(${projectPrivacyCondition(actor)} and ${projects.visibility} = 'open')`;
+}
+
+/** Only the portfolio mandate gateway may select this projection, after checking
+ * the exact private-read grant and current Friday binding. Delegation supplies
+ * the owner's read authority; it never changes the source runtime principal or
+ * grants authority on ordinary target-company routes. Both user ceilings remain
+ * resource-specific even when the privacy rollout is off. */
+export function portfolioOwnerReadSqlConditions(actor: AuthorizationActor): { issue: SQL<boolean>; project: SQL<boolean> } {
+  if (actor.type !== "agent" || !actor.agentId || !actor.companyId || !actor.onBehalfOfUserId
+    || (actor.keyScope && actor.keyScope.kind !== "standard")) return { issue: sql`false`, project: sql`false` };
+  const owner = actor.onBehalfOfUserId;
+  const ownerAdmin = sql<boolean>`exists (select 1 from ${instanceUserRoles} r where r.user_id = ${owner} and r.role = 'instance_admin')`;
+  const ownerActor: AuthorizationActor = { type: "board", userId: owner, ignoreInstanceAdmin: true };
+  let issue = sql<boolean>`(${ownerAdmin} or ${issuePrivacyPrincipalCondition(ownerActor)})`;
+  let project = sql<boolean>`(${ownerAdmin} or ${projectPrivacyPrincipalCondition(ownerActor)})`;
+  const users = [...new Set([owner, actor.authorizingUserId].filter((id): id is string => !!id))];
+  for (const userId of users) {
+    issue = sql<boolean>`(${issue} and exists (select 1 from ${companyMemberships} m where m.company_id = ${issues.companyId}
+      and m.principal_type = 'user' and m.principal_id = ${userId} and m.status = 'active'))`;
+    project = sql<boolean>`(${project} and exists (select 1 from ${companyMemberships} m where m.company_id = ${projects.companyId}
+      and m.principal_type = 'user' and m.principal_id = ${userId} and m.status = 'active'))`;
+  }
+  if (actor.authorizingUserId) {
+    const authorizer: AuthorizationActor = { type: "board", userId: actor.authorizingUserId, ignoreInstanceAdmin: true };
+    issue = sql<boolean>`(${issue} and ${issuePrivacyPrincipalCondition(authorizer)})`;
+    project = sql<boolean>`(${project} and ${projectPrivacyPrincipalCondition(authorizer)})`;
+  }
+  return { issue, project };
 }
 export async function canActorReadIssuePrivacy(db: Db | DbTransaction, actor: AuthorizationActor, issue: IssuePrivacyRow) {
   return db.select({ id: issues.id }).from(issues)
@@ -1039,6 +1069,7 @@ function createAuthorizationService(db: Db | DbTransaction, readSnapshot?: ReadA
           status: agents.status,
           reportsTo: agents.reportsTo,
           permissions: agents.permissions,
+          isBoardCoordinator: fridayCoordinatorSql(agents.companyId, agents.id),
         })
         .from(agents)
         .where(eq(agents.id, agentId))
@@ -2225,6 +2256,37 @@ function createAuthorizationService(db: Db | DbTransaction, readSnapshot?: ReadA
         reason: "deny_company_boundary",
         explanation: "Actor agent was not found in the target company.",
       });
+    }
+
+    // This only narrows the real agent's authority. Friday's product board role
+    // never substitutes a board actor or skips the native checks below.
+    if (actorAgent.isBoardCoordinator) {
+      if (["applications:manage", "agents:create", "workforce:retire", "project:write_workspace"].includes(input.action)) {
+        return deny({ action: input.action, reason: "deny_scope",
+          explanation: "Friday directs company executives; the CEO or department head owns staffing and delivery setup." });
+      }
+      if (["agent_config:update", "agent_instructions:update"].includes(input.action)
+        && (input.resource.type !== "agent" || input.resource.agentId !== actorAgentId)) {
+        return deny({ action: input.action, reason: "deny_scope",
+          explanation: "Friday gives direction to company executives; those executives configure their teams." });
+      }
+      if (input.action === "agent:wake" && (input.resource.type !== "agent" || (input.resource.agentId !== actorAgentId
+        && !await isFridayExecutiveTarget(db, { companyId, fridayAgentId: actorAgentId, assigneeAgentId: input.resource.agentId })))) {
+        return deny({ action: input.action, reason: "deny_scope",
+          explanation: "Friday directs the company CEO or department heads; they activate their specialists." });
+      }
+      if (input.action === "tasks:assign") {
+        const resource = input.resource.type === "issue" ? input.resource : null;
+        const sourceId = resource?.issueId ?? resource?.parentIssueId;
+        const source = sourceId ? await loadIssue(sourceId) : null;
+        if (!resource || !await isFridayExecutiveTarget(db, {
+          companyId, fridayAgentId: actorAgentId, assigneeAgentId: resource.assigneeAgentId,
+          assigneeUserId: resource.assigneeUserId, projectId: resource.projectId ?? source?.projectId,
+        })) {
+          return deny({ action: input.action, reason: "deny_scope",
+            explanation: "Friday must direct this work to the company CEO or the responsible department head. They delegate to specialists." });
+        }
+      }
     }
 
     if (input.actor.keyScope?.kind === "skill_test") {

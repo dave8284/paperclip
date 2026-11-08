@@ -3,6 +3,7 @@ import { adapterAuthSessions, type Db } from "@paperclipai/db";
 import type { AgentAdapterType } from "@paperclipai/shared";
 import { forbidden } from "../errors.js";
 import { aiConnectionService } from "./ai-connections.js";
+import { finishOwnerAiAccountConnection } from "./ai-workspace-account-setup.js";
 import {
   SETUP_TOKEN_STORAGE_FAILED,
   SetupTokenSessionError,
@@ -22,7 +23,7 @@ export async function completeSetupTokenAiConnection(
     eq(adapterAuthSessions.adapterType, scope.adapterType as AgentAdapterType),
   ));
   if (!session) throw forbidden("Login session ownership mismatch");
-  return aiConnectionService(db).save(scope.companyId, scope.ownerUserId, scope.aiConnection, token, {
+  const saved = await aiConnectionService(db).save(scope.companyId, scope.ownerUserId, scope.aiConnection, token, {
     id: session.id,
     complete: async (tx) => {
       const transitioned = await transitionSetupTokenSessionToStored(tx, {
@@ -31,4 +32,5 @@ export async function completeSetupTokenAiConnection(
       if (!transitioned) throw new SetupTokenSessionError(500, SETUP_TOKEN_STORAGE_FAILED);
     },
   });
+  return { ...saved, aiAccountSetup: await finishOwnerAiAccountConnection(db, { ...saved, companyId: scope.companyId, userId: scope.ownerUserId }) };
 }

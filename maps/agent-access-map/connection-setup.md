@@ -108,6 +108,17 @@ own policy and access review.
 Gaps: Selecting account ownership/eligible agents is management; an agent can request
 the intended connection.
 
+Owner subscription reuse also has board-only APIs: GET
+`/api/instance/ai-accounts`, POST `/api/instance/ai-accounts/enroll`, PATCH
+`/api/instance/ai-accounts/{accountId}`, and POST/DELETE
+`/api/instance/ai-accounts/{accountId}/companies/{companyId}`. The signed-in
+account owner must retain actual company ownership and native connection
+configuration permission; instance administration alone grants no account access.
+The registry carries references, never duplicated credentials. Agents keep native
+company grants and use the canonical credential only through the runtime resolver.
+Focused authority, route and component checks are source evidence; real provider,
+concurrent database and revocation acceptance remain open.
+
 ## `credentials`
 
 Capability ID: `connection-setup/credentials`.

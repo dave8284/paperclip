@@ -58,7 +58,7 @@ export function refreshCompanySubscriptions(db: Db, companyId: string, userId: s
     for (const row of await service.subscriptionAccounts(companyId, userId)) {
       if (row.summary.status !== "connected") continue;
       try {
-        const session = await subscriptionSession(db, companyId, row.grant.credentialSecretRefs);
+        const session = await subscriptionSession(db, row);
         const credential = await service.credential(row);
         const input: SubscriptionConnection = { companyId, connectionId: row.connection.id, grantId: row.grant.id,
           provider: row.summary.provider, name: row.connection.name, ownerUserId: row.grant.subjectUserId, credential, session };

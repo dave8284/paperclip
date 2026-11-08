@@ -83,6 +83,9 @@ export interface SubscriptionAccountReport {
   ownerUserId: string | null;
   ownerName: string | null;
   shared: boolean;
+  /** Reuse metadata for this company's visible subscription only. Never
+   * includes another company's identity, price, credentials or usage. */
+  workspaceAccount?: { role: "source" | "company_link" } | null;
   identityVerified: boolean;
   detectedPlan: string | null;
   observedAt: string | null;

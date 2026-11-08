@@ -1794,6 +1794,20 @@ describe("NewIssueDialog", () => {
     act(() => root.unmount());
   });
 
+  it("keeps a restored Friday assignment visible for correction and prevents submitting it", async () => {
+    dialogState.newIssueDefaults = { title: "Build the company report", assigneeAgentId: "friday" };
+    mockAgentsApi.list.mockResolvedValue([{ id: "friday", name: "Friday", isBoardCoordinator: true,
+      status: "active", adapterType: "codex_local", adapterConfig: {}, runtimeConfig: {}, permissions: {} }]);
+    const { root } = renderDialog(container);
+    await flush();
+    expect(container.textContent).toContain("Choose a company team member to own this task");
+    const submitButton = Array.from(container.querySelectorAll("button")).find(button => button.getAttribute("aria-label") === "Create task");
+    expect(submitButton?.disabled).toBe(true);
+    await act(async () => { submitButton?.dispatchEvent(new MouseEvent("click", { bubbles: true })); });
+    expect(mockIssuesApi.create).not.toHaveBeenCalled();
+    act(() => root.unmount());
+  });
+
   it("submits the parent assignee when a sub-issue opens with inherited defaults", async () => {
     dialogState.newIssueDefaults = {
       parentId: "issue-1",

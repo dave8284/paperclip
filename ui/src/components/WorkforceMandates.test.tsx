@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AgentosWorkforce, PortfolioReadMandate } from "@paperclipai/shared";
 import { WorkforceMandates } from "./WorkforceMandates";
 
-const mocks = vi.hoisted(() => ({ mandates: vi.fn(), saveMandate: vi.fn(), revokeMandate: vi.fn(), agents: vi.fn() }));
+const mocks = vi.hoisted(() => ({ mandates: vi.fn(), saveMandate: vi.fn(), revokeMandate: vi.fn(), setBoardDirectionAuthority: vi.fn(), agents: vi.fn() }));
 vi.mock("../api/workforce", () => ({ workforceApi: mocks, workforceKeys: { account: (id: string) => ["workforce", id], detail: (id: string, portfolio: string) => ["workforce", id, portfolio] } }));
 vi.mock("../api/agents", () => ({ agentsApi: { list: mocks.agents } }));
 vi.mock("../api/client", () => ({ detachInflightGet: vi.fn() }));
@@ -53,6 +53,50 @@ describe("explicit portfolio read controls", () => {
     expect(host.querySelectorAll("select")[0].disabled).toBe(true); expect(host.querySelectorAll("select")[1].disabled).toBe(true);
     await click("Cancel"); await click("Revoke access");
     expect(mocks.revokeMandate).toHaveBeenCalledWith("portfolio", "mandate", 4);
+  });
+  it("saves an explicit Friday private scope and retains it when reopening", async () => {
+    mocks.mandates.mockResolvedValue([{ ...mandate, readScope: "owner_accessible_private" }]);
+    mocks.saveMandate.mockResolvedValue({ ...mandate, readScope: "owner_accessible_private", revision: 5 });
+    await open(); await vi.waitFor(() => expect(button("Edit access")).toBeDefined());
+    expect(host.textContent).toContain("Authorized shared and private work, documents, task and case attachments, and your personal chats");
+    await click("Edit access");
+    expect(host.querySelectorAll("select")[2].value).toBe("owner_accessible_private");
+    expect(host.textContent).toContain("designated Friday");
+    await vi.waitFor(() => expect(button("Save explicit read grant").disabled).toBe(false));
+    await act(async () => host.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
+    await vi.waitFor(() => expect(mocks.saveMandate).toHaveBeenCalledWith("portfolio", expect.objectContaining({
+      id: "mandate", expectedRevision: 4, readScope: "owner_accessible_private", sourceAgentId: "agent",
+    })));
+  });
+  it("never converts private reading into writes without an explicit owner action", async () => {
+    mocks.mandates.mockResolvedValue([{ ...mandate, readScope: "owner_accessible_private", boardDirectionGrantId: null, boardDirectionAuthority: null }]);
+    mocks.setBoardDirectionAuthority.mockResolvedValue({});
+    await open(); await vi.waitFor(() => expect(button("Authorize executive directions")).toBeDefined());
+    expect(mocks.setBoardDirectionAuthority).not.toHaveBeenCalled();
+    expect(host.textContent).toContain("Reading access does not authorize executive directions");
+    await click("Authorize executive directions");
+    expect(mocks.setBoardDirectionAuthority).toHaveBeenCalledWith("portfolio", "mandate", { expectedRevision: 4, expectedGrantId: null, enabled: true });
+  });
+  it("revokes the exact shown write grant and explains already admitted work", async () => {
+    mocks.mandates.mockResolvedValue([{ ...mandate, readScope: "owner_accessible_private", boardDirectionGrantId: "grant", boardDirectionAuthority: { grantId: "grant", mandateRevision: 4 } }]);
+    mocks.setBoardDirectionAuthority.mockResolvedValue({});
+    await open(); await vi.waitFor(() => expect(button("Revoke executive directions")).toBeDefined());
+    expect(button("Authorize executive directions")).toBeUndefined(); expect(host.textContent).toContain("work already admitted remains with its company");
+    await click("Revoke executive directions");
+    expect(mocks.setBoardDirectionAuthority).toHaveBeenCalledWith("portfolio", "mandate", { expectedRevision: 4, expectedGrantId: "grant", enabled: false });
+  });
+  it("replaces a stale write grant explicitly without describing it as current authority", async () => {
+    mocks.mandates.mockResolvedValue([{ ...mandate, readScope: "owner_accessible_private", boardDirectionGrantId: "old", boardDirectionAuthority: null }]);
+    mocks.setBoardDirectionAuthority.mockRejectedValue(new Error("Direction authority changed"));
+    await open(); await vi.waitFor(() => expect(button("Authorize executive directions")).toBeDefined()); await click("Authorize executive directions");
+    await vi.waitFor(() => expect(host.textContent).toContain("Direction authority changed"));
+    expect(mocks.setBoardDirectionAuthority).toHaveBeenCalledWith("portfolio", "mandate", { expectedRevision: 4, expectedGrantId: "old", enabled: true });
+    expect(host.textContent).not.toContain("Executive directions are authorized");
+  });
+  it("does not show direction mutation controls without native portfolio management", async () => {
+    mocks.mandates.mockResolvedValue([{ ...mandate, readScope: "owner_accessible_private", boardDirectionGrantId: "grant", boardDirectionAuthority: { grantId: "grant", mandateRevision: 4 } }]);
+    await open({ ...workforce, canManage: false }); await vi.waitFor(() => expect(host.textContent).toContain("Executive directions are authorized"));
+    expect(button("Authorize executive directions")).toBeUndefined(); expect(button("Revoke executive directions")).toBeUndefined();
   });
   it("hides retained mandate details and controls after a denied refetch", async () => {
     mocks.mandates.mockResolvedValue([mandate]); await open(); await vi.waitFor(() => expect(host.textContent).toContain("Second venture"));

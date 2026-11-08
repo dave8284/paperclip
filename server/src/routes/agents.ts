@@ -1,5 +1,6 @@
 import { prepareRuntimeSettingsPatch } from "../services/agent-runtime-settings.js";
 import { completeSetupTokenAiConnection } from "../services/setup-token-ai-connection.js";
+import { finishOwnerAiAccountConnection } from "../services/ai-workspace-account-setup.js";
 import { cancellationRequestId } from "../services/native-runtime/native-cancellation-request.js";
 import { agentHarnessType, isEnvironmentDriverSupportedForAdapter, normalizeClaudeRunnerOptions, type AgentConfigurationWarning, type AgentRunnerChoice } from "@paperclipai/shared";
 import { resolveNewAgentRunnerForCompany } from "../services/agent-runner-selection.js";
@@ -885,10 +886,11 @@ export function agentRoutes(
         async promote(authBytes, context) {
           const managedSession = await adapterLoginStore.get(context.sessionId);
           if (managedSession?.aiConnection) {
-            await adapterLoginStore.withCompanyAdapterPromotionLock(context.companyId, context.startedByUserId, context.adapterType, async () => {
+            const saved = await adapterLoginStore.withCompanyAdapterPromotionLock(context.companyId, context.startedByUserId, context.adapterType, async () => {
               if (!(await checkStagedCredentialReadiness(authBytes)).ready) throw new Error("Provider credential is not ready");
-              await aiConnectionService(db).save(context.companyId, context.startedByUserId, managedSession.aiConnection!, authBytes.toString("utf8"), { id: context.sessionId });
+              return aiConnectionService(db).save(context.companyId, context.startedByUserId, managedSession.aiConnection!, authBytes.toString("utf8"), { id: context.sessionId });
             });
+            await finishOwnerAiAccountConnection(db, { ...saved, companyId: context.companyId, userId: context.startedByUserId });
             return;
           }
 
@@ -1130,10 +1132,11 @@ export function agentRoutes(
         async promote(authBytes, context) {
           const managedSession = await adapterLoginStore.get(context.sessionId);
           if (managedSession?.aiConnection) {
-            await adapterLoginStore.withCompanyAdapterPromotionLock(context.companyId, context.startedByUserId, context.adapterType, async () => {
+            const saved = await adapterLoginStore.withCompanyAdapterPromotionLock(context.companyId, context.startedByUserId, context.adapterType, async () => {
               if (!(await checkStagedGrokCredentialReadiness(authBytes)).ready) throw new Error("Provider credential is not ready");
-              await aiConnectionService(db).save(context.companyId, context.startedByUserId, managedSession.aiConnection!, authBytes.toString("utf8"), { id: context.sessionId });
+              return aiConnectionService(db).save(context.companyId, context.startedByUserId, managedSession.aiConnection!, authBytes.toString("utf8"), { id: context.sessionId });
             });
+            await finishOwnerAiAccountConnection(db, { ...saved, companyId: context.companyId, userId: context.startedByUserId });
             return;
           }
 

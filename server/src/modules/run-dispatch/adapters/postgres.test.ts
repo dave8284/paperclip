@@ -10,6 +10,7 @@ import {
   budgetPolicies,
   budgetReservations,
   companies,
+  companyOperatingProfiles,
   costEvents,
   createDb,
   documentRevisions,
@@ -79,6 +80,7 @@ describeEmbeddedPostgres("run-dispatch postgres adapter", () => {
     await db.delete(heartbeatRunEvents);
     await db.delete(heartbeatRuns);
     await db.delete(projects);
+    await db.delete(companyOperatingProfiles);
     await db.delete(agents);
     await db.delete(companies);
   });
@@ -534,6 +536,70 @@ describeEmbeddedPostgres("run-dispatch postgres adapter", () => {
       expect(dispatch).not.toHaveBeenCalled();
       expect((await db.select().from(issues).where(eq(issues.id, issueId)))[0].executionRunId).toBe(competingId);
     } finally { race.mockRestore(); }
+  });
+
+  it.each([false, true])("rechecks a new Friday designation at final dispatch (own conversation=%s)", async conversation => {
+    const { companyId, agentId } = await seedCompanyAndAgent();
+    const issueId = randomUUID();
+    await seedIssue({ companyId, issueId, status: "in_progress", assigneeAgentId: agentId });
+    if (conversation) await db.update(issues).set({ conversationAgentId: agentId, conversationUserId: "responsible-user" }).where(eq(issues.id, issueId));
+    const runId = await seedRun({ companyId, agentId, status: "running", contextSnapshot: { issueId } });
+    await db.update(issues).set({ executionRunId: runId }).where(eq(issues.id, issueId));
+    const reservation = await reserveRunBudget(db, companyId, runId, null);
+    const transaction = db.transaction.bind(db);
+    let admitted = false;
+    const race = vi.spyOn(db, "transaction").mockImplementation(async (callback, config) => {
+      const value = await transaction(callback, config);
+      if (!admitted) {
+        admitted = true;
+        await db.insert(companyOperatingProfiles).values({ companyId, fridayAgentId: agentId });
+      }
+      return value;
+    });
+    const dispatch = vi.fn(async () => "provider entered");
+    try {
+      const gate = await createPostgresRunDispatchAdapter(db).dispatchResolvedInteractionIfCurrent({ companyId, runId,
+        reservationId: reservation.id, expectedStatus: "running", now: new Date(), dispatch });
+      expect(gate.dispatched).toBe(conversation);
+      if (gate.dispatched) expect(await gate.resultPromise).toBe("provider entered");
+      else expect(gate).toMatchObject({ admissionBlockReason: expect.stringContaining("Friday directs") });
+      expect(dispatch).toHaveBeenCalledTimes(conversation ? 1 : 0);
+    } finally { race.mockRestore(); }
+  });
+
+  it("holds Friday configuration stable through synchronous provider entry, including an absent profile", async () => {
+    const { companyId, agentId } = await seedCompanyAndAgent();
+    const runId = await seedRun({ companyId, agentId, status: "running" });
+    const reservation = await reserveRunBudget(db, companyId, runId, null);
+    let release!: () => void;
+    let entered!: () => void;
+    const enteredSignal = new Promise<void>(resolve => { entered = resolve; });
+    const continueCommit = new Promise<void>(resolve => { release = resolve; });
+    const transaction = db.transaction.bind(db);
+    let phase = 0;
+    const race = vi.spyOn(db, "transaction").mockImplementation((callback, config) => transaction(async tx => {
+      const current = ++phase;
+      const value = await callback(tx);
+      if (current === 2) { entered(); await continueCommit; }
+      return value;
+    }, config));
+    const dispatch = vi.fn(async () => "provider entered");
+    const gate = createPostgresRunDispatchAdapter(db).dispatchResolvedInteractionIfCurrent({ companyId, runId,
+      reservationId: reservation.id, expectedStatus: "running", now: new Date(), dispatch });
+    try {
+      await enteredSignal;
+      expect(dispatch).toHaveBeenCalledOnce();
+      await transaction(async tx => {
+        const rows = await tx.execute(sql`select pg_try_advisory_xact_lock(hashtextextended(${`operating-profile:${companyId}`}, 0)) as acquired`);
+        expect(rows[0]?.acquired).toBe(false);
+      });
+      release();
+      expect((await gate).dispatched).toBe(true);
+      await transaction(async tx => {
+        const rows = await tx.execute(sql`select pg_try_advisory_xact_lock(hashtextextended(${`operating-profile:${companyId}`}, 0)) as acquired`);
+        expect(rows[0]?.acquired).toBe(true);
+      });
+    } finally { release(); race.mockRestore(); await gate.catch(() => undefined); }
   });
 
   it.each(["charge", "budget reduction"] as const)("rejects a committed %s between accounting admission and final ownership handoff", async change => {

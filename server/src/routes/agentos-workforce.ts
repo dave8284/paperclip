@@ -2,7 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import type { Db } from "@paperclipai/db";
 import { createAgentosPortfolioSchema, createAgentosEmployeeSchema, createAgentosAssignmentSchema, retireAgentosAssignmentSchema,
-  publishAgentosCapabilitySchema, decideAgentosCapabilitySchema, savePortfolioReadMandateSchema, revokePortfolioReadMandateSchema } from "@paperclipai/shared";
+  publishAgentosCapabilitySchema, decideAgentosCapabilitySchema, savePortfolioReadMandateSchema, revokePortfolioReadMandateSchema, setBoardDirectionAuthoritySchema } from "@paperclipai/shared";
 import { agentosWorkforceService } from "../services/agentos-workforce.js";
 import { agentosCapabilityService } from "../services/agentos-capabilities.js";
 import { agentosPortfolioMandateService } from "../services/agentos-portfolio-mandates.js";
@@ -40,6 +40,8 @@ export function agentosWorkforceRoutes(db: Db) {
     res.json(await mandates.save(req.actor, getActorInfo(req), id(req.params.portfolioId), savePortfolioReadMandateSchema.parse(req.body))));
   router.post("/agentos/portfolios/:portfolioId/read-mandates/:mandateId/revoke", async (req, res) =>
     res.json(await mandates.revoke(req.actor, getActorInfo(req), id(req.params.portfolioId), id(req.params.mandateId), revokePortfolioReadMandateSchema.parse(req.body).expectedRevision)));
+  router.post("/agentos/portfolios/:portfolioId/read-mandates/:mandateId/board-direction-authority", async (req, res) =>
+    res.json(await mandates.setBoardDirectionAuthority(req.actor, getActorInfo(req), id(req.params.portfolioId), id(req.params.mandateId), setBoardDirectionAuthoritySchema.parse(req.body))));
   router.get("/agentos/portfolios/:portfolioId/employees/:employeeId/capabilities", async (req, res) =>
     res.json(await capabilities.read(req.actor, id(req.params.portfolioId), id(req.params.employeeId), z.coerce.number().int().min(0).max(100000).parse(req.query.offset ?? 0))));
   router.post("/agentos/portfolios/:portfolioId/capabilities", async (req, res) =>

@@ -6,6 +6,8 @@ import { useAccountIdentity } from "@/api/companies-query";
 import { ApiError } from "@/api/client";
 import { Link } from "@/lib/router";
 import { ModelIntelligenceInsights } from "./ModelIntelligenceInsights";
+import { ModelComparisonPreparation } from "./ModelComparisonPreparation";
+import { ModelRoutingControls } from "./ModelRoutingControls";
 import { Button } from "./ui/button";
 
 const labels: Record<ModelProfileQualification["state"], string> = {
@@ -45,6 +47,8 @@ function ModelSettingsScope({ companyId, userId }: { companyId: string; userId: 
       {catalog.isSuccess && accounts.isSuccess && <div className="overflow-x-auto"><table className="agentos-data-table"><thead><tr><th>Model</th><th>Historical use</th><th>Configured employees</th></tr></thead><tbody>{catalog.data.models.filter(row => connectedProviders.has(row.provider as "openai" | "anthropic")).map(row => <tr key={`${row.provider}:${row.id}`}><td>{row.label}</td><td>{row.observed ? "Observed in this company" : "Not yet observed"}</td><td>{row.configuredAgents.map(agent => agent.name).join(", ") || "—"}</td></tr>)}</tbody></table></div>}
     </div>
     <ModelQualifications companyId={companyId} userId={userId} />
+    <ModelComparisonPreparation companyId={companyId} userId={userId} />
+    <ModelRoutingControls companyId={companyId} userId={userId} />
   </section>;
 }
 

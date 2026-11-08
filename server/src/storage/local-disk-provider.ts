@@ -54,14 +54,14 @@ export function createLocalDiskStorageProvider(baseDir: string): StorageProvider
     },
 
     async getObject(input): Promise<GetObjectResult> {
+      input.signal?.throwIfAborted();
       const filePath = resolveWithin(root, input.objectKey);
       const stat = await statOrNull(filePath);
       if (!stat || !stat.isFile()) {
         throw notFound("Object not found");
       }
-      const streamOptions = input.range
-        ? { start: input.range.start, end: input.range.end }
-        : undefined;
+      input.signal?.throwIfAborted();
+      const streamOptions = { ...(input.range ? { start: input.range.start, end: input.range.end } : {}), signal: input.signal };
       const contentLength = input.range
         ? input.range.end - input.range.start + 1
         : stat.size;

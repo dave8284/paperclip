@@ -4,7 +4,10 @@ export function isRunLogOnlyProviderEvent(
   payload: Record<string, unknown>,
 ): boolean {
   if (eventType === "harness.diagnostic") {
-    return payload.code === "codex_unrelated_information";
+    const receipt = payload.contextReceipt as Record<string, unknown> | null | undefined;
+    return payload.code === "codex_unrelated_information"
+      || (payload.code === "context.tool_result_written" && payload.severity === "info"
+        && receipt?.schema === "paperclip.provider-context-receipt.v1" && receipt.stage === "transport_written");
   }
   // Older runners dropped the classification when converting this diagnostic
   // into a notice. Match its complete notice shape so real warnings stay visible.

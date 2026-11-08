@@ -8,6 +8,7 @@ import type { Db } from "@paperclipai/db";
 import { agents, connectionGrantMembers, connectionGrantDelegations, connectionGrants, authUsers, companyMemberships, toolAccessAuditEvents, toolConnections } from "@paperclipai/db";
 import { badRequest, conflict, forbidden, notFound, unprocessable } from "../../../errors.js";
 import { isPaperclipCloudConnectorStrategy } from "../../paperclip-cloud-connector.js";
+import { assertNotWorkspaceAccountConnection } from "../../ai-workspace-account-guards.js";
 import { vercelTokenRequest, type VercelConnectClient } from "../../vercel-connect.js";
 
 import type { createConnectionCredentialValidation } from "./credential-validation.js";
@@ -126,6 +127,7 @@ replaceConnectionGrantMembers: async (
       actor?: ActorInfo,
     ) => {
       const connection = await getConnectionRow(idOrUid);
+      if (connection.connectionPurpose === "ai") await assertNotWorkspaceAccountConnection(db, connection.companyId, connection.id);
       const [grant] = await db
         .select()
         .from(connectionGrants)
@@ -148,6 +150,7 @@ replaceConnectionGrantMembers: async (
       ];
       const binding = actorBinding(actor);
       const members = await db.transaction(async (tx) => {
+        if (connection.connectionPurpose === "ai") await assertNotWorkspaceAccountConnection(tx as unknown as Db, connection.companyId, connection.id, { mutation: true });
         // Serialize replacements before taking the current audience snapshot.
         // Otherwise a second replacement could read the old rows, wait behind
         // an in-flight replacement, and then miss locking a newly-added member.
@@ -426,12 +429,14 @@ replaceConnectionGrantMembers: async (
       actor?: ActorInfo,
     ) => {
       const connection = await getConnectionRow(idOrUid);
+      if (connection.connectionPurpose === "ai") await assertNotWorkspaceAccountConnection(db, connection.companyId, connection.id);
       await assertSecretRefs(
         connection.companyId,
         input.credentialSecretRefs ?? [],
       );
+      const write = async (database: Db) => {
       if (input.isDefault) {
-        await db
+        await database
           .update(connectionGrants)
           .set({ isDefault: false, updatedAt: new Date() })
           .where(
@@ -442,7 +447,7 @@ replaceConnectionGrantMembers: async (
           );
       }
       const binding = actorBinding(actor);
-      const [grant] = await db
+      const [grant] = await database
         .insert(connectionGrants)
         .values({
           companyId: connection.companyId,
@@ -459,7 +464,7 @@ replaceConnectionGrantMembers: async (
         })
         .returning();
       if (!grant) throw new Error("Failed to create connection installation");
-      await db.insert(toolAccessAuditEvents).values({
+      await database.insert(toolAccessAuditEvents).values({
         companyId: connection.companyId,
         connectionId: connection.id,
         actorType: binding.actorType ?? "system",
@@ -474,6 +479,12 @@ replaceConnectionGrantMembers: async (
         },
       });
       return toConnectionGrant(grant);
+      };
+      if (connection.connectionPurpose !== "ai") return write(db);
+      return db.transaction(async tx => {
+        await assertNotWorkspaceAccountConnection(tx as unknown as Db, connection.companyId, connection.id, { mutation: true });
+        return write(tx as unknown as Db);
+      });
     },
     revokeConnectionGrant: async (
       idOrUid: string,
@@ -481,6 +492,7 @@ replaceConnectionGrantMembers: async (
       actor?: ActorInfo,
     ) => {
       const connection = await getConnectionRow(idOrUid);
+      if (connection.connectionPurpose === "ai") await assertNotWorkspaceAccountConnection(db, connection.companyId, connection.id);
       const binding = actorBinding(actor);
       const [currentGrant] = await db
         .select()
@@ -529,6 +541,7 @@ replaceConnectionGrantMembers: async (
         providerRevocation = "local_only_shared_client";
       }
       const grant = await db.transaction(async (tx) => {
+        if (connection.connectionPurpose === "ai") await assertNotWorkspaceAccountConnection(tx as unknown as Db, connection.companyId, connection.id, { mutation: true });
         const [lockedGrant] = await tx.select({ id: connectionGrants.id }).from(connectionGrants)
           .where(and(eq(connectionGrants.id, grantId), eq(connectionGrants.companyId, connection.companyId), eq(connectionGrants.connectionId, connection.id)))
           .for("update");

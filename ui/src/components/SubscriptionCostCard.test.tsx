@@ -77,6 +77,40 @@ describe("subscription costs", () => {
     expect(container.textContent).toContain("$100.00/month");
     expect(container.textContent).toContain("1 unconfirmed account identity");
   });
+  it("explains a reused subscription and its excluded fee without another company's details", async () => {
+    const report = fixture(); report.accounts[0].workspaceAccount = { role: "company_link" };
+    report.activeCount = 0; report.monthlyTotals = [];
+    report.accounts[0].price = { ...report.accounts[0].price, status: "excluded", source: "unknown", amountCents: null, monthlyCents: null };
+    await render(report);
+    expect(container.textContent).toContain("1 connection uses an owner's existing subscription");
+    await click("View details");
+    expect(document.body.textContent).toContain("Uses the owner's connected subscription");
+    expect(document.body.textContent).toContain("no additional automatic fee is added here");
+    expect(document.body.textContent).toContain("Excluded");
+    await click("Edit price");
+    expect(document.body.textContent).toContain("Only enter a company-specific amount if you intend to track one here");
+    expect(document.body.textContent).not.toContain("Enter the full amount for one account or seat");
+    expect(document.querySelector<HTMLInputElement>("#subscription-price")!.value).toBe("");
+    expect(mocks.update).not.toHaveBeenCalled();
+  });
+  it("keeps an explicit company price visible and unchanged for a reused subscription", async () => {
+    const report = fixture(); report.accounts[0].workspaceAccount = { role: "company_link" };
+    report.accounts[0].price.source = "user"; report.monthlyTotals[0].estimatedCount = 0;
+    await render(report); await click("View details");
+    expect(document.body.textContent).toContain("$100.00/month");
+    expect(document.body.textContent).toContain("Your saved company price is tracked separately and has not been changed");
+    await click("Edit price");
+    expect(document.querySelector<HTMLInputElement>("#subscription-price")!.value).toBe("100");
+    expect(document.querySelector<HTMLSelectElement>("#subscription-status")!.value).toBe("active");
+    expect(mocks.update).not.toHaveBeenCalled();
+  });
+  it("identifies the source company's fee without listing other companies", async () => {
+    const report = fixture(); report.accounts[0].workspaceAccount = { role: "source" };
+    await render(report); await click("View details");
+    expect(document.body.textContent).toContain("This subscription's automatic fee is counted here");
+    expect(document.body.textContent).toContain("$100.00/month");
+    expect(document.body.textContent).not.toContain("Uses the owner's connected subscription");
+  });
   it("saves an annual price with the expected revision and selected currency", async () => {
     await render(fixture()); await click("View details"); await click("Edit price");
     await act(async () => {

@@ -4,7 +4,27 @@ Product map: [Task creation and lifecycle](../feature-map/tasks.md).
 
 Feature ID: `tasks`.
 
+Company-isolation continuation (2026-11-07): native task creation, reparenting
+and batch import reject unavailable parents in the selected company. Updates
+recheck under the company tree lock and retain the parent row lock through the
+write; batch-local ordinary parents remain valid. Six controlled-dependency
+[service guard checks](../../server/src/__tests__/issue-parent-company-guards.test.ts)
+pass. Four new [PostgreSQL cases](../../server/src/__tests__/issues-parent-id-alias.test.ts)
+remain unrun under retained listener restrictions; this is not concurrency or
+live acceptance evidence.
+
 Source revision: `3bbc2104b65caf9f7763938a01260a5673e12f7a`.
+
+Friday board-role continuation (2026-11-08): current operating-profile designation
+excludes Friday from work/routine assignment and nonconversation execution.
+Native tasks:assign allows her to target only an actual same-company CEO or
+responsible department head, before existing grant, trust and user ceilings.
+Her real owned conversation remains eligible. Final dispatch holds the operating
+profile advisory lock shared through synchronous provider entry, serializing with
+profile changes without inserting an async wait into the provider callback.
+Source tests cover the guard and SQL projections; PostgreSQL designation-race,
+lock and conversation cases remain unrun under retained listener restrictions.
+These restrictions add no cross-company write authority.
 
 Review depth and executed proof are separate. The operation records enumerate the named behavior and access boundaries. Their evidence states describe the reviewed sources; run results and environment limits belong in the PR or verification artifacts. A listed API or source test does not establish a live authorized journey. Follow the [map contract](../README.md).
 

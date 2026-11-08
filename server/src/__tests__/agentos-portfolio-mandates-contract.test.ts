@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { drizzle } from "drizzle-orm/pg-proxy";
 import { agentosPortfolioMandates, principalPermissionGrants, type Db } from "@paperclipai/db";
 import { savePortfolioReadMandateSchema, portfolioWorkQuerySchema } from "@paperclipai/shared";
-import { assertPortfolioMandateActor, matchesPortfolioMandateGrant, portfolioMandateGrantScope, portfolioSummary } from "../services/agentos-portfolio-mandates.js";
+import { assertPortfolioMandateActor, assertPortfolioPrivateDelegate, matchesPortfolioMandateGrant, portfolioMandateGrantScope, portfolioSummary } from "../services/agentos-portfolio-mandates.js";
 import { refreshWorkforceBoardActor } from "../services/agentos-workforce.js";
 import { fridayAwarenessService } from "../services/friday-awareness.js";
 import type { AuthorizationActor } from "../services/authorization.js";
@@ -21,6 +21,7 @@ describe("explicit portfolio read contract", () => {
     const input = { id: id(1), expectedRevision: 0, sourceCompanyId: id(3), sourceAgentId: id(4), targetCompanyIds: [id(6)],
       action: "portfolio_work:read", readScope: "company_shared_only", expiresAt: null };
     expect(savePortfolioReadMandateSchema.safeParse(input).success).toBe(true);
+    expect(savePortfolioReadMandateSchema.safeParse({ ...input, readScope: "owner_accessible_private" }).success).toBe(true);
     for (const key of ["readScope", "action", "expiresAt"]) {
       const missing = { ...input }; delete missing[key as keyof typeof missing];
       expect(savePortfolioReadMandateSchema.safeParse(missing).success).toBe(false);
@@ -52,7 +53,7 @@ describe("explicit portfolio read contract", () => {
     vi.stubEnv("PAPERCLIP_ISSUE_PRIVACY_MODE", "off");
     const calls: Array<{ text: string; params: unknown[] }> = [];
     const db = drizzle(async (text, params) => { calls.push({ text, params }); return { rows: text.includes('count(*)::int') && !text.includes('group by') ? [[0]] : [] }; }) as unknown as Db;
-    const work = await fridayAwarenessService(db).work(id(6), actor, { offset: 0, projectOffset: 0, limit: 25, status: "all" }, { companySharedSummary: true });
+    const work = await fridayAwarenessService(db).work(id(6), actor, { offset: 0, projectOffset: 0, limit: 25, status: "all" }, { portfolioReadScope: "company_shared_only" });
     expect(calls).toHaveLength(4);
     for (const call of calls.filter(call => call.text.includes('from "issues"'))) {
       expect(call.text).toContain("privacy_ancestors");
@@ -64,6 +65,37 @@ describe("explicit portfolio read contract", () => {
     const result = portfolioSummary(row, id(6), { ...work, evidence: [{ id: "secret", title: "private evidence", kind: "comment", agentId: null, taskId: "task", createdAt: new Date() }] });
     expect(result).not.toHaveProperty("evidence"); expect(result).not.toHaveProperty("assignments"); expect(result).not.toHaveProperty("accountability");
     expect(result).toMatchObject({ mandateId: row.id, revision: 3, targetCompanyId: id(6), tasks: [], counts: {} });
+  });
+  it("requires explicit private scope and the current Friday identity, without upgrading old grants", () => {
+    const privateRow = { ...row, readScope: "owner_accessible_private" };
+    expect(() => assertPortfolioMandateActor(privateRow, actor, id(6), 3)).not.toThrow();
+    expect(matchesPortfolioMandateGrant(privateRow, grant)).toBe(false);
+    expect(matchesPortfolioMandateGrant(privateRow, { ...grant, scope: portfolioMandateGrantScope(privateRow) })).toBe(true);
+    expect(() => assertPortfolioPrivateDelegate(privateRow, row.sourceAgentId)).not.toThrow();
+    expect(() => assertPortfolioPrivateDelegate(privateRow, "replacement-friday")).toThrow("currently designated Friday");
+    expect(() => assertPortfolioPrivateDelegate(privateRow, null)).toThrow();
+    expect(() => assertPortfolioPrivateDelegate(row, null)).not.toThrow();
+    expect(() => assertPortfolioMandateActor({ ...row, readScope: "unknown" }, actor, id(6), 3)).toThrow();
+  });
+  it("projects private summaries through current owner rights and the external user ceiling before counts", async () => {
+    vi.stubEnv("PAPERCLIP_ISSUE_PRIVACY_MODE", "off");
+    const calls: Array<{ text: string; params: unknown[] }> = [];
+    const db = drizzle(async (text, params) => { calls.push({ text, params }); return { rows: text.includes('count(*)::int') && !text.includes('group by') ? [[0]] : [] }; }) as unknown as Db;
+    const work = await fridayAwarenessService(db).work(id(6), actor, { offset: 0, projectOffset: 0, limit: 25, status: "all" }, { portfolioReadScope: "owner_accessible_private" });
+    expect(calls).toHaveLength(4);
+    for (const call of calls) {
+      expect(call.text).toContain('instance_user_roles');
+      expect(call.text).toContain("r.role = 'instance_admin'");
+      expect(call.params).toEqual(expect.arrayContaining(["owner", "external", id(6)]));
+      expect(call.params).not.toContain(row.sourceAgentId);
+    }
+    for (const call of calls.filter(call => call.text.includes('from "issues"'))) {
+      expect(call.text).toContain("privacy_ancestors");
+      expect(call.text).toContain('"issues"."conversation_agent_id" is null');
+      expect(call.text).not.toContain("where false or false or false");
+    }
+    expect(calls.some(call => /issue_comments|issue_work_products|case_handoffs|adapter_config/.test(call.text))).toBe(false);
+    expect(portfolioSummary({ ...row, readScope: "owner_accessible_private" }, id(6), work)).toMatchObject({ readScope: "owner_accessible_private" });
   });
 });
 

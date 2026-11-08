@@ -113,7 +113,7 @@ function ApiKeyConnectionStep({ companyId, provider, connectionId, name: initial
   const preparing = copilot && (envs.isPending || settings.isPending);
   const save = useMutation({
     mutationFn: () => aiConnectionsApi.create(companyId, { provider, method: "api_key", name: connectionId ? name : nameForMethod?.("api_key") ?? name, ownership, agentIds, allAgents, connectionId, apiKey, ...(copilot ? { environmentId } : {}) }),
-    onSuccess: (result) => { void client.invalidateQueries({ queryKey: ["ai-connections", companyId] }); void client.invalidateQueries({ queryKey: ["tools"] }); onComplete({ ...result, method: "api_key" }); },
+    onSuccess: (result) => { void client.invalidateQueries({ queryKey: ["ai-connections", companyId] }); void client.invalidateQueries({ queryKey: ["tools"] }); onComplete({ connectionId: result.connectionId, grantId: result.grantId, method: "api_key" }); },
     onSettled: () => setApiKey(""),
   });
   return <div className="mx-auto w-full min-w-0 max-w-xl space-y-4">

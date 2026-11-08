@@ -1775,6 +1775,7 @@ console.log(JSON.stringify({ type: "result", subtype: "success", result: "hello"
     const sessionId = randomUUID();
     await db.insert(adapterAuthSessions).values({ companyId, environmentId: environment.id, adapterType: "claude_local", startedByUserId: "alice", publicSessionId: sessionId, status: "submitting", aiConnection: { ...intent, agentIds: [] }, expiresAt: new Date(Date.now() + 60000) });
     const first = await completeSetupTokenAiConnection(db, { scope: { companyId, ownerUserId: "alice", environmentId: environment.id, adapterType: "claude_local", aiConnection: { ...intent, agentIds: [] } }, token: "fixture-subscription", sessionId });
+    expect(first.aiAccountSetup).toMatchObject({ status: "not_applicable", accountId: null, retry: null });
     expect(await completeSetupTokenAiConnection(db, { scope: { companyId, ownerUserId: "alice", environmentId: environment.id, adapterType: "claude_local", aiConnection: { ...intent, agentIds: [] } }, token: "fixture-subscription", sessionId })).toEqual(first);
     expect((await db.select().from(adapterAuthSessions).where(eq(adapterAuthSessions.publicSessionId, sessionId)))[0]).toMatchObject({ status: "stored", connectionId: first.connectionId, connectionGrantId: first.grantId });
     const cancelled = randomUUID();
@@ -2223,6 +2224,7 @@ console.log(JSON.stringify({ type: "result", subtype: "success", result: "hello"
       expect(reader).toHaveBeenLastCalledWith(provider, path.join(home, "instances/ai-connection-fixture/ai-local-logins", started.body.sessionId));
       const saved = await request(app).post(base).send(input);
       expect(saved.status).toBe(201);
+      expect(saved.body.aiAccountSetup).toMatchObject({ status: "not_applicable", accountId: null, retry: null });
       expect((await request(app).post(base).send(input)).body).toEqual(saved.body);
       expect(JSON.stringify(saved.body)).not.toContain("isolated-fixture-token");
       expect((await service.list(companyId, owner)).filter(c => c.name === intent.name)).toHaveLength(1);

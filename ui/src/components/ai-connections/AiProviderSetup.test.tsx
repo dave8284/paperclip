@@ -24,7 +24,8 @@ it("reconnects an older OpenRouter account without adding routing metadata", asy
     await act(async () => root.render(<QueryClientProvider client={client}><AiProviderSetup companyId="company" reconnect={account} onCancel={() => {}} onComplete={onComplete} /></QueryClientProvider>));
     expect(container.textContent).toContain("Existing credential flow");
     expect(credentialProps).toMatchObject({ connectionId: account.id, provider: "openrouter", initialMethod: "api_key", fixedMethod: true });
-    credentialProps!.onComplete({ connectionId: account.id, grantId: account.grantId, method: "api_key" });
+    credentialProps!.onComplete({ connectionId: account.id, grantId: account.grantId, method: "api_key",
+      aiAccountSetup: { status: "not_applicable", accountId: null, pending: [], installedCompanyIds: [], retry: null } } as never);
     expect(onComplete).toHaveBeenCalledWith({ provider: "openrouter", method: "api_key", mode: "delegated", connectionId: account.id, grantId: account.grantId });
   } finally {
     await act(async () => root.unmount());

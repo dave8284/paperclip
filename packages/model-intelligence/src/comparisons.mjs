@@ -1,3 +1,4 @@
+import { mapEffects } from "./storage-effects.mjs";
 import { createHash } from "node:crypto";
 
 export const COMPARISON_POLICY_VERSION = "paired-holdout-v1";
@@ -22,12 +23,13 @@ function totalLatency(attempts) {
 }
 function common(input, keys) { object(input, keys, "input"); text(input.namespace, "namespace"); text(input.id, "id"); }
 const variantKeys = ["profileId", "provider", "model", "modelVersion", "reasoningEffort", "method", "harnessFingerprint", "promptFingerprint", "contextFingerprint"];
-function variant(value) {
+export function validateComparisonVariant(value) {
   object(value, variantKeys, "variant");
   for (const key of variantKeys.slice(0, 5)) text(value[key], key);
   if (value.method !== "subscription") throw new Error("Comparison profiles must use subscriptions");
   for (const key of ["harnessFingerprint", "promptFingerprint", "contextFingerprint"]) sha(value[key], key);
 }
+const variant = validateComparisonVariant;
 function thresholds(value) {
   object(value, ["minimumHoldoutPairs", "qualityLowerBound", "maximumMedianIterations", "minimumLatencyImprovement"], "thresholds");
   integer(value.minimumHoldoutPairs, 5, 100, "minimumHoldoutPairs");
@@ -38,33 +40,62 @@ function thresholds(value) {
 
 /** Embedded, operator-owned audit. No provider execution, activation, or HTTP authorization. */
 export function createComparisonStore(db, { blocked, lowerBound, median }) {
-  db.exec(`
-    BEGIN IMMEDIATE;
-    CREATE TABLE IF NOT EXISTS comparison_datasets (namespace TEXT NOT NULL, id TEXT NOT NULL, version TEXT NOT NULL, input_hash TEXT NOT NULL, payload TEXT NOT NULL, created_at TEXT NOT NULL, PRIMARY KEY(namespace,id,version));
-    CREATE TABLE IF NOT EXISTS comparison_cases (namespace TEXT NOT NULL, dataset_id TEXT NOT NULL, dataset_version TEXT NOT NULL, case_id TEXT NOT NULL, split TEXT NOT NULL, input_digest TEXT NOT NULL, check_digest TEXT NOT NULL, PRIMARY KEY(namespace,dataset_id,dataset_version,case_id));
-    CREATE INDEX IF NOT EXISTS comparison_training_inputs ON comparison_cases(namespace,input_digest,split);
-    CREATE TABLE IF NOT EXISTS controlled_comparisons (namespace TEXT NOT NULL, id TEXT NOT NULL, input_hash TEXT NOT NULL, payload TEXT NOT NULL, created_at TEXT NOT NULL, receipt_cutoff INTEGER NOT NULL, PRIMARY KEY(namespace,id));
-    CREATE TABLE IF NOT EXISTS comparison_outcomes (namespace TEXT NOT NULL, id TEXT NOT NULL, comparison_id TEXT NOT NULL, case_id TEXT NOT NULL, arm TEXT NOT NULL, attempt INTEGER NOT NULL, receipt_id TEXT NOT NULL, input_hash TEXT NOT NULL, payload TEXT NOT NULL, created_at TEXT NOT NULL, PRIMARY KEY(namespace,id), UNIQUE(namespace,comparison_id,case_id,arm,attempt), UNIQUE(namespace,receipt_id));
-    PRAGMA user_version=2;
-    COMMIT;
-  `);
-  function atomic(work) { db.exec("BEGIN IMMEDIATE"); try { const result = work(); db.exec("COMMIT"); return result; } catch (error) { db.exec("ROLLBACK"); throw error; } }
+  // Nested policy work shares its caller's public-operation transaction.
+  function* atomic(work) { return (yield* work()); }
+
   function replay(row, input) {
     if (row.input_hash !== digest(input)) throw new Error("Record ID already exists with different inputs");
     return { ...JSON.parse(row.payload), createdAt: row.created_at };
   }
-  function dataset(namespace, id, version) {
-    const row = db.prepare("SELECT * FROM comparison_datasets WHERE namespace=? AND id=? AND version=?").get(namespace, id, version);
+  function* dataset(namespace, id, version) {
+    const row = (yield db.prepare("SELECT * FROM comparison_datasets WHERE namespace=? AND id=? AND version=?").get(namespace, id, version));
     if (!row) throw new Error("Dataset version not found in this namespace");
     return JSON.parse(row.payload);
   }
-  function comparison(namespace, id) {
-    const row = db.prepare("SELECT * FROM controlled_comparisons WHERE namespace=? AND id=?").get(namespace, id);
+  function* comparison(namespace, id) {
+    const row = (yield db.prepare("SELECT * FROM controlled_comparisons WHERE namespace=? AND id=?").get(namespace, id));
     if (!row) throw new Error("Comparison not found in this namespace");
     return { ...JSON.parse(row.payload), createdAt: row.created_at };
   }
   return {
-    registerDataset(input) {
+    *validateComparisonSelection(input) {
+      const binding = input.comparisonBinding;
+      object(binding, ["comparisonId", "caseId", "arm", "inputDigest", "checkDigest"], "comparison selection binding");
+      for (const key of ["comparisonId", "caseId"]) text(binding[key], key);
+      oneOf(binding.arm, ["baseline", "candidate"], "arm");
+      sha(binding.inputDigest, "input"); sha(binding.checkDigest, "check");
+      const run = (yield* comparison(input.namespace, binding.comparisonId)), data = (yield* dataset(input.namespace, run.datasetId, run.datasetVersion));
+      const item = (data.cases.find(item => item.id === binding.caseId)), expected = run[binding.arm];
+      // A native receipt may use a host-specific candidate ID. The frozen
+      // comparison profile's policy still governs initial selection and replay.
+      if ((yield* blocked(input.namespace, expected.profileId))) throw new Error("The comparison profile has been blocked");
+      const selected = input.candidates[0];
+      if (!item || item.inputDigest !== binding.inputDigest || item.checkDigest !== binding.checkDigest || input.contextFingerprint !== binding.inputDigest
+        || input.taskType !== data.taskFamily || input.complexity !== data.complexity
+        || input.candidates.length !== 1 || input.defaultCandidateId !== selected?.id
+        || selected.provider !== expected.provider || selected.model !== expected.model || selected.method !== expected.method) {
+        throw new Error("Native selection does not match the preregistered comparison arm and case");
+      }
+      return { ...binding };
+    },
+    *comparisonDefinition({ namespace, comparisonId }) {
+      text(namespace, "namespace"); text(comparisonId, "comparisonId");
+      return (yield* atomic(function*() {
+        const run = (yield* comparison(namespace, comparisonId));
+        return { comparison: run, dataset: (yield* dataset(namespace, run.datasetId, run.datasetVersion)) };
+      }));
+    },
+    *comparisonCatalog(namespace) {
+      text(namespace, "namespace");
+      // Discovery is bounded and returns the same immutable owner records used
+      // by admission. It neither registers outcomes nor activates a policy.
+      return (yield* atomic(function*() { return (yield* mapEffects((yield db.prepare("SELECT id FROM controlled_comparisons WHERE namespace=? ORDER BY created_at DESC,rowid DESC LIMIT 20")
+        .all(namespace)), function*({ id }) {
+          const run = (yield* comparison(namespace, id));
+          return { comparison: run, dataset: (yield* dataset(namespace, run.datasetId, run.datasetVersion)) };
+        })); }));
+    },
+    *registerDataset(input) {
       common(input, ["namespace", "id", "version", "taskFamily", "taskFamilyVersion", "complexity", "provenance", "cases"]);
       for (const key of ["version", "taskFamily", "taskFamilyVersion"]) text(input[key], key);
       oneOf(input.complexity, ["routine", "complex"], "complexity");
@@ -78,17 +109,17 @@ export function createComparisonStore(db, { blocked, lowerBound, median }) {
         if (ids.has(item.id) || inputs.has(item.inputDigest)) throw new Error("Duplicate case or input digest within dataset version");
         ids.add(item.id); inputs.add(item.inputDigest);
       }
-      return atomic(() => {
-        const old = db.prepare("SELECT * FROM comparison_datasets WHERE namespace=? AND id=? AND version=?").get(input.namespace, input.id, input.version);
+      return (yield* atomic(function*() {
+        const old = (yield db.prepare("SELECT * FROM comparison_datasets WHERE namespace=? AND id=? AND version=?").get(input.namespace, input.id, input.version));
         if (old) return replay(old, input);
         const createdAt = new Date().toISOString();
-        db.prepare("INSERT INTO comparison_datasets VALUES(?,?,?,?,?,?)").run(input.namespace, input.id, input.version, digest(input), JSON.stringify(input), createdAt);
+        (yield db.prepare("INSERT INTO comparison_datasets VALUES(?,?,?,?,?,?)").run(input.namespace, input.id, input.version, digest(input), JSON.stringify(input), createdAt));
         const insert = db.prepare("INSERT INTO comparison_cases VALUES(?,?,?,?,?,?,?)");
-        for (const item of input.cases) insert.run(input.namespace, input.id, input.version, item.id, item.split, item.inputDigest, item.checkDigest);
+        for (const item of input.cases) (yield insert.run(input.namespace, input.id, input.version, item.id, item.split, item.inputDigest, item.checkDigest));
         return { ...input, createdAt };
-      });
+      }));
     },
-    registerComparison(input) {
+    *registerComparison(input) {
       common(input, ["namespace", "id", "datasetId", "datasetVersion", "dimension", "baseline", "candidate", "thresholds"]);
       text(input.datasetId, "datasetId"); text(input.datasetVersion, "datasetVersion");
       oneOf(input.dimension, ["model", "prompt", "context"], "dimension");
@@ -97,17 +128,17 @@ export function createComparisonStore(db, { blocked, lowerBound, median }) {
       const measured = changing.filter(key => key !== "profileId");
       if (variantKeys.some(key => !changing.includes(key) && input.baseline[key] !== input.candidate[key])
         || measured.every(key => input.baseline[key] === input.candidate[key])) throw new Error("Change exactly the declared comparison dimension; provider, funding and harness stay fixed");
-      return atomic(() => {
-        const old = db.prepare("SELECT * FROM controlled_comparisons WHERE namespace=? AND id=?").get(input.namespace, input.id);
+      return (yield* atomic(function*() {
+        const old = (yield db.prepare("SELECT * FROM controlled_comparisons WHERE namespace=? AND id=?").get(input.namespace, input.id));
         if (old) return replay(old, input);
-        dataset(input.namespace, input.datasetId, input.datasetVersion);
+        (yield* dataset(input.namespace, input.datasetId, input.datasetVersion));
         const createdAt = new Date().toISOString();
-        const cutoff = db.prepare("SELECT coalesce(max(rowid),0) AS sequence FROM routing_receipts").get().sequence;
-        db.prepare("INSERT INTO controlled_comparisons VALUES(?,?,?,?,?,?)").run(input.namespace, input.id, digest(input), JSON.stringify(input), createdAt, cutoff);
+        const cutoff = (yield db.prepare("SELECT coalesce(max(rowid),0) AS sequence FROM routing_receipts").get()).sequence;
+        (yield db.prepare("INSERT INTO controlled_comparisons VALUES(?,?,?,?,?,?)").run(input.namespace, input.id, digest(input), JSON.stringify(input), createdAt, cutoff));
         return { ...input, createdAt };
-      });
+      }));
     },
-    recordComparisonOutcome(input) {
+    *recordComparisonOutcome(input) {
       common(input, ["namespace", "id", "comparisonId", "caseId", "arm", "attempt", "receiptId", "inputDigest", "checkDigest", "observedVariant", "provenance", "outcome", "terminal", "iterations", "latencyMs", "source", "evaluator", "evidenceRef"]);
       for (const key of ["comparisonId", "caseId", "receiptId", "evaluator", "evidenceRef"]) text(input[key], key);
       oneOf(input.arm, ["baseline", "candidate"], "arm"); integer(input.attempt, 1, 10, "attempt");
@@ -116,53 +147,62 @@ export function createComparisonStore(db, { blocked, lowerBound, median }) {
       oneOf(input.source, ["human", "checks"], "source");
       sha(input.inputDigest, "input"); sha(input.checkDigest, "check");
       if (input.observedVariant !== null) variant(input.observedVariant);
-      integer(input.iterations, 1, 100, "iterations");
+      if (input.iterations !== null) integer(input.iterations, 1, 100, "iterations");
       if (input.latencyMs !== null && (!Number.isFinite(input.latencyMs) || input.latencyMs < 0 || input.latencyMs > Number.MAX_SAFE_INTEGER / 10)) throw new Error("Invalid latencyMs");
       if (typeof input.terminal !== "boolean" || (input.outcome === "passed" || input.attempt === 10) && !input.terminal) throw new Error("Successful or final bounded attempts must be terminal");
-      return atomic(() => {
-        const old = db.prepare("SELECT * FROM comparison_outcomes WHERE namespace=? AND id=?").get(input.namespace, input.id);
+      return (yield* atomic(function*() {
+        const old = (yield db.prepare("SELECT * FROM comparison_outcomes WHERE namespace=? AND id=?").get(input.namespace, input.id));
         if (old) return replay(old, input);
-        const run = comparison(input.namespace, input.comparisonId), data = dataset(input.namespace, run.datasetId, run.datasetVersion);
-        const item = data.cases.find(item => item.id === input.caseId), expected = run[input.arm];
+        const run = (yield* comparison(input.namespace, input.comparisonId)), data = (yield* dataset(input.namespace, run.datasetId, run.datasetVersion));
+        const item = (data.cases.find(item => item.id === input.caseId)), expected = run[input.arm];
         if (!item || input.inputDigest !== item.inputDigest || input.checkDigest !== item.checkDigest) throw new Error("Outcome does not match the frozen case and acceptance checks");
         if (input.observedVariant !== null && canonical(input.observedVariant) !== canonical(expected)) throw new Error("Observed execution differs from the frozen variant");
-        const row = db.prepare("SELECT rowid AS sequence,receipt FROM routing_receipts WHERE namespace=? AND id=?").get(input.namespace, input.receiptId);
+        const row = (yield db.prepare("SELECT rowid AS sequence,receipt FROM routing_receipts WHERE namespace=? AND id=?").get(input.namespace, input.receiptId));
         if (!row) throw new Error("Selection receipt not found in this namespace");
         const receipt = JSON.parse(row.receipt);
-        const cutoff = db.prepare("SELECT receipt_cutoff FROM controlled_comparisons WHERE namespace=? AND id=?").get(input.namespace, input.comparisonId).receipt_cutoff;
-        if (row.sequence <= cutoff || receipt.taskType !== data.taskFamily || receipt.complexity !== data.complexity
-          || receipt.candidate.id !== expected.profileId || receipt.candidate.provider !== expected.provider || receipt.candidate.model !== expected.model
-          || receipt.candidate.method !== expected.method || receipt.promptFingerprint !== expected.promptFingerprint || receipt.contextFingerprint !== expected.contextFingerprint) throw new Error("Selection receipt does not match the registered comparison variant");
-        const prior = db.prepare("SELECT payload FROM comparison_outcomes WHERE namespace=? AND comparison_id=? AND case_id=? AND arm=? ORDER BY attempt DESC LIMIT 1").get(input.namespace, input.comparisonId, input.caseId, input.arm);
+        const cutoff = (yield db.prepare("SELECT receipt_cutoff FROM controlled_comparisons WHERE namespace=? AND id=?").get(input.namespace, input.comparisonId)).receipt_cutoff;
+        const binding = receipt.comparisonBinding;
+        const identityMatches = binding
+          ? binding.comparisonId === input.comparisonId && binding.caseId === input.caseId && binding.arm === input.arm && receipt.contextFingerprint === item.inputDigest
+            && binding.inputDigest === item.inputDigest && binding.checkDigest === item.checkDigest
+          : receipt.candidate.id === expected.profileId && receipt.promptFingerprint === expected.promptFingerprint && receipt.contextFingerprint === expected.contextFingerprint;
+        // Native task identity remains on the ordinary receipt; the separately
+        // frozen comparison binding identifies its strategy/variant contract.
+        // Actual dimensions still require the host's observedVariant above.
+        if (row.sequence <= cutoff || receipt.taskType !== data.taskFamily || receipt.complexity !== data.complexity || !identityMatches
+          || receipt.candidate.provider !== expected.provider || receipt.candidate.model !== expected.model
+          || receipt.candidate.method !== expected.method) throw new Error("Selection receipt does not match the registered comparison variant");
+        const prior = (yield db.prepare("SELECT payload FROM comparison_outcomes WHERE namespace=? AND comparison_id=? AND case_id=? AND arm=? ORDER BY attempt DESC LIMIT 1").get(input.namespace, input.comparisonId, input.caseId, input.arm));
         const previous = prior && JSON.parse(prior.payload);
         if (previous?.terminal || input.attempt !== (previous?.attempt ?? 0) + 1) throw new Error("Append consecutive attempts; terminal history cannot be rewritten");
         const createdAt = new Date().toISOString();
-        db.prepare("INSERT INTO comparison_outcomes VALUES(?,?,?,?,?,?,?,?,?,?)").run(input.namespace, input.id, input.comparisonId, input.caseId, input.arm, input.attempt, input.receiptId, digest(input), JSON.stringify(input), createdAt);
+        (yield db.prepare("INSERT INTO comparison_outcomes VALUES(?,?,?,?,?,?,?,?,?,?)").run(input.namespace, input.id, input.comparisonId, input.caseId, input.arm, input.attempt, input.receiptId, digest(input), JSON.stringify(input), createdAt));
         return { ...input, createdAt };
-      });
+      }));
     },
-    comparisonReport({ namespace, comparisonId }) {
+    *comparisonReport({ namespace, comparisonId }) {
       text(namespace, "namespace"); text(comparisonId, "comparisonId");
-      return atomic(() => {
-        const run = comparison(namespace, comparisonId), data = dataset(namespace, run.datasetId, run.datasetVersion);
-        const outcomes = db.prepare("SELECT payload,created_at FROM comparison_outcomes WHERE namespace=? AND comparison_id=? ORDER BY case_id,arm,attempt").all(namespace, comparisonId)
+      return (yield* atomic(function*() {
+        const run = (yield* comparison(namespace, comparisonId)), data = (yield* dataset(namespace, run.datasetId, run.datasetVersion));
+        const outcomes = (yield db.prepare("SELECT payload,created_at FROM comparison_outcomes WHERE namespace=? AND comparison_id=? ORDER BY case_id,arm,attempt").all(namespace, comparisonId))
           .map(row => ({ ...JSON.parse(row.payload), createdAt: row.created_at }));
         const blockers = new Set();
-        const cases = data.cases.map(item => {
+        const cases = (yield* mapEffects(data.cases, function*(item) {
           const arms = Object.fromEntries(["baseline", "candidate"].map(arm => {
             const attempts = outcomes.filter(outcome => outcome.caseId === item.id && outcome.arm === arm);
             return [arm, { attempts, terminal: attempts.at(-1)?.terminal ?? false, outcome: attempts.at(-1)?.outcome ?? "missing",
               latencyMs: totalLatency(attempts),
-              iterations: attempts.reduce((sum, attempt) => sum + attempt.iterations, 0) }];
+              iterations: !attempts.length || attempts.some(attempt => attempt.iterations === null)
+                ? null : attempts.reduce((sum, attempt) => sum + attempt.iterations, 0) }];
           }));
-          const exposedToTraining = !!db.prepare("SELECT 1 FROM comparison_cases WHERE namespace=? AND input_digest=? AND split='training' LIMIT 1").get(namespace, item.inputDigest);
+          const exposedToTraining = !!(yield db.prepare("SELECT 1 FROM comparison_cases WHERE namespace=? AND input_digest=? AND split='training' LIMIT 1").get(namespace, item.inputDigest));
           return { caseId: item.id, split: item.split, exposedToTraining, ...arms };
-        });
+        }));
         const holdout = cases.filter(item => item.split === "holdout");
         if (holdout.length < run.thresholds.minimumHoldoutPairs) blockers.add("insufficient_holdout_cases");
         if (data.provenance !== "observed") blockers.add("synthetic_dataset");
         if (data.complexity !== "routine") blockers.add("complex_work_requires_separate_qualification");
-        if (blocked(namespace, run.baseline.profileId) || blocked(namespace, run.candidate.profileId)) blockers.add("profile_blocked_by_policy");
+        if ((yield* blocked(namespace, run.baseline.profileId)) || (yield* blocked(namespace, run.candidate.profileId))) blockers.add("profile_blocked_by_policy");
         for (const item of holdout) {
           if (item.exposedToTraining) blockers.add("holdout_exposed_to_training");
           if (!item.baseline.terminal || !item.candidate.terminal) blockers.add("incomplete_pairs");
@@ -171,6 +211,7 @@ export function createComparisonStore(db, { blocked, lowerBound, median }) {
             if (arm.attempts.some(attempt => attempt.observedVariant === null)) blockers.add("unverified_execution_dimensions");
             if (arm.attempts.some(attempt => ["unknown", "cancelled"].includes(attempt.outcome))) blockers.add("unknown_or_cancelled_outcomes");
             if (arm.terminal && arm.latencyMs === null) blockers.add("unmeasured_resources");
+            if (arm.attempts.some(attempt => attempt.iterations === null)) blockers.add("unmeasured_resources");
             if (arm.attempts.length && arm.attempts.every(attempt => attempt.latencyMs !== null) && arm.latencyMs === null) blockers.add("unrepresentable_resource_aggregate");
           }
           if (item.baseline.outcome === "passed" && item.candidate.outcome !== "passed") blockers.add("paired_quality_regression");
@@ -182,7 +223,7 @@ export function createComparisonStore(db, { blocked, lowerBound, median }) {
             firstPass: holdout.filter(item => firstPass(item[arm])).length,
             failedAttempts: holdout.reduce((sum, item) => sum + item[arm].attempts.filter(attempt => attempt.outcome === "failed").length, 0),
             lowerBound: lowerBound(passed.length, holdout.length),
-            medianIterations: holdout.every(item => item[arm].terminal) ? median(holdout.map(item => item[arm].iterations)) : null,
+            medianIterations: holdout.every(item => item[arm].terminal && item[arm].iterations !== null) ? median(holdout.map(item => item[arm].iterations)) : null,
             medianAcceptedLatencyMs: median(passed.flatMap(item => item[arm].latencyMs === null ? [] : [item[arm].latencyMs])) };
         };
         const baseline = summary("baseline"), candidate = summary("candidate");
@@ -205,7 +246,7 @@ export function createComparisonStore(db, { blocked, lowerBound, median }) {
             "Thresholds describe these frozen cases; they are not universal statistical or production guarantees.",
             "Training exposure checks cover registered input digests only; unseen training overlap and omitted executions cannot be detected here.",
             "This report does not activate routing, override pins or grant provider, company or execution access."] };
-      });
+      }));
     },
   };
 }

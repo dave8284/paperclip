@@ -7,10 +7,11 @@ import {
   type AgentOrgChainHealth,
 } from "@paperclipai/shared";
 import { conflict, notFound, unprocessable } from "../errors.js";
+import { assertFridayWorkEligible, fridayCoordinatorSql } from "./friday-board-role.js";
 
-type AgentAssignmentKind = "work" | "routine";
+type AgentAssignmentKind = "work" | "routine" | "conversation";
 
-type AssignabilityAgent = AgentEligibilityAgent;
+type AssignabilityAgent = AgentEligibilityAgent & { isBoardCoordinator?: boolean };
 
 type AgentAssignmentConflictReason =
   | "pending_approval"
@@ -75,6 +76,7 @@ async function getAgent(db: Db, agentId: string): Promise<AssignabilityAgent | n
       name: agents.name,
       status: agents.status,
       reportsTo: agents.reportsTo,
+      isBoardCoordinator: fridayCoordinatorSql(agents.companyId, agents.id),
     })
     .from(agents)
     .where(eq(agents.id, agentId))
@@ -114,6 +116,7 @@ export async function assertAssignableAgent(
   if (assignee.companyId !== companyId) {
     throw unprocessable("Assignee must belong to same company");
   }
+  assertFridayWorkEligible({ isBoardCoordinator: assignee.isBoardCoordinator, companyId, agentId, kind });
 
   const companyAgents = await listCompanyAgents(db, companyId);
   const eligibility = getAgentWorkEligibility({ agent: assignee, agents: companyAgents });

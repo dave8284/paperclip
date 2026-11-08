@@ -3401,6 +3401,34 @@ also accepts `PAPERCLIP_INTERACTIONS_TEST_DATABASE_URL`. The suites migrate and 
 URLs; the sleep suite truncates company data between tests.
 
 
+### Model Intelligence storage
+
+The existing `AGENTOS_MODEL_INTELLIGENCE_DB` selects the independent SQLite
+evidence store. PostgreSQL requires an imported and separately accepted
+destination; startup never imports data or records migration acceptance.
+After the full migration rehearsal and cutover review, configure these protected
+environment variables instead of the SQLite path:
+
+- `AGENTOS_MODEL_INTELLIGENCE_POSTGRES_URL`: the private runtime connection URL.
+- `AGENTOS_MODEL_INTELLIGENCE_DESTINATION_ID`: the retained destination UUID.
+- `AGENTOS_MODEL_INTELLIGENCE_ACTIVATION_ID`: the accepted activation UUID.
+- `AGENTOS_MODEL_INTELLIGENCE_MANIFEST_SHA256`: the exact imported manifest hash.
+
+Partial or mixed configuration fails startup. A changed remote configuration
+requires the native restart lifecycle. The host uses the shared database client
+with a separate four-connection pool, five-second connection timeout and
+60-second idle release. The package checks destination/activation and private
+schema access before use; it never owns credentials or grants native authority.
+Native acknowledgements await storage commit. Existing reconciliation restores
+actual observation deadlines; idle scheduler reads perform no remote I/O.
+Shutdown drains store operations before ending its pool. Keep one coordinated
+runtime writer until cross-process notification/recovery has been proven.
+
+See the [independent package](../packages/model-intelligence/README.md#explicit-postgresql-runtime)
+and [full migration plan](plans/2026-11-07-agentos-supabase-full-migration.md).
+These source options are not a deployed cutover. Real PostgreSQL parity,
+backup/restore, private access and acceptance remain required.
+
 ### Local AgentOS System One triage
 
 The local lane uses pinned Laya, independently of hosted Jev and the subscription

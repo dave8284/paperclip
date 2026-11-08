@@ -83,7 +83,7 @@ describe("InboxAgentPolicyControl", () => {
     container = document.createElement("div");
     document.body.appendChild(container);
     mockAgentsApi.list.mockResolvedValue([
-      { id: "agent-1", name: "Gardener", role: "gardener", status: "active", icon: null },
+      { id: "agent-1", name: "Gardener", role: "gardener", status: "active", icon: null, isBoardCoordinator: true },
       { id: "agent-2", name: "Coder", role: "engineer", status: "active", icon: null },
       { id: "agent-3", name: "Retired", role: "engineer", status: "terminated", icon: null },
     ]);
@@ -127,7 +127,7 @@ describe("InboxAgentPolicyControl", () => {
     act(() => root.unmount());
   });
 
-  it("round-trips an allowlist selection through the PUT endpoint", async () => {
+  it("round-trips an allowlist including the board coordinator through the PUT endpoint", async () => {
     const root = render(container);
     await flush();
 

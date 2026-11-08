@@ -1998,12 +1998,16 @@ type IssueUserContextInput = {
 };
 type ProjectGoalReader = Pick<Db, "select">;
 type DbReader = Pick<Db, "select">;
-/** Conversation containers cannot acquire new child edges, even with the experiment disabled. */
-async function assertExecutionTaskParent(db: Db, companyId: string, parentId?: string | null) {
+/** A parent must be an execution task in this company, regardless of workspace inheritance. */
+async function assertExecutionTaskParent(db: Db, companyId: string, parentId?: string | null, lockParent = false) {
   if (!parentId) return;
-  const [parent] = await db.select({ conversationAgentId: issues.conversationAgentId })
+  const query = db.select({ conversationAgentId: issues.conversationAgentId })
     .from(issues).where(and(eq(issues.id, parentId), eq(issues.companyId, companyId)));
-  if (parent?.conversationAgentId) throw unprocessable("Conversations cannot have new subtasks; create a task in a project instead");
+  // Lock only after the caller owns the company tree lock. Preflight callers
+  // may already be inside a transaction; taking row locks first reverses order.
+  const [parent] = await (lockParent ? query.for("share") : query);
+  if (!parent) throw notFound("Parent task not found");
+  if (parent.conversationAgentId) throw unprocessable("Conversations cannot have new subtasks; create a task in a project instead");
 }
 
 type DbTransaction = Parameters<Parameters<Db["transaction"]>[0]>[0];
@@ -9981,7 +9985,7 @@ export function issueService(db: Db) {
       }
       if (data.assigneeAgentId) {
         await assertAssignableAgent(db, companyId, data.assigneeAgentId, {
-          kind: "work",
+          kind: data.conversationAgentId === data.assigneeAgentId && data.conversationUserId ? "conversation" : "work",
         });
       }
       if (data.assigneeUserId) {
@@ -9996,7 +10000,7 @@ export function issueService(db: Db) {
       }
       const persist = async (tx: DbTransaction) => {
         await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`issue-privacy-tree:${companyId}`}, 0))`);
-        await assertExecutionTaskParent(tx as unknown as Db, companyId, issueData.parentId);
+        await assertExecutionTaskParent(tx as unknown as Db, companyId, issueData.parentId, true);
         if (issueData.conversationAgentId && issueData.conversationUserId) {
           const identity = `conversation:${companyId}:${issueData.conversationAgentId}:${issueData.conversationUserId}`;
           await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${identity}, 0))`);
@@ -10551,6 +10555,7 @@ export function issueService(db: Db) {
         await instanceSettings.getExperimental()
       ).enableIsolatedWorkspaces;
       await db.transaction(async (tx) => {
+        await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`issue-privacy-tree:${companyId}`}, 0))`);
         // Self-correcting counter: seed from max(issue_number) so a drifted
         // company counter cannot mint colliding identifiers, then reserve the
         // whole range in one bump instead of one-per-issue.
@@ -10635,9 +10640,15 @@ export function issueService(db: Db) {
           companyId: string;
         }> = [];
 
+        // These ordinary tasks will all be inserted into companyId below. Their
+        // parent rows may not exist yet; external parents still need the normal
+        // company/conversation check. A colliding ID fails the atomic insert.
+        const importedIssueIds = new Set(rows.map(row => row.id));
         let counter = base;
         for (const row of rows) {
-          await assertExecutionTaskParent(tx as unknown as Db, companyId, row.parentId);
+          if (!row.parentId || !importedIssueIds.has(row.parentId)) {
+            await assertExecutionTaskParent(tx as unknown as Db, companyId, row.parentId, true);
+          }
           counter += 1;
           const issueNumber = counter;
           const identifier = `${company.issuePrefix}-${issueNumber}`;
@@ -10714,8 +10725,8 @@ export function issueService(db: Db) {
             responsibleUserId: null,
             requestDepth: clampIssueRequestDepth(undefined),
             originKind: "manual",
-            // The caller resolves parentId against ids in this same batch, so a
-            // parent always lands in the same insert (rows arrive parents-first).
+            // Parents in this batch arrive first; existing parents were checked
+            // in this company before the insert.
             parentId: row.parentId ?? null,
             // Preserved bundle timestamps win; without them createdAt/updatedAt
             // fall back to the insert time (the old defaultNow() behavior).
@@ -11085,7 +11096,7 @@ export function issueService(db: Db) {
           dbOrTx as Db,
           existing.companyId,
           nextAssigneeAgentId,
-          { kind: "work" },
+          { kind: existing.conversationAgentId === nextAssigneeAgentId && existing.conversationUserId ? "conversation" : "work" },
         );
       }
       if (issueData.assigneeUserId) {
@@ -11177,6 +11188,11 @@ export function issueService(db: Db) {
           .for("update")
           .then((rows: Array<typeof issues.$inferSelect>) => rows[0] ?? null);
         if (!receiptExisting) return null;
+        if (issueData.parentId !== undefined) {
+          // Recheck after the task/company locks; the preflight read cannot
+          // authorize a parent link that changed while this update waited.
+          await assertExecutionTaskParent(tx, receiptExisting.companyId, issueData.parentId, true);
+        }
         if (actorRunId) await assertNoCaseHandoffMutation(tx, actorRunId, id);
         if (expectedStatusVersion !== undefined && (
           receiptExisting.statusVersion !== expectedStatusVersion || receiptExisting.status !== "backlog"
@@ -11780,13 +11796,13 @@ export function issueService(db: Db) {
       checkoutRunId: string | null,
     ) => {
       const issueCompany = await db
-        .select({ companyId: issues.companyId })
+        .select({ companyId: issues.companyId, conversationAgentId: issues.conversationAgentId, conversationUserId: issues.conversationUserId })
         .from(issues)
         .where(eq(issues.id, id))
         .then((rows) => rows[0] ?? null);
       if (!issueCompany) throw notFound("Issue not found");
       await assertAssignableAgent(db, issueCompany.companyId, agentId, {
-        kind: "work",
+        kind: issueCompany.conversationAgentId === agentId && issueCompany.conversationUserId ? "conversation" : "work",
       });
 
       const now = new Date();

@@ -1,7 +1,7 @@
 import { and, eq, isNull, or, sql } from "drizzle-orm";
 import { agents, agentApiKeys, agentRuntimeState, agentTaskSessions, agentWakeupRequests, activityLog,
   budgetReservations, heartbeatRunEvents, heartbeatRuns, issueExecutionDecisions, issues, issueComments,
-  caseHandoffs, agentosAssignments, agentosDepartments, principalPermissionGrants, aiExecutionCapacityClaims, modelProfileQualifications, type Db } from "@paperclipai/db";
+  caseHandoffs, agentosBoardDirections, agentosAssignments, agentosDepartments, principalPermissionGrants, aiExecutionCapacityClaims, modelProfileQualifications, type Db } from "@paperclipai/db";
 import { conflict } from "../errors.js";
 import { issueThreadInteractionService } from "./issue-thread-interactions.js";
 
@@ -28,6 +28,11 @@ export async function deleteAgentDependencies(tx: Db, companyId: string, id: str
   )).limit(1);
   if (retainedHandoff) throw conflict("Saved case handoff history requires this agent record. Keep the agent terminated instead of permanently deleting it", {
     code: "agent_case_history_retained",
+  });
+  const [retainedDirection] = await tx.select({ id: agentosBoardDirections.id }).from(agentosBoardDirections).where(and(
+    eq(agentosBoardDirections.targetCompanyId, companyId), eq(agentosBoardDirections.executiveAgentId, id))).limit(1);
+  if (retainedDirection) throw conflict("Saved board direction history requires this executive record. Keep the agent terminated instead of permanently deleting it", {
+    code: "agent_board_direction_history_retained",
   });
   const [decisionHold] = await tx.select({ id: budgetReservations.id }).from(budgetReservations).where(and(
     eq(budgetReservations.companyId, companyId), eq(budgetReservations.agentId, id),

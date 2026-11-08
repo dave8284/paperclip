@@ -32,6 +32,7 @@ const apiPrefixes: Record<string, string> = {
   "agent-profile-avatar.ts": "/api",
   "announcements.ts": "/api",
   "ai-connections.ts": "/api",
+  "ai-workspace-accounts.ts": "/api",
   "ai-execution-capacity.ts": "/api",
   "egm-review-packets.ts": "/api",
   "decision-models.ts": "/api",
@@ -321,6 +322,31 @@ function loadSpecRoutes() {
 }
 
 describe("openapi routes", () => {
+  it("documents distinct case and task file ownership and repeated case checks", () => {
+    const paths = (buildOpenApiSpec() as any).paths;
+    const records = paths["/api/companies/{companyId}/friday/portfolio-records"].get;
+    expect(records.summary).toContain("kind=case_attachments requires caseId");
+    expect(records.parameters.find((value: any) => value.name === "kind").schema.enum).toEqual(expect.arrayContaining(["cases", "case_attachments", "attachments"]));
+    const file = paths["/api/companies/{companyId}/friday/portfolio-attachment"].get;
+    expect(file.summary).toContain("Supply exactly one owner: taskId or caseId");
+    expect(file.summary).toContain("those checks repeat after storage");
+    for (const name of ["taskId", "caseId"]) expect(file.parameters.find((value: any) => value.name === name).required).toBe(false);
+  });
+  it("documents separate executive direction authority and bounded company-owned handoffs", () => {
+    const paths = (buildOpenApiSpec() as any).paths;
+    const create = paths["/api/companies/{companyId}/friday/board-directions"].post;
+    const schema = create.requestBody.content["application/json"].schema;
+    expect(schema.additionalProperties).toBe(false);
+    expect(schema.required).toEqual(expect.arrayContaining(["mandateId", "revision", "grantId", "targetCompanyId", "executiveAgentId", "projectId", "idempotencyKey", "title", "description"]));
+    for (const key of ["parentId", "executionWorkspaceId", "originRunId", "createdByUserId"]) expect(schema.properties).not.toHaveProperty(key);
+    expect(create.summary).toContain("separate boardDirectionAuthority.grantId");
+    const grant = paths["/api/agentos/portfolios/{portfolioId}/read-mandates/{mandateId}/board-direction-authority"].post;
+    expect(grant.requestBody.content["application/json"].schema.required).toEqual(expect.arrayContaining(["expectedRevision", "expectedGrantId", "enabled"]));
+    expect(paths["/api/companies/{companyId}/friday/board-directions/{directionId}"].get.summary).toContain("does not certify execution");
+    const designation = paths["/api/companies/{companyId}/operating-profile"].put.summary;
+    expect(designation).toContain("existing work and cleanup settle");
+    expect(designation).toContain("grants no operational permissions");
+  });
   it("removes Pipelines discovery while retaining Cases and Routines", () => {
     const spec = buildOpenApiSpec() as any;
     const paths = Object.keys(spec.paths);
@@ -412,6 +438,28 @@ describe("openapi routes", () => {
     }
     expect(operation.responses["409"]).toBeDefined();
     expect(operation.responses["503"]).toBeDefined();
+  });
+
+  it("keeps native model and component owner controls out of agent authentication discovery", () => {
+    const { spec } = loadSpecRoutes();
+    const operations = [
+      ["get", "/api/companies/{companyId}/friday/model-qualifications"],
+      ["post", "/api/companies/{companyId}/friday/model-qualifications"],
+      ["delete", "/api/companies/{companyId}/friday/model-qualifications/{id}"],
+      ["get", "/api/companies/{companyId}/friday/model-comparisons"],
+      ["post", "/api/companies/{companyId}/friday/model-comparisons/prepare"],
+      ["get", "/api/companies/{companyId}/friday/model-routing"],
+      ["post", "/api/companies/{companyId}/friday/model-routing/policy"],
+      ["post", "/api/companies/{companyId}/friday/model-routing/rollback"],
+      ["post", "/api/companies/{companyId}/friday/platform-changes"],
+      ["get", "/api/companies/{companyId}/friday/platform-component-sources/{issueId}/documents/{documentId}/revisions/{revisionId}"],
+    ] as const;
+    for (const [method, path] of operations) {
+      const operation = spec.paths[path]?.[method];
+      expect(operation, `${method.toUpperCase()} ${path}`).toBeDefined();
+      expect(operation.security).toEqual([{ BoardSessionAuth: [] }, { BoardApiKeyAuth: [] }]);
+      expect(operation["x-paperclip-authorization"]).toEqual({ actor: "board", instanceAdmin: true });
+    }
   });
 
   it("documents board-only pool management with revision-checked deletion", () => {

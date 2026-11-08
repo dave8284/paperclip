@@ -84,14 +84,19 @@ export function buildCompanyUserMentionOptions(
   }));
 }
 
-export function isAgentTaskTarget(
-  agent: Pick<Agent, "status"> & Partial<Pick<Agent, "orgChainHealth" | "appearance">>,
-): boolean {
+type AgentTarget = Pick<Agent, "status"> & Partial<Pick<Agent, "orgChainHealth" | "appearance" | "isBoardCoordinator">>;
+
+/** Coordination and mentions remain available to the board coordinator. */
+export function isAgentInteractionTarget(agent: AgentTarget): boolean {
   return (
     agent.status !== "terminated" &&
     agent.status !== "pending_approval" &&
     agent.orgChainHealth?.status !== "invalid_org_chain"
   );
+}
+
+export function isAgentTaskTarget(agent: AgentTarget): boolean {
+  return agent.isBoardCoordinator !== true && isAgentInteractionTarget(agent);
 }
 
 export function buildIssueMentionOptions(
@@ -116,7 +121,7 @@ export function buildIssueMentionOptions(
 }
 
 export function buildMarkdownMentionOptions(args: {
-  agents?: Array<Pick<Agent, "id" | "name" | "status" | "icon"> & Partial<Pick<Agent, "orgChainHealth" | "appearance">>> | null | undefined;
+  agents?: Array<Pick<Agent, "id" | "name" | "status" | "icon"> & Partial<Pick<Agent, "orgChainHealth" | "appearance" | "isBoardCoordinator">>> | null | undefined;
   projects?: Array<Pick<Project, "id" | "name" | "color">> | null | undefined;
   members?: CompanyUserRecord[] | null | undefined;
   issues?: Array<Pick<Issue, "id" | "identifier" | "title">> | null | undefined;
@@ -124,7 +129,7 @@ export function buildMarkdownMentionOptions(args: {
   const options: MentionOption[] = [
     ...buildCompanyUserMentionOptions(args.members),
     ...[...(args.agents ?? [])]
-      .filter(isAgentTaskTarget)
+      .filter(isAgentInteractionTarget)
       .sort((left, right) => left.name.localeCompare(right.name))
       .map((agent) => ({
         id: `agent:${agent.id}`,

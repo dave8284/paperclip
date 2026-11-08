@@ -1,5 +1,5 @@
 import { and, eq, exists, gte, isNull, lte, notExists, or, sql } from "drizzle-orm";
-import { aiSubscriptions, aiSubscriptionPrices, aiSubscriptionConnections, connectionGrants, connectionGrantMembers, agents, authUsers, companyMemberships, costEvents, type Db } from "@paperclipai/db";
+import { aiSubscriptions, aiSubscriptionPrices, aiSubscriptionConnections, aiWorkspaceAccounts, aiWorkspaceAccountLinks, connectionGrants, connectionGrantMembers, agents, authUsers, companyMemberships, costEvents, type Db } from "@paperclipai/db";
 import { addCents, monthlySubscriptionCents, type SubscriptionCostReport, type SubscriptionPrice, type SubscriptionUsage } from "@paperclipai/shared";
 import { withAccountingReadSnapshot } from "./accounting-transaction.js";
 import { ordinaryInputTokens } from "./costs.js";
@@ -45,7 +45,7 @@ export async function subscriptionCostReport(db: Db, companyId: string, actor: S
           )))),
     );
     const visibleCurrent = and(eq(aiSubscriptions.companyId, companyId), isNull(aiSubscriptions.mergedIntoId), visible);
-    const [accounts, links, prices, owners, groups] = await Promise.all([
+    const [accounts, links, prices, owners, groups, workspaceAccounts] = await Promise.all([
       tx.select().from(aiSubscriptions).where(visibleCurrent),
       // Historical aliases are needed to distinguish hidden accounts from
       // truly unattributed runs. Do not load their private metadata or prices.
@@ -67,12 +67,29 @@ export async function subscriptionCostReport(db: Db, companyId: string, actor: S
         unpricedEventCount: sql<number>`count(*) filter (where ${costEvents.costStatus} = 'unpriced' and ${costEvents.billingType} <> 'subscription_included')::int`,
       }).from(costEvents).leftJoin(agents, and(eq(agents.id, costEvents.agentId), eq(agents.companyId, companyId)))
         .where(and(...conditions)).groupBy(costEvents.subscriptionId, costEvents.billingType, costEvents.agentId, agents.name),
+      // Describe reuse without exposing the source company, owner identity or
+      // any other company's records. Disabled links retain this explanation.
+      tx.select({ subscriptionId: aiSubscriptionConnections.subscriptionId,
+        companyLink: exists(tx.select({ id: aiWorkspaceAccountLinks.id }).from(aiWorkspaceAccountLinks).where(and(
+          eq(aiWorkspaceAccountLinks.companyId, companyId), eq(aiWorkspaceAccountLinks.connectionId, aiSubscriptionConnections.connectionId),
+          eq(aiWorkspaceAccountLinks.grantId, aiSubscriptionConnections.grantId)))),
+        source: exists(tx.select({ id: aiWorkspaceAccounts.id }).from(aiWorkspaceAccounts).where(and(
+          eq(aiWorkspaceAccounts.sourceCompanyId, companyId), eq(aiWorkspaceAccounts.sourceConnectionId, aiSubscriptionConnections.connectionId),
+          eq(aiWorkspaceAccounts.sourceGrantId, aiSubscriptionConnections.grantId)))),
+      }).from(aiSubscriptions).innerJoin(aiSubscriptionConnections, and(
+        eq(aiSubscriptionConnections.companyId, companyId), eq(aiSubscriptionConnections.subscriptionId, aiSubscriptions.id),
+      )).where(visibleCurrent),
     ]);
     const report: SubscriptionCostReport = { canRefresh: !actor.readOnly, asOf: new Date().toISOString(), accounts: [], monthlyTotals: [],
       activeCount: 0, unknownPriceCount: 0, unidentifiedAccountCount: 0,
       api: emptySubscriptionUsage(), subscription: emptySubscriptionUsage(), unknown: emptySubscriptionUsage(), unattributedSubscription: emptySubscriptionUsage() };
     const currentPrices = new Map(prices.map(({ price }) => [price.subscriptionId, priceDto(price)]));
     const ownerNames = new Map(owners.map(owner => [owner.id, owner.name]));
+    const workspaceRoles = new Map<string, "source" | "company_link">();
+    for (const row of workspaceAccounts) {
+      if (row.source) workspaceRoles.set(row.subscriptionId, "source");
+      else if (row.companyLink && !workspaceRoles.has(row.subscriptionId)) workspaceRoles.set(row.subscriptionId, "company_link");
+    }
     for (const account of accounts) {
       const price = currentPrices.get(account.id);
       if (!price) throw new Error("Subscription price history is incomplete");
@@ -80,6 +97,7 @@ export async function subscriptionCostReport(db: Db, companyId: string, actor: S
       report.accounts.push({ id: account.id, provider: account.provider,
         name: account.ownerUserIds.length > 0 && (account.shared || !account.ownerUserIds.includes(actor.userId)) ? `${account.provider} subscription` : account.name,
         ownerUserId, ownerName: ownerNames.get(ownerUserId ?? "") ?? null, shared: account.shared,
+        workspaceAccount: workspaceRoles.has(account.id) ? { role: workspaceRoles.get(account.id)! } : null,
         identityVerified: account.identityVerified, detectedPlan: account.detectedPlan,
         observedAt: account.observedAt?.toISOString() ?? null, lastCheckedAt: account.lastCheckedAt?.toISOString() ?? null,
         refreshStatus: account.refreshStatus, canEdit: canEditSubscription(account, actor), price,

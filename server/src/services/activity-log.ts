@@ -56,6 +56,9 @@ export function publishPluginDomainEvent(event: PluginEvent): void {
 }
 
 export interface LogActivityInput {
+  /** Host-owned immutable receipt identity, for recoverable cross-store writes.
+   * Reusing an existing ID fails; this never replaces an audit record. */
+  id?: string;
   companyId: string;
   actorType: "agent" | "user" | "system" | "plugin";
   actorId: string;
@@ -166,6 +169,7 @@ export async function persistActivity(db: Db, input: LogActivityInput) {
   const redactedDetails = await redactActivityDetails(db, input.details ?? null);
   const responsibleUserId = await resolveResponsibleUserIdForActivity(db, input);
   const insert = (runner: Db) => runner.insert(activityLog).values({
+    id: input.id,
     companyId: input.companyId,
     actorType: input.actorType,
     actorId: input.actorId,

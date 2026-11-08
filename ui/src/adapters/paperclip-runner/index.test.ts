@@ -22,6 +22,18 @@ const piFailure = (overrides: Record<string, unknown> = {}, eventOverrides: Reco
 });
 
 describe("paperclip runner transcript projection", () => {
+  it("keeps successful context transport receipts out of conversation text without hiding warnings", () => {
+    const receipt = { code: "context.tool_result_written", severity: "info",
+      contextReceipt: { schema: "paperclip.provider-context-receipt.v1", stage: "transport_written" } };
+    const parse = paperclipRunnerUIAdapter.createStdoutParser!().parseLine;
+    const render = (payload: Record<string, unknown>) => parse(JSON.stringify({ type: "paperclip.prp.event", event: {
+      runId: "run-1", turnId: "turn-1", normalizedSessionId: "session-1", eventType: "harness.diagnostic", payload,
+    } }), "2026-11-07T00:00:00.000Z");
+    expect(render(receipt)).toEqual([]);
+    expect(render({ ...receipt, severity: "warning", message: "Context delivery uncertain" }))
+      .toMatchObject([{ kind: "system", text: "Runner: Context delivery uncertain" }]);
+    expect(render({ ...receipt, contextReceipt: { stage: "unknown" } })).toHaveLength(1);
+  });
   it("keeps both pinned Pi failure facts in diagnostics without adding a task warning", async () => {
     const adapter = createPiProfileExtensionAdapter({ workspacePath: "/fixture", sessionId: "session-1", turnId: "turn-1" });
     const notice = { sessionId: "session-1", category: "runtime_failure", severity: "error",

@@ -15,6 +15,7 @@ import {
 } from "@paperclipai/shared";
 import { managedProviderRouting } from "./ai-provider-routing.js";
 import { aiConnectionService } from "./ai-connections.js";
+import { resolveAiCredentialOwner, aiCredentialOwnerSnapshot, sameAiCredentialOwner, type AiCredentialOwnerSnapshot } from "./ai-account-credential-owner.js";
 import { managedAiSessionIdentity } from "./ai-connection-session.js";
 import { subscriptionService } from "./subscriptions.js";
 import { refreshSubscriptionConnection } from "./subscription-refresh.js";
@@ -235,6 +236,8 @@ export async function prepareManagedAiRuntime(
     allowUninstalledShared?: boolean;
     allowLegacyValidation?: boolean;
     config: Record<string, unknown>;
+    /** Internal probe fence: never select a different account after its lock wait. */
+    credentialFence?: { connectionId: string; grantId: string; owner: AiCredentialOwnerSnapshot };
   },
 ) {
   const configuredEnv =
@@ -284,18 +287,28 @@ export async function prepareManagedAiRuntime(
       throw unprocessable(
         "The selected default changed. Retry this execution.",
       );
-    const credentialRef = selection.grant.credentialSecretRefs.find((ref) => ref.configPath === "ai.credential");
+    const credentialOwner = await resolveAiCredentialOwner(db, selection);
+    const credentialOwnerIdentity = aiCredentialOwnerSnapshot(credentialOwner);
+    if (input.credentialFence && (selection.connection.id !== input.credentialFence.connectionId ||
+        selection.grant.id !== input.credentialFence.grantId ||
+        !sameAiCredentialOwner(input.credentialFence.owner, credentialOwnerIdentity))) {
+      throw unprocessable("The selected account changed while waiting for a probe; retry the probe");
+    }
+    const credentialCompanyId = credentialOwner.connection.companyId;
+    const credentialRef = credentialOwner.grant.credentialSecretRefs.find((ref) => ref.configPath === "ai.credential");
     const routing = aiConnectionMetadataSchema.parse(selection.connection.config.ai).routing;
     const noAuth = routing?.auth === "none";
     if (!noAuth && !credentialRef) throw unprocessable("The selected AI credential is unavailable");
     const readFreshness = async () => {
       if (!credentialRef) return undefined;
+      const owner = await resolveAiCredentialOwner(db, selection);
+      if (!sameAiCredentialOwner(credentialOwnerIdentity, aiCredentialOwnerSnapshot(owner))) return undefined;
       const [currentGrant] = await db.select({ refs: connectionGrants.credentialSecretRefs, status: connectionGrants.status })
-        .from(connectionGrants).where(and(eq(connectionGrants.companyId, input.companyId), eq(connectionGrants.id, selection.grant.id)));
+        .from(connectionGrants).where(and(eq(connectionGrants.companyId, credentialCompanyId), eq(connectionGrants.id, credentialOwner.grant.id)));
       const currentRef = currentGrant?.refs.find(ref => ref.configPath === "ai.credential");
       if (currentGrant?.status !== "active" || currentRef?.secretId !== credentialRef.secretId || currentRef.versionSelector !== credentialRef.versionSelector) return undefined;
       return (await db.select({ epoch: companySecrets.aiSessionEpoch, version: companySecrets.latestVersion })
-        .from(companySecrets).where(and(eq(companySecrets.companyId, input.companyId), eq(companySecrets.id, credentialRef.secretId))).limit(1))[0];
+        .from(companySecrets).where(and(eq(companySecrets.companyId, credentialCompanyId), eq(companySecrets.id, credentialRef.secretId))).limit(1))[0];
     };
     const { value, freshness } = await (async () => {
       if (noAuth) return { value: "", freshness: undefined };
@@ -379,13 +392,16 @@ export async function prepareManagedAiRuntime(
       if (projected.hermesConfig) await writeFile(path.join(providerHome, "config.yaml"), projected.hermesConfig, { mode: 0o600 });
       if (projected.codexConfig) await writeFile(path.join(providerHome, "config.toml"), 'cli_auth_credentials_store = "file"\n' + projected.codexConfig, { mode: 0o600 });
     }
-    const attribution = { ...selection.attribution } as typeof selection.attribution & { subscriptionId?: string };
+    const attribution = { ...selection.attribution,
+      ...(credentialOwner.binding ? { credentialOwner: credentialOwnerIdentity } : {}),
+    } as typeof selection.attribution & { subscriptionId?: string; credentialOwner?: typeof credentialOwnerIdentity };
     if (attribution.method === "subscription") {
       const subscription = {
         companyId: input.companyId, connectionId: selection.connection.id, grantId: selection.grant.id,
         provider: selection.attribution.provider, name: selection.connection.name,
         ownerUserId: selection.grant.subjectUserId, credential: value,
-        session: credentialRef && freshness ? { secretId: credentialRef.secretId, epoch: freshness.epoch } : null,
+        session: credentialRef && freshness ? { secretId: credentialRef.secretId, epoch: freshness.epoch,
+          ...(credentialOwner.binding ? { credentialOwner: credentialOwnerIdentity } : {}) } : null,
       };
       attribution.subscriptionId = await subscriptionService(db).register(subscription);
       void refreshSubscriptionConnection(db, subscription, attribution.subscriptionId);
@@ -417,6 +433,7 @@ export async function prepareManagedAiRuntime(
       },
       ...(subscriptionFile && input.binding.provider === "openai" && credentialRef && freshness ? {
         credentialWriteback: { grantId: selection.grant.id, secretId: credentialRef.secretId, sessionEpoch: freshness.epoch,
+          ...(credentialOwner.binding ? { credentialOwner: credentialOwnerIdentity } : {}),
           versionSelector: credentialRef.versionSelector ?? "latest" } satisfies PluginTaskCredentialWritebackBinding,
       } : {}),
       config: {
@@ -438,14 +455,18 @@ export async function prepareManagedAiRuntime(
             // A quota exchange can hold this company lock for 60 seconds.
             // Retry its 30-second acquisition timeout without discarding the
             // provider's only copy of a rotated, single-use refresh token.
-            const writeBack = () => withAccountHomeSecretMutationLock(undefined, input.companyId, () => db.transaction(async (tx) => {
+            const writeBack = () => withAccountHomeSecretMutationLock(undefined, credentialCompanyId, () => db.transaction(async (tx) => {
+              const owner = await resolveAiCredentialOwner(tx as unknown as Db, selection, { lock: true });
+              if (!sameAiCredentialOwner(credentialOwnerIdentity, aiCredentialOwnerSnapshot(owner))) {
+                throw new Error("Shared account credential cleanup authority changed");
+              }
               const [grant] = await tx
                 .select()
                 .from(connectionGrants)
                 .where(
                   and(
-                    eq(connectionGrants.id, selection.grant.id),
-                    eq(connectionGrants.companyId, input.companyId),
+                    eq(connectionGrants.id, credentialOwner.grant.id),
+                    eq(connectionGrants.companyId, credentialCompanyId),
                   ),
                 )
                 .for("update");
@@ -462,19 +483,26 @@ export async function prepareManagedAiRuntime(
               // so an authorized rotation of this secret could otherwise
               // land between the read and the write below and be
               // overwritten by this stale write-back.
-              await tx
-                .select({ id: companySecrets.id })
+              const [secret] = await tx
+                .select({ id: companySecrets.id, epoch: companySecrets.aiSessionEpoch, status: companySecrets.status })
                 .from(companySecrets)
                 .where(
                   and(
                     eq(companySecrets.id, ref.secretId),
-                    eq(companySecrets.companyId, input.companyId),
+                    eq(companySecrets.companyId, credentialCompanyId),
                   ),
                 )
                 .for("update");
+              if (!secret || secret.status !== "active") return;
+              // Shared-account replacement requires exact retained authority.
+              // Existing company-only connections keep their native same-account
+              // freshness merge across reconnects; a new login alone does not
+              // invalidate a newer provider refresh from that same identity.
+              if (credentialOwner.binding && (secret.epoch !== freshness?.epoch ||
+                  ref.secretId !== credentialRef?.secretId || (ref.versionSelector ?? "latest") !== (credentialRef?.versionSelector ?? "latest"))) return;
               const current = await aiConnectionService(
                 tx as unknown as Db,
-              ).credential({ ...selection, grant });
+              ).credential({ connection: owner.connection, grant });
               const destination = path.join(
                 providerHome,
                 "current-auth.json",
@@ -527,17 +555,25 @@ export async function withManagedAiProbe<T>(
   input: Parameters<typeof prepareManagedAiRuntime>[1],
   probe: (runtime: Awaited<ReturnType<typeof prepareManagedAiRuntime>>) => Promise<T>,
 ): Promise<T> {
-  const run = async () => {
-    const runtime = await prepareManagedAiRuntime(db, input);
+  const run = async (credentialFence?: Parameters<typeof prepareManagedAiRuntime>[1]["credentialFence"]) => {
+    const runtime = await prepareManagedAiRuntime(db, { ...input, credentialFence });
     try { return await probe(runtime); }
     finally { await runtime.cleanup(); }
   };
-  return input.binding.provider === "openai"
-    ? withAccountHomeSecretMutationLock(undefined, input.companyId, run).catch(error => {
+  if (input.binding.provider !== "openai") return run();
+  const selection = await aiConnectionService(db).select({ ...input, userId: input.responsibleUserId,
+    model: input.config.model, runnerProvider: input.config.provider, acpxAgent: input.config.acpxAgent });
+  const owner = await resolveAiCredentialOwner(db, selection);
+  return withAccountHomeSecretMutationLock(undefined, owner.connection.companyId, async () => {
+      const current = await resolveAiCredentialOwner(db, selection);
+      if (!sameAiCredentialOwner(aiCredentialOwnerSnapshot(owner), aiCredentialOwnerSnapshot(current))) {
+        throw unprocessable("The connected account changed while waiting for a probe");
+      }
+      return run({ connectionId: selection.connection.id, grantId: selection.grant.id, owner: aiCredentialOwnerSnapshot(owner) });
+    }).catch(error => {
       if ((error as NodeJS.ErrnoException)?.code === WORKSPACE_RESTORE_LOCK_TIMEOUT_CODE) {
         throw unprocessable("AI credentials are being updated. Retry shortly.", { code: "ai_connection_busy" });
       }
       throw error;
-    })
-    : run();
+    });
 }

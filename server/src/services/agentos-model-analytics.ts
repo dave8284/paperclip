@@ -10,7 +10,7 @@ import { modelActivityAudit } from "./agentos-model-audit.js";
 export async function modelIntelligenceAnalytics(db: Db, actor: AdminPrincipal, now = new Date()) {
   await assertAdministration(db, actor);
   const since = new Date(now.getTime() - 30 * 86400000);
-  const learning = modelIntelligenceProduct()?.analytics();
+  const learning = await modelIntelligenceProduct()?.analytics();
   const triageTask = sql<string>`${heartbeatRuns.contextSnapshot} #>> '{modelTriage,taskType}'`;
   const triageComplexity = sql<string>`${heartbeatRuns.contextSnapshot} #>> '{modelTriage,complexity}'`;
   const triageContext = sql<string>`${heartbeatRuns.contextSnapshot} #>> '{modelTriage,contextStrategy}'`;

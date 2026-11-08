@@ -15,6 +15,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // the refetch has to answer too — otherwise the identity errors and the list
 // never runs.
 const mockAdaptersApi = vi.hoisted(() => ({ list: vi.fn(async (_context?: { companyId: string; environmentId?: string | null }) => [] as import("../api/adapters").AdapterInfo[]) }));
+const accountSetupView = vi.hoisted(() => vi.fn());
+vi.mock("./AiAccountSetupNotice", () => ({ AiCompanyAccountSetup: (props: unknown) => { accountSetupView(props); return null; } }));
 vi.mock("../api/adapters", () => ({ adaptersApi: mockAdaptersApi }));
 
 function setupAdapterInfo(input: Pick<import("../api/adapters").AdapterInfo, "type"> & Partial<import("../api/adapters").AdapterInfo>): import("../api/adapters").AdapterInfo {
@@ -33,6 +35,7 @@ const managedApi = vi.hoisted(() => ({
   checkLocalLogin: vi.fn(async (): Promise<LocalAiLoginStatus> => ({ status: "sign_in_required" })),
   cancelLocalLogin: vi.fn(async () => ({})),
   connectLocal: vi.fn(async () => ({ connectionId: "local-connection", grantId: "local-grant" })),
+  loginResult: vi.fn(async () => ({ connectionId: "saved-connection", grantId: "saved-grant" })),
   create: vi.fn(async () => ({ connectionId: "managed-connection", grantId: "managed-grant" })),
 }));
 vi.mock("@/api/ai-connections", () => ({ aiConnectionsApi: managedApi }));
@@ -1609,6 +1612,8 @@ describe("OnboardingWizard restore-gate (stale localStorage across accounts)", (
       id: "created",
       name: "Created Co",
       issuePrefix: "CRE",
+      aiAccountSetup: { status: "pending", accountId: null, installedCompanyIds: [],
+        pending: [{ companyId: "created", reason: "busy", message: "Account work is finishing." }], retry: { kind: "company", companyId: "created" } },
     });
 
     const { root, queryClient } = render();
@@ -1627,6 +1632,7 @@ describe("OnboardingWizard restore-gate (stale localStorage across accounts)", (
     expect(mockCompaniesApi.create).toHaveBeenCalledWith({ name: "Created Co" });
     expect(mockCompaniesApi.list).toHaveBeenCalledTimes(2);
     expect(document.querySelector("#onboarding-agent-name")).not.toBeNull();
+    expect(accountSetupView).toHaveBeenCalledWith(expect.objectContaining({ companyId: "created", refreshKey: 1 }));
 
     await act(async () => {
       resolveRefetch([{ id: "created", name: "Created Co", issuePrefix: "CRE" }]);

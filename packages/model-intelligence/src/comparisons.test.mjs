@@ -37,6 +37,58 @@ function complete(engine, data, run, overrides = () => ({})) {
   for (let i = 0; i < data.cases.length; i++) for (const arm of ["baseline", "candidate"]) attempt(engine, data, run, i, arm, overrides(i, arm)).record();
 }
 
+test("native host discovery reads bounded immutable definitions in the requested namespace without changing evidence", t => {
+  const { engine, data, run } = setup(t);
+  const original = engine.comparisonDefinition({ namespace, comparisonId: run.id });
+  assert.deepEqual(original.dataset, data);
+  assert.deepEqual(original.comparison, { ...run, createdAt: original.comparison.createdAt });
+  original.dataset.cases[0].checkDigest = sha("tampered read");
+  assert.equal(engine.comparisonDefinition({ namespace, comparisonId: run.id }).dataset.cases[0].checkDigest, data.cases[0].checkDigest);
+  assert.throws(() => engine.comparisonDefinition({ namespace: "other", comparisonId: run.id }), /not found/);
+  assert.deepEqual(engine.comparisonCatalog("other"), []);
+  for (let i = 0; i < 25; i++) engine.registerComparison({ ...run, id: `comparison-${i}` });
+  const catalog = engine.comparisonCatalog(namespace);
+  assert.equal(catalog.length, 20);
+  assert.equal(catalog[0].comparison.id, "comparison-24");
+  assert(catalog.every(item => item.dataset.namespace === namespace && item.comparison.namespace === namespace));
+  assert.equal(engine.analytics(namespace).counts.selections, 0);
+  assert.equal(engine.analytics(namespace).counts.evaluations, 0);
+  assert.equal(engine.analytics(namespace).counts.policyEvents, 0);
+});
+
+test("native selection binds one frozen arm, respects its block on replay, and cannot train observational routing", t => {
+  const { engine, data, run } = setup(t), item = data.cases[0];
+  const input = { namespace, requestId: "native-run", taskKey: "native-task", taskType: data.taskFamily, complexity: data.complexity,
+    defaultCandidateId: "host-profile", candidates: [{ id: "host-profile", provider: run.baseline.provider, model: run.baseline.model, method: "subscription", available: true }],
+    contextFingerprint: item.inputDigest, comparisonBinding: { comparisonId: run.id, caseId: item.id, arm: "baseline", inputDigest: item.inputDigest, checkDigest: item.checkDigest } };
+  const receipt = engine.select(input);
+  assert.deepEqual(engine.select(input), receipt);
+  assert.deepEqual(receipt.comparisonBinding, input.comparisonBinding);
+  assert.throws(() => engine.select({ ...input, requestId: "changed", comparisonBinding: { ...input.comparisonBinding, checkDigest: sha("wrong") } }), /preregistered/);
+  assert.throws(() => engine.select({ ...input, requestId: "other-company", namespace: "other" }), /not found/);
+  assert.throws(() => engine.evaluate({ namespace, id: "evaluation", receiptId: receipt.id, passed: true, iterations: 1,
+    latencyMs: 500, source: "human", evaluator: "reviewer", evidenceRef: "review" }), /cannot train observational/);
+  engine.policy({ namespace, candidateId: run.baseline.profileId, action: "block", reason: "Native profile revoked" });
+  assert.deepEqual(engine.selectionReceipt({ namespace, receiptId: receipt.id }), receipt);
+  assert.equal(engine.selectionReceipt({ namespace: "other", receiptId: receipt.id }), null);
+  assert.throws(() => engine.select(input), /blocked/);
+  assert.throws(() => engine.select({ ...input, requestId: "another" }), /blocked/);
+  engine.policy({ namespace, candidateId: run.baseline.profileId, action: "restore", reason: "Restored" });
+  assert.deepEqual(engine.select(input), receipt);
+});
+
+test("unmeasured repair iterations stay unknown and cannot satisfy first-pass or resource gates", t => {
+  const { engine, data, run, report } = setup(t);
+  complete(engine, data, run, (index, arm) => index === 0 && arm === "candidate" ? { iterations: null } : {});
+  const result = report();
+  assert.equal(result.cases[0].candidate.iterations, null);
+  assert.equal(result.candidate.medianIterations, null);
+  assert.equal(result.candidate.firstPass, 4);
+  assert.equal(result.status, "not_ready");
+  assert(result.blockers.includes("unmeasured_resources"));
+  assert(result.blockers.includes("paired_first_pass_regression"));
+});
+
 test("frozen paired holdout report qualifies only host-attested canary evidence without changing routing", t => {
   const { engine, data, run, report } = setup(t);
   complete(engine, data, run);
@@ -217,7 +269,7 @@ test("immutable idempotency and complete audit survive SQLite restart and additi
     assert.equal(engine.comparisonReport({ namespace, comparisonId: run.id }).cases[0].baseline.attempts.length, 2);
     assert(engine.analytics(namespace).receipts.some(row => row.id === "legacy"));
     engine.close(); engine = null;
-    const future = new DatabaseSync(path); future.exec("PRAGMA user_version=3"); future.close();
+    const future = new DatabaseSync(path); future.exec("PRAGMA user_version=6"); future.close();
     assert.throws(() => createModelIntelligence(path), /newer than this package/);
   } finally { engine?.close(); rmSync(dir, { recursive: true, force: true }); }
 });

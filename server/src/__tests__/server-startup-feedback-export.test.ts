@@ -4,7 +4,7 @@ import { idleWorkSnapshot } from "../services/task-admission.js";
 import { readIdleSleepSafety } from "../services/idle-sleep-safety.js";
 import * as idleLocalWork from "../services/idle-local-work.js";
 import { idleBackupWakeMarker, markIdleBackupWakeRequired } from "../services/idle-database-backup.js";
-import { DELIVERY_QUEUES } from "../services/delivery-work-notifications.js";
+import { DELIVERY_QUEUES, subscribeDeliveryWork } from "../services/delivery-work-notifications.js";
 import { reconcileBuiltInAgentsOnStartup, reconcileCodexLocalManagedHomesOnStartup, reconcilePersistedRuntimeServicesOnStartup } from "../services/index.js";
 import { runDatabaseBackup } from "@paperclipai/db";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -97,6 +97,7 @@ const {
     reconcileHotRestartAdoption: vi.fn(async () => ({ mode: "none" })),
     reapOrphanedRuns: vi.fn(async () => ({ reaped: 0, runIds: [] })),
     promoteDueScheduledRetries: vi.fn(async () => ({ promoted: 0, runIds: [] })),
+    reconcileAiExecutionCapacity: vi.fn(async () => undefined),
     resumeQueuedRuns: vi.fn(async () => undefined),
     recoverPendingSessionGoalActions: vi.fn(async () => ({ scanned: 0, enqueued: 0, alreadyQueued: 0, invalid: 0 })),
     recoverActiveSessionGoals: vi.fn(async () => ({ scanned: 0, enqueued: 0 })),
@@ -247,6 +248,13 @@ vi.mock("node:http", () => ({
 
 vi.mock("detect-port", () => ({
   default: detectPortMock,
+}));
+
+// This suite supplies a registration-only coordinator and a database stub.
+// Real transaction-aware signals belong to the coordinator/database suites.
+vi.mock("../services/delivery-work-notifications.js", async (importOriginal) => ({
+  ...await importOriginal<typeof import("../services/delivery-work-notifications.js")>(),
+  subscribeDeliveryWork: vi.fn(() => vi.fn()),
 }));
 
 vi.mock("@paperclipai/db", async (importOriginal) => ({
@@ -512,6 +520,21 @@ describe("startServer feedback export wiring", () => {
     expect(caseHandoffDeliveryServiceMock.sweepPending).toHaveBeenLastCalledWith(controller.signal);
     await registration![1].hasPending!();
     expect(caseHandoffDeliveryServiceMock.hasPending).toHaveBeenCalledOnce();
+  });
+
+  it("wakes both model outcome workers from accounting settlement and unsubscribes on close", async () => {
+    await startServer();
+    for (const queue of [DELIVERY_QUEUES.modelComparisons, DELIVERY_QUEUES.modelRouting]) {
+      const index = deliveryWorkRegisterMock.mock.calls.findIndex(([registered]) => registered === queue);
+      expect(index).toBeGreaterThanOrEqual(0);
+      const worker = deliveryWorkRegisterMock.mock.results[index]!.value;
+      const subscription = vi.mocked(subscribeDeliveryWork).mock.calls.findIndex(([, topic, listener]) => topic === DELIVERY_QUEUES.accounting && listener === worker.wake);
+      expect(subscription).toBeGreaterThanOrEqual(0);
+      const [, , listener] = vi.mocked(subscribeDeliveryWork).mock.calls[subscription];
+      listener(); expect(worker.wake).toHaveBeenCalled();
+    }
+    for (const [event, listener] of fakeServer.on.mock.calls) if (event === "close") listener();
+    for (const result of vi.mocked(subscribeDeliveryWork).mock.results) expect(result.value).toHaveBeenCalled();
   });
 
   it.each([false, true].flatMap(checkpointMode => [false, true].map(fails => ({ checkpointMode, fails }))))

@@ -1,0 +1,49 @@
+{
+  "schema": "agentos.delegation-acceptance.v1",
+  "companyName": "Orbit Test Company",
+  "objectiveTitle": "Prepare a reviewed launch plan for the fictional DeskBuddy service",
+  "brief": "DeskBuddy is a fictional recurring desk-cleaning service for small offices. Produce a launch recommendation from the supplied facts, with transparent arithmetic, an operating plan, draft customer messages, risks and a clear go/no-go recommendation. This exercise uses no real customers, outreach, payments, publication or production changes. The owner and Friday act as the board. Friday briefs the company CEO and reports the evidence. The CEO owns the plan, appoints an accountable lead, delegates specialist work and obtains independent review. All work and files belong to this test company.",
+  "facts": {
+    "currency": "NZD",
+    "pricePerBooking": 35,
+    "labourMinutesPerBooking": 20,
+    "labourCostPerHour": 30,
+    "materialsPerBooking": 2,
+    "travelAllocationPerBooking": 3,
+    "overheadAllocationPerBooking": 5,
+    "forecastBookingsMonthOne": 64,
+    "capacityBookingsPerWeek": 40,
+    "forecastWeeks": 4,
+    "taxTreatment": "All supplied figures are fictional and exclude tax. Make no tax or legal claims."
+  },
+  "requiredOutputs": [
+    { "name": "launch-plan.md", "criteria": "State the recommendation, scope, assumptions, operating responsibilities, booking capacity, risks, unresolved questions and a four-week action plan." },
+    { "name": "unit-economics.csv", "criteria": "Show source inputs and formulas for labour cost, total cost, contribution per booking, contribution margin, month-one revenue/cost/contribution and capacity utilization." },
+    { "name": "customer-message-drafts.md", "criteria": "Provide an initial invitation, confirmation and response to a scheduling complaint. Clearly label all messages as unsent drafts." },
+    { "name": "independent-review.md", "criteria": "A reviewer who did not author the deliverables checks the arithmetic, source facts, internal consistency and every acceptance criterion. Record deficiencies and corrections with exact task/run/document or artifact revision references." },
+    { "name": "board-report.md", "criteria": "The CEO's team prepares its recommendation, reviewed output references, remaining uncertainties and a decision needed from the owner. Friday reads this company-owned report and briefs the owner through their native conversation. Friday does not author the implementation deliverables. Distinguish reviewed evidence from business acceptance." }
+  ],
+  "acceptanceGates": [
+    "The owner request and Friday direction retain their original native actor/run identities.",
+    "Friday delegates only to the test company's actual CEO or responsible department head.",
+    "The CEO or head appoints a lead; at least two specialists own distinct tasks.",
+    "Provider identity and subscription-only account authorization are observed; no paid API fallback is used.",
+    "Every task, workspace, attachment and provider execution remains company-local.",
+    "Deliverable files/documents exist with immutable hashes or revision IDs and are read by the reviewer.",
+    "Independent review is bound to the actual implementation run and includes a resolved verdict; process success alone is insufficient.",
+    "Friday reads the reviewed evidence and reports the result to the owner without authoring the implementation outputs.",
+    "A repeated direction request creates no duplicate task or execution, and interrupted/recovered work retains its evidence.",
+    "The owner's actual acceptance is recorded separately; setup, fixtures and smoke tests never count as a passed live journey."
+  ],
+  "expectedArithmetic": {
+    "labourCostPerBooking": 10,
+    "totalCostPerBooking": 20,
+    "contributionPerBooking": 15,
+    "contributionMarginPercent": 42.857142857142854,
+    "monthOneRevenue": 2240,
+    "monthOneCost": 1280,
+    "monthOneContribution": 960,
+    "monthOneCapacity": 160,
+    "capacityUtilizationPercent": 40
+  }
+}

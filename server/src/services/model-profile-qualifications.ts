@@ -7,6 +7,7 @@ import { conflict, forbidden, notFound, HttpError } from "../errors.js";
 import { ZodError } from "zod";
 import { authorizationService, type AuthorizationActor } from "./authorization.js";
 import { aiConnectionService } from "./ai-connections.js";
+import { resolveAiCredentialOwner, aiCredentialOwnerSnapshot, sameAiCredentialOwner, type AiCredentialOwnerSnapshot } from "./ai-account-credential-owner.js";
 import { managedAiSessionIdentity } from "./ai-connection-session.js";
 import { modelAccountFingerprint, modelProfileConfiguration, modelProfileDigest, sameModelProfileScope } from "./model-profile-binding.js";
 import { nativeModelTaskMatchesSelection, readNativeModelProfileEvidence } from "./native-runtime/native-model-profile-evidence.js";
@@ -70,11 +71,14 @@ async function readEvidence(db: Db, companyId: string, runId: string, reviewDeci
     ...(account.mode === "responsible_user" ? {} : { grantId: account.grantId, connectionId: account.connectionId }) });
   const selected = await aiConnectionService(db).select({ companyId, agentId: agent.id, userId: account.responsibleUserId,
     adapterType: agent.adapterType, runnerProvider: "codex", model: profile.model, binding: nativeBinding });
-  const credential = selected.grant.credentialSecretRefs.find(ref => ref.configPath === "ai.credential");
-  const [secret] = credential ? await db.select({ epoch: companySecrets.aiSessionEpoch, deleted: companySecrets.deletedAt }).from(companySecrets)
-    .where(and(eq(companySecrets.companyId, companyId), eq(companySecrets.id, credential.secretId))).for("share") : [];
+  const credentialOwner = await resolveAiCredentialOwner(db, selected, { lock: true });
+  const credential = credentialOwner.grant.credentialSecretRefs.find(ref => ref.configPath === "ai.credential");
+  const [secret] = credential ? await db.select({ epoch: companySecrets.aiSessionEpoch, deleted: companySecrets.deletedAt, status: companySecrets.status }).from(companySecrets)
+    .where(and(eq(companySecrets.companyId, credentialOwner.connection.companyId), eq(companySecrets.id, credential.secretId))).for("share") : [];
   const [subscription] = await db.select().from(aiSubscriptionConnections).where(and(eq(aiSubscriptionConnections.companyId, companyId), eq(aiSubscriptionConnections.grantId, selected.grant.id))).for("share");
-  if (!credential || !secret || secret.deleted || selected.grant.id !== account.grantId || selected.connection.id !== account.connectionId
+  if (!credential || !secret || secret.deleted || secret.status !== "active" || selected.grant.id !== account.grantId || selected.connection.id !== account.connectionId
+    || Boolean(account.credentialOwner) !== Boolean(credentialOwner.binding)
+    || (credentialOwner.binding && !sameAiCredentialOwner(account.credentialOwner as AiCredentialOwnerSnapshot, aiCredentialOwnerSnapshot(credentialOwner)))
     || selected.attribution.method !== "subscription" || subscription?.subscriptionId !== account.subscriptionId
     || managedAiSessionIdentity(selected.grant.id, account.responsibleUserId, { secretId: credential.secretId, epoch: secret.epoch }) !== account.sessionIdentity
     || modelAccountFingerprint(companyId, { provider: "openai", subscriptionId: account.subscriptionId, sessionIdentity: account.sessionIdentity }) !== profile.accountFingerprint) {

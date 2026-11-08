@@ -13,6 +13,8 @@ const mocks = vi.hoisted(() => ({
   organization: vi.fn(),
   loginPanel: vi.fn(),
 }));
+const setupApi = vi.hoisted(() => ({ finishSetup: vi.fn() }));
+vi.mock("@/api/ai-workspace-accounts", () => ({ aiWorkspaceAccountsApi: setupApi, aiWorkspaceAccountKeys: { all: ["ai-workspace-accounts"] } }));
 const managedApi = vi.hoisted(() => ({
   list: vi.fn(async () => ({ currentUserId: "user-1", connections: [] })),
   loginResult: vi.fn(async () => ({ connectionId: "login-account", grantId: "login-grant" })),
@@ -352,6 +354,29 @@ describe("AgentProviderConnection reuse", () => {
     finish({ connectionId: "saved", grantId: "saved-grant" });
     await new Promise(resolve => setTimeout(resolve, 0));
     expect(onComplete).not.toHaveBeenCalled();
+  });
+  it("finishes pending company setup without repeating a saved provider login or changing its binding", async () => {
+    const onComplete = vi.fn();
+    managedApi.checkLocalLogin.mockResolvedValue({ status: "ready" });
+    managedApi.connectLocal.mockResolvedValueOnce({ connectionId: "local-account", grantId: "local-grant", aiAccountSetup: {
+      status: "pending", accountId: "account", installedCompanyIds: [], retry: { kind: "account", accountId: "account" },
+      pending: [{ companyId: "other", reason: "busy", message: "Other company work is finishing." }],
+    } } as never);
+    setupApi.finishSetup.mockRejectedValueOnce(new Error("Still finishing")).mockResolvedValueOnce({ status: "ready", accountId: "account", installedCompanyIds: ["other"], pending: [], retry: null });
+    await mount("codex_local", false, false, false, false, false, { intent: { provider: "openai", method: "subscription", name: "Company account", ownership: "shared", agentIds: [], allAgents: true }, onComplete }, true);
+    openProvider();
+    await vi.waitFor(() => expect(host.textContent).toContain("is signed in"));
+    click("Connect");
+    await vi.waitFor(() => expect(host.textContent).toContain("Other company work is finishing"));
+    expect(onComplete).not.toHaveBeenCalled();
+    click("Retry account setup");
+    await vi.waitFor(() => expect(host.textContent).toContain("Still finishing"));
+    expect(onComplete).not.toHaveBeenCalled();
+    click("Retry account setup");
+    await vi.waitFor(() => expect(onComplete).toHaveBeenCalledExactlyOnceWith({ connectionId: "local-account", grantId: "local-grant", method: "subscription" }));
+    expect(managedApi.connectLocal).toHaveBeenCalledOnce();
+    expect(managedApi.startLocalLogin).toHaveBeenCalledOnce();
+    expect(setupApi.finishSetup).toHaveBeenLastCalledWith({ kind: "account", accountId: "account" });
   });
   it.each(["claude_local", "codex_local"] as const)("does not import local credentials for an unsupported remote environment: %s", async (adapterType) => {
     const onComplete = vi.fn();

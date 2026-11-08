@@ -102,6 +102,25 @@ native evidence and register an immutable qualification. DELETE
 /api/companies/{companyId}/friday/model-qualifications/{id} revokes eligibility
 while retaining the evidence. Request bodies accept native references and expiry,
 never caller-authored model observations or quality scores.
+GET /api/companies/{companyId}/friday/model-comparisons discovers bounded,
+preregistered comparison choices and matching native backlog tasks.
+POST /api/companies/{companyId}/friday/model-comparisons/prepare freezes one
+comparison/case/arm on a fresh task with a locked native assignment and audit.
+It accepts native selections and an idempotency key, never an observed variant,
+outcome or quality score. It does not start work or activate a routing policy.
+GET /api/companies/{companyId}/friday/model-routing discovers company/family
+policies and sanitized release history. POST to model-routing/policy revises
+explicit enrollment/pins/opt-out; POST to model-routing/rollback withdraws a
+release. Both require a stable request key and an approved current owner/admin;
+native admission additionally requires their committed audit and current rights.
+Agents cannot configure routing or submit caller-authored rollout outcomes.
+Frozen native outcomes and indexed observation deadlines use the existing shared
+delivery lifecycle. Unknown native context remains null and prevents canary
+qualification. Source checks pass; PostgreSQL and live rollout remain unverified.
+The optional PostgreSQL evidence adapter preserves these native authority gates.
+Operator migration acceptance is separate from importing and application startup;
+neither an agent request nor a model response can activate its destination.
+Host calls await durable results before marking native evidence delivered.
 
 Agent access: `restricted` — these are instance-level board administrator reads.
 Company membership, an agent role or task execution does not grant this
@@ -109,6 +128,20 @@ cross-company report. Ordinary task/run links still use their native access rule
 Qualification management is also operator-only: current approved instance
 administrator plus active target-company membership, or local implicit board.
 An agent cannot certify its own account access or reviewed workflow.
+Comparison discovery and preparation require the same current operator boundary
+plus native source, acceptance-check and selected-task access. Generic document
+locking or caller-controlled wake metadata cannot authorize comparison admission.
+The native admission/outbox owners recheck the prepared account/profile and retain
+historical receipts without granting execution on replay. Private comparison
+bindings are withheld from ordinary run responses. Exact source-run/decision and
+independent reviewer bindings govern quality. Native complete event histories and
+review timestamps supply repair counts and acceptance latency; incomplete evidence
+stays null. Delivered context remains unbound and blocks readiness. PostgreSQL/restart and live flow evidence is still
+blocked/unverified; source checks do not establish those boundaries.
+Native tool-result transport receipts bind original call/result/turn history,
+with hashes and byte counts but no result bodies. Business outcomes remain
+distinct from transport errors. Written bytes do not certify provider acceptance
+or implicit context; no new model or routing authority follows from a receipt.
 
 Policy: `assertAdministration` executes before queries. Actual usage joins both
 company and run; selection/triage receipts bind their recorded company/run, and

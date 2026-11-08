@@ -6,6 +6,7 @@ import { isCodexLocalKnownModel, codexLocalReasoningEffortsForModel } from "@pap
 import { models as claudeModels, claudeLocalReasoningEffortsForModel } from "@paperclipai/adapter-claude-local";
 import { models as grokModels, grokLocalReasoningEffortsForModel } from "@paperclipai/adapter-grok-local";
 import { aiConnectionService } from "./ai-connections.js";
+import { resolveAiCredentialOwner, aiCredentialOwnerSnapshot } from "./ai-account-credential-owner.js";
 import { instanceSettingsService } from "./instance-settings.js";
 import { logActivity } from "./activity-log.js";
 import { forbidden, notFound, conflict, unprocessable } from "../errors.js";
@@ -166,11 +167,18 @@ export function aiConnectionRouterService(db: Db, workerManager?: PluginWorkerMa
     return { ok: true };
   }
   async function usageCacheKey(member: AiConnectionPoolMember, companyId: string) {
-    const [grant] = await db.select().from(connectionGrants).where(and(eq(connectionGrants.companyId, companyId), eq(connectionGrants.id, member.binding.grantId)));
-    if (!grant) return null;
-    const ref = grant.credentialSecretRefs.find((r) => r.configPath === "ai.credential");
-    const [secret] = ref ? await db.select({ version: companySecrets.latestVersion }).from(companySecrets).where(and(eq(companySecrets.companyId, companyId), eq(companySecrets.id, ref.secretId))) : [];
-    return `${companyId}:${grant.id}:${ref?.secretId}:${secret?.version}:${grant.updatedAt.toISOString()}`;
+    const [selected] = await db.select({ connection: toolConnections, grant: connectionGrants }).from(connectionGrants)
+      .innerJoin(toolConnections, and(eq(toolConnections.companyId, connectionGrants.companyId), eq(toolConnections.id, connectionGrants.connectionId)))
+      .where(and(eq(connectionGrants.companyId, companyId), eq(connectionGrants.id, member.binding.grantId), eq(toolConnections.id, member.binding.connectionId)));
+    if (!selected) return null;
+    const owner = await resolveAiCredentialOwner(db, selected);
+    const ref = owner.grant.credentialSecretRefs.find((r) => r.configPath === "ai.credential");
+    const [secret] = ref ? await db.select({ version: companySecrets.latestVersion, epoch: companySecrets.aiSessionEpoch,
+      status: companySecrets.status, deletedAt: companySecrets.deletedAt }).from(companySecrets)
+      .where(and(eq(companySecrets.companyId, owner.connection.companyId), eq(companySecrets.id, ref.secretId))) : [];
+    if (ref && (!secret || secret.status !== "active" || secret.deletedAt)) return null;
+    return JSON.stringify({ companyId, grantId: selected.grant.id, grantUpdatedAt: selected.grant.updatedAt.toISOString(),
+      credentialOwner: aiCredentialOwnerSnapshot(owner), version: secret?.version, epoch: secret?.epoch });
   }
   async function probe(member: AiConnectionPoolMember, companyId: string, userId: string, deadline: number) {
     const key = await usageCacheKey(member, companyId);

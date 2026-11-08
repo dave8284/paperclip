@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
-import { and, eq, gte, inArray, lt, sql } from "drizzle-orm";
+import { and, eq, getTableColumns, gte, inArray, lt, sql } from "drizzle-orm";
 import { agents, costEvents, type Db } from "@paperclipai/db";
 import {
   agentAppearanceSchema, resolveAgentAppearance, agentAvatarUrl,
@@ -10,6 +10,9 @@ import { conflict, notFound, unprocessable } from "../errors.js";
 import { REDACTED_EVENT_VALUE, sanitizeRecord } from "../redaction.js";
 import { normalizeAgentPermissions } from "./agent-permissions.js";
 import { builtInAgentMarkersEqual, readBuiltInAgentMarker } from "./built-in-agent-metadata.js";
+import { fridayCoordinatorSql } from "../services/friday-board-role.js";
+
+type AgentPresentationRow = typeof agents.$inferSelect & { isBoardCoordinator?: boolean };
 
 export function hashToken(token: string) {
   return createHash("sha256").update(token).digest("hex");
@@ -322,7 +325,7 @@ export function agentRecordQueries(db: Db) {
     };
   }
 
-  function normalizeAgentBaseRow(row: typeof agents.$inferSelect) {
+  function normalizeAgentBaseRow(row: AgentPresentationRow) {
     const { lifecycleOperation, lifecycleRequiredPluginIds, ...publicRow } = row;
     return withUrlKey({
       ...publicRow,
@@ -340,7 +343,7 @@ export function agentRecordQueries(db: Db) {
     };
   }
 
-  function normalizeAgentRows(rows: (typeof agents.$inferSelect)[], allCompanyRows = rows) {
+  function normalizeAgentRows(rows: AgentPresentationRow[], allCompanyRows = rows) {
     const eligibilityAgents = allCompanyRows.map(toEligibilityAgent);
     return rows.map((row) => {
       const base = normalizeAgentBaseRow(row);
@@ -357,7 +360,7 @@ export function agentRecordQueries(db: Db) {
     });
   }
 
-  function normalizeAgentRow(row: typeof agents.$inferSelect, allCompanyRows?: (typeof agents.$inferSelect)[]) {
+  function normalizeAgentRow(row: AgentPresentationRow, allCompanyRows?: AgentPresentationRow[]) {
     return normalizeAgentRows([row], allCompanyRows)[0]!;
   }
 
@@ -399,7 +402,7 @@ export function agentRecordQueries(db: Db) {
 
   async function getById(id: string) {
     const row = await db
-      .select()
+      .select({ ...getTableColumns(agents), isBoardCoordinator: fridayCoordinatorSql(agents.companyId, agents.id) })
       .from(agents)
       .where(eq(agents.id, id))
       .then((rows) => rows[0] ?? null);

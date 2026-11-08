@@ -180,6 +180,15 @@ async function materializeInstructionBundle(db: Db, agent: RuntimeAgent, agentFi
   return { entryPath, bundle: await materializeAsset(files) };
 }
 
+/** The comparison owner may pin instruction bytes before a task starts. Reuse
+ * the same bounded, symlink-rejecting native materializer as execution; expose
+ * content identity, never arbitrary file paths or another reader authority. */
+export async function readNativeComparisonInstructionSnapshot(db: Db, agent: RuntimeAgent) {
+  const instructions = await materializeInstructionBundle(db, agent);
+  return { entryPath: instructions.entryPath, bundleDigest: instructions.bundle.digest,
+    promptRevision: PAPERCLIP_EXECUTION_PROMPT_REVISION, promptDigest: nativeRuntimePromptDigest() };
+}
+
 async function materializeSelectedSkills(runtimeConfig: Record<string, unknown>, entries: PaperclipSkillEntry[], omitLegacy: boolean) {
   const desiredKeys = resolvePaperclipDesiredSkillNames(runtimeConfig, entries).filter(
     (key) => !omitLegacy || key !== PAPERCLIP_OPERATIONAL_SKILL_KEY,

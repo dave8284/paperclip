@@ -49,6 +49,18 @@ policies use the ordinary Permissions screen. See [connector notes](../../doc/co
 - `failure`: `connection-setup/failure` — denied login, unreachable/private URL, expired credentials, and
   permission errors leave an actionable state rather than a false success.
 
+### Owner subscription reuse
+
+Settings → Connectors shows the owner's connected subscriptions. Connect a shared
+subscription once, then use it in other companies the owner currently controls.
+Existing connections can be enrolled without another provider sign-in. Company
+work, agent access, sessions and attribution remain local. Account disable,
+company revocation and reconnect wait for outstanding native credential cleanup.
+All aliases share one capacity group; a new group begins with one slot pending
+actual provider qualification. Personal connection permissions are not silently
+expanded. Source and component checks cover owner changes, unavailable accounts,
+explicit revocation and local access; live provider acceptance remains separate.
+
 ## How to get to it (user POV)
 
 ### `apps-catalog`

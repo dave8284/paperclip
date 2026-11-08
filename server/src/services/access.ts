@@ -958,6 +958,11 @@ export function accessService(db: Db) {
     grantedByUserId: string | null,
   ) {
     await db.transaction(async (tx) => {
+      // Lock the parent even when no explicit permissions exist yet. Readers
+      // pinning native owner authority must serialize with the first rule.
+      await tx.select({ id: companyMemberships.id }).from(companyMemberships)
+        .where(and(eq(companyMemberships.companyId, companyId), eq(companyMemberships.principalType, principalType),
+          eq(companyMemberships.principalId, principalId))).for("update");
       await tx
         .delete(principalPermissionGrants)
         .where(
@@ -1044,9 +1049,39 @@ export function accessService(db: Db) {
     grantedByUserId: string | null,
     scope: Record<string, unknown> | null = null,
   ) {
-    if (!enabled) {
-      await db
-        .delete(principalPermissionGrants)
+    return db.transaction(async tx => {
+      // Lock the parent even when no explicit permissions exist yet. Readers
+      // pinning native owner authority must serialize with the first rule.
+      let [member] = await tx.select({ id: companyMemberships.id }).from(companyMemberships)
+        .where(and(eq(companyMemberships.companyId, companyId), eq(companyMemberships.principalType, principalType),
+          eq(companyMemberships.principalId, principalId))).for("update");
+      if (enabled && !member) {
+        // Preserve existing membership role/status. Granting a permission must
+        // neither demote an owner nor reactivate a suspended member.
+        await tx.insert(companyMemberships).values({ companyId, principalType, principalId, membershipRole: "member", status: "active" })
+          .onConflictDoNothing();
+        [member] = await tx.select({ id: companyMemberships.id }).from(companyMemberships)
+          .where(and(eq(companyMemberships.companyId, companyId), eq(companyMemberships.principalType, principalType),
+            eq(companyMemberships.principalId, principalId))).for("update");
+        if (!member) throw conflict("Company membership changed while granting access");
+      }
+      if (!enabled) {
+        await tx
+          .delete(principalPermissionGrants)
+          .where(
+            and(
+              eq(principalPermissionGrants.companyId, companyId),
+              eq(principalPermissionGrants.principalType, principalType),
+              eq(principalPermissionGrants.principalId, principalId),
+              eq(principalPermissionGrants.permissionKey, permissionKey),
+            ),
+          );
+        return;
+      }
+
+      const existing = await tx
+        .select()
+        .from(principalPermissionGrants)
         .where(
           and(
             eq(principalPermissionGrants.companyId, companyId),
@@ -1054,46 +1089,31 @@ export function accessService(db: Db) {
             eq(principalPermissionGrants.principalId, principalId),
             eq(principalPermissionGrants.permissionKey, permissionKey),
           ),
-        );
-      return;
-    }
+        )
+        .then((rows) => rows[0] ?? null);
 
-    await ensureMembership(companyId, principalType, principalId, "member", "active");
+      if (existing) {
+        await tx
+          .update(principalPermissionGrants)
+          .set({
+            scope,
+            grantedByUserId,
+            updatedAt: new Date(),
+          })
+          .where(eq(principalPermissionGrants.id, existing.id));
+        return;
+      }
 
-    const existing = await db
-      .select()
-      .from(principalPermissionGrants)
-      .where(
-        and(
-          eq(principalPermissionGrants.companyId, companyId),
-          eq(principalPermissionGrants.principalType, principalType),
-          eq(principalPermissionGrants.principalId, principalId),
-          eq(principalPermissionGrants.permissionKey, permissionKey),
-        ),
-      )
-      .then((rows) => rows[0] ?? null);
-
-    if (existing) {
-      await db
-        .update(principalPermissionGrants)
-        .set({
-          scope,
-          grantedByUserId,
-          updatedAt: new Date(),
-        })
-        .where(eq(principalPermissionGrants.id, existing.id));
-      return;
-    }
-
-    await db.insert(principalPermissionGrants).values({
-      companyId,
-      principalType,
-      principalId,
-      permissionKey,
-      scope,
-      grantedByUserId,
-      createdAt: new Date(),
-      updatedAt: new Date(),
+      await tx.insert(principalPermissionGrants).values({
+        companyId,
+        principalType,
+        principalId,
+        permissionKey,
+        scope,
+        grantedByUserId,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
     });
   }
 

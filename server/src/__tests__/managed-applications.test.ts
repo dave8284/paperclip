@@ -3,7 +3,7 @@ import express from "express";
 import request from "supertest";
 import { and, eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { activityLog, agents, companies, companyMemberships, companyOperatingProfiles, createDb, issues, managedApplications, managedApplicationProjects, projects, projectAccessMembers } from "@paperclipai/db";
+import { activityLog, agents, companies, companyMemberships, companyOperatingProfiles, principalPermissionGrants, createDb, issues, managedApplications, managedApplicationProjects, projects, projectAccessMembers } from "@paperclipai/db";
 import { startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
 import { errorHandler } from "../middleware/index.js";
 import { managedApplicationRoutes } from "../routes/managed-applications.js";
@@ -63,7 +63,7 @@ describe("managed application persistence and access", () => {
     expect(audit[0].entityId).toBe(fixture.homeProjectId);
   });
 
-  it("binds Friday with a revocable native grant and protects the binding from agents and stale writes", async () => {
+  it("binds Friday without granting delivery management and protects the binding from agents and stale writes", async () => {
     const fixture = await seed();
     const [friday, replacement] = await db.insert(agents).values([
       { companyId: fixture.companyId, name: "Friday", role: "general", adapterType: "paperclip_runner" },
@@ -77,13 +77,17 @@ describe("managed application persistence and access", () => {
     expect(bound.status).toBe(200);
     expect(bound.body.revision).toBe(1);
     expect((await request(app(fridayActor)).put(endpoint).send({ fridayAgentId: replacement.id, expectedRevision: 1 })).status).toBe(403);
-    const created = await request(app(fridayActor)).post(fixture.base).send(fixture.input);
+    expect(await db.select().from(principalPermissionGrants).where(and(eq(principalPermissionGrants.principalId, friday.id),
+      eq(principalPermissionGrants.permissionKey, "applications:manage")))).toHaveLength(0);
+    expect((await request(app(fridayActor)).post(fixture.base).send(fixture.input)).status).toBe(403);
+    const created = await request(owner).post(fixture.base).send(fixture.input);
     expect(created.status).toBe(201);
+    expect((await request(app(fridayActor)).get(`${fixture.base}/${created.body.id}`)).status).toBe(200);
     expect((await request(app({ ...fridayActor, keyScope: { kind: "skill_test" } as never })).patch(`${fixture.base}/${created.body.id}`).send({ name: "No" })).status).toBe(403);
     expect((await request(owner).put(endpoint).send({ fridayAgentId: replacement.id, expectedRevision: 0 })).status).toBe(409);
     expect((await request(owner).put(endpoint).send({ fridayAgentId: replacement.id, expectedRevision: 1 })).status).toBe(200);
     expect((await request(app(fridayActor)).patch(`${fixture.base}/${created.body.id}`).send({ name: "Old Friday" })).status).toBe(403);
-    expect((await request(app({ ...fridayActor, agentId: replacement.id })).patch(`${fixture.base}/${created.body.id}`).send({ name: "New Friday" })).status).toBe(200);
+    expect((await request(app({ ...fridayActor, agentId: replacement.id })).patch(`${fixture.base}/${created.body.id}`).send({ name: "New Friday" })).status).toBe(403);
     const foreign = await seed();
     const [foreignAgent] = await db.insert(agents).values({ companyId: foreign.companyId, name: "Other company's agent", role: "general", adapterType: "paperclip_runner" }).returning();
     expect((await request(owner).put(endpoint).send({ fridayAgentId: foreignAgent.id, expectedRevision: 2 })).status).toBe(404);

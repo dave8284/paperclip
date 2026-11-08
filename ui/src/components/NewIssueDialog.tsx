@@ -417,6 +417,7 @@ export function NewIssueDialog() {
     [agents, selectedAssigneeAgentId],
   );
   const assigneeAdapterType = selectedAssigneeAgent?.adapterType ?? null;
+  const boardCoordinatorSelected = selectedAssigneeAgent?.isBoardCoordinator === true;
   const mentionOptions = useMemo<MentionOption[]>(() => {
     return buildMarkdownMentionOptions({
       agents,
@@ -792,7 +793,7 @@ export function NewIssueDialog() {
   async function handleSubmit(body: string, mode: IssueWorkMode, settings: ComposerRunSettings | null) {
     const currentTitle = titleRef.current.trim();
     const currentDescription = body.trim();
-    if (!effectiveCompanyId || (!currentTitle && !currentDescription) || createIssue.isPending || worktreeSelectionIncomplete || parentPrivacyUnresolved) return;
+    if (!effectiveCompanyId || (!currentTitle && !currentDescription) || createIssue.isPending || worktreeSelectionIncomplete || parentPrivacyUnresolved || boardCoordinatorSelected) return;
     const inheritedOverrides = buildAssigneeAdapterOverrides({
       adapterType: assigneeAdapterType,
       lane: assigneeChrome ? "custom" : assigneeModelLane,
@@ -1368,6 +1369,11 @@ export function NewIssueDialog() {
                       </div>
                     ) : null}
 
+                    {boardCoordinatorSelected ? (
+                      <InlineBanner tone="warning" compact>
+                        Friday directs the company CEO or department heads. Choose a company team member to own this task.
+                      </InlineBanner>
+                    ) : null}
                     {showParentWorkspaceWarning ? (
                       <div className="mb-2">
                         <InlineBanner tone="warning" compact>
@@ -1381,7 +1387,7 @@ export function NewIssueDialog() {
                     ) : null}
                   </>
                 ),
-                submitDisabled: worktreeSelectionIncomplete || parentPrivacyUnresolved,
+                submitDisabled: worktreeSelectionIncomplete || parentPrivacyUnresolved || boardCoordinatorSelected,
                 contextBar: (
                   <>
                     <InlineEntitySelector

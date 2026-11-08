@@ -2237,6 +2237,9 @@ export function issueThreadInteractionService(
             })
           : undefined;
 
+      if (isNativeCompletionReview(lockedCurrent)) await notifyDeliveryWork(tx, DELIVERY_QUEUES.modelComparisons, args.issue.companyId);
+      if (isNativeCompletionReview(lockedCurrent)) await notifyDeliveryWork(tx, DELIVERY_QUEUES.modelRouting, args.issue.companyId);
+
       const [updated] = await tx
         .update(issueThreadInteractions)
         .set({
@@ -2513,6 +2516,9 @@ export function issueThreadInteractionService(
         reason: reason || null,
         now,
       });
+
+      if (isNativeCompletionReview(lockedCurrent)) await notifyDeliveryWork(tx, DELIVERY_QUEUES.modelComparisons, args.issue.companyId);
+      if (isNativeCompletionReview(lockedCurrent)) await notifyDeliveryWork(tx, DELIVERY_QUEUES.modelRouting, args.issue.companyId);
 
       const [resolved] = await tx
         .update(issueThreadInteractions)

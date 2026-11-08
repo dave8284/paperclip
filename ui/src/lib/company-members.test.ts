@@ -6,6 +6,7 @@ import {
   buildCompanyUserProfileMap,
   buildIssueMentionOptions,
   buildMarkdownMentionOptions,
+  isAgentTaskTarget,
 } from "./company-members";
 
 const activeMember = (overrides: Partial<CompanyMember>): CompanyMember => ({
@@ -24,6 +25,14 @@ const activeMember = (overrides: Partial<CompanyMember>): CompanyMember => ({
 });
 
 describe("company-members helpers", () => {
+  it("excludes the designated Friday from delivery assignees without excluding ordinary workers", () => {
+    expect(isAgentTaskTarget({ status: "idle", isBoardCoordinator: true })).toBe(false);
+    expect(isAgentTaskTarget({ status: "idle", isBoardCoordinator: false })).toBe(true);
+    expect(isAgentTaskTarget({ status: "paused", isBoardCoordinator: false })).toBe(true);
+    expect(isAgentTaskTarget({ status: "terminated", isBoardCoordinator: false })).toBe(false);
+    expect(buildMarkdownMentionOptions({ agents: [{ id: "friday", name: "Friday", status: "idle", icon: null, isBoardCoordinator: true }] }))
+      .toEqual([expect.objectContaining({ id: "agent:friday", agentId: "friday" })]);
+  });
   it("builds labels from company member profiles", () => {
     const labels = buildCompanyUserLabelMap([
       activeMember({ principalId: "user-1", user: { id: "user-1", name: "Taylor", email: "taylor@example.com", image: null } }),

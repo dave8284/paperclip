@@ -1,6 +1,6 @@
 import type { AgentosPortfolio, AgentosWorkforce, CreateAgentosPortfolio, CreateAgentosEmployee, CreateAgentosAssignment, RetireAgentosAssignment,
   AgentosCapabilities, AgentosCapabilityRelease, PublishAgentosCapability, DecideAgentosCapability,
-  PortfolioReadMandate, SavePortfolioReadMandate } from "@paperclipai/shared";
+  PortfolioReadMandate, SavePortfolioReadMandate, SetBoardDirectionAuthority } from "@paperclipai/shared";
 import { api, detachInflightGet } from "./client";
 
 const root = "/agentos/portfolios";
@@ -23,6 +23,7 @@ export const workforceApi = {
   mandates: (id: string, signal?: AbortSignal) => read<PortfolioReadMandate[]>(`${root}/${id}/read-mandates`, signal),
   saveMandate: (id: string, input: SavePortfolioReadMandate) => api.post<PortfolioReadMandate>(`${root}/${id}/read-mandates`, input),
   revokeMandate: (id: string, mandateId: string, expectedRevision: number) => api.post<PortfolioReadMandate>(`${root}/${id}/read-mandates/${mandateId}/revoke`, { expectedRevision }),
+  setBoardDirectionAuthority: (id: string, mandateId: string, input: SetBoardDirectionAuthority) => api.post<PortfolioReadMandate>(`${root}/${id}/read-mandates/${mandateId}/board-direction-authority`, input),
 };
 export const workforceKeys = {
   account: (userId: string | null) => ["agentos-workforce", userId] as const,

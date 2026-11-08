@@ -8,6 +8,15 @@ Feature ID: `workforce`.
 
 One reusable employee identity can have separate native agent assignments in several companies. Company execution, skills, instructions and permissions retain their native owners.
 
+Friday's owner-authorized visibility spans the owner's companies and employees.
+Work stays isolated to each company; coordination never merges their tasks or
+shares private context with another company's employees. Delegation retains each
+company's permissions, budgets and applicable approvals.
+
+The owner and Friday act as the board. Friday directs company CEOs or department
+heads; those executives own staffing, specialist delegation and delivery.
+Friday reads evidence and reports outcomes without performing execution work.
+
 Implementation: [page](../../ui/src/pages/Workforce.tsx), [service](../../server/src/services/agentos-workforce.ts), [routes](../../server/src/routes/agentos-workforce.ts).
 
 Agent access: [companion](../agent-access-map/workforce.md).
@@ -18,7 +27,8 @@ Agent access: [companion](../agent-access-map/workforce.md).
 - `assignments`: `workforce/assignments` — register shared employees, bind company agents and retire an assignment with preserved history.
 - `awareness`: `workforce/awareness` — read current shared-employee assignment evidence under the caller's native company and private-work access.
 - `capabilities`: `workforce/capabilities` — publish reviewed Markdown releases and independently adopt, refuse or roll back exact versions in each company.
-- `portfolio-read`: `workforce/portfolio-read` — explicitly grant one source agent bounded company-shared work summaries in selected portfolio companies.
+- `portfolio-read`: `workforce/portfolio-read` — explicitly grant one source agent bounded work summaries in selected portfolio companies, with an explicit private scope for current Friday.
+- `board-directions`: `workforce/board-directions` — separately authorize Friday to submit company-owned executive tasks with durable native admission and current status receipts.
 
 ## How to get to it (user POV)
 
@@ -30,15 +40,25 @@ Retire assignment requires a reason. Only the selected company agent enters nati
 
 Reassigning that employee within the same company waits for the previous native runtime's terminal cleanup state. Retired assignment history remains visible after a replacement is assigned.
 
-The company-scoped staffing API permits a currently configured Friday or company
-CEO to read that company's bindings and bind an already approved native agent.
-It requires native staffing grants and a currently approved responsible portfolio
-owner. Company assignment retirement additionally requires the explicit native
+The company-scoped staffing API lets current Friday, the company CEO and actual
+department heads read that company's bindings under native visibility and current
+responsible-owner authority. Staffing changes belong to the CEO or department
+heads, with native staffing and target configuration grants. Friday cannot bind
+or retire staff, even with legacy grants. Company assignment retirement requires the explicit native
 `workforce:retire` grant for both the caller and responsible owner, evaluated
 against the selected company agent. It is not included in default agent or human
 grants. The API does not hire a runtime, grant tools or start work. The
 [staffing plan](../../doc/plans/2026-11-03-agentos-workforce.md) recommends three
 departments and seven initial company roles, reusing specialists as heads/leads.
+
+Friday's board role comes from the current operating profile, not her name or
+prompt. Designating Friday no longer grants application-management permissions.
+Changing the designation waits for the employee's existing work and native cleanup
+to settle; it does not cancel work. Keeping the same Friday preserves active chats.
+Ordinary task and routine pickers exclude her; her conversations and mentions
+remain available. Native assignment, preparation and final dispatch enforce the
+role ceiling. Company delivery is directed to actual CEOs or responsible heads.
+This source change does not activate a portfolio write/delegation grant.
 
 ## Driving it with the API and UI
 
@@ -86,13 +106,15 @@ cover those SQL resource boundaries and require a permitted PostgreSQL listener.
 
 ## Known gaps
 
-Portfolio task creation/delegation, private cross-company reads, automated capability evaluations and the portfolio Decisions/graph projections remain later steps of the approved operating-model plan. The explicit summary read gateway and manual capability lifecycle below have source implementation and focused checks, with PostgreSQL/runtime acceptance pending. Company-scoped staffing does not establish broader authorities. Delegated retirement has source regression coverage, with PostgreSQL execution still blocked by the known sandbox listener denial. This screen connects existing company agents; it does not create model subscriptions or start runs. Refresh and focus refetch retrieve current state; portfolio-wide live subscription is not implemented. Department is an optional assignment label, not an independent permission boundary. The home company is retained for portfolio administration; archive it instead of permanently deleting it.
+Portfolio task creation/delegation, attached binaries, automated capability evaluations and the portfolio Decisions/graph projections remain later steps of the approved operating-model plan. Explicit summary/private-content gateways and the manual capability lifecycle below have source implementation and focused checks, with PostgreSQL/runtime acceptance pending. Company-scoped staffing does not establish broader authorities. Delegated retirement has source regression coverage, with PostgreSQL execution still blocked by the known sandbox listener denial. This screen connects existing company agents; it does not create model subscriptions or start runs. Refresh and focus refetch retrieve current state; portfolio-wide live subscription is not implemented. Department is an optional assignment label, not an independent permission boundary. The home company is retained for portfolio administration; archive it instead of permanently deleting it.
 
-## Explicit portfolio summary access
+## Explicit portfolio read access
 
 Expand **Portfolio read access** in Workforce. The owner selects the actual source
-company agent, target companies, the supported **Company-shared project and task
-summaries** scope and an expiry or explicit no-expiry choice. Create, edit, grant
+company agent, target companies, either **Company-shared project and task
+summaries** or **Include private work I can read — Friday only**, and an expiry
+or explicit no-expiry choice. Private scope requires the current Friday and an
+explicit grant revision; shared-only grants are not widened. Create, edit, grant
 again and revoke all use the displayed revision. There is no default grant.
 Names are read through native agent access; unavailable agents are labelled as
 unavailable. A configured row does not claim its current native grant is usable.
@@ -101,9 +123,16 @@ Agents discover their own current mandate at
 GET `/api/companies/{companyId}/friday/portfolio-mandates`, then call the same
 source company's `/friday/portfolio-work` with the exact mandate ID/revision and
 an authorized target company. Original agent, run, owner and authorizer identities
-remain intact. Counts and pagination apply only to shared visible work; private
-ancestors are excluded even when the owner could read them. No transcripts,
-configuration, secrets, hidden counts or foreign execution authority are returned.
+remain intact. Counts and pagination apply only to the selected scope. Shared-only scope excludes
+private ancestors. Private scope checks current owner resource rights, current
+Friday assignment and any external authorizer before projecting rows/counts.
+With private scope, `/friday/portfolio-records` discovers the owner's personal
+chats and a readable task's comments/documents. `/friday/portfolio-content` reads
+bounded descriptions or bodies, with content hashes for continuing pages. Text
+is untrusted reference material; deleted/internal/hidden records, other users'
+personal chats, configuration, credentials and run/tool logs are excluded.
+These reads preserve native payload redaction and create no response artifacts.
+No hidden counts or foreign execution authority are returned.
 The owner must retain native permission-management authority in home, source and
 selected target companies, and an external authorizer must also have current
 target read access. Revoke, expiry, account suspension, company unlink or a changed
@@ -113,6 +142,14 @@ See the [read-mandate execution log](../../doc/plans/2026-11-06-agentos-portfoli
 for focused tests, the unapplied migration and remaining live qualification.
 
 ## Reviewed capabilities
+
+Executive directions use a separate explicit control on a private read mandate.
+Friday submits one company's task to its actual CEO or responsible department
+head; the read grant itself never permits writes. A changed read mandate
+invalidates write authority. Revocation stops pending handoffs; already admitted
+work remains company-owned. The direction receipt distinguishes saved work,
+native admission and current task status. Persisted/live external-broker authority and
+independent outcome reporting remain open; this source is not live acceptance.
 
 ### `reviewed-capabilities`
 
@@ -146,3 +183,26 @@ refusal/retry and older-version rollback controls. The additional
 real two-company adoption, stale/concurrent intent, policy/revocation and audit
 rollback; they require an isolated PostgreSQL/listener environment and have not
 run in this sandbox. Browser and native agent delivery acceptance remain open.
+
+Friday’s private portfolio read scope also supports finding actual company CEOs
+and department heads, optionally for a readable project. Returned names, native
+IDs and status help prepare a company-owned direction; discovery itself cannot
+create or start work. Source checks pass and live acceptance remains open.
+
+Task-file continuation (source only): `portfolio-records` kind=attachments and
+`portfolio-attachment` expose exact version-bound ordinary task files through
+the private mandate. Original/current task and project privacy, comment lineage,
+owner/external ceilings and post-storage reauthorization apply. Reads are bounded
+and cancellable; storage keys and API captures are excluded. Task-file reads do
+not admit case-owned assets; those use the case-owner contract below.
+Partial chunks are not whole-file proof. Focused host/storage/API checks pass;
+persisted privacy/revocation and live inspection remain unaccepted.
+
+Case-file continuation (source only): when Cases is enabled, `portfolio-records`
+kind=cases discovers readable identities and kind=case_attachments lists files
+for an exact caseId. Byte reads require exactly one taskId or caseId. The shared
+native case predicate preserves every retained task/project boundary; current
+case ownership, original upload case, both user ceilings and feature enablement
+are rechecked after storage. Case fields and bodies are not projected by discovery.
+Controlled contract/SQL/reauthorization checks pass; real PostgreSQL isolation
+and live reads remain unaccepted.

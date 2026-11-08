@@ -1,59 +1,58 @@
 import { and, eq, inArray } from "drizzle-orm";
-import { agents, authUsers, companyMemberships, principalPermissionGrants, agentosPortfolios,
+import { agents, authUsers, companyMemberships, companyOperatingProfiles, instanceUserRoles, principalPermissionGrants, agentosPortfolios,
   agentosPortfolioCompanies, agentosPortfolioMandates, type Db } from "@paperclipai/db";
-import type { PortfolioReadMandate, SavePortfolioReadMandate, PortfolioWorkQuery, PortfolioWorkSummary } from "@paperclipai/shared";
+import { portfolioReadScopeSchema, portfolioAttachmentQuerySchema, type PortfolioAttachment, type PortfolioAttachmentQuery, type SetBoardDirectionAuthority, type PortfolioContent, type PortfolioRecords, type PortfolioContentQuery, type PortfolioRecordsQuery, type PortfolioPrivateReadReceipt, type PortfolioReadMandate, type SavePortfolioReadMandate, type PortfolioWorkQuery, type PortfolioWorkSummary } from "@paperclipai/shared";
 import { conflict, forbidden, notFound } from "../errors.js";
 import { authorizationService, type AuthorizationActor } from "./authorization.js";
 import { agentosWorkforceService, refreshWorkforceBoardActor } from "./agentos-workforce.js";
 import { fridayAwarenessService } from "./friday-awareness.js";
 import { persistActivity, type ActivityPublication, type LogActivityInput } from "./activity-log.js";
 import { publishAccountingActivities } from "./accounting-transaction.js";
+import { portfolioPrivateContentProjection } from "./agentos-portfolio-content.js";
+import { PORTFOLIO_READ_PERMISSION, portfolioMandateGrantScope, matchesPortfolioMandateGrant } from "./portfolio-mandate-grants.js";
+import { BOARD_DIRECTION_PERMISSION, boardDirectionGrantScope, matchesBoardDirectionGrant } from "./board-direction-grants.js";
+import { readPortfolioAttachmentChunk, samePortfolioAttachment } from "./portfolio-attachment-read.js";
+import { getStorageService, type StorageService } from "../storage/index.js";
+export { PORTFOLIO_READ_PERMISSION, portfolioMandateGrantScope, matchesPortfolioMandateGrant } from "./portfolio-mandate-grants.js";
 
 type Mandate = typeof agentosPortfolioMandates.$inferSelect;
-type Grant = typeof principalPermissionGrants.$inferSelect;
 type Who = Pick<LogActivityInput, "actorType" | "actorId" | "agentId" | "runId">;
-export const PORTFOLIO_READ_PERMISSION = "workforce:portfolio_read" as const;
 const sorted = (ids: string[]) => [...ids].sort();
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
-export function portfolioMandateGrantScope(row: Pick<Mandate, "id" | "portfolioId" | "revision" | "sourceCompanyId" | "sourceAgentId" | "targetCompanyIds" | "action" | "readScope" | "expiresAt">) {
-  return { mandateId: row.id, portfolioId: row.portfolioId, revision: row.revision,
-    sourceCompanyId: row.sourceCompanyId, sourceAgentId: row.sourceAgentId, targetCompanyIds: sorted(row.targetCompanyIds),
-    action: row.action, readScope: row.readScope, expiresAt: row.expiresAt?.toISOString() ?? null };
-}
-export function matchesPortfolioMandateGrant(row: Mandate, grant: Grant | undefined) {
-  if (!grant || grant.id !== row.grantId || grant.companyId !== row.sourceCompanyId || grant.principalType !== "agent"
-    || grant.principalId !== row.sourceAgentId || grant.permissionKey !== PORTFOLIO_READ_PERMISSION || grant.grantedByUserId !== row.ownerUserId) return false;
-  const expected = portfolioMandateGrantScope(row);
-  // Unknown fields and widened scopes are not silently accepted.
-  return grant.scope !== null && same(Object.keys(grant.scope).sort(), Object.keys(expected).sort())
-    && Object.entries(expected).every(([key, value]) => same(grant.scope![key], value));
-}
 export function assertPortfolioMandateActor(row: Mandate, actor: AuthorizationActor, targetCompanyId: string, revision: number, now = new Date()) {
   if (actor.type !== "agent" || actor.agentId !== row.sourceAgentId || actor.companyId !== row.sourceCompanyId
     || (actor.keyScope && actor.keyScope.kind !== "standard") || actor.onBehalfOfUserId !== row.ownerUserId
     || row.revokedAt || (row.expiresAt && row.expiresAt <= now) || row.revision !== revision
-    || row.action !== "portfolio_work:read" || row.readScope !== "company_shared_only" || !row.targetCompanyIds.includes(targetCompanyId)) {
+    || row.action !== "portfolio_work:read" || !portfolioReadScopeSchema.safeParse(row.readScope).success || !row.targetCompanyIds.includes(targetCompanyId)) {
     throw forbidden("A current, explicit portfolio read mandate is required for this agent, owner and company");
   }
 }
+export function assertPortfolioPrivateDelegate(row: Pick<Mandate, "readScope" | "sourceAgentId">, fridayAgentId: string | null | undefined) {
+  if (row.readScope === "owner_accessible_private" && fridayAgentId !== row.sourceAgentId) {
+    throw forbidden("Private portfolio access requires the currently designated Friday coordinator");
+  }
+}
+export function assertPortfolioContentScope(row: Pick<Mandate, "readScope">) {
+  if (row.readScope !== "owner_accessible_private") throw forbidden("Private content requires an explicit owner-accessible private mandate");
+}
 function projection(row: Mandate): PortfolioReadMandate {
   return { id: row.id, portfolioId: row.portfolioId, revision: row.revision, sourceCompanyId: row.sourceCompanyId,
-    sourceAgentId: row.sourceAgentId, targetCompanyIds: row.targetCompanyIds, action: "portfolio_work:read", readScope: "company_shared_only",
+    sourceAgentId: row.sourceAgentId, targetCompanyIds: row.targetCompanyIds, action: "portfolio_work:read", readScope: portfolioReadScopeSchema.parse(row.readScope),
     expiresAt: row.expiresAt?.toISOString() ?? null, revokedAt: row.revokedAt?.toISOString() ?? null, updatedAt: row.updatedAt.toISOString() };
 }
 export function portfolioSummary(row: Mandate, targetCompanyId: string, work: Awaited<ReturnType<ReturnType<typeof fridayAwarenessService>["work"]>>): PortfolioWorkSummary {
   return { mandateId: row.id, revision: row.revision, sourceCompanyId: row.sourceCompanyId, targetCompanyId,
-    readScope: "company_shared_only", observedAt: work.observedAt, projectCount: work.projectCount, nextProjectOffset: work.nextProjectOffset,
+    readScope: portfolioReadScopeSchema.parse(row.readScope), observedAt: work.observedAt, projectCount: work.projectCount, nextProjectOffset: work.nextProjectOffset,
     projects: work.projects.map(({ id, name, status }) => ({ id, name, status })),
     tasks: work.tasks.map(({ id, identifier, title, status, priority, projectId, updatedAt }) => ({ id, identifier, title, status, priority, projectId, updatedAt })),
     counts: work.counts, nextOffset: work.nextOffset };
 }
 
-export function agentosPortfolioMandateService(db: Db) {
+export function agentosPortfolioMandateService(db: Db, options: { storage?: Pick<StorageService, "provider" | "getObject"> } = {}) {
   const workforce = agentosWorkforceService(db);
   // All checks below run after lock acquisition. Existing membership/grant/account
   // revocations cannot commit halfway through the authorized projection.
-  async function lockAuthority(tx: Db, row: Pick<Mandate, "portfolioId" | "sourceAgentId" | "sourceCompanyId" | "ownerUserId">,
+  async function lockAuthority(tx: Db, row: Pick<Mandate, "portfolioId" | "sourceAgentId" | "sourceCompanyId" | "ownerUserId" | "readScope">,
     companyIds: string[], authorizingUserId?: string | null) {
     const noWait = { noWait: true } as const;
     const [portfolio] = await tx.select().from(agentosPortfolios).where(eq(agentosPortfolios.id, row.portfolioId)).for("share", noWait);
@@ -65,6 +64,13 @@ export function agentosPortfolioMandateService(db: Db) {
     const userIds = sorted([...new Set([row.ownerUserId, ...(authorizingUserId ? [authorizingUserId] : [])])]);
     const users = await tx.select().from(authUsers).where(inArray(authUsers.id, userIds)).orderBy(authUsers.id).for("share", noWait);
     if (users.length !== userIds.length || users.some(user => user.approvalStatus !== "approved")) throw forbidden("A portfolio authority account is unavailable");
+    if (row.readScope === "owner_accessible_private") {
+      const [profile] = await tx.select().from(companyOperatingProfiles).where(eq(companyOperatingProfiles.companyId, row.sourceCompanyId)).for("share", noWait);
+      assertPortfolioPrivateDelegate(row, profile?.fridayAgentId);
+      // The projection can use current instance-admin read authority, but a
+      // revocation cannot race between that check and the authorized query.
+      await tx.select().from(instanceUserRoles).where(eq(instanceUserRoles.userId, row.ownerUserId)).for("share", noWait);
+    }
     await tx.select().from(companyMemberships).where(and(inArray(companyMemberships.companyId, allCompanyIds),
       inArray(companyMemberships.principalId, [...userIds, row.sourceAgentId]))).orderBy(companyMemberships.id).for("share", noWait);
     await tx.select().from(principalPermissionGrants).where(and(inArray(principalPermissionGrants.companyId, allCompanyIds),
@@ -119,11 +125,119 @@ export function agentosPortfolioMandateService(db: Db) {
     if ((value.cause?.code ?? value.code) === "55P03") throw conflict("Portfolio authority is changing. Retry the request.", { retryable: true });
     throw error;
   }
+  async function privateRead<T>(actor: AuthorizationActor, who: Who, sourceCompanyId: string,
+    query: PortfolioContentQuery | PortfolioRecordsQuery,
+    project: (projection: ReturnType<typeof portfolioPrivateContentProjection>) => Promise<T>): Promise<T & PortfolioPrivateReadReceipt> {
+    const publications: ActivityPublication[] = [];
+    const result = await db.transaction(async connection => {
+      const tx = connection as unknown as Db;
+      const [row] = await tx.select().from(agentosPortfolioMandates).where(and(
+        eq(agentosPortfolioMandates.id, query.mandateId), eq(agentosPortfolioMandates.sourceCompanyId, sourceCompanyId))).for("share", { noWait: true });
+      if (!row) throw notFound("Mandate not found");
+      assertPortfolioContentScope(row);
+      const current = await requireRead(tx, row, actor, query.targetCompanyId, query.revision);
+      const content = await project(portfolioPrivateContentProjection(tx, current, query.targetCompanyId));
+      assertPortfolioMandateActor(row, actor, query.targetCompanyId, query.revision);
+      await audit(tx, publications, who, row, "agentos.portfolio_content_read", {
+        targetCompanyId: query.targetCompanyId, kind: query.kind, offset: query.offset,
+        ...("resourceId" in query ? { resourceId: query.resourceId } : { taskId: query.taskId ?? null,
+          ...(query.kind === "case_attachments" ? { caseId: query.caseId } : {}),
+          ...(query.kind === "executives" ? { projectId: query.projectId ?? null } : {}) }),
+      });
+      return { ...content, mandateId: row.id, revision: row.revision, sourceCompanyId, targetCompanyId: query.targetCompanyId,
+        readScope: "owner_accessible_private" as const, contentTrust: "untrusted_reference" as const, observedAt: new Date().toISOString() };
+    }).catch(changing);
+    publishAccountingActivities(sourceCompanyId, publications);
+    return result;
+  }
+  // Internal transaction contract: callers retain these locks through their
+  // authorized operation. This check alone never authorizes a write.
+  async function authorizePrivateRead(tx: Db, actor: AuthorizationActor, sourceCompanyId: string,
+      query: { mandateId: string; revision: number; targetCompanyId: string }) {
+      const [row] = await tx.select().from(agentosPortfolioMandates).where(and(eq(agentosPortfolioMandates.id, query.mandateId),
+        eq(agentosPortfolioMandates.sourceCompanyId, sourceCompanyId))).for("share", { noWait: true });
+      if (!row) throw notFound("Mandate not found");
+      assertPortfolioContentScope(row);
+      return { row, actor: await requireRead(tx, row, actor, query.targetCompanyId, query.revision) };
+  }
   return {
+    authorizePrivateRead,
+    async attachment(actor: AuthorizationActor, who: Who, sourceCompanyId: string, raw: PortfolioAttachmentQuery,
+      signal?: AbortSignal): Promise<PortfolioAttachment> {
+      const query = portfolioAttachmentQuerySchema.parse(raw);
+      const authorize = async (tx: Db) => {
+        signal?.throwIfAborted();
+        const authorized = await authorizePrivateRead(tx, actor, sourceCompanyId, query);
+        const source = await portfolioPrivateContentProjection(tx, authorized.actor, query.targetCompanyId).attachment(query);
+        assertPortfolioMandateActor(authorized.row, actor, query.targetCompanyId, query.revision);
+        return { ...authorized, source };
+      };
+      const initial = await db.transaction(connection => authorize(connection as unknown as Db)).catch(changing);
+      // No identity/resource locks are retained while storage is slow or fails.
+      const chunk = await readPortfolioAttachmentChunk(options.storage ?? getStorageService(), initial.source, query, { signal });
+      const publications: ActivityPublication[] = [];
+      const result = await db.transaction(async connection => {
+        const tx = connection as unknown as Db, current = await authorize(tx);
+        if (!samePortfolioAttachment(initial.source, current.source)) throw conflict("Attachment changed during the read; rediscover it");
+        await audit(tx, publications, who, current.row, "agentos.portfolio_attachment_read", {
+          targetCompanyId: query.targetCompanyId, attachmentId: query.attachmentId, taskId: query.taskId ?? null,
+          ...(query.caseId ? { caseId: query.caseId } : {}),
+          offset: chunk.offset, byteCount: Buffer.byteLength(chunk.body, "base64"),
+        });
+        signal?.throwIfAborted();
+        return { ...chunk, attachmentId: current.source.attachmentId, taskId: current.source.taskId,
+          ...("caseId" in current.source ? { caseId: current.source.caseId } : {}),
+          filename: current.source.filename?.slice(0, 1000) ?? null, contentType: current.source.contentType,
+          byteSize: current.source.byteSize, sha256: current.source.sha256,
+          mandateId: current.row.id, revision: current.row.revision, sourceCompanyId, targetCompanyId: query.targetCompanyId,
+          readScope: "owner_accessible_private" as const, contentTrust: "untrusted_reference" as const, observedAt: new Date().toISOString() };
+      }).catch(changing);
+      publishAccountingActivities(sourceCompanyId, publications);
+      return result;
+    },
+    async setBoardDirectionAuthority(actor: AuthorizationActor, who: Who, portfolioId: string, mandateId: string, input: SetBoardDirectionAuthority) {
+      await workforce.read(actor, portfolioId);
+      const [known] = await db.select().from(agentosPortfolioMandates).where(and(eq(agentosPortfolioMandates.id, mandateId), eq(agentosPortfolioMandates.portfolioId, portfolioId)));
+      if (!known) throw notFound("Mandate not found");
+      return workforce.mutateCapabilities(actor, portfolioId, known.sourceCompanyId, known.sourceAgentId, async (tx, publications) => {
+        const [row] = await tx.select().from(agentosPortfolioMandates).where(eq(agentosPortfolioMandates.id, mandateId)).for("update");
+        if (!row || row.revision !== input.expectedRevision) throw conflict("Read mandate changed. Refresh before changing direction authority.");
+        const [existing] = await tx.select().from(principalPermissionGrants).where(and(eq(principalPermissionGrants.companyId, row.sourceCompanyId),
+          eq(principalPermissionGrants.principalType, "agent"), eq(principalPermissionGrants.principalId, row.sourceAgentId),
+          eq(principalPermissionGrants.permissionKey, BOARD_DIRECTION_PERMISSION))).for("update", { noWait: true });
+        if ((existing?.id ?? null) !== input.expectedGrantId) throw conflict("Direction authority changed. Refresh before saving.");
+        let grantId: string | null = null;
+        if (input.enabled) {
+          if (row.revokedAt || (row.expiresAt && row.expiresAt <= new Date())) throw forbidden("A current private read mandate is required");
+          assertPortfolioContentScope(row);
+          const companyIds = await lockAuthority(tx, row, row.targetCompanyIds);
+          if (actor.source !== "local_implicit" && companyIds.some(id => !actor.companyIds?.includes(id))) throw forbidden("The current session does not admit every selected company");
+          await assertOwnerAuthority(tx, row.ownerUserId, companyIds);
+          const [readGrant] = await tx.select().from(principalPermissionGrants).where(eq(principalPermissionGrants.id, row.grantId ?? "00000000-0000-0000-0000-000000000000"));
+          if (!matchesPortfolioMandateGrant(row, readGrant)) throw forbidden("The private read grant was removed or changed");
+          // Every explicit replacement receives a fresh identity. Previously
+          // queued requests cannot acquire a newly granted capability by retry.
+          if (existing) await tx.delete(principalPermissionGrants).where(eq(principalPermissionGrants.id, existing.id));
+          const [created] = await tx.insert(principalPermissionGrants).values({ companyId: row.sourceCompanyId, principalType: "agent", principalId: row.sourceAgentId,
+            permissionKey: BOARD_DIRECTION_PERMISSION, scope: boardDirectionGrantScope(row), grantedByUserId: row.ownerUserId }).returning();
+          grantId = created.id;
+        } else if (existing) await tx.delete(principalPermissionGrants).where(eq(principalPermissionGrants.id, existing.id));
+        await audit(tx, publications, who, row, "agentos.board_direction_authority_changed", { enabled: input.enabled, grantId });
+        return { ...projection(row), boardDirectionAuthority: grantId ? { grantId, mandateRevision: row.revision } : null,
+          boardDirectionGrantId: grantId };
+      }).catch(changing);
+    },
+    content: (actor: AuthorizationActor, who: Who, sourceCompanyId: string, query: PortfolioContentQuery): Promise<PortfolioContent> =>
+      privateRead(actor, who, sourceCompanyId, query, projection => projection.content(query)),
+    records: (actor: AuthorizationActor, who: Who, sourceCompanyId: string, query: PortfolioRecordsQuery): Promise<PortfolioRecords> =>
+      privateRead(actor, who, sourceCompanyId, query, projection => projection.records(query)),
     async list(actor: AuthorizationActor, portfolioId: string): Promise<PortfolioReadMandate[]> {
       const overview = await workforce.read(actor, portfolioId);
       const current = await refreshWorkforceBoardActor(db, actor);
       const rows = await db.select().from(agentosPortfolioMandates).where(eq(agentosPortfolioMandates.portfolioId, portfolioId)).orderBy(agentosPortfolioMandates.createdAt);
+      const directionGrants = rows.length ? await db.select().from(principalPermissionGrants).where(and(
+        eq(principalPermissionGrants.permissionKey, BOARD_DIRECTION_PERMISSION), eq(principalPermissionGrants.principalType, "agent"),
+        inArray(principalPermissionGrants.principalId, rows.map(row => row.sourceAgentId)))) : [];
       const result: PortfolioReadMandate[] = [];
       for (const row of rows) {
         let sourceAgentName: string | null = null;
@@ -134,7 +248,9 @@ export function agentosPortfolioMandateService(db: Db) {
             sourceAgentName = agent?.name ?? null;
           }
         }
-        result.push({ ...projection(row), sourceAgentName });
+        const directionGrant = directionGrants.find(grant => grant.companyId === row.sourceCompanyId && grant.principalId === row.sourceAgentId);
+        result.push({ ...projection(row), sourceAgentName, boardDirectionGrantId: directionGrant?.id ?? null,
+          boardDirectionAuthority: matchesBoardDirectionGrant(row, directionGrant) ? { grantId: directionGrant!.id, mandateRevision: row.revision } : null });
       }
       return result;
     },
@@ -192,7 +308,11 @@ export function agentosPortfolioMandateService(db: Db) {
           try { await requireRead(tx, row, actor, target, row.revision); targets.push(target); }
           catch (error) { if ((error as { status?: number }).status !== 403) throw error; }
         }
-        return targets.length ? [{ ...projection(row), targetCompanyIds: targets }] : [];
+        const [directionGrant] = targets.length ? await tx.select().from(principalPermissionGrants).where(and(
+          eq(principalPermissionGrants.companyId, sourceCompanyId), eq(principalPermissionGrants.principalType, "agent"),
+          eq(principalPermissionGrants.principalId, row.sourceAgentId), eq(principalPermissionGrants.permissionKey, BOARD_DIRECTION_PERMISSION))) : [];
+        return targets.length ? [{ ...projection(row), targetCompanyIds: targets,
+          boardDirectionAuthority: matchesBoardDirectionGrant(row, directionGrant) ? { grantId: directionGrant!.id, mandateRevision: row.revision } : null }] : [];
       }).catch(changing);
     },
     async read(actor: AuthorizationActor, who: Who, sourceCompanyId: string, query: PortfolioWorkQuery) {
@@ -203,7 +323,7 @@ export function agentosPortfolioMandateService(db: Db) {
         if (!row) throw notFound("Mandate not found");
         const current = await requireRead(tx, row, actor, query.targetCompanyId, query.revision);
         const work = await fridayAwarenessService(tx).work(query.targetCompanyId, current,
-          { offset: query.offset, projectOffset: query.projectOffset, limit: query.limit, status: "all" }, { companySharedSummary: true });
+          { offset: query.offset, projectOffset: query.projectOffset, limit: query.limit, status: "all" }, { portfolioReadScope: portfolioReadScopeSchema.parse(row.readScope) });
         assertPortfolioMandateActor(row, actor, query.targetCompanyId, query.revision);
         await audit(tx, publications, who, row, "agentos.portfolio_work_read", { targetCompanyId: query.targetCompanyId, offset: query.offset, projectOffset: query.projectOffset });
         return portfolioSummary(row, query.targetCompanyId, work);

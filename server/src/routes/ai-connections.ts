@@ -32,6 +32,8 @@ import { accessService } from "../services/access.js";
 import { logActivity } from "../services/activity-log.js";
 import { aiConnectionRouterService } from "../services/ai-connection-router.js";
 import { aiConnectionService } from "../services/ai-connections.js";
+import { canReconnectWorkspaceAiAccount } from "../services/ai-workspace-accounts.js";
+import { inspectOwnerAiAccountSetup } from "../services/ai-workspace-account-setup.js";
 import { validate } from "../middleware/validate.js";
 import { probeCopilotConnection } from "../services/copilot-connection-probe.js";
 import type { PluginWorkerManager } from "../services/plugin-worker-manager.js";
@@ -83,7 +85,8 @@ export async function assertAiConnectionCreateAccess(
         ),
       )
       .limit(1);
-    if (!grant || (grant.owner ?? grant.creator) !== userId)
+    if (!grant || ((grant.owner ?? grant.creator) !== userId &&
+      !(await canReconnectWorkspaceAiAccount(db, companyId, input.connectionId, userId))))
       throw forbidden(
         "Only the account owner can reconnect this AI connection",
       );
@@ -383,10 +386,12 @@ export function aiConnectionRoutes(db: Db, options: Parameters<typeof supportsLo
             ),
           ),
         );
-      if (!session?.connectionId)
+      if (!session?.connectionId || !session.grantId)
         throw notFound("The login has not saved a connection");
       res.setHeader("Cache-Control", "no-store");
-      res.json(session);
+      res.json({ ...session, aiAccountSetup: await inspectOwnerAiAccountSetup(db, {
+        companyId, userId: getActorInfo(req).actorId, connectionId: session.connectionId, grantId: session.grantId,
+      }) });
     },
   );
   return router;

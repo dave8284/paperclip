@@ -20,6 +20,14 @@ function absent(pid: number): boolean {
   }
 }
 
+function localExecutionIdentityStopped(run: typeof heartbeatRuns.$inferSelect, recorded: Record<string, unknown> | null | undefined) {
+  if (recorded?.targetKind !== "local" || recorded.hostname !== os.hostname() ||
+      recorded.processPid !== run.processPid || recorded.processGroupId !== run.processGroupId ||
+      !run.processStartedAt || recorded.processStartedAt !== run.processStartedAt.toISOString()) return false;
+  return Boolean(run.processPid && absent(run.processPid) &&
+    (!run.processGroupId || absent(-run.processGroupId)));
+}
+
 /** A fresh workspace is not process containment. Bind an OS observation to
  * the original host, process birth, and launch event before accepting it. */
 export async function recordedLocalExecutionStopped(db: Db, run: typeof heartbeatRuns.$inferSelect) {
@@ -27,12 +35,32 @@ export async function recordedLocalExecutionStopped(db: Db, run: typeof heartbea
     eq(heartbeatRunEvents.companyId, run.companyId), eq(heartbeatRunEvents.runId, run.id),
     eq(heartbeatRunEvents.eventType, PROCESS_IDENTITY_RECORDED), isNull(heartbeatRunEvents.sourceEventId),
   )).orderBy(desc(heartbeatRunEvents.seq)).limit(1);
-  const recorded = identity?.payload;
-  if (recorded?.targetKind !== "local" || recorded.hostname !== os.hostname() ||
-      recorded.processPid !== run.processPid || recorded.processGroupId !== run.processGroupId ||
-      !run.processStartedAt || recorded.processStartedAt !== run.processStartedAt.toISOString()) return false;
-  return Boolean(run.processPid && absent(run.processPid) &&
-    (!run.processGroupId || absent(-run.processGroupId)));
+  return localExecutionIdentityStopped(run, identity?.payload);
+}
+
+/**
+ * Successful runs retain their process identity for warm-session handoff. Observe
+ * that exact local process without clearing its identity, checkpoint, or leases.
+ * The caller must hold the run/controller locks and separately verify cleanup.
+ */
+export async function retainedNativeLocalExecutionStopped(db: Db, run: typeof heartbeatRuns.$inferSelect) {
+  if (run.runtimeMode !== "native" || run.status !== "succeeded" || !run.finishedAt ||
+      (run.controllerLeaseExpiresAt && run.controllerLeaseExpiresAt > new Date()) ||
+      run.runnerProfileJson?.nativeWorkspaceFinalizationOwner != null ||
+      !Number.isSafeInteger(run.processPid) || run.processPid! <= 1 ||
+      !Number.isSafeInteger(run.processGroupId) || run.processGroupId! <= 1 ||
+      !run.processStartedAt || !Number.isFinite(run.processStartedAt.getTime())) return false;
+  const leases = await db.select({ provider: environmentLeases.provider }).from(environmentLeases).where(and(
+    eq(environmentLeases.companyId, run.companyId), eq(environmentLeases.heartbeatRunId, run.id),
+  ));
+  if (leases.some(lease => lease.provider !== "local")) return false;
+  const [identity] = await db.select({ eventType: heartbeatRunEvents.eventType, payload: heartbeatRunEvents.payload })
+    .from(heartbeatRunEvents).where(and(
+      eq(heartbeatRunEvents.companyId, run.companyId), eq(heartbeatRunEvents.runId, run.id),
+      isNull(heartbeatRunEvents.sourceEventId),
+      inArray(heartbeatRunEvents.eventType, [PROCESS_START_REQUESTED, PROCESS_IDENTITY_RECORDED]),
+    )).orderBy(desc(heartbeatRunEvents.seq)).limit(1);
+  return identity?.eventType === PROCESS_IDENTITY_RECORDED && localExecutionIdentityStopped(run, identity.payload);
 }
 
 /**

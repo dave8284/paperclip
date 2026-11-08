@@ -116,6 +116,8 @@ export interface Agent {
   lastHeartbeatAt: Date | null;
   metadata: Record<string, unknown> | null;
   orgChainHealth?: AgentOrgChainHealth;
+  /** Server-derived current Friday designation; never a writable role flag. */
+  isBoardCoordinator?: boolean;
   createdByUserId?: string | null;
   createdAt: Date;
   updatedAt: Date;

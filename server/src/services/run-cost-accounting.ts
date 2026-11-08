@@ -9,6 +9,7 @@ import { budgetServiceInTransaction, type BudgetServiceHooks } from "./budgets.j
 import { logger } from "../middleware/logger.js";
 import { promises as fs } from "node:fs";
 import { replayUsageReceipts, indexPendingUsageReceipts, recoverPendingRunUsageReceipts, type UsageReceiptIndex } from "./usage-receipts.js";
+import { notifyDeliveryWork, DELIVERY_QUEUES } from "./delivery-work-notifications.js";
 
 const terminalStatuses = ["succeeded", "failed", "timed_out", "cancelled", "interrupted"];
 const object = (value: unknown): Record<string, unknown> => value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
@@ -38,6 +39,8 @@ export async function accountRunCost(db: Db, runId: string, hooks: BudgetService
     let [run] = await tx.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, runId)).for("update");
     if (!run?.costAccountingPending || !terminalStatuses.includes(run.status)) return false;
     if (run.costAccountedAt) {
+      if (run.runnerProfileJson?.nativeModelComparison) await notifyDeliveryWork(tx, DELIVERY_QUEUES.modelComparisons, run.companyId);
+      if (run.runnerProfileJson?.nativeModelRoutingAdmission) await notifyDeliveryWork(tx, DELIVERY_QUEUES.modelRouting, run.companyId);
       await tx.update(heartbeatRuns).set({ costAccountingPending: false }).where(eq(heartbeatRuns.id, run.id));
       await budgetServiceInTransaction(tx, publications).evaluateAffectedScopes(run.companyId, run.agentId,
         text(object(object(run.usageJson).ledgerScope).projectId));
@@ -69,6 +72,8 @@ export async function accountRunCost(db: Db, runId: string, hooks: BudgetService
     if (!preProviderFailure && object(run.usageJson).accountingReceiptReady === false) return false;
     // Acknowledgement is part of the same transaction. Budget checks inside
     // this transaction must not mistake this receipt for missing accounting.
+    if (run.runnerProfileJson?.nativeModelComparison) await notifyDeliveryWork(tx, DELIVERY_QUEUES.modelComparisons, run.companyId);
+    if (run.runnerProfileJson?.nativeModelRoutingAdmission) await notifyDeliveryWork(tx, DELIVERY_QUEUES.modelRouting, run.companyId);
     await tx.update(heartbeatRuns).set({ costAccountingPending: false, costAccountedAt: new Date() }).where(eq(heartbeatRuns.id, run.id));
     await tx.update(budgetReservations).set({ state: preProviderFailure ? "released" : "settled", settledAt: new Date() })
       .where(and(eq(budgetReservations.companyId, run.companyId), eq(budgetReservations.runId, run.id), eq(budgetReservations.state, "held")));

@@ -5,6 +5,7 @@ import { conflict, forbidden, notFound } from "../errors.js";
 import { logActivity, type ActivityPublication } from "./activity-log.js";
 import { publishAccountingActivities } from "./accounting-transaction.js";
 import { subscriptionCredentialIdentity, subscriptionIdentityKey, type SubscriptionIdentity } from "./subscription-identity.js";
+import { resolveAiCredentialOwner, aiCredentialOwnerSnapshot, sameAiCredentialOwner, type AiCredentialSelection, type AiCredentialOwnerSnapshot } from "./ai-account-credential-owner.js";
 
 type Account = typeof aiSubscriptions.$inferSelect;
 type Price = typeof aiSubscriptionPrices.$inferInsert;
@@ -14,14 +15,18 @@ export interface SubscriptionConnection {
   name: string; ownerUserId: string | null; credential: string;
   session?: SubscriptionSession | null;
 }
-export interface SubscriptionSession { secretId: string; epoch: number }
+export interface SubscriptionSession { secretId: string; epoch: number; credentialOwner?: AiCredentialOwnerSnapshot }
 
-export async function subscriptionSession(db: Db, companyId: string, refs: { secretId: string; configPath: string }[]): Promise<SubscriptionSession | null> {
-  const ref = refs.find(r => r.configPath === "ai.credential");
+export async function subscriptionSession(db: Db, selection: AiCredentialSelection, lock = false): Promise<SubscriptionSession | null> {
+  const owner = await resolveAiCredentialOwner(db, selection, { lock });
+  const ref = owner.grant.credentialSecretRefs.find(r => r.configPath === "ai.credential");
   if (!ref) return null;
-  const [secret] = await db.select({ epoch: companySecrets.aiSessionEpoch }).from(companySecrets)
-    .where(and(eq(companySecrets.companyId, companyId), eq(companySecrets.id, ref.secretId)));
-  return secret ? { secretId: ref.secretId, epoch: secret.epoch } : null;
+  const query = db.select({ epoch: companySecrets.aiSessionEpoch, status: companySecrets.status, deletedAt: companySecrets.deletedAt }).from(companySecrets)
+    .where(and(eq(companySecrets.companyId, owner.connection.companyId), eq(companySecrets.id, ref.secretId)));
+  const [secret] = await (lock ? query.for("share", { noWait: true }) : query);
+  if (!secret || secret.status !== "active" || secret.deletedAt) throw notFound("Subscription credential unavailable");
+  return { secretId: ref.secretId, epoch: secret.epoch,
+    ...(owner.binding ? { credentialOwner: aiCredentialOwnerSnapshot(owner) } : {}) };
 }
 
 export function canonicalSubscriptionId(id: string, accounts: Pick<Account, "id" | "mergedIntoId">[] | Map<string, string | null>): string {
@@ -38,7 +43,10 @@ function detectedPrice(companyId: string, subscriptionId: string, plan: string |
   return { companyId, subscriptionId, revision, plan: plan ?? "Plan unknown", amountCents: null, source: "unknown" };
 }
 
-function autoPrice(account: Pick<Account, "id" | "companyId" | "provider" | "identityVerified">, plan: string | null, revision: number): Price {
+function autoPrice(account: Pick<Account, "id" | "companyId" | "provider" | "identityVerified">, plan: string | null, revision: number, sharedAccountAlias: boolean): Price {
+  // Reusing a workspace account does not purchase another seat. Keep local
+  // attribution, but leave allocation to an explicit user-entered price.
+  if (sharedAccountAlias) return { ...detectedPrice(account.companyId, account.id, plan, revision), status: "excluded" };
   // A plan hint alone cannot prove whether two rotated credentials are one paid
   // seat. Require a stable identity before adding an automatic fee to totals.
   const catalog = account.identityVerified ? subscriptionPlan(account.provider, plan) : null;
@@ -98,10 +106,6 @@ async function mergeInTransaction(db: Db, companyId: string, source: Account, ta
 export function subscriptionService(db: Db) {
   async function register(input: SubscriptionConnection, observed?: SubscriptionIdentity) {
     const identity = { ...(observed ?? subscriptionCredentialIdentity(input.companyId, input.provider, input.credential)) };
-    if (!observed) {
-      const [cached] = await db.select().from(aiSubscriptionConnections).where(and(eq(aiSubscriptionConnections.companyId, input.companyId), eq(aiSubscriptionConnections.grantId, input.grantId)));
-      if (cached?.credentialKey === identity.credentialKey && cached.connectionId === input.connectionId) return cached.subscriptionId;
-    }
     return withSubscriptionTransaction(db, input.companyId, async (tx, publications) => {
       // Company and grant identity are authoritative, even for internal callers.
       const [grant] = await tx.select({ grant: connectionGrants, connection: toolConnections }).from(connectionGrants)
@@ -113,11 +117,16 @@ export function subscriptionService(db: Db) {
         || !metadata.success || metadata.data.method !== "subscription" || metadata.data.provider !== input.provider) {
         throw notFound("Subscription connection not found");
       }
+      // Refreshes, cached registrations and delayed provider observations all
+      // retain the exact company link and credential generation used by the run.
+      const session = await subscriptionSession(tx, grant, true);
+      const sharedAccountAlias = session?.credentialOwner?.binding?.linkId != null;
+      if (session && (input.session?.secretId !== session.secretId || input.session.epoch !== session.epoch
+          || Boolean(input.session.credentialOwner) !== Boolean(session.credentialOwner)
+          || (session.credentialOwner && !sameAiCredentialOwner(input.session.credentialOwner!, session.credentialOwner)))) {
+        throw conflict("The AI credential changed. Retry this execution.");
+      }
       if (!observed?.verified) {
-        const session = await subscriptionSession(tx, input.companyId, grant.grant.credentialSecretRefs);
-        if (session && (input.session?.secretId !== session.secretId || input.session.epoch !== session.epoch)) {
-          throw conflict("The AI credential changed. Retry this execution.");
-        }
         identity.accountKey = subscriptionIdentityKey(input.companyId, input.provider, ["grant", input.grantId,
           ...(session ? ["session", session.secretId, String(session.epoch)] : [identity.credentialKey])]);
       }
@@ -137,7 +146,7 @@ export function subscriptionService(db: Db) {
           accountKey: identity.accountKey, identityVerified: identity.verified, name: grant.connection.name,
           ownerUserIds: grant.grant.subjectUserId ? [grant.grant.subjectUserId] : [], shared: grant.grant.kind === "organization", detectedPlan: identity.plan,
         }).returning();
-        await tx.insert(aiSubscriptionPrices).values(autoPrice(account, identity.plan, 0));
+        await tx.insert(aiSubscriptionPrices).values(autoPrice(account, identity.plan, 0, sharedAccountAlias));
         await logActivity(tx, { companyId: input.companyId, actorType: "system", actorId: "subscription_reporting",
           action: "subscription.discovered", entityType: "ai_subscription", entityId: account.id, details: { provider: input.provider } }, publications);
       }
@@ -163,8 +172,8 @@ export function subscriptionService(db: Db) {
       if (observed) {
         if (identity.plan) {
           const [price] = await tx.select().from(aiSubscriptionPrices).where(and(eq(aiSubscriptionPrices.subscriptionId, account.id), eq(aiSubscriptionPrices.revision, account.revision)));
-          const next = autoPrice(account, identity.plan, account.revision + 1);
-          if (price?.source !== "user" && (price?.plan !== next.plan || price?.amountCents !== (next.amountCents ?? null) || price?.source !== next.source)) {
+          const next = autoPrice(account, identity.plan, account.revision + 1, sharedAccountAlias);
+          if (price?.source !== "user" && (price?.plan !== next.plan || price?.amountCents !== (next.amountCents ?? null) || price?.source !== next.source || price?.status !== (next.status ?? "active"))) {
             account.revision++;
             await tx.insert(aiSubscriptionPrices).values(next);
           }

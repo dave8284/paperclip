@@ -2738,6 +2738,27 @@
       "when": 1794004303484,
       "tag": "0392_thick_lizard",
       "breakpoints": true
+    },
+    {
+      "idx": 393,
+      "version": "7",
+      "when": 1794011088210,
+      "tag": "0393_graceful_unus",
+      "breakpoints": true
+    },
+    {
+      "idx": 394,
+      "version": "7",
+      "when": 1794051601825,
+      "tag": "0394_sudden_arclight",
+      "breakpoints": true
+    },
+    {
+      "idx": 395,
+      "version": "7",
+      "when": 1794111207040,
+      "tag": "0395_clever_may_parker",
+      "breakpoints": true
     }
   ]
 }

@@ -308,6 +308,12 @@ export function buildTranscript(
       timelineEntry.eventType === "harness.diagnostic" ||
       timelineEntry.eventType === "runner.diagnostic"
     ) {
+      // Transport receipts remain in the audit timeline; routine writes are not
+      // conversational messages. Keep warnings/errors visible even with this code.
+      const receipt = payloadRecord(payload.contextReceipt);
+      if (timelineEntry.eventType === "harness.diagnostic" && payload.code === "context.tool_result_written"
+        && payload.severity === "info" && receipt.schema === "paperclip.provider-context-receipt.v1"
+        && receipt.stage === "transport_written") continue;
       entries.push({
         kind: "diagnostic",
         key: `diagnostic:${timelineEntry.sourceEventId}`,

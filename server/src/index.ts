@@ -20,7 +20,12 @@ import {
 } from "./services/native-runtime/native-workspace-sync-retention.js";
 import { markGitRestorePointExpired } from "./services/git-restore-point-storage.js";
 import { subscribeAllCompanyLiveEvents } from "./services/live-events.js";
-import { DELIVERY_QUEUES } from "./services/delivery-work-notifications.js";
+import { DELIVERY_QUEUES, subscribeDeliveryWork } from "./services/delivery-work-notifications.js";
+import { modelComparisonDeliveryService } from "./services/model-comparison-delivery.js";
+import { modelRoutingDeliveryService } from "./services/model-routing-delivery.js";
+import { boardDirectionDeliveryService } from "./services/board-direction-delivery.js";
+import { modelIntelligenceProduct } from "./services/model-intelligence.js";
+import { initializeModelIntelligenceStore, closeModelIntelligenceStore } from "./services/model-intelligence-store.js";
 import { registerBudgetEnforcementWork, registerCostAccountingWork } from "./services/budget-enforcement-worker.js";
 import { caseHandoffDeliveryService } from "./services/case-handoff-delivery.js";
 import { registerScheduledWork } from "./services/scheduled-work.js";
@@ -681,9 +686,10 @@ async function startServerWithDatabaseTeardown(
   const closeDatabaseClients = async () => {
     setSentryRunLinkResolver(null);
     const clients = pluginMigrationDb === db ? [db] : [db, pluginMigrationDb];
-    await Promise.all([...clients.map((client) => endDatabaseClient(client, 5)), closeLivenessDb(db, 5)]);
+    await Promise.all([...clients.map((client) => endDatabaseClient(client, 5)), closeLivenessDb(db, 5), closeModelIntelligenceStore()]);
   };
   startupDatabase.close = closeDatabaseClients;
+  await initializeModelIntelligenceStore();
   setSentryRunLinkResolver(createSentryRunLinkResolver(db));
   
   // A claimed warm-pool stack may restart while its provider environment still
@@ -1345,8 +1351,32 @@ async function startServerWithDatabaseTeardown(
   });
   const accountingWorker = registerCostAccountingWork(db, deliveryWork, accountingHeartbeat.reconcileCostAccounting);
   server.on("close", accountingWorker.stop);
+  const comparisonDeliveries = modelComparisonDeliveryService(db);
+  const comparisonWorker = deliveryWork.register(DELIVERY_QUEUES.modelComparisons, {
+    retryMs: 5_000, runDuringDrain: true,
+    run: signal => comparisonDeliveries.sweepPending(signal), hasPending: () => comparisonDeliveries.hasPending(),
+  });
+  // Terminal execution already registers accounting intent. Its settled signal
+  // also wakes comparison delivery, including pre-provider failures and stops.
+  const unsubscribeComparisonTerminal = subscribeDeliveryWork(db, DELIVERY_QUEUES.accounting, comparisonWorker.wake);
+  server.on("close", unsubscribeComparisonTerminal);
+  const routingDeliveries = modelRoutingDeliveryService(db);
+  const routingWorker = deliveryWork.register(DELIVERY_QUEUES.modelRouting, {
+    retryMs: 5_000, runDuringDrain: true,
+    run: signal => routingDeliveries.sweepPending(signal), hasPending: () => routingDeliveries.hasPending(), nextRunAt: routingDeliveries.nextRunAt,
+  });
+  // Model-store commits create precise observation deadlines, even if their native
+  // acknowledgement is lost. PostgreSQL terminal/accounting/review writes wake
+  // outcome delivery; startup reconstructs both durable sources once.
+  const unsubscribeRoutingStore = modelIntelligenceProduct()?.subscribeRoutingWork(routingWorker.wake);
+  const unsubscribeRoutingTerminal = subscribeDeliveryWork(db, DELIVERY_QUEUES.accounting, routingWorker.wake);
+  server.on("close", () => { unsubscribeRoutingStore?.(); unsubscribeRoutingTerminal(); });
   skillSourceSync.start(deliveryWork);
   const caseHandoffDeliveries = caseHandoffDeliveryService(db as any, { heartbeat: environmentLeaseCleanupHeartbeat });
+  const boardDirections = boardDirectionDeliveryService(db, { heartbeat: environmentLeaseCleanupHeartbeat });
+  deliveryWork.register(DELIVERY_QUEUES.boardDirections, {
+    retryMs: 5_000, run: signal => boardDirections.sweepPending(signal), hasPending: () => boardDirections.hasPending(), nextRunAt: boardDirections.nextRunAt,
+  });
   deliveryWork.register(DELIVERY_QUEUES.caseHandoffs, {
     retryMs: 5_000,
     run: signal => caseHandoffDeliveries.sweepPending(signal),

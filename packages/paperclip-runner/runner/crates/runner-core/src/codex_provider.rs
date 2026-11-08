@@ -450,6 +450,8 @@ pub struct ObservedCodexIdentity {
     pub model: Option<String>,
     pub reasoning_effort: Option<String>,
     pub source: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub context_receipt: Option<Value>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
@@ -870,6 +872,8 @@ pub struct CodexProvider {
     provider_session_id: Option<String>,
     observed_model: Option<String>,
     observed_codex_identity: Option<ObservedCodexIdentity>,
+    accepted_turn_input_receipt: Option<Value>,
+    written_tool_result_receipt: Option<Value>,
     active_provider_turn_id: Option<String>,
     pending_messages: VecDeque<BufferedProviderMessage>,
     deferred_ambiguous_messages: VecDeque<BufferedProviderMessage>,
@@ -1290,6 +1294,8 @@ impl CodexProvider {
             provider_session_id: None,
             observed_model: None,
             observed_codex_identity: None,
+            accepted_turn_input_receipt: None,
+            written_tool_result_receipt: None,
             active_provider_turn_id: None,
             pending_messages: VecDeque::new(),
             deferred_ambiguous_messages: VecDeque::new(),
@@ -1430,6 +1436,16 @@ impl CodexProvider {
                 }
             }
             stage = ProviderStartupStage::ThreadOpen;
+            // Retain only identities of the exact request accepted by the
+            // provider. Configuration alone and an attempted request are not
+            // delivery evidence; implicit provider context is not attested.
+            let context_receipt = json!({
+                "schema": "paperclip.provider-context-receipt.v1",
+                "stage": "thread_accepted",
+                "source": method,
+                "parametersSha256": format!("{:x}", Sha256::digest(params.to_string().as_bytes())),
+                "instructionsSha256": format!("{:x}", Sha256::digest(config.instructions.as_bytes())),
+            });
             let opened = provider.request(method, params)?;
             provider.thread_id = opened
                 .pointer("/thread/id")
@@ -1484,6 +1500,7 @@ impl CodexProvider {
                         })
                         .map(str::to_owned),
                     source: method.to_owned(),
+                    context_receipt: Some(context_receipt),
                 });
                 if config
                     .expected_codex_identity
@@ -1544,6 +1561,16 @@ impl CodexProvider {
 
     pub fn observed_codex_identity(&self) -> Option<&ObservedCodexIdentity> {
         self.observed_codex_identity.as_ref()
+    }
+
+    pub fn accepted_turn_input_receipt(&self) -> Option<&Value> {
+        self.accepted_turn_input_receipt.as_ref()
+    }
+
+    /// A successful transport write, not an acknowledgement that the provider
+    /// accepted, retained or used the tool's result.
+    pub fn written_tool_result_receipt(&self) -> Option<&Value> {
+        self.written_tool_result_receipt.as_ref()
     }
 
     pub fn observed_model(&self) -> Option<&str> {
@@ -2174,6 +2201,17 @@ impl CodexProvider {
         } else {
             turn_params_object.insert("permissions".to_owned(), json!(self.permission_profile));
         }
+        let input_receipt = json!({
+            "schema": "paperclip.provider-context-receipt.v1",
+            "stage": "turn_accepted",
+            "source": "turn/start",
+            "parametersSha256": format!("{:x}", Sha256::digest(turn_params.to_string().as_bytes())),
+            "promptSha256": format!("{:x}", Sha256::digest(message.as_bytes())),
+            "modelEnvelopeSha256": serde_json::from_str::<Value>(message).ok()
+                .filter(|value| value.get("schema").and_then(Value::as_str)
+                    .is_some_and(|schema| schema.starts_with("paperclip.native-model-envelope.")))
+                .map(|value| format!("{:x}", Sha256::digest(value.to_string().as_bytes()))),
+        });
         let result = match self.request_classified("turn/start", turn_params) {
             Ok(result) => result,
             Err(ProviderRequestError::Rejected(error)) => {
@@ -2221,6 +2259,7 @@ impl CodexProvider {
         // Only a validated provider turn identity proves that replacement
         // work exists and supersedes the prior completed result.
         self.accept_replacement_turn(provider_turn_id, runtime_request_scope);
+        self.accepted_turn_input_receipt = Some(input_receipt);
         Ok(result)
     }
 
@@ -3326,6 +3365,14 @@ impl CodexProvider {
         }
         let text = String::from_utf8(result_bytes)
             .expect("serde_json always serializes JSON values as valid UTF-8");
+        let receipt = json!({
+            "schema": "paperclip.provider-context-receipt.v1",
+            "stage": "transport_written", "source": "tool/result",
+            "callId": result.call_id, "operationId": result.operation_id,
+            "providerTurnId": self.active_provider_turn_id,
+            "resultSha256": format!("{:x}", Sha256::digest(text.as_bytes())),
+            "resultBytes": text.len(), "isError": result.is_error,
+        });
         self.send_frame(&json!({
             "id": pending.rpc_id,
             "result": {
@@ -3333,6 +3380,7 @@ impl CodexProvider {
                 "contentItems": [{"type": "inputText", "text": text}],
             },
         }))?;
+        self.written_tool_result_receipt = Some(receipt);
         if let Some(completed) = self.pending_tool_requests.remove(&result.call_id) {
             self.pending_tool_request_bytes = self
                 .pending_tool_request_bytes
@@ -4573,6 +4621,31 @@ done
             }
         }
         provider
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn context_receipts_bind_accepted_inputs_without_recording_private_text() {
+        let mut provider = completion_tail_provider();
+        let identity = provider.observed_codex_identity().unwrap();
+        let session = identity.context_receipt.as_ref().unwrap();
+        assert_eq!(session["stage"], "thread_accepted");
+        assert_eq!(
+            session["instructionsSha256"],
+            format!("{:x}", Sha256::digest(b"Test only."))
+        );
+        assert_eq!(session["parametersSha256"].as_str().unwrap().len(), 64);
+        assert!(!session.to_string().contains("Test only."));
+        let accepted = provider.accepted_turn_input_receipt().unwrap().clone();
+        assert_eq!(accepted["stage"], "turn_accepted");
+        assert_eq!(
+            accepted["promptSha256"],
+            format!("{:x}", Sha256::digest(b"First turn"))
+        );
+        assert!(!accepted.to_string().contains("First turn"));
+        let cwd = provider.config.cwd.clone();
+        assert!(provider.start_turn("Rejected private turn", &cwd).is_err());
+        assert_eq!(provider.accepted_turn_input_receipt(), Some(&accepted));
     }
 
     #[cfg(unix)]

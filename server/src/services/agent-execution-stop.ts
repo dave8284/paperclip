@@ -7,7 +7,7 @@ import { hasRemoteTerminationReceipt } from "./remote-execution-termination.js";
 import { isCancelledNativeStartup } from "./cancelled-native-startup.js";
 
 /** Cancellation changes admission. Process and lease evidence controls cleanup. */
-export async function agentExecutionsHaveStopped(db: Db, agentIds: string[]) {
+export async function agentExecutionsHaveStopped(db: Db, agentIds: string[], options: { readOnly?: boolean } = {}) {
   if (!agentIds.length) return true;
   const runs = await db.select().from(heartbeatRuns).where(inArray(heartbeatRuns.agentId, agentIds));
   const runIds = db.select({ id: heartbeatRuns.id }).from(heartbeatRuns).where(inArray(heartbeatRuns.agentId, agentIds));
@@ -59,6 +59,9 @@ export async function agentExecutionsHaveStopped(db: Db, agentIds: string[]) {
         !(run.executionStage === "settled" && !await runUsedConversationAdapter(db, run)) &&
         !await isCancelledNativeStartup(db, run, coordinators.find(row => row.runId === run.id))) return false;
   }
+  // Configuration checks consume stop evidence without taking over lifecycle
+  // cleanup or acquiring coordinator write locks after their configuration lock.
+  if (options.readOnly) return true;
   // Release an expired owner only after its cancelled execution has stop proof.
   for (const coordinator of abandoned) {
     const [cleared] = await db.update(nativeRunFinalizations).set({ leaseOwner: null, leaseExpiresAt: null, updatedAt: now })

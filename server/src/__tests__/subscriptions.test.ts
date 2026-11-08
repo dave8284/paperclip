@@ -39,12 +39,14 @@ async function company() {
   return id;
 }
 async function connection(companyId: string, credential = token(), provider: SubscriptionConnection["provider"] = "openai", userId: string | null = "alice") {
-  const applicationId = randomUUID(), connectionId = randomUUID(), grantId = randomUUID();
+  const applicationId = randomUUID(), connectionId = randomUUID(), grantId = randomUUID(), secretId = randomUUID();
   await db.insert(toolApplications).values({ id: applicationId, companyId, name: applicationId, type: "custom" });
   await db.insert(toolConnections).values({ id: connectionId, companyId, applicationId, name: "My subscription", uid: connectionId,
     connectionPurpose: "ai", transport: "runtime_auth", status: "active", enabled: true, config: { ai: { provider, method: "subscription" } } });
-  await db.insert(connectionGrants).values({ id: grantId, companyId, connectionId, kind: userId ? "user" : "organization", subjectUserId: userId });
-  return { companyId, connectionId, grantId, credential, provider, name: "My subscription", ownerUserId: userId };
+  await db.insert(companySecrets).values({ id: secretId, companyId, key: `ai-${grantId}`, name: `ai-${grantId}` });
+  await db.insert(connectionGrants).values({ id: grantId, companyId, connectionId, kind: userId ? "user" : "organization", subjectUserId: userId,
+    credentialSecretRefs: [{ secretId, configPath: "ai.credential" }] });
+  return { companyId, connectionId, grantId, credential, provider, name: "My subscription", ownerUserId: userId, session: { secretId, epoch: 0 } };
 }
 async function price(companyId: string, id: string, amountCents: string | null = "10000", extra: Record<string, unknown> = {}, actor = owner) {
   const [account] = await db.select().from(aiSubscriptions).where(eq(aiSubscriptions.id, id));
@@ -108,6 +110,7 @@ describe("durable subscription reporting", () => {
     expect((await subscriptionCostReport(db, c, owner)).monthlyTotals[0].amountCents).toBe("2000.0000000");
     await db.delete(toolApplications).where(eq(toolApplications.companyId, c));
     await db.delete(activityLog).where(eq(activityLog.companyId, c));
+    await db.delete(companySecrets).where(and(eq(companySecrets.companyId, c), eq(companySecrets.id, input.session.secretId)));
     await db.delete(companies).where(eq(companies.id, c));
     expect(await db.select().from(aiSubscriptions).where(eq(aiSubscriptions.companyId, c))).toHaveLength(0);
     expect(await db.select().from(aiSubscriptionPrices).where(eq(aiSubscriptionPrices.companyId, c))).toHaveLength(0);
@@ -440,7 +443,8 @@ describe("durable subscription reporting", () => {
     const agentId = randomUUID(), runId = randomUUID();
     await db.insert(agents).values({ id: agentId, companyId: c, name: "Codie", role: "engineer", adapterType: "codex_local" });
     await db.insert(heartbeatRuns).values({ id: runId, companyId: c, agentId, invocationSource: "on_demand", status: "succeeded", contextSnapshot: { aiConnection: { subscriptionId: original, provider: "openai" } } });
-    const replacement = await service.register({ ...input, credential: token("other-workspace") });
+    await db.update(companySecrets).set({ aiSessionEpoch: 1 }).where(eq(companySecrets.id, input.session.secretId));
+    const replacement = await service.register({ ...input, credential: token("other-workspace"), session: { ...input.session, epoch: 1 } });
     expect(replacement).not.toBe(original);
     const receipt = { agentId, heartbeatRunId: runId, idempotencyKey: "subscription-test", provider: "openai", billingType: "subscription_included" as const, model: "fixture", inputTokens: 10, costCents: "0", occurredAt: new Date() };
     const saved = await costService(db).createEvent(c, { ...receipt, subscriptionId: replacement });
@@ -477,9 +481,7 @@ describe("durable subscription reporting", () => {
   });
   it("keeps one unverified account through OAuth refreshes and separates a reconnect", async () => {
     const c = await company(), connected = await connection(c, "grok-first", "xai"), service = subscriptionService(db);
-    const secretId = randomUUID();
-    await db.insert(companySecrets).values({ id: secretId, companyId: c, key: `ai-${connected.grantId}`, name: `ai-${connected.grantId}` });
-    await db.update(connectionGrants).set({ credentialSecretRefs: [{ secretId, configPath: "ai.credential" }] }).where(eq(connectionGrants.id, connected.grantId));
+    const { secretId } = connected.session;
     const input = { ...connected, session: { secretId, epoch: 0 } };
     const id = await service.register(input);
     await price(c, id, "3000");
@@ -497,9 +499,7 @@ describe("durable subscription reporting", () => {
   });
   it("rejects an unverified registration from a session older than the latest reconnect", async () => {
     const c = await company(), connected = await connection(c, "grok-old", "xai"), service = subscriptionService(db);
-    const secretId = randomUUID();
-    await db.insert(companySecrets).values({ id: secretId, companyId: c, key: `ai-${connected.grantId}`, name: `ai-${connected.grantId}` });
-    await db.update(connectionGrants).set({ credentialSecretRefs: [{ secretId, configPath: "ai.credential" }] }).where(eq(connectionGrants.id, connected.grantId));
+    const { secretId } = connected.session;
     await db.update(companySecrets).set({ aiSessionEpoch: 1 }).where(eq(companySecrets.id, secretId));
     const current = await service.register({ ...connected, credential: "grok-new", session: { secretId, epoch: 1 } });
     await expect(service.register({ ...connected, credential: "grok-old-refreshed", session: { secretId, epoch: 0 } })).rejects.toMatchObject({ status: 409 });
@@ -516,7 +516,8 @@ describe("durable subscription reporting", () => {
     const request = vi.fn<typeof fetch>().mockImplementation(() => { started(); return new Promise<Response>(resolve => { finish = resolve; }); });
     const pending = refreshSubscriptionConnection(db, input, id, request);
     await ready;
-    const next = await service.register({ ...input, credential: token("new-workspace") });
+    await db.update(companySecrets).set({ aiSessionEpoch: 1 }).where(eq(companySecrets.id, input.session.secretId));
+    const next = await service.register({ ...input, credential: token("new-workspace"), session: { ...input.session, epoch: 1 } });
     finish(Response.json(usage("pro"))); await pending;
     const [binding] = await db.select().from(aiSubscriptionConnections).where(and(eq(aiSubscriptionConnections.companyId, c), eq(aiSubscriptionConnections.grantId, input.grantId)));
     expect(binding.subscriptionId).toBe(next);

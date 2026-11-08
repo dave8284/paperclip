@@ -261,6 +261,7 @@ export const connectionGrants = pgTable(
     index("connection_grants_subject_user_idx").on(table.companyId, table.subjectUserId),
     index("connection_grants_subject_agent_idx").on(table.companyId, table.subjectAgentId),
     unique("connection_grants_company_id_uq").on(table.companyId, table.id),
+    unique("connection_grants_company_connection_id_uq").on(table.companyId, table.connectionId, table.id),
     uniqueIndex("connection_grants_user_uq").on(table.connectionId, table.subjectUserId),
     uniqueIndex("connection_grants_agent_uq").on(table.connectionId, table.subjectAgentId),
     uniqueIndex("connection_grants_default_uq").on(table.connectionId).where(sql`${table.isDefault} = true and ${table.kind} = 'organization'`),

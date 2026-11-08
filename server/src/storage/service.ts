@@ -127,7 +127,7 @@ export function createStorageService(provider: StorageProvider): StorageService 
 
     async getObject(companyId: string, objectKey: string, options) {
       ensureCompanyPrefix(companyId, objectKey);
-      return provider.getObject({ objectKey, range: options?.range });
+      return provider.getObject({ objectKey, range: options?.range, ...(options?.signal ? { signal: options.signal } : {}) });
     },
 
     async headObject(companyId: string, objectKey: string) {

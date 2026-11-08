@@ -167,7 +167,8 @@ export function AiProviderSetup({
       provider: nativeProvider,
       method: result.method ?? "api_key",
       mode: ownership === "shared" ? "shared" : "delegated",
-      ...result,
+      connectionId: result.connectionId,
+      grantId: result.grantId,
     });
   };
   const save = useMutation({

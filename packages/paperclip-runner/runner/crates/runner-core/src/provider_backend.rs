@@ -38,11 +38,11 @@ const PROVIDER_STATE_SCHEMA: &str = "paperclip.runner.codex-provider-state.v1";
 pub const CODEX_PROVIDER_STATE_FILE: &str = "codex-provider-state.json";
 const MAX_PROVIDER_STATE_BYTES: u64 = 16 * 1024 * 1024;
 const MAX_EVENTS_PER_POLL: usize = 128;
-// One accepted semantic call can produce an input and a result event. Normal
+// One accepted semantic call can produce input, result and transport-receipt events. Normal
 // traffic cannot consume the additional capacity required to diagnose a
 // receipt-limit stop, settle every retained call, and record the provider plus
 // run terminal events.
-const MAX_REGULAR_QUEUED_PROVIDER_EVENTS: usize = 2 * MAX_PENDING_CALLS + 3;
+const MAX_REGULAR_QUEUED_PROVIDER_EVENTS: usize = 3 * MAX_PENDING_CALLS + 3;
 const MAX_RECEIPT_LIMIT_TERMINAL_RESERVE: usize = MAX_PENDING_CALLS + 4;
 // During a receipt-limit stop, provider polling continues even when older
 // events remain unacknowledged so an already-buffered authoritative terminal
@@ -3106,7 +3106,7 @@ impl CodexCommandExecutor {
                 "Codex turn/start failed: {error}"
             )));
         }
-        let (provider_turn_id, thread_id) = {
+        let (provider_turn_id, thread_id, input_receipt) = {
             let provider = self
                 .provider
                 .as_ref()
@@ -3119,6 +3119,7 @@ impl CodexCommandExecutor {
                     })?
                     .to_owned(),
                 provider.thread_id().to_owned(),
+                provider.accepted_turn_input_receipt().cloned(),
             )
         };
         let state = self
@@ -3146,7 +3147,7 @@ impl CodexCommandExecutor {
             events: vec![(
                 "turn.accepted".to_owned(),
                 EventPriority::P0,
-                json!({"provider": provider_label, "providerSessionId": thread_id, "providerTurnId": provider_turn_id}),
+                json!({"provider": provider_label, "providerSessionId": thread_id, "providerTurnId": provider_turn_id, "inputReceipt": input_receipt}),
             )],
         })
     }
@@ -3542,6 +3543,28 @@ impl CodexCommandExecutor {
         })
     }
 
+    fn record_written_tool_result(&mut self) -> Result<(), DurableRunnerError> {
+        let receipt = self
+            .provider
+            .as_ref()
+            .and_then(CodexProvider::written_tool_result_receipt)
+            .cloned()
+            .ok_or_else(|| {
+                DurableRunnerError::invalid("Written tool result has no transport receipt")
+            })?;
+        let state = self
+            .state
+            .as_mut()
+            .ok_or_else(|| DurableRunnerError::invalid("Codex provider is not prepared"))?;
+        state.push_event(NormalizedProviderEvent {
+            event_type: "harness.diagnostic".to_owned(),
+            priority: EventPriority::P0,
+            payload: json!({ "code": "context.tool_result_written", "severity": "info",
+                "contextReceipt": receipt }),
+        })?;
+        self.save_state()
+    }
+
     fn reject_tool_call(
         &mut self,
         call_id: String,
@@ -3847,6 +3870,9 @@ impl CodexCommandExecutor {
                             "failed to replay a durable semantic tool result: {error}"
                         ))
                     })?;
+                // Exact replay retains the original receipt and must not consume
+                // more durable event capacity. Missing historical receipts remain
+                // unknown, rather than being backfilled as original delivery.
                 return Ok(());
             }
             Ok(ToolCallAdmission::PendingReplay) => return Ok(()),
@@ -3948,6 +3974,7 @@ impl CodexCommandExecutor {
                 "failed to return semantic tool result to Codex: {error}"
             ))
         })?;
+        self.record_written_tool_result()?;
         Ok(CommandExecution::result(json!({
             "status": "delivered",
             "callId": result.call_id,
@@ -6090,7 +6117,7 @@ mod tests {
             item_id: "item-1".to_owned(),
         };
 
-        // Keep the pending window occupied, then model the input and result
+        // Keep the pending window occupied, then model input, result and written
         // receipts retained by the maximum 4,096 completed calls. Only three
         // regular queued-event slots remain at this boundary.
         for index in 0..MAX_EVENTS_PER_POLL {
@@ -6115,13 +6142,19 @@ mod tests {
                 .push_event(semantic_result_event(
                     &identity,
                     &ToolResult {
-                        call_id: call.call_id,
-                        operation_id: call.operation_id,
+                        call_id: call.call_id.clone(),
+                        operation_id: call.operation_id.clone(),
                         result: json!({"ok": true}),
                         is_error: false,
                     },
                 ))
                 .unwrap();
+            state.push_event(NormalizedProviderEvent {
+                event_type: "harness.diagnostic".to_owned(), priority: EventPriority::P0,
+                payload: json!({ "code": "context.tool_result_written", "contextReceipt": {
+                    "callId": call.call_id, "operationId": call.operation_id, "stage": "transport_written",
+                } }),
+            }).unwrap();
         }
         assert_eq!(
             MAX_REGULAR_QUEUED_PROVIDER_EVENTS - state.queued_events.len(),

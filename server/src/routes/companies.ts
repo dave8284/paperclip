@@ -49,6 +49,7 @@ import {
   writeImportTransferPart,
 } from "../services/company-import-transfers.js";
 import { companyTransferRunService } from "../services/company-transfer-runs.js";
+import { inheritOwnerAiAccountsWithStatus } from "../services/ai-workspace-account-setup.js";
 import { agentInstructionsBundleMode } from "../services/agent-instructions.js";
 import { resolvePortableExportAgentSelection } from "../services/company-portability-agent-selection.js";
 import {
@@ -1250,7 +1251,11 @@ export function companyRoutes(db: Db, storage?: StorageService, options?: Compan
         req.actor.userId ?? "board",
       );
     }
-    res.status(201).json(company);
+    // Company creation is already durable. Account setup reports its own
+    // resumable result so a delayed login/capacity change never asks the client
+    // to create this company again.
+    const aiAccountSetup = await inheritOwnerAiAccountsWithStatus(db, company.id, req.actor.userId ?? null);
+    res.status(201).json({ ...company, aiAccountSetup });
   });
 
   router.patch("/:companyId", async (req, res) => {

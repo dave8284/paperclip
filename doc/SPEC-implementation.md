@@ -1,5 +1,84 @@
 # Paperclip V1 Implementation Spec
 
+AgentOS subscription reuse (8 November 2026): owner account metadata references
+one canonical native connection/grant. Company-local aliases carry no copied
+credential refs. Runtime selection, users, agent grants, conversation homes and
+accounting retain target-company scope; canonical credential refresh and recovery
+retain exact owner/account/link revisions and one admission capacity group. New
+shared owner logins inherit into authorized companies; explicit revocations,
+personal identity choices and disabled auto-install are preserved. Account
+management is owner-only and revalidates native company authority. Live acceptance
+is tracked separately in the completion ledger.
+
+
+AgentOS controlled comparison source (2026-11-07): an approved current instance
+administrator prepares an exact registered case/arm on a fresh backlog task.
+Preparation does not start execution. Native admission revalidates its authority,
+account and profile; native task controls retain capacity, pause and dispatch.
+Exact independent review supplies quality, and the run row retains a frozen
+outcome outbox for idempotent cross-store recovery. Complete native event histories
+now supply provider-turn/repair counts; queue-through-independent-review timing
+and failed-attempt chains supply acceptance latency. Missing evidence stays null.
+Delivered context is still incompletely bound and prevents canary readiness.
+Persisted/live acceptance remains open in the completion ledger.
+
+AgentOS versioned routing source (2026-11-07) adds company/family enrollment,
+complete-comparison publication, bounded canary/control assignment, observed
+adoption, version pins and rollback. Native admission requires the committed
+policy audit, current owner authority and current account/profile qualification.
+Frozen run-row outcomes recover both cross-store acknowledgement gaps; indexed
+observation deadlines use the existing shared worker lifecycle. The independent
+store is schema v5. M05's unknown implicit/retrieved context still prevents a
+native canary from qualifying; no live release or production benefit is claimed.
+
+AgentOS private portfolio reads (2026-11-07) use the existing exact mandate,
+current Friday and owner/authorizer ceilings for separate `portfolio-records`
+and `portfolio-content` gateways. Resource predicates run in each content SQL
+statement. Body pages bind their SHA-256; deleted/system/hidden records and other
+users' personal chats remain excluded. Responses are untrusted references and
+use protected native API handling without plaintext overflow artifacts. Native
+audit is atomic and contains no bodies. Shared-only grants cannot read content.
+The separate `portfolio-attachment` gateway reads ordinary task files by exact
+attachment/task/hash, up to 64 KiB per request. It retains original upload-task
+privacy, excludes case-owned files and API captures, releases authority locks
+before storage and rechecks current authority and file identity before returning
+bytes. Cancellation/deadlines abort storage. Partial chunks carry their own hashes;
+`fullFileVerified` requires the entire file in the response and a matching hash.
+Storage keys never leave the service. PostgreSQL/live acceptance remains open.
+
+The owner clarified company isolation (2026-11-07): Friday has portfolio-wide
+visibility, including the owner's private company information and employees.
+Each execution task has exactly one company; its project, parent, dependencies,
+assignee and workspace must belong to that company. Portfolio reads cannot
+authorize writes or copy another company's private context into a handoff.
+Delegation must preserve the target company's native permissions, budgets and
+applicable approvals. Current gateway exclusions remain implementation limits.
+
+Friday's clarified board role directs company CEOs or department heads. Those
+executives own execution plans, staffing, specialist delegation and delivery.
+Friday retains authorized reads, board-direction records, native presentation
+and reporting; implementation and business operations are never assigned to
+Friday. This product role is distinct from the native board authorization actor.
+Default coordinator/direct-chat instructions are updated. Source enforcement now
+rejects Friday as a delivery/routine assignee and nonconversation executor;
+final dispatch serializes against current designation changes. Task directions
+must target actual CEOs or responsible department heads under native authority.
+Friday retains workforce visibility but cannot bind/retire staff, manage the
+application registry/departments or write project workspaces. Designating Friday
+adds no operational grants; a new designation waits for the employee's existing
+execution and cleanup to settle, using native lifecycle evidence under the same
+configuration lock as final provider entry. Unchanged bindings do not interrupt
+Friday's conversations. Native owner-conversation directions now use a
+separate exact write grant, one destination-company task and a durable outbox.
+Native admission rechecks current authority and unchanged task input inside its
+own transaction. Stable native receipts recover uncertain dispatch; admission,
+task status and accepted outcomes remain separate. Source reads now include the
+latest native implementation run, exact historical independent review and current
+scope-match evidence, without asserting business acceptance. External sources
+revalidate the connection and every current authorizer/operator ceiling.
+Migration 0394, database concurrency proof and the actual executive-to-team
+delivery/review/reporting journey remain unaccepted.
+
 AgentOS knowledge/routine refinement (2026-11-06): the loop editor saves project
 and parent-objective relationships through existing revision checks. Direct
 routine reads and mutations retain native project/task authorization; historical
@@ -2652,9 +2731,13 @@ native permission-management authority in each selected linked company. A native
 workforce:portfolio_read grant must exactly match the stored owner, source agent,
 company set, action, revision, scope and expiry. Every gateway read revalidates
 the real actor and current responsible/external-authorizer ceilings under locks.
-Native Friday SQL projection excludes private ancestry/projects before counts
-even during privacy shadow mode; only bounded project/task summaries are returned.
-There are no automatic grants or supported private scope. Native source-company
-audit records retain grant revisions, revocations and successful read events.
-Migration 0390 is source-only until explicitly activated; see the
+Explicit company_shared_only scope excludes private ancestry/projects before
+counts, even during privacy shadow mode. The owner-approved owner_accessible_private
+scope delegates bounded project/task summaries only to the current Friday; current
+owner resource rights and external-authorizer ceilings are enforced in native SQL.
+The Friday binding and current owner/admin authority are rechecked under locks.
+Other private content and cross-company execution remain outside this gateway.
+Existing grants keep their scope; private scope requires an explicit new revision.
+Native source-company audit retains grant revisions, revocations and reads.
+Migration 0393 adds the private scope and is not activated by this source change; see the
 [mandate implementation log](plans/2026-11-06-agentos-portfolio-read-mandates.md).

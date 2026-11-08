@@ -3,6 +3,7 @@ import {
   aiExecutionCapacityGroups as groups, aiExecutionCapacityBindings as bindings,
   aiExecutionCapacityClaims as claims, agentosAdminEvents, companies, connectionGrants,
   toolConnections, heartbeatRuns, heartbeatRunEvents, authUsers, instanceUserRoles, companyMemberships, nativeRunFinalizations, type Db,
+  aiWorkspaceAccounts, aiWorkspaceAccountLinks,
 } from "@paperclipai/db";
 import {
   aiConnectionMetadataSchema, aiExecutionCapacityPolicySchema, saveAiExecutionCapacitySchema,
@@ -14,16 +15,77 @@ import { DELIVERY_QUEUES, notifyDeliveryWork, subscribeDeliveryWork } from "./de
 import { appendHeartbeatRunEvent } from "./heartbeat-run-events.js";
 import { isCaseHandoffSourceReleased } from "./heartbeat/case-handoff-lifecycle.js";
 import { hasPendingRunCleanup } from "./execution-blocker.js";
-import { hasNativeLocalProcessStop } from "./native-local-process-stop.js";
+import { hasNativeLocalProcessStop, retainedNativeLocalExecutionStopped } from "./native-local-process-stop.js";
 import { remoteExecutionHasStopped } from "./remote-execution-termination.js";
 import { assertAdministration } from "./agentos-administration.js";
 import { isCancelledNativeStartup } from "./cancelled-native-startup.js";
+import { hasPendingAiCredentialHandoff } from "./ai-credential-handoff.js";
 
 type Claim = typeof claims.$inferSelect;
 type CapacityScope = { userId: string; local: boolean; companyIds: readonly string[] | null };
 const terminal = new Set(["succeeded", "failed", "cancelled", "timed_out", "interrupted"]);
 const unboundAdmitted = "ai.capacity.unbound_admitted", unboundSettled = "ai.capacity.unbound_settled";
 const configurationFence = sql`hashtext('ai_execution_capacity_configuration')`;
+
+type AccountCapacityConnection = { companyId: string; connectionId: string; grantId: string };
+/** Called inside the account owner's authorized transaction. Aliases join the
+ * same native admission group; a new company never acquires another seat. */
+export async function ensureAiWorkspaceAccountCapacity(db: Db, input: {
+  ownerUserId: string; source: AccountCapacityConnection; target?: AccountCapacityConnection;
+}) {
+  await db.execute(sql`select pg_advisory_xact_lock(${configurationFence})`);
+  const selected = [input.source, ...(input.target ? [input.target] : [])];
+  const [sourceBinding] = await db.select().from(bindings).where(eq(bindings.grantId, input.source.grantId));
+  const [source] = await db.select({ connection: toolConnections, grant: connectionGrants }).from(connectionGrants)
+    .innerJoin(toolConnections, and(eq(toolConnections.companyId, connectionGrants.companyId), eq(toolConnections.id, connectionGrants.connectionId)))
+    .where(and(eq(connectionGrants.companyId, input.source.companyId), eq(connectionGrants.connectionId, input.source.connectionId), eq(connectionGrants.id, input.source.grantId)));
+  const metadata = aiConnectionMetadataSchema.safeParse(source?.connection.config.ai);
+  if (!source || source.grant.status !== "active" || source.connection.status !== "active" || !source.connection.enabled ||
+      !metadata.success || metadata.data.method !== "subscription") throw conflict("The connected subscription is unavailable");
+  const existing = await db.select().from(bindings).where(inArray(bindings.grantId, selected.map(row => row.grantId)));
+  if (existing.some(row => row.groupId !== sourceBinding?.groupId || !selected.some(item => item.companyId === row.companyId && item.connectionId === row.connectionId && item.grantId === row.grantId))) {
+    throw conflict("The account connections already have different capacity bindings");
+  }
+  const added = selected.filter(row => !existing.some(binding => binding.grantId === row.grantId));
+  if (!added.length) return sourceBinding!.groupId;
+  if (sourceBinding) {
+    const [pending] = await db.select({ id: claims.runId }).from(claims).where(and(eq(claims.groupId, sourceBinding.groupId), isNull(claims.releasedAt))).limit(1);
+    if (pending) throw conflict("Wait for current account work to settle before connecting another company");
+  }
+  await assertAiCapacityBindingsSettled(db, selected);
+  let groupId = sourceBinding?.groupId;
+  await notifyDeliveryWork(db, DELIVERY_QUEUES.aiExecutionCapacity, groupId);
+  if (!groupId) {
+    const [group] = await db.insert(groups).values({ name: source.connection.name, provider: metadata.data.provider,
+      maxConcurrent: 1, interactiveReserved: 0, interactivePriority: true, waitWarningMs: 60_000,
+      createdByUserId: input.ownerUserId }).returning();
+    groupId = group.id;
+  } else {
+    const [group] = await db.select().from(groups).where(eq(groups.id, groupId)).for("update");
+    if (!group || group.provider !== metadata.data.provider) throw conflict("The account capacity group changed");
+    await db.update(groups).set({ revision: group.revision + 1, updatedAt: new Date() }).where(eq(groups.id, group.id));
+  }
+  await db.insert(bindings).values(added.map(row => ({ ...row, groupId })));
+  await db.insert(agentosAdminEvents).values({ actorUserId: input.ownerUserId, action: "ai_account_capacity_linked",
+    details: { groupId, bindings: added } });
+  return groupId;
+}
+
+async function assertWorkspaceAccountCapacity(db: Db, touchedGrantIds: string[]) {
+  if (!touchedGrantIds.length) return;
+  const affected = await db.select().from(aiWorkspaceAccounts).where(or(
+    inArray(aiWorkspaceAccounts.sourceGrantId, touchedGrantIds),
+    sql`exists (select 1 from ${aiWorkspaceAccountLinks} l where l.account_id = ${aiWorkspaceAccounts.id} and l.grant_id in (${sql.join(touchedGrantIds.map(id => sql`${id}::uuid`), sql`, `)}))`,
+  ));
+  for (const account of affected) {
+    const links = await db.select().from(aiWorkspaceAccountLinks).where(and(eq(aiWorkspaceAccountLinks.accountId, account.id), eq(aiWorkspaceAccountLinks.enabled, true)));
+    const ids = [account.sourceGrantId, ...links.map(link => link.grantId)];
+    const current = await db.select().from(bindings).where(inArray(bindings.grantId, ids));
+    if (current.length !== ids.length || new Set(current.map(row => row.groupId)).size !== 1) {
+      throw conflict("Keep every company using this account in the same capacity group");
+    }
+  }
+}
 function assertScope(scope: CapacityScope, companyId: string) {
   if (scope.companyIds !== null && !scope.companyIds.includes(companyId)) throw forbidden("Access to every bound company is required");
 }
@@ -59,6 +121,9 @@ async function latestUnboundAdmission(db: Db, companyId: string, runId: string) 
  * Only unresolved history is considered, with a hard per-edit work bound. */
 export async function assertAiCapacityBindingsSettled(db: Db, selected: SaveAiExecutionCapacity["bindings"]) {
   if (!selected.length) return;
+  if (await hasPendingAiCredentialHandoff(db, selected)) {
+    throw conflict("Wait for pending account credential cleanup before changing account access or capacity");
+  }
   const alreadySettled = sql`coalesce(${heartbeatRuns.status} in ('succeeded', 'failed', 'cancelled', 'timed_out', 'interrupted') and (
     exists (select 1 from ${claims} settled_claim where settled_claim.run_id = ${heartbeatRuns.id}
       and settled_claim.company_id = ${heartbeatRuns.companyId} and settled_claim.released_at is not null)
@@ -83,6 +148,18 @@ export async function assertAiCapacityBindingsSettled(db: Db, selected: SaveAiEx
     // caller-supplied context as an execution settlement receipt.
     const cleanupPending = await hasPendingRunCleanup(db, run.companyId, run.id);
     let stopped = !cleanupPending && (await remoteExecutionHasStopped(db, run.companyId, run.id) || (run.runtimeMode === "native" && await hasNativeLocalProcessStop(db, run.companyId, run.id)));
+    if (!stopped && !cleanupPending && run.status === "succeeded" && run.runtimeMode === "native") {
+      // Successful native turns intentionally retain their runner identity for
+      // the next turn. Observe the exact stopped local generation without
+      // clearing that identity or manufacturing a capacity settlement receipt.
+      // NOWAIT preserves the coordinator/run lifecycle's competing lock order.
+      const [coordinator] = await db.select().from(nativeRunFinalizations).where(and(eq(nativeRunFinalizations.companyId, run.companyId), eq(nativeRunFinalizations.runId, run.id))).for("share", { noWait: true });
+      const [currentRun] = await db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.id, run.id), eq(heartbeatRuns.companyId, run.companyId))).for("share", { noWait: true });
+      stopped = !!currentRun && (!coordinator || (!!coordinator.resultId && !coordinator.leaseOwner && coordinator.phase === "committed"))
+        && !await hasPendingAiCredentialHandoff(db, selected)
+        && !await hasPendingRunCleanup(db, run.companyId, run.id)
+        && await retainedNativeLocalExecutionStopped(db, currentRun);
+    }
     if (!stopped && !cleanupPending && run.status === "cancelled") {
       const [coordinator] = await db.select().from(nativeRunFinalizations).where(and(eq(nativeRunFinalizations.companyId, run.companyId), eq(nativeRunFinalizations.runId, run.id))).for("share", { noWait: true });
       const [currentRun] = await db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.id, run.id), eq(heartbeatRuns.companyId, run.companyId))).for("share", { noWait: true });
@@ -216,6 +293,7 @@ export function aiExecutionCapacityService(db: Db) {
         if (existing) await tx.delete(bindings).where(eq(bindings.groupId, existing.id));
         if (input.bindings.length) await tx.insert(bindings).values(input.bindings.map(row => ({ ...row, groupId: saved.id })));
       }
+      await assertWorkspaceAccountCapacity(tx, [...previous, ...input.bindings].map(row => row.grantId));
       await tx.insert(agentosAdminEvents).values({ actorUserId: scope.userId, action: "ai_capacity_group_saved",
         details: { groupId: saved.id, revision: saved.revision, policy: input.policy, bindings: input.bindings } });
       return { id: saved.id, revision: saved.revision };
@@ -242,6 +320,11 @@ export function aiExecutionCapacityService(db: Db) {
       const [binding] = await tx.select().from(bindings).where(and(eq(bindings.companyId, input.companyId), eq(bindings.grantId, input.attribution.grantId), eq(bindings.connectionId, input.attribution.connectionId)));
       const [prior] = await tx.select().from(claims).where(eq(claims.runId, input.runId));
       if (!binding) {
+        const [account] = await tx.select({ id: aiWorkspaceAccounts.id }).from(aiWorkspaceAccounts)
+          .where(eq(aiWorkspaceAccounts.sourceGrantId, input.attribution.grantId)).limit(1);
+        const [link] = await tx.select({ id: aiWorkspaceAccountLinks.id }).from(aiWorkspaceAccountLinks)
+          .where(eq(aiWorkspaceAccountLinks.grantId, input.attribution.grantId)).limit(1);
+        if (account || link) throw conflict("This account's shared capacity binding is unavailable");
         if (prior) throw conflict("This execution's capacity binding is no longer available");
         if (await latestUnboundAdmission(tx, input.companyId, input.runId) !== unboundAdmitted) {
           await appendHeartbeatRunEvent(tx, { companyId: run.companyId, agentId: run.agentId, runId: run.id,

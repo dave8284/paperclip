@@ -6,7 +6,20 @@ navigation: {"section":"Tasks and conversations","sectionOrder":20,"order":10}
 
 People create, assign, organize, discuss, and finish tasks. A task retains its owner, project, priority, history, and outputs as it moves through the work lifecycle.
 
+Task parents must belong to the same company. Creation, reparenting and import
+reject a missing or foreign parent, including creation without inherited
+workspaces. A valid hierarchy within a single company remains supported.
+The current source guard checks pass; persisted integration is unverified under
+the retained local-listener restriction.
+
 Feature ID: `tasks`.
+
+Friday board-role continuation (2026-11-08): native task/routine choices exclude
+current Friday while preserving her directory, mentions and own conversations.
+A restored task draft naming Friday remains visible with a correction message
+and cannot submit until another assignee is chosen. Native assignment/preparation
+and final dispatch also enforce this role. These source changes await loaded
+runtime and database concurrency acceptance.
 
 Implementation: [new task](../../ui/src/components/NewIssueDialog.tsx), [task list](../../ui/src/pages/Issues.tsx), [task detail](../../ui/src/pages/IssueDetail.tsx).
 

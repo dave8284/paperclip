@@ -1006,6 +1006,7 @@ export const PERMISSION_KEYS = [
   "agents:suggest-changes",
   "workforce:retire",
   "workforce:portfolio_read",
+  "workforce:board_direct",
   "skills:create",
   "skills:suggest-changes",
   "environments:manage",

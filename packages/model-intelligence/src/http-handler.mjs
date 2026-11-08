@@ -3,6 +3,8 @@ import { validNamespace } from "./http-auth.mjs";
 const writes = Object.freeze({
   "/v1/select": "select", "/v1/evaluations": "evaluate", "/v1/policy": "policy",
   "/v1/datasets": "registerDataset", "/v1/comparisons": "registerComparison", "/v1/comparison-outcomes": "recordComparisonOutcome",
+  "/v1/routing/policy": "configureRoutingPolicy", "/v1/routing/releases": "publishRoutingRelease",
+  "/v1/routing/rollback": "rollbackRoutingRelease", "/v1/routing/outcomes": "recordRoutingOutcome",
 });
 class HttpError extends Error { constructor(status, message) { super(message); this.status = status; } }
 const badRequest = message => new HttpError(400, message);
@@ -79,13 +81,19 @@ export function createHttpHandler(store, authority) {
         queryFields(url, ["namespace"]);
         const namespace = url.searchParams.get("namespace") ?? undefined;
         authorizeNamespace(namespace, true);
-        send(200, store.analytics(namespace)); return;
+        send(200, await store.analytics(namespace)); return;
       }
       if (request.method === "GET" && url.pathname === "/v1/comparisons/report") {
         queryFields(url, ["namespace", "comparisonId"]);
         const namespace = url.searchParams.get("namespace") ?? undefined;
         authorizeNamespace(namespace);
-        send(200, store.comparisonReport({ namespace, comparisonId: url.searchParams.get("comparisonId") })); return;
+        send(200, await store.comparisonReport({ namespace, comparisonId: url.searchParams.get("comparisonId") })); return;
+      }
+      if (request.method === "GET" && url.pathname === "/v1/routing/rollouts") {
+        queryFields(url, ["namespace", "taskType"]);
+        const namespace = url.searchParams.get("namespace") ?? undefined;
+        authorizeNamespace(namespace);
+        send(200, await store.routingRollouts({ namespace, taskType: url.searchParams.get("taskType") })); return;
       }
       const method = Object.hasOwn(writes, url.pathname) ? writes[url.pathname] : null;
       if (request.method !== "POST" || !method) { send(404, { error: "Not found" }); return; }
@@ -94,7 +102,7 @@ export function createHttpHandler(store, authority) {
       queryFields(url, []);
       const input = await readObject(request, method === "registerDataset" ? 131072 : 65536);
       authorizeNamespace(input.namespace);
-      send(200, store[method](input));
+      send(200, await store[method](input));
     } catch (error) {
       if (error instanceof HttpError && error.status === 413) response.setHeader("Connection", "close");
       send(error instanceof HttpError ? error.status : 400, { error: error.message });

@@ -1,12 +1,12 @@
 import { getTableColumns } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pg-proxy";
-import { heartbeatRuns, type Db } from "@paperclipai/db";
+import { heartbeatRuns, nativeRunFinalizations, type Db } from "@paperclipai/db";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { aiExecutionCapacityService, assertAiCapacityBindingsSettled, currentAiCapacityScope } from "./ai-execution-capacity.js";
 
-const native = vi.hoisted(() => ({ cleanup: vi.fn(), stopped: vi.fn(), remote: vi.fn(), event: vi.fn(), bootstrap: vi.fn() }));
+const native = vi.hoisted(() => ({ cleanup: vi.fn(), stopped: vi.fn(), retainedStopped: vi.fn(), remote: vi.fn(), event: vi.fn(), bootstrap: vi.fn() }));
 vi.mock("./execution-blocker.js", async original => ({ ...await original<typeof import("./execution-blocker.js")>(), hasPendingRunCleanup: native.cleanup }));
-vi.mock("./native-local-process-stop.js", async original => ({ ...await original<typeof import("./native-local-process-stop.js")>(), hasNativeLocalProcessStop: native.stopped }));
+vi.mock("./native-local-process-stop.js", async original => ({ ...await original<typeof import("./native-local-process-stop.js")>(), hasNativeLocalProcessStop: native.stopped, retainedNativeLocalExecutionStopped: native.retainedStopped }));
 vi.mock("./remote-execution-termination.js", async original => ({ ...await original<typeof import("./remote-execution-termination.js")>(), remoteExecutionHasStopped: native.remote }));
 vi.mock("./heartbeat-run-events.js", async original => ({ ...await original<typeof import("./heartbeat-run-events.js")>(), appendHeartbeatRunEvent: native.event }));
 vi.mock("./cancelled-native-startup.js", async original => ({ ...await original<typeof import("./cancelled-native-startup.js")>(), isCancelledNativeStartup: native.bootstrap }));
@@ -17,9 +17,13 @@ const attribution = { ...binding, method: "subscription" as const, provider: "op
 const scope = { userId: "owner", local: false, companyIds: [companyId] };
 const policy = { name: "Explicit seat", provider: "openai" as const, maxConcurrent: 1, interactiveReserved: 0, interactivePriority: false, waitWarningMs: 60_000 };
 type Query = { text: string; params: unknown[] };
-function fixture(options: { status?: string; settled?: boolean; claimReleased?: boolean; admin?: boolean; membership?: boolean; role?: string; revokeAtFence?: boolean; many?: boolean } = {}) {
+function fixture(options: { status?: string; settled?: boolean; claimReleased?: boolean; admin?: boolean; membership?: boolean; role?: string; revokeAtFence?: boolean; many?: boolean;
+  workspaceAccount?: boolean; workspaceAlias?: boolean; missingRun?: boolean; handoffAfterLocks?: boolean;
+  coordinator?: { phase: string; resultId: string | null; leaseOwner: string | null };
+  handoff?: { companyId: string; grantId: string; state: string } } = {}) {
   const queries: Query[] = [];
   let admin = options.admin ?? true;
+  let lifecycleLocked = false;
   const run = { id: runId, companyId, agentId: "agent", status: options.status ?? "running", runtimeMode: "native", contextSnapshot: { aiConnection: attribution, aiCapacityAdmission: { settled: true } } };
   const db = drizzle(async (text, params) => {
     queries.push({ text, params });
@@ -27,7 +31,12 @@ function fixture(options: { status?: string; settled?: boolean; claimReleased?: 
     if (text.includes('from "auth_user"') || text.includes('from "user"')) return { rows: [["owner"]] };
     if (text.includes('from "instance_user_roles"')) return { rows: text.includes(" join ") && !admin ? [] : [["admin-role"]] };
     if (text.includes('from "company_memberships"')) return { rows: options.membership === false ? [] : [[companyId, options.role ?? "member"]] };
+    if (text.includes('from "environment_leases"')) return { rows: options.handoffAfterLocks && lifecycleLocked ? [["pending-lease"]] : options.handoff?.state === "pending"
+      && params.includes(options.handoff.companyId) && params.includes(options.handoff.grantId) ? [["pending-lease"]] : [] };
+    if (text.includes('from "ai_workspace_accounts"')) return { rows: options.workspaceAccount ? [["account"]] : [] };
+    if (text.includes('from "ai_workspace_account_links"')) return { rows: options.workspaceAlias ? [["link"]] : [] };
     if (text.includes('from "heartbeat_runs"')) {
+      if (options.missingRun) return { rows: [] };
       const row = text.startsWith('select "id", "company_id", "status", "runtime_mode"')
         ? [run.id, run.companyId, run.status, run.runtimeMode]
         : text.startsWith('select "agent_id", "status", "context_snapshot"') ? [run.agentId, run.status, run.contextSnapshot]
@@ -36,7 +45,10 @@ function fixture(options: { status?: string; settled?: boolean; claimReleased?: 
     }
     if (text.includes('from "ai_execution_capacity_claims"')) return { rows: options.claimReleased ? [[new Date().toISOString()]] : [] };
     if (text.includes('from "ai_execution_capacity_bindings"')) return { rows: [] };
-    if (text.includes('from "native_run_finalizations"')) return { rows: [] };
+    if (text.includes('from "native_run_finalizations"')) {
+      lifecycleLocked = true;
+      return { rows: options.coordinator ? [Object.keys(getTableColumns(nativeRunFinalizations)).map(key => options.coordinator![key as keyof typeof options.coordinator] ?? null)] : [] };
+    }
     if (text.includes('from "heartbeat_run_events"')) return { rows: options.settled ? [["ai.capacity.unbound_settled"]] : [] };
     throw new Error(`Unexpected query: ${text}`);
   }) as unknown as Db;
@@ -45,7 +57,7 @@ function fixture(options: { status?: string; settled?: boolean; claimReleased?: 
   db.transaction = ((work: (tx: Db) => Promise<unknown>) => work(db)) as unknown as Db["transaction"];
   return { db, queries };
 }
-beforeEach(() => { vi.clearAllMocks(); native.cleanup.mockResolvedValue(false); native.stopped.mockResolvedValue(false); native.remote.mockResolvedValue(false); native.bootstrap.mockResolvedValue(false); });
+beforeEach(() => { vi.clearAllMocks(); native.cleanup.mockResolvedValue(false); native.stopped.mockResolvedValue(false); native.retainedStopped.mockResolvedValue(false); native.remote.mockResolvedValue(false); native.bootstrap.mockResolvedValue(false); });
 
 describe("capacity configuration authority", () => {
   it("refreshes native administrator authority after waiting at the configuration fence", async () => {
@@ -73,8 +85,9 @@ describe("binding edits and existing native work", () => {
   it("rejects active unbound work even if caller context claims settlement", async () => {
     const { db, queries } = fixture();
     await expect(assertAiCapacityBindingsSettled(db, [binding])).rejects.toThrow("Wait for existing work");
-    expect(queries[0].params).toEqual(expect.arrayContaining([companyId, binding.grantId, binding.connectionId]));
-    expect(queries[0].params.at(-1)).toBe(101);
+    const runs = queries.find(query => query.text.includes('from "heartbeat_runs"'))!;
+    expect(runs.params).toEqual(expect.arrayContaining([companyId, binding.grantId, binding.connectionId]));
+    expect(runs.params.at(-1)).toBe(101);
   });
   it("does not infer release from terminal status, but accepts authoritative cleanup evidence", async () => {
     const { db } = fixture({ status: "failed" });
@@ -88,6 +101,38 @@ describe("binding edits and existing native work", () => {
     await expect(assertAiCapacityBindingsSettled(fixture({ status: "succeeded", ...proof }).db, [binding])).resolves.toBeUndefined();
     expect(native.cleanup).not.toHaveBeenCalled();
   });
+  it("accepts a stopped retained successful runner under native lifecycle locks without rewriting its session", async () => {
+    const { db, queries } = fixture({ status: "succeeded" });
+    await expect(assertAiCapacityBindingsSettled(db, [binding])).rejects.toThrow("native cleanup");
+    native.retainedStopped.mockResolvedValue(true);
+    await expect(assertAiCapacityBindingsSettled(db, [binding])).resolves.toBeUndefined();
+    expect(native.retainedStopped).toHaveBeenCalledWith(db, expect.objectContaining({ id: runId, status: "succeeded" }));
+    expect(queries.find(query => query.text.includes('from "native_run_finalizations"'))?.text).toContain("for share nowait");
+    expect(queries.filter(query => query.text.includes('from "heartbeat_runs"')).some(query => query.text.includes("for share nowait"))).toBe(true);
+    expect(queries.some(query => /^(insert|update|delete) /.test(query.text))).toBe(false);
+    expect(native.event).not.toHaveBeenCalled();
+  });
+  it("retains cleanup that starts before the successful-run lifecycle locks are acquired", async () => {
+    const { db } = fixture({ status: "succeeded" });
+    native.retainedStopped.mockResolvedValue(true);
+    native.cleanup.mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+    await expect(assertAiCapacityBindingsSettled(db, [binding])).rejects.toThrow("native cleanup");
+    expect(native.retainedStopped).not.toHaveBeenCalled();
+  });
+  it("retains a credential handoff recorded before lifecycle locks are acquired", async () => {
+    native.retainedStopped.mockResolvedValue(true);
+    await expect(assertAiCapacityBindingsSettled(fixture({ status: "succeeded", handoffAfterLocks: true }).db, [binding])).rejects.toThrow("native cleanup");
+    expect(native.retainedStopped).not.toHaveBeenCalled();
+  });
+  it.each([
+    { phase: "committed", resultId: null, leaseOwner: null },
+    { phase: "workspace_finalizing", resultId: "result", leaseOwner: null },
+    { phase: "committed", resultId: "result", leaseOwner: "executor" },
+  ])("retains unresolved successful-run coordinator ownership: %j", async coordinator => {
+    native.retainedStopped.mockResolvedValue(true);
+    await expect(assertAiCapacityBindingsSettled(fixture({ status: "succeeded", coordinator }).db, [binding])).rejects.toThrow("native cleanup");
+    expect(native.retainedStopped).not.toHaveBeenCalled();
+  });
   it("fences unbound admission and locks the exact attributed run before recording its receipt", async () => {
     const { db, queries } = fixture();
     await expect(aiExecutionCapacityService(db).tryAcquire({ companyId, runId, attribution, interactive: false })).resolves.toEqual({ admitted: true, governed: false });
@@ -95,6 +140,26 @@ describe("binding edits and existing native work", () => {
     expect(queries[1].text).toContain('from "heartbeat_runs"');
     expect(queries[1].text).toContain("for update");
     expect(native.event).toHaveBeenCalledWith(db, expect.objectContaining({ companyId, runId, eventType: "ai.capacity.unbound_admitted" }));
+  });
+  it.each([{ workspaceAccount: true }, { workspaceAlias: true }])("does not admit an account outside its missing shared capacity binding: %j", async options => {
+    const { db } = fixture(options);
+    await expect(aiExecutionCapacityService(db).tryAcquire({ companyId, runId, attribution, interactive: false })).rejects.toThrow("shared capacity binding is unavailable");
+    expect(native.event).not.toHaveBeenCalled();
+  });
+  it.each([{ status: "succeeded", claimReleased: true }, { missingRun: true }])("retains pending credential handoff as an obligation after run settlement or removal: %j", async options => {
+    const { db, queries } = fixture({ ...options, handoff: { companyId, grantId: binding.grantId, state: "pending" } });
+    await expect(assertAiCapacityBindingsSettled(db, [binding])).rejects.toThrow("credential");
+    expect(queries[0].text).toContain('from "environment_leases"');
+    expect(queries[0].text).toContain("runnerTaskCredentialHandoff,state");
+    expect(queries[0].params).toEqual(expect.arrayContaining([companyId, binding.grantId]));
+    expect(queries.some(query => query.text.includes('from "heartbeat_runs"'))).toBe(false);
+  });
+  it.each([
+    { companyId: "another-company", grantId: binding.grantId, state: "pending" },
+    { companyId, grantId: "another-grant", state: "pending" },
+    { companyId, grantId: binding.grantId, state: "complete" },
+  ])("does not block settled bindings on unrelated or complete handoff: %j", async handoff => {
+    await expect(assertAiCapacityBindingsSettled(fixture({ status: "succeeded", claimReleased: true, handoff }).db, [binding])).resolves.toBeUndefined();
   });
   it("bounds unresolved historical proof checks instead of holding admission behind an unlimited scan", async () => {
     await expect(assertAiCapacityBindingsSettled(fixture({ many: true }).db, [binding])).rejects.toThrow("More than 100 executions");

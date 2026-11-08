@@ -1,4 +1,5 @@
 import { toConnection } from "./projection.js";
+import { assertNotWorkspaceAccountConnection } from "../../ai-workspace-account-guards.js";
 import { actorBinding } from "../actor.js";
 import { vercelConnectResourcesFor } from "../vercel-credentials.js";
 import type { ActorInfo } from "../types.js";
@@ -244,6 +245,15 @@ async function removeConnection(
 
   async function removeConnectionUnlocked(connectionId: string, companyId?: string, actor?: ActorInfo): Promise<ToolConnectionRemovalResult> {
     const connection = await getConnectionRow(connectionId, companyId);
+    if (connection.connectionPurpose === "ai") {
+      // Archive first under enrollment's fence. The following local cleanup is
+      // retryable; no concurrent enrollment can adopt a half-removed credential.
+      await db.transaction(async tx => {
+        await assertNotWorkspaceAccountConnection(tx as unknown as Db, connection.companyId, connection.id, { mutation: true });
+        await tx.update(toolConnections).set({ status: "archived", enabled: false, updatedAt: new Date() })
+          .where(and(eq(toolConnections.id, connection.id), eq(toolConnections.companyId, connection.companyId)));
+      });
+    }
     forgetMcpHttpSessions(connection.id);
     const now = new Date();
     const binding = actorBinding(actor);

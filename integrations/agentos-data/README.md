@@ -32,3 +32,31 @@ existing application records were copied, no remote schema/data was seeded,
 and no automatic replication is enabled. Agent OS itself still runs locally.
 New data ingestion should be a scoped native task/routine with source records,
 company/project ownership, retention and versioned output rules.
+
+On 7 November the owner selected planning a full database migration. The
+[migration plan](../../doc/plans/2026-11-07-agentos-supabase-full-migration.md)
+covers native PostgreSQL, Model Intelligence SQLite, files/keys, access gates,
+rehearsal, cutover and rollback. No data has moved. Generic agent SQL access must
+be restricted before this project holds private application data.
+
+`migration-preflight.sql` is a read-only destination metadata inventory for the
+linked AgentOS project. It reads versions, schemas, extensions, estimated table
+sizes and access grants; it reads no user rows or credentials and performs no
+migration. Keep its output private. Data API settings, native connector policy,
+source inventory and restore acceptance remain separate checks.
+
+Run `bash scripts/agentos-supabase-preflight.sh` from the `paperclip/` repository or
+use the script's absolute path. An optional first argument selects the private
+report path. The default is `/private/tmp/agentos-supabase-preflight-20261108.json`.
+The helper verifies the linked project, validates the returned report, preserves
+the CLI's untrusted-data envelope, and publishes a complete mode-0600 file without
+overwriting an existing report. Driver diagnostics and partial results are never
+published. Its seven controlled CLI tests exercise failures and file handling;
+they do not prove destination connectivity or SQL execution.
+
+On 8 November the owner's terminal returned login-role status 544 with a
+connection timeout before this query ran. CLI 2.90.0 initializes database
+credentials before dispatching even a linked Management API query; the generic
+`SUPABASE_DB_PASSWORD` suggestion is not evidence of an incorrect password.
+Confirm the project's current health before retrying. No password, token, project
+restart or credential reset is required by this helper.

@@ -104,6 +104,21 @@ describe("transcriptRole", () => {
 });
 
 describe("buildTranscript", () => {
+  it("retains context transport receipts in the audit snapshot without chat noise", async () => {
+    const { events } = await drive("completion");
+    const receipt = { code: "context.tool_result_written", severity: "info",
+      contextReceipt: { schema: "paperclip.provider-context-receipt.v1", stage: "transport_written" } };
+    const base = events[events.length - 1];
+    const written = { ...base, eventType: "harness.diagnostic", sourceEventId: "written", sourceSeq: base.sourceSeq + 1, payload: receipt } as PrpEvent;
+    const warning = { ...written, sourceEventId: "warning", sourceSeq: written.sourceSeq + 1,
+      payload: { ...receipt, severity: "warning", message: "Context delivery uncertain" } } as PrpEvent;
+    const all = [...events, written, warning];
+    const snapshot = all.reduce(applyPrpEvent, seed("run-completion", "session-completion"));
+    expect(snapshot.timeline.some(entry => entry.sourceEventId === "written")).toBe(true);
+    const transcript = buildTranscript(snapshot, all);
+    expect(transcript.some(entry => entry.key === "diagnostic:written")).toBe(false);
+    expect(transcript).toContainEqual(expect.objectContaining({ key: "diagnostic:warning", message: "Context delivery uncertain" }));
+  });
   it("orders entries by the reducer timeline and shows the submitted message", async () => {
     const { events, snapshot } = await drive("completion");
     const entries = buildTranscript(snapshot, events);

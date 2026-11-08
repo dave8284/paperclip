@@ -1,10 +1,11 @@
-import { randomUUID } from "node:crypto";
+import { randomUUID, createHash } from "node:crypto";
+import { Readable } from "node:stream";
 import express from "express";
 import request from "supertest";
 import { and, eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { agents, agentApiKeys, authUsers, companies, companyMemberships, companyOperatingProfiles, principalPermissionGrants, activityLog, agentosAssignments, agentosEmployees,
-  companySkills, companySkillVersions, companySkillTestRuns, companySkillPolicies, issues, projects, agentosCapabilityDecisions, agentosPortfolioMandates, createDb } from "@paperclipai/db";
+import { agents, assets, issueAttachments, cases, caseAttachments, caseAccessSources, agentApiKeys, authUsers, companies, companyMemberships, companyOperatingProfiles, principalPermissionGrants, activityLog, agentosAssignments, agentosEmployees,
+  companySkills, companySkillVersions, companySkillTestRuns, companySkillPolicies, issues, issueComments, documents, issueDocuments, projects, projectAccessMembers, instanceUserRoles, agentosCapabilityDecisions, agentosPortfolioMandates, agentosDepartments, agentosDepartmentProjects, createDb } from "@paperclipai/db";
 import { readPaperclipSkillSyncPreference } from "@paperclipai/adapter-utils/server-utils";
 import { capabilitySelectionHash } from "../services/agentos-capabilities.js";
 import { companySkillService } from "../services/company-skills.js";
@@ -15,6 +16,8 @@ import { fridayRoutes } from "../routes/friday.js";
 import { deleteCompany } from "../services/company-deletion.js";
 import { deleteAgentDependencies } from "../services/agent-deletion.js";
 import { accessService } from "../services/access.js";
+import { agentosPortfolioMandateService } from "../services/agentos-portfolio-mandates.js";
+import { instanceSettingsService } from "../services/instance-settings.js";
 
 describe("Agent OS shared workforce", () => {
   let database: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>;
@@ -125,6 +128,236 @@ describe("Agent OS shared workforce", () => {
     await accessService(db).setPrincipalPermission(f.one.id, "agent", f.first.id, "workforce:portfolio_read", false, f.owner);
     await request(f.runtime).get(f.path).query(f.query).expect(403);
   });
+  it("grants private summaries only to current Friday and intersects the owner's task and project rights", async () => {
+    const f = await mandateFixture();
+    const intent = { ...f.intent, expectedRevision: 1, readScope: "owner_accessible_private" };
+    await request(f.api).post(`${f.base}/read-mandates`).send(intent).expect(403);
+    await db.insert(companyOperatingProfiles).values({ companyId: f.one.id, fridayAgentId: f.first.id });
+    await request(f.api).post(`${f.base}/read-mandates`).send(intent).expect(200);
+    const [visibleProject, hiddenProject] = await db.insert(projects).values([
+      { companyId: f.two.id, name: "Owner's private project", visibility: "private" },
+      { companyId: f.two.id, name: "Someone else's private project", visibility: "private" },
+    ]).returning();
+    await db.insert(projectAccessMembers).values({ companyId: f.two.id, projectId: visibleProject.id, subjectType: "user", subjectId: f.owner });
+    const [parent, projectTask, hidden] = await db.insert(issues).values([
+      { companyId: f.two.id, title: "Owner's private task", visibility: "private", responsibleUserId: f.owner },
+      { companyId: f.two.id, title: "Authorized project task", projectId: visibleProject.id },
+      { companyId: f.two.id, title: "Unrelated private task", visibility: "private", projectId: hiddenProject.id },
+    ]).returning();
+    const [child] = await db.insert(issues).values({ companyId: f.two.id, title: "Private descendant", privacyParentIssueId: parent.id }).returning();
+    const query = { ...f.query, revision: 2 };
+    const response = await request(f.runtime).get(f.path).query(query).expect(200);
+    expect(response.body.readScope).toBe("owner_accessible_private");
+    expect(response.body.tasks.map((row: { id: string }) => row.id).sort()).toEqual([parent.id, projectTask.id, child.id].sort());
+    expect(response.body.projects.map((row: { id: string }) => row.id)).toEqual([visibleProject.id]);
+    expect(JSON.stringify(response.body)).not.toContain(hidden.id);
+    await request(f.runtime).get(`/api/companies/${f.two.id}/friday/work`).expect(403);
+    await db.update(companyOperatingProfiles).set({ fridayAgentId: null }).where(eq(companyOperatingProfiles.companyId, f.one.id));
+    await request(f.runtime).get(f.path).query(query).expect(403);
+  });
+  it("rechecks owner admin revocation and retains the private external-authorizer ceiling", async () => {
+    const f = await mandateFixture();
+    await db.insert(companyOperatingProfiles).values({ companyId: f.one.id, fridayAgentId: f.first.id });
+    await request(f.api).post(`${f.base}/read-mandates`).send({ ...f.intent, expectedRevision: 1, readScope: "owner_accessible_private" }).expect(200);
+    const [hidden] = await db.insert(issues).values({ companyId: f.two.id, title: "Admin-readable private task", visibility: "private" }).returning();
+    const [role] = await db.insert(instanceUserRoles).values({ userId: f.owner, role: "instance_admin" }).returning();
+    const query = { ...f.query, revision: 2 };
+    expect((await request(f.runtime).get(f.path).query(query).expect(200)).body.tasks.map((row: { id: string }) => row.id)).toContain(hidden.id);
+    const external = randomUUID();
+    await db.insert(authUsers).values({ id: external, name: "External authorizer", email: `${external}@example.test`, approvalStatus: "approved", createdAt: new Date(), updatedAt: new Date() });
+    await db.insert(companyMemberships).values([f.one, f.two].map(company => ({ companyId: company.id, principalType: "user", principalId: external, membershipRole: "member", status: "active" })));
+    const bounded = await request(app({ ...f.runtimeActor, authorizingUserId: external })).get(f.path).query(query).expect(200);
+    expect(JSON.stringify(bounded.body)).not.toContain(hidden.id);
+    await db.delete(instanceUserRoles).where(eq(instanceUserRoles.id, role.id));
+    const revoked = await request(f.runtime).get(f.path).query(query).expect(200);
+    expect(JSON.stringify(revoked.body)).not.toContain(hidden.id);
+    expect(Object.values(revoked.body.counts).reduce((sum: number, count) => sum + Number(count), 0)).toBe(0);
+  });
+  it("reads private content through current owner scope, versioned Unicode pages and redacted audit while retaining shared-only denial", async () => {
+    const f = await mandateFixture();
+    const contentPath = `/api/companies/${f.one.id}/friday/portfolio-content`;
+    const recordsPath = `/api/companies/${f.one.id}/friday/portfolio-records`;
+    const [task, hidden, chat, otherChat] = await db.insert(issues).values([
+      { companyId: f.two.id, title: "Owner work", description: "Private description", visibility: "private", responsibleUserId: f.owner },
+      { companyId: f.two.id, title: "Other work", description: "Hidden body", visibility: "private" },
+      { companyId: f.two.id, title: "Owner chat", conversationAgentId: f.second.id, conversationUserId: f.owner },
+      { companyId: f.two.id, title: "Other chat", conversationAgentId: f.second.id, conversationUserId: "other-user" },
+    ]).returning();
+    const [comment, deleted] = await db.insert(issueComments).values([
+      { companyId: f.two.id, issueId: task.id, body: "Readable comment", authorUserId: f.owner, metadata: { privateCredential: "not-a-response-field" } as never },
+      { companyId: f.two.id, issueId: task.id, body: "Deleted body", deletedAt: new Date() },
+    ]).returning();
+    const [document, internal] = await db.insert(documents).values([
+      { companyId: f.two.id, title: "Work product", latestBody: "😀α\nprivate" },
+      { companyId: f.two.id, title: "Internal", latestBody: "Internal context" },
+    ]).returning();
+    await db.insert(issueDocuments).values([
+      { companyId: f.two.id, issueId: task.id, documentId: document.id, key: "result" },
+      { companyId: f.two.id, issueId: task.id, documentId: internal.id, key: "continuation-summary" },
+    ]);
+    await request(f.runtime).get(contentPath).query({ ...f.query, kind: "task", resourceId: task.id }).expect(403);
+    await db.insert(companyOperatingProfiles).values({ companyId: f.one.id, fridayAgentId: f.first.id });
+    await request(f.api).post(`${f.base}/read-mandates`).send({ ...f.intent, expectedRevision: 1, readScope: "owner_accessible_private" }).expect(200);
+    const query = { ...f.query, revision: 2 };
+    const read = await request(f.runtime).get(contentPath).query({ ...query, kind: "document", resourceId: document.id, limit: 2 }).expect(200);
+    expect(read.headers["cache-control"]).toBe("no-store");
+    expect(read.body).toMatchObject({ body: "😀α", nextOffset: 2, contentTrust: "untrusted_reference", readScope: "owner_accessible_private" });
+    const rest = await request(f.runtime).get(contentPath).query({ ...query, kind: "document", resourceId: document.id,
+      offset: 2, bodySha256: read.body.bodySha256 }).expect(200);
+    expect(rest.body.body).toBe("\nprivate");
+    await db.update(documents).set({ latestBody: "Changed" }).where(eq(documents.id, document.id));
+    await request(f.runtime).get(contentPath).query({ ...query, kind: "document", resourceId: document.id,
+      offset: 2, bodySha256: read.body.bodySha256 }).expect(404);
+    const refs = await request(f.runtime).get(recordsPath).query({ ...query, kind: "documents", taskId: task.id }).expect(200);
+    expect(refs.body.records.map((record: { id: string }) => record.id)).toEqual([document.id]);
+    const comments = await request(f.runtime).get(recordsPath).query({ ...query, kind: "comments", taskId: task.id }).expect(200);
+    expect(comments.body.records.map((record: { id: string }) => record.id)).toEqual([comment.id]);
+    const chats = await request(f.runtime).get(recordsPath).query({ ...query, kind: "conversations" }).expect(200);
+    expect(chats.body.records.map((record: { id: string }) => record.id)).toEqual([chat.id]);
+    for (const [kind, resourceId] of [["task", hidden.id], ["task", otherChat.id], ["comment", deleted.id], ["document", internal.id]]) {
+      await request(f.runtime).get(contentPath).query({ ...query, kind, resourceId }).expect(404);
+    }
+    const body = await request(f.runtime).get(contentPath).query({ ...query, kind: "comment", resourceId: comment.id }).expect(200);
+    expect(body.body.body).toBe("Readable comment");
+    expect(body.body.comment).toMatchObject({ authorUserId: f.owner, authorAgentId: null });
+    expect(JSON.stringify(body.body)).not.toContain("not-a-response-field");
+    const receipts = await db.select().from(activityLog).where(and(eq(activityLog.entityId, f.intent.id), eq(activityLog.action, "agentos.portfolio_content_read")));
+    expect(receipts.length).toBeGreaterThan(0);
+    expect(receipts.every(receipt => receipt.actorId === f.first.id && receipt.companyId === f.one.id)).toBe(true);
+    expect(JSON.stringify(receipts)).not.toMatch(/Readable comment|Internal context|Private description|privateCredential/);
+    await db.update(issues).set({ responsibleUserId: null }).where(eq(issues.id, task.id));
+    await request(f.runtime).get(contentPath).query({ ...query, kind: "comment", resourceId: comment.id }).expect(404);
+    await request(f.runtime).get(`/api/companies/${f.two.id}/friday/work`).expect(403);
+    await request(f.api).post(`${f.base}/read-mandates/${f.intent.id}/revoke`).send({ expectedRevision: 2 }).expect(200);
+    await request(f.runtime).get(recordsPath).query({ ...query, kind: "conversations" }).expect(403);
+  });
+  it("reads only authorized task files and discards stored bytes after resource revocation", async () => {
+    const f = await mandateFixture();
+    await db.insert(companyOperatingProfiles).values({ companyId: f.one.id, fridayAgentId: f.first.id });
+    await request(f.api).post(`${f.base}/read-mandates`).send({ ...f.intent, expectedRevision: 1, readScope: "owner_accessible_private" }).expect(200);
+    const [owned, hidden] = await db.insert(issues).values([
+      { companyId: f.two.id, title: "Owner file", visibility: "private", responsibleUserId: f.owner },
+      { companyId: f.two.id, title: "Other private origin", visibility: "private" },
+    ]).returning();
+    const body = Buffer.from("private attachment evidence"), sha256 = createHash("sha256").update(body).digest("hex");
+    const stored = await db.insert(assets).values([`issues/${owned.id}`, `issues/${hidden.id}`, "runner-api"].map(namespace => ({
+      companyId: f.two.id, provider: "local_disk", objectKey: `${f.two.id}/${namespace}/${randomUUID()}.bin`,
+      contentType: "application/octet-stream", byteSize: body.length, sha256, originalFilename: "Evidence.bin",
+    }))).returning();
+    const attachments = await db.insert(issueAttachments).values(stored.map(asset => ({ companyId: f.two.id, issueId: owned.id, assetId: asset.id }))).returning();
+    const query = { ...f.query, revision: 2, taskId: owned.id };
+    const list = await request(f.runtime).get(`/api/companies/${f.one.id}/friday/portfolio-records`).query({ ...query, kind: "attachments" }).expect(200);
+    expect(list.body.records.map((record: { id: string }) => record.id)).toEqual([attachments[0].id]);
+    let revoke = false, reads = 0;
+    const service = agentosPortfolioMandateService(db, { storage: { provider: "local_disk", getObject: async () => {
+      reads++;
+      if (revoke) await db.update(issues).set({ responsibleUserId: null }).where(eq(issues.id, owned.id));
+      return { stream: Readable.from([body]), contentLength: body.length };
+    } } });
+    const read = (attachmentId = attachments[0].id) => service.attachment(f.runtimeActor,
+      { actorType: "agent", actorId: f.first.id, agentId: f.first.id }, f.one.id, { ...query, attachmentId, sha256, offset: 0, limit: 65536 });
+    await expect(read(attachments[1].id)).rejects.toMatchObject({ status: 404 }); expect(reads).toBe(0);
+    expect(await read()).toMatchObject({ fullFileVerified: true, body: body.toString("base64"), sha256 });
+    revoke = true;
+    await expect(read()).rejects.toMatchObject({ status: 404 });
+    const audit = await db.select().from(activityLog).where(and(eq(activityLog.entityId, f.intent.id), eq(activityLog.action, "agentos.portfolio_attachment_read")));
+    expect(audit).toHaveLength(1); expect(audit[0].companyId).toBe(f.one.id);
+    expect(JSON.stringify(audit)).not.toContain(body.toString()); expect(JSON.stringify(audit)).not.toContain(stored[0].objectKey);
+  });
+  it("retains every case-file source boundary and discards bytes when a retained source changes", async () => {
+    const f = await mandateFixture(), settings = instanceSettingsService(db);
+    const previouslyEnabled = (await settings.getExperimental()).enableCases;
+    await settings.updateExperimental({ enableCases: true });
+    try {
+      await db.insert(companyOperatingProfiles).values({ companyId: f.one.id, fridayAgentId: f.first.id });
+      await request(f.api).post(`${f.base}/read-mandates`).send({ ...f.intent, expectedRevision: 1, readScope: "owner_accessible_private" }).expect(200);
+      const [owned, hidden] = await db.insert(issues).values([
+        { companyId: f.two.id, title: "Case source", visibility: "private", responsibleUserId: f.owner },
+        { companyId: f.two.id, title: "Unavailable retained source", visibility: "private" },
+      ]).returning();
+      const [allowed, denied] = await db.insert(cases).values(["Allowed", "Denied"].map((title, index) => ({
+        companyId: f.two.id, title, caseNumber: index + 1, identifier: `CASE-${randomUUID()}`, caseType: "work",
+      }))).returning();
+      await db.insert(caseAccessSources).values([
+        { companyId: f.two.id, caseId: allowed.id, sourceKind: "issue", sourceId: owned.id },
+        { companyId: f.two.id, caseId: denied.id, sourceKind: "issue", sourceId: owned.id },
+        { companyId: f.two.id, caseId: denied.id, sourceKind: "issue", sourceId: hidden.id },
+      ]);
+      const body = Buffer.from("case evidence"), sha256 = createHash("sha256").update(body).digest("hex");
+      const stored = await db.insert(assets).values([allowed, denied].map(record => ({
+        companyId: f.two.id, provider: "local_disk", objectKey: `${f.two.id}/assets/cases/${record.id}/${randomUUID()}.bin`,
+        contentType: "application/octet-stream", byteSize: body.length, sha256, originalFilename: "Case evidence.bin",
+      }))).returning();
+      const attachments = await db.insert(caseAttachments).values(stored.map(asset => ({
+        companyId: f.two.id, caseId: allowed.id, assetId: asset.id,
+      }))).returning(); // A relink cannot widen the original denied case's file ownership.
+      const query = { ...f.query, revision: 2 }, path = `/api/companies/${f.one.id}/friday/portfolio-records`;
+      const discovered = await request(f.runtime).get(path).query({ ...query, kind: "cases" }).expect(200);
+      expect(discovered.body.records.map((record: { id: string }) => record.id)).toEqual([allowed.id]);
+      const files = await request(f.runtime).get(path).query({ ...query, kind: "case_attachments", caseId: allowed.id }).expect(200);
+      expect(files.body.records.map((record: { id: string }) => record.id)).toEqual([attachments[0].id]);
+      let revoke = false, reads = 0;
+      const service = agentosPortfolioMandateService(db, { storage: { provider: "local_disk", getObject: async () => {
+        reads++;
+        if (revoke) await db.insert(caseAccessSources).values({ companyId: f.two.id, caseId: allowed.id, sourceKind: "issue", sourceId: hidden.id });
+        return { stream: Readable.from([body]), contentLength: body.length };
+      } } });
+      const read = (attachmentId = attachments[0].id) => service.attachment(f.runtimeActor,
+        { actorType: "agent", actorId: f.first.id, agentId: f.first.id }, f.one.id,
+        { ...query, caseId: allowed.id, attachmentId, sha256, offset: 0, limit: 65536 });
+      await expect(read(attachments[1].id)).rejects.toMatchObject({ status: 404 }); expect(reads).toBe(0);
+      expect(await read()).toMatchObject({ taskId: null, caseId: allowed.id, fullFileVerified: true, body: body.toString("base64") });
+      revoke = true;
+      await expect(read()).rejects.toMatchObject({ status: 404 });
+      const audit = await db.select().from(activityLog).where(and(eq(activityLog.entityId, f.intent.id), eq(activityLog.action, "agentos.portfolio_attachment_read")));
+      expect(audit).toHaveLength(1); expect(audit[0].details).toMatchObject({ caseId: allowed.id, taskId: null });
+      expect(JSON.stringify(audit)).not.toContain(body.toString());
+      await settings.updateExperimental({ enableCases: false });
+      await request(f.runtime).get(path).query({ ...query, kind: "cases" }).expect(403);
+    } finally { await settings.updateExperimental({ enableCases: previouslyEnabled }); }
+  });
+  it("discovers real target-company executives without widening read grants or disclosing private project leadership", async () => {
+    const f = await mandateFixture();
+    const path = `/api/companies/${f.one.id}/friday/portfolio-records`;
+    const [ceo, head, spoof, targetFriday] = await db.insert(agents).values([
+      { companyId: f.two.id, name: "Actual CEO", role: "ceo", adapterConfig: { credential: "never-expose-executive-config" } },
+      { companyId: f.two.id, name: "Actual head", role: "engineer" },
+      { companyId: f.two.id, name: "CEO", title: "Department Head", role: "engineer" },
+      { companyId: f.two.id, name: "Company coordinator", role: "ceo" },
+    ]).returning();
+    const [project] = await db.insert(projects).values({ companyId: f.two.id, name: "Private department", visibility: "private" }).returning();
+    await db.insert(projectAccessMembers).values({ companyId: f.two.id, projectId: project.id, subjectType: "user", subjectId: f.owner });
+    const [department] = await db.insert(agentosDepartments).values({ companyId: f.two.id, name: "Delivery", leadAgentId: head.id }).returning();
+    await db.insert(agentosDepartmentProjects).values({ companyId: f.two.id, projectId: project.id, departmentId: department.id });
+    await request(f.runtime).get(path).query({ ...f.query, kind: "executives" }).expect(403);
+    await db.insert(companyOperatingProfiles).values([
+      { companyId: f.one.id, fridayAgentId: f.first.id }, { companyId: f.two.id, fridayAgentId: targetFriday.id },
+    ]);
+    await request(f.api).post(`${f.base}/read-mandates`).send({ ...f.intent, expectedRevision: 1, readScope: "owner_accessible_private" }).expect(200);
+    const query = { ...f.query, revision: 2, kind: "executives", projectId: project.id };
+    const result = await request(f.runtime).get(path).query(query).expect(200);
+    expect(result.headers["cache-control"]).toBe("no-store");
+    expect(result.body.records.map((row: { id: string }) => row.id).sort()).toEqual([ceo.id, head.id].sort());
+    expect(JSON.stringify(result.body)).not.toMatch(/never-expose-executive-config|adapterConfig/);
+    expect(JSON.stringify(result.body)).not.toContain(spoof.id);
+    expect(JSON.stringify(result.body)).not.toContain(f.first.id);
+    const authorizer = randomUUID();
+    await db.insert(authUsers).values({ id: authorizer, name: "External reviewer", email: `${authorizer}@example.test`,
+      approvalStatus: "approved", createdAt: new Date(), updatedAt: new Date() });
+    await db.insert(companyMemberships).values([f.one, f.two].map(company => ({ companyId: company.id,
+      principalType: "user", principalId: authorizer, membershipRole: "member", status: "active" })));
+    const externallyAuthorized = app({ ...f.runtimeActor, authorizingUserId: authorizer });
+    expect((await request(externallyAuthorized).get(path).query(query).expect(200)).body.records).toEqual([]);
+    await db.insert(projectAccessMembers).values({ companyId: f.two.id, projectId: project.id, subjectType: "user", subjectId: authorizer });
+    expect((await request(externallyAuthorized).get(path).query(query).expect(200)).body.records).toHaveLength(2);
+    await db.update(agentosDepartments).set({ leadAgentId: null }).where(eq(agentosDepartments.id, department.id));
+    expect((await request(f.runtime).get(path).query(query).expect(200)).body.records.map((row: { id: string }) => row.id)).toEqual([ceo.id]);
+    await db.delete(projectAccessMembers).where(eq(projectAccessMembers.projectId, project.id));
+    expect((await request(f.runtime).get(path).query(query).expect(200)).body.records).toEqual([]);
+    await db.update(companyOperatingProfiles).set({ fridayAgentId: null }).where(eq(companyOperatingProfiles.companyId, f.one.id));
+    await request(f.runtime).get(path).query(query).expect(403);
+  });
+
   it("serializes duplicate mandate intent, fences stale revisions and revokes both records", async () => {
     const f = await mandateFixture();
     const edit = { ...f.intent, expectedRevision: 1, targetCompanyIds: [f.one.id, f.two.id] };
@@ -244,8 +477,12 @@ describe("Agent OS shared workforce", () => {
       await accessService(db).setPrincipalPermission(f.two.id, principal.type, principal.id, "workforce:retire", true, f.owner, { agentIds: [targetAgentId] });
     }
   }
-  it.each([false, true])("allows explicitly granted company retirement by the CEO/current Friday only (%s)", async coordinator => {
-    const f = await delegatedSeed(coordinator), access = accessService(db);
+  it.each([false, true])("allows explicitly granted company retirement by the CEO/department head (%s)", async departmentHead => {
+    const f = await delegatedSeed(), access = accessService(db);
+    if (departmentHead) {
+      await db.update(agents).set({ role: "general" }).where(eq(agents.id, f.manager.id));
+      await db.insert(agentosDepartments).values({ companyId: f.two.id, name: "Delivery", leadAgentId: f.manager.id });
+    }
     const path = `${f.companyPath}/assignments/${f.assignments[1].id}/retire`;
     const intent = { expectedRevision: 1, reason: "Company trial completed" };
     const [employeeBefore] = await db.select().from(agentosEmployees).where(eq(agentosEmployees.id, f.employeeInput.id));
@@ -274,7 +511,7 @@ describe("Agent OS shared workforce", () => {
     await request(f.delegated).post(path).send({ ...intent, reason: "Different intent" }).expect(409);
     await request(f.delegated).post(`${f.companyPath}/assignments`).send({ id: randomUUID(), employeeId: f.employeeInput.id, agentId: f.target.id }).expect(409);
     // A successful prior request is not authority after a role/binding change.
-    if (coordinator) await db.update(companyOperatingProfiles).set({ fridayAgentId: null }).where(eq(companyOperatingProfiles.companyId, f.two.id));
+    if (departmentHead) await db.update(agentosDepartments).set({ leadAgentId: null }).where(eq(agentosDepartments.companyId, f.two.id));
     else await db.update(agents).set({ role: "general" }).where(eq(agents.id, f.manager.id));
     await request(f.delegated).post(path).send(intent).expect(403);
   });
@@ -352,9 +589,14 @@ describe("Agent OS shared workforce", () => {
     await request(f.delegated).get(`/api/companies/${f.one.id}/workforce`).expect(403);
     expect((await request(f.api).get(f.base).expect(200)).body.assignments.find((row: { id: string }) => row.id === f.assignments[0].id).status).toBe("active");
   });
-  it("requires the current coordinator binding or CEO role, not an agent name", async () => {
+  it("lets current Friday inspect workforce while executive mutations remain denied", async () => {
     const f = await delegatedSeed(true);
     await request(f.delegated).get(f.companyPath).expect(200);
+    await grantRetirement(f);
+    await request(f.delegated).post(`${f.companyPath}/assignments`).send(f.binding).expect(403);
+    await request(f.delegated).post(`${f.companyPath}/assignments/${f.assignments[1].id}/retire`)
+      .send({ expectedRevision: 1, reason: "Should go through the company executive" }).expect(403);
+    expect((await db.select().from(agentosAssignments).where(eq(agentosAssignments.id, f.assignments[1].id)))[0].status).toBe("active");
     await db.update(companyOperatingProfiles).set({ fridayAgentId: null }).where(eq(companyOperatingProfiles.companyId, f.two.id));
     await request(f.delegated).get(f.companyPath).expect(403);
     await request(f.delegated).post(`${f.companyPath}/assignments`).send(f.binding).expect(403);

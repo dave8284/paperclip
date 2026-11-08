@@ -1,4 +1,5 @@
 import os from "node:os";
+import { publicModelComparisonRecord } from "./services/model-comparison-presentation.js";
 
 export const CURRENT_USER_REDACTION_TOKEN = "*";
 
@@ -141,7 +142,7 @@ export function redactCurrentUserValue<T>(value: T, opts?: CurrentUserRedactionO
   }
 
   const redacted: Record<string, unknown> = {};
-  for (const [key, entry] of Object.entries(value)) {
+  for (const [key, entry] of Object.entries(publicModelComparisonRecord(value))) {
     redacted[key] = redactCurrentUserValue(entry, opts);
   }
   return redacted as T;

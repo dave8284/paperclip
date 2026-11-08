@@ -5,11 +5,16 @@ import { forbidden, notFound } from "../errors.js";
 import { authorizationService, issueReadSqlCondition, projectReadSqlCondition, type AuthorizationActor } from "./authorization.js";
 import { isLowTrustQuarantined, resolveActorSourceTrustForIssue } from "./source-trust.js";
 import { resolveCoreTrustPreset } from "./trust-preset-resolver.js";
+import { instanceSettingsService } from "./instance-settings.js";
 
 type CaseDb = Db | Parameters<Parameters<Db["transaction"]>[0]>[0];
 type CaseIdentity = { id: string; companyId: string };
 
 const CASE_TRUST_ERROR = "Low-trust work must use its governed review path before writing or executing case work";
+
+export async function assertCasesEnabled(db: Db) {
+  if (!(await instanceSettingsService(db).getExperimental()).enableCases) throw forbidden("Cases are disabled");
+}
 
 function runIssueId(run: { issueId: string | null; nativeIssueId: string | null; contextIssueId: unknown }) {
   const id = run.issueId ?? run.nativeIssueId ?? run.contextIssueId;
@@ -118,6 +123,12 @@ export async function caseReadSqlCondition(db: CaseDb, actor: AuthorizationActor
   const companyCondition = responsibleUsers.reduce((condition, userId) => sql`(${condition} and exists (
       select 1 from ${companyMemberships} cm where cm.company_id = ${cases.companyId}
         and cm.principal_type = 'user' and cm.principal_id = ${userId} and cm.status = 'active'))`, ownCompany);
+  return caseRetainedSourceReadCondition(companyCondition, issueCondition, projectCondition);
+}
+
+/** Shared retained-source invariant. Callers supply already-qualified company
+ * authority and resource predicates; this expression never grants authority. */
+export function caseRetainedSourceReadCondition(companyCondition: SQL, issueCondition: SQL, projectCondition: SQL): SQL<boolean> {
   return sql<boolean>`(${companyCondition} and not exists (
     select 1 from ${caseAccessSources} retained where retained.case_id = ${cases.id}
       and (retained.company_id <> ${cases.companyId} or not (

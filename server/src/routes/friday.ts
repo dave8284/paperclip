@@ -2,6 +2,9 @@ import { Router, json } from "express";
 import { z } from "zod";
 import type { Db } from "@paperclipai/db";
 import { fridayWorkQuerySchema, fridayDiagnosticsQuerySchema, createDepartmentSchema, updateDepartmentSchema, assignDepartmentProjectSchema, createPerformanceReportSchema, companyPerformanceQuerySchema } from "@paperclipai/shared";
+import { modelComparisonService } from "../services/model-comparisons.js";
+import { modelRoutingService } from "../services/model-routing.js";
+import { prepareModelComparisonSchema } from "@paperclipai/shared";
 import { modelCatalog } from "../services/model-intelligence.js";
 import { fridayVoiceStatus, fridayVoiceRequest } from "../services/friday-voice.js";
 import { companyPerformanceService } from "../services/company-performance.js";
@@ -9,8 +12,10 @@ import { departmentService } from "../services/agentos-departments.js";
 import { fridayAwarenessService } from "../services/friday-awareness.js";
 import { employeeAwarenessService } from "../services/employee-awareness.js";
 import { fridayDiagnosticsService } from "../services/friday-diagnostics.js";
-import { employeeAwarenessQuerySchema, portfolioWorkQuerySchema } from "@paperclipai/shared";
+import { employeeAwarenessQuerySchema, portfolioWorkQuerySchema, portfolioContentQuerySchema, portfolioRecordsQuerySchema, portfolioAttachmentQuerySchema } from "@paperclipai/shared";
 import { agentosPortfolioMandateService } from "../services/agentos-portfolio-mandates.js";
+import { createBoardDirectionSchema, boardDirectionReadQuerySchema } from "@paperclipai/shared";
+import { boardDirectionService } from "../services/board-directions.js";
 import { forbidden } from "../errors.js";
 import { assertCompanyAccess, assertBoard, getActorInfo } from "./authz.js";
 import { authorizationService } from "../services/authorization.js";
@@ -46,8 +51,29 @@ export function fridayRoutes(db: Db) {
   });
   router.get("/companies/:companyId/friday/portfolio-mandates", async (req, res) =>
     res.set("Cache-Control", "no-store").json(await agentosPortfolioMandateService(db).discover(req.actor, req.params.companyId as string)));
+  router.post("/companies/:companyId/friday/board-directions", async (req, res) => {
+    const result = await boardDirectionService(db).create(req.actor, req.params.companyId as string, createBoardDirectionSchema.parse(req.body));
+    res.status(result.created ? 201 : 200).set("Cache-Control", "no-store").json(result);
+  });
+  router.get("/companies/:companyId/friday/board-directions/:directionId", async (req, res) =>
+    res.set("Cache-Control", "no-store").json(await boardDirectionService(db).read(req.actor, req.params.companyId as string,
+      z.uuid().parse(req.params.directionId), boardDirectionReadQuerySchema.parse(req.query).revision)));
   router.get("/companies/:companyId/friday/portfolio-work", async (req, res) =>
     res.set("Cache-Control", "no-store").json(await agentosPortfolioMandateService(db).read(req.actor, getActorInfo(req), req.params.companyId as string, portfolioWorkQuerySchema.parse(req.query))));
+  router.get("/companies/:companyId/friday/portfolio-records", async (req, res) =>
+    res.set("Cache-Control", "no-store").json(await agentosPortfolioMandateService(db).records(req.actor, getActorInfo(req), req.params.companyId as string, portfolioRecordsQuerySchema.parse(req.query))));
+  router.get("/companies/:companyId/friday/portfolio-content", async (req, res) =>
+    res.set("Cache-Control", "no-store").json(await agentosPortfolioMandateService(db).content(req.actor, getActorInfo(req), req.params.companyId as string, portfolioContentQuerySchema.parse(req.query))));
+  router.get("/companies/:companyId/friday/portfolio-attachment", async (req, res) => {
+    const abort = new AbortController();
+    const disconnected = () => { if (!res.writableEnded) abort.abort(); };
+    req.once("aborted", disconnected); res.once("close", disconnected);
+    try {
+      const result = await agentosPortfolioMandateService(db).attachment(req.actor, getActorInfo(req), req.params.companyId as string,
+        portfolioAttachmentQuerySchema.parse(req.query), abort.signal);
+      res.set("Cache-Control", "no-store").json(result);
+    } finally { req.off("aborted", disconnected); res.off("close", disconnected); }
+  });
   router.get("/companies/:companyId/friday/diagnostics", async (req, res) => {
     res.set("Cache-Control", "no-store").json(await fridayDiagnosticsService(db).read(req.params.companyId as string, req.actor, fridayDiagnosticsQuerySchema.parse(req.query)));
   });
@@ -72,9 +98,30 @@ export function fridayRoutes(db: Db) {
     const includeLearning = req.actor.type === "board" && (req.actor.source === "local_implicit" || req.actor.isInstanceAdmin === true);
     res.json(await modelCatalog(db, req.params.companyId as string, includeLearning));
   });
+  router.get("/companies/:companyId/friday/model-comparisons", async (req, res) => {
+    assertBoard(req);
+    res.set("Cache-Control", "no-store").json(await modelComparisonService(db).discover(req.params.companyId as string, req.actor));
+  });
+  router.post("/companies/:companyId/friday/model-comparisons/prepare", async (req, res) => {
+    assertBoard(req);
+    const result = await modelComparisonService(db).prepare(req.params.companyId as string, req.actor, prepareModelComparisonSchema.parse(req.body));
+    res.set("Cache-Control", "no-store").status(result.created ? 201 : 200).json(result);
+  });
   router.get("/companies/:companyId/friday/model-qualifications", async (req, res) => {
     assertBoard(req);
     res.set("Cache-Control", "no-store").json(await modelProfileQualificationService(db).list(req.params.companyId as string, req.actor));
+  });
+  router.get("/companies/:companyId/friday/model-routing", async (req, res) => {
+    assertBoard(req);
+    res.set("Cache-Control", "no-store").json(await modelRoutingService(db).discover(req.params.companyId as string, req.actor));
+  });
+  router.post("/companies/:companyId/friday/model-routing/policy", async (req, res) => {
+    assertBoard(req);
+    res.set("Cache-Control", "no-store").json(await modelRoutingService(db).configure(req.params.companyId as string, req.actor, req.body));
+  });
+  router.post("/companies/:companyId/friday/model-routing/rollback", async (req, res) => {
+    assertBoard(req);
+    res.set("Cache-Control", "no-store").json(await modelRoutingService(db).rollback(req.params.companyId as string, req.actor, req.body));
   });
   router.post("/companies/:companyId/friday/model-qualifications", async (req, res) => {
     assertBoard(req);

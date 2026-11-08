@@ -10,12 +10,21 @@ import { decideCodexAuthMerge, withAccountHomeSecretMutationLock } from "@paperc
 import { WORKSPACE_RESTORE_LOCK_TIMEOUT_CODE } from "@paperclipai/adapter-utils/workspace-restore-merge";
 import { aiConnectionService } from "./ai-connections.js";
 import { secretService } from "./secrets.js";
+import { resolveAiCredentialOwner, aiCredentialOwnerSnapshot, sameAiCredentialOwner } from "./ai-account-credential-owner.js";
+
+const credentialOwnerSchema = z.object({
+  companyId: z.string().uuid(), connectionId: z.string().uuid(), grantId: z.string().uuid(),
+  credential: z.object({ secretId: z.string().uuid(), versionSelector: z.union([z.literal("latest"), z.number().int().positive()]) }).strict().nullable(),
+  binding: z.object({ accountId: z.string().uuid(), accountRevision: z.number().int().positive(),
+    linkId: z.string().uuid().nullable(), linkRevision: z.number().int().positive().nullable() }).strict().nullable(),
+}).strict();
 
 const bindingSchema = z.object({
   grantId: z.string().uuid(),
   secretId: z.string().uuid(),
   sessionEpoch: z.number().int().nonnegative(),
   versionSelector: z.union([z.literal("latest"), z.number().int().positive()]),
+  credentialOwner: credentialOwnerSchema.optional(),
 }).strict();
 export type PluginTaskCredentialWritebackBinding = z.infer<typeof bindingSchema>;
 const handoffSchema = z.object({
@@ -76,23 +85,39 @@ export async function settlePluginTaskCredentialHandoff(
       const [grant] = await database.select().from(connectionGrants).where(and(
         eq(connectionGrants.companyId, scope.companyId), eq(connectionGrants.id, binding.grantId),
       )).for("update");
-      if (!grant || grant.status !== "active") return null;
-      const ref = grant.credentialSecretRefs.find(ref => ref.configPath === "ai.credential");
+      if (!grant || grant.status !== "active") {
+        // Preserve the provider's retained replacement until a shared account's
+        // exact cleanup authority can be reconciled. Never discard it merely
+        // because one company's grant changed.
+        if (binding.credentialOwner) throw new Error("Shared account credential cleanup requires reconciliation");
+        return null;
+      }
+      const [targetConnection] = await database.select().from(toolConnections).where(and(
+        eq(toolConnections.companyId, scope.companyId), eq(toolConnections.id, grant.connectionId),
+      ));
+      if (!targetConnection) {
+        if (binding.credentialOwner) throw new Error("Shared account credential cleanup requires reconciliation");
+        return null;
+      }
+      const owner = await resolveAiCredentialOwner(database, { connection: targetConnection, grant }, { lock: true });
+      if (binding.credentialOwner && !sameAiCredentialOwner(binding.credentialOwner, aiCredentialOwnerSnapshot(owner))) {
+        throw new Error("Shared account credential cleanup authority changed");
+      }
+      if (!binding.credentialOwner && owner.binding) throw new Error("Shared account credential authority was not retained");
+      const ref = owner.grant.credentialSecretRefs.find(ref => ref.configPath === "ai.credential");
       if (!ref || ref.secretId !== binding.secretId ||
           (ref.versionSelector ?? "latest") !== binding.versionSelector) return null;
       const [secret] = await database.select().from(companySecrets).where(and(
-        eq(companySecrets.companyId, scope.companyId), eq(companySecrets.id, binding.secretId),
+        eq(companySecrets.companyId, owner.connection.companyId), eq(companySecrets.id, binding.secretId),
       )).for("update");
       if (!secret || secret.aiSessionEpoch !== binding.sessionEpoch) return null;
-      const [connection] = await database.select().from(toolConnections).where(and(
-        eq(toolConnections.companyId, scope.companyId), eq(toolConnections.id, grant.connectionId),
-      ));
+      const connection = owner.connection;
       const ai = aiConnectionMetadataSchema.safeParse(connection?.config.ai);
       if (!connection || !ai.success || ai.data.provider !== "openai" || ai.data.method !== "subscription") return null;
-      return { connection, grant };
+      return { connection, grant: owner.grant };
     };
     const mutate = <T>(operation: (database: Db) => Promise<T>) => withAccountHomeSecretMutationLock(
-      undefined, scope.companyId, () => db.transaction(tx => operation(tx as unknown as Db)),
+      undefined, binding.credentialOwner?.companyId ?? scope.companyId, () => db.transaction(tx => operation(tx as unknown as Db)),
     );
     const current = metadata.runnerTaskDispatched === true && await mutate(account);
     if (current) {

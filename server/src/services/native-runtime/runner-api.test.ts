@@ -189,6 +189,22 @@ describe("runner API catalog", () => {
     expect(operation.summary).toContain("source agent's exact explicit portfolio mandate revision");
     expect(operation.callPolicy).toBe("rest");
   });
+  it("discovers bounded private content without granting ordinary foreign routes", () => {
+    const content = runnerApiOperation("GET /api/companies/{companyId}/friday/portfolio-content");
+    const records = runnerApiOperation("GET /api/companies/{companyId}/friday/portfolio-records");
+    const attachment = runnerApiOperation("GET /api/companies/{companyId}/friday/portfolio-attachment");
+    for (const operation of [content, records, attachment]) {
+      expect(operation.allowedModes).toEqual(expect.arrayContaining(["standard", "ask", "planning"]));
+      expect(operation.parameters.find(parameter => parameter.name === "revision")?.required).toBe(true);
+      expect(operation.summary).toContain("owner_accessible_private");
+      expect(operation.callPolicy).toBe("rest");
+    }
+    expect(content.parameters.find(parameter => parameter.name === "limit")?.schema.maximum).toBe(20000);
+    expect(records.parameters.find(parameter => parameter.name === "limit")?.schema.maximum).toBe(50);
+    expect(attachment.parameters.find(parameter => parameter.name === "limit")?.schema.maximum).toBe(65536);
+    expect(attachment.parameters.find(parameter => parameter.name === "sha256")?.required).toBe(true);
+    expect(content.summary).toContain("untrusted reference material");
+  });
 });
 
 describe("runner API request boundary", () => {
@@ -356,6 +372,21 @@ describe("runner API request boundary", () => {
     expect(result).not.toHaveProperty("artifact");
     expect(save).not.toHaveBeenCalled();
     expect(reserve).not.toHaveBeenCalled();
+  });
+  it.each(["content", "records", "attachment"])("keeps private portfolio %s responses out of response artifacts", async endpoint => {
+    const operationId = `GET /api/companies/{companyId}/friday/portfolio-${endpoint}`;
+    const value = "private portfolio text ".repeat(3000);
+    const transport = io(async () => Response.json({ body: value }));
+    const save = vi.fn(transport.saveResponse);
+    const reserve = vi.fn(async () => vi.fn(async () => {}));
+    const query = { mandateId: "00000000-0000-4000-8000-000000000001", revision: 1,
+      targetCompanyId: "00000000-0000-4000-8000-000000000002",
+      ...(endpoint === "content" ? { kind: "task", resourceId: "00000000-0000-4000-8000-000000000003" }
+        : endpoint === "attachment" ? { taskId: "00000000-0000-4000-8000-000000000003", attachmentId: "00000000-0000-4000-8000-000000000004", sha256: "a".repeat(64) } : { kind: "conversations" }) };
+    const result = await executeRunnerApi({ operationId, query }, context, { ...transport, saveResponse: save, reserveResponseCapture: reserve });
+    expect(result).toMatchObject({ ok: true, status: 200, data: { body: value } });
+    expect(result).not.toHaveProperty("artifact");
+    expect(save).not.toHaveBeenCalled(); expect(reserve).not.toHaveBeenCalled();
   });
   it("withholds a credential response when the run is revoked during HTTP", async () => {
     let authorized = true;
