@@ -249,6 +249,28 @@ export async function materializeNativeInteractionResponses(input: {
       });
       continue;
     }
+    const hasInteractionResolver = Boolean(interaction.resolvedByUserId || interaction.resolvedByAgentId);
+    if (
+      (interaction.kind === "request_confirmation" || interaction.kind === "request_checkbox_confirmation")
+      && interaction.status === "cancelled"
+      && interactionResult.version === 1
+      && interactionResult.outcome === "withdrawn"
+      && interaction.resolvedAt
+      && hasInteractionResolver
+      && !(interaction.kind === "request_confirmation"
+        && (interaction.payload.toolAction || interaction.payload.secretProposal))
+    ) {
+      // The withdrawal producer wakes the assignee with this exact card. It is
+      // administrative context, including when the author withdraws its own
+      // obsolete request, never an approval or a successful business verdict.
+      // Governed actions retain their separate authoritative lifecycle checks.
+      responses.push({
+        interactionId: interaction.id,
+        kind: interaction.kind,
+        response: { status: "cancelled", result: structuredClone(interaction.result) },
+      });
+      continue;
+    }
     if (
       interaction.resolvedByRunId === input.runId
       || (
@@ -261,7 +283,6 @@ export async function materializeNativeInteractionResponses(input: {
         `Run ${input.runId} cannot consume a response it resolved itself`,
       );
     }
-    const hasInteractionResolver = Boolean(interaction.resolvedByUserId || interaction.resolvedByAgentId);
     if (interaction.kind !== "request_item_verdicts" && !hasInteractionResolver) {
       throw new NativeInteractionBridgeError(
         "native_interaction_unresolved",

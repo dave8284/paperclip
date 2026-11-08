@@ -27,6 +27,10 @@ conversation context.
 
 Policy: Conversation discovery/creation requires a board user and the Agent Chat gate;
 task access follows task visibility.
+Completion replays cannot supersede the same or a newer receipt. Ownership-only
+Done changes retain outstanding delivery through a fresh version; delivered
+reports stay delivered. Each pending board return still revalidates current
+mandate, owner, conversation and task authority before publication.
 
 Evidence: `source-only` — [implementation](../../server/src/routes/issues.ts#L18077) at
 the reviewed commit above.

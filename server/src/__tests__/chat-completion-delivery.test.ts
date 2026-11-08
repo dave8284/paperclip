@@ -45,9 +45,9 @@ const support = await getEmbeddedPostgresTestSupport();
     });
     const service = chatCompletionDeliveryService(db, { wakeup } as any);
     const run = async () => {
-      const [delivery] = await rows();
+      const delivery = (await rows()).find(row => ["pending", "queued"].includes(row.status))!;
       await service.deliver(delivery.id);
-      const [current] = await rows();
+      const current = (await rows()).find(row => row.id === delivery.id)!;
       const [r] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, current.targetRunId!));
       return prepareChatCompletionTurn(db, r);
     };
@@ -109,10 +109,15 @@ const support = await getEmbeddedPostgresTestSupport();
     expect(await db.select().from(handoffs).where(eq(handoffs.taskId, f.task.id))).toMatchObject([{ conversationId: f.sourceId, sessionGeneration: 0 }]);
     const done = await f.finish();
     await db.transaction(tx => recordChatCompletion(tx, f.task, done!));
-    expect(await f.rows()).toHaveLength(1);
+    expect(await f.rows()).toMatchObject([{ status: "pending", statusVersion: done!.statusVersion }]);
     await issueService(db).update(f.task.id, { status: "todo" });
     expect(await f.rows()).toMatchObject([{ status: "superseded" }]);
-    await f.finish(); expect(await f.rows()).toHaveLength(2);
+    const laterDone = await f.finish(); expect(await f.rows()).toHaveLength(2);
+    await db.transaction(tx => recordChatCompletion(tx, f.task, done!));
+    expect(await f.rows()).toMatchObject([
+      { status: "superseded", statusVersion: done!.statusVersion },
+      { status: "pending", statusVersion: laterDone!.statusVersion },
+    ]);
     await expect(db.transaction(async tx => { await issueService(tx as any).update(f.task.id, { status: "todo" }, tx); throw new Error("rollback"); })).rejects.toThrow("rollback");
     expect((await f.rows()).filter(d => d.status === "pending")).toHaveLength(1);
   });
@@ -266,9 +271,53 @@ const support = await getEmbeddedPostgresTestSupport();
   });
   it("delivers Done tasks after an ownership-only status version change", async () => {
     const f = await seed(); await f.finish();
-    await issueService(db).update(f.task.id, { assigneeAgentId: f.agentId });
+    const changed = await issueService(db).update(f.task.id, { assigneeAgentId: f.agentId });
+    expect(await f.rows()).toMatchObject([{ status: "superseded" }, { status: "pending", statusVersion: changed!.statusVersion }]);
     const run = await f.run();
     expect(run.contextSnapshot?.chatCompletionUpdates).toEqual([expect.objectContaining({ id: f.task.id, status: "done" })]);
+  });
+  it("replaces a frozen queued report after ownership changes and publishes only the replacement once", async () => {
+    const f = await seed(), done = await f.finish(), oldRun = await f.run();
+    const [oldDelivery] = await f.rows();
+    expect(oldDelivery).toMatchObject({ status: "queued", statusVersion: done!.statusVersion, targetRunId: oldRun.id });
+    expect(oldRun.contextSnapshot?.chatCompletionDeliveryIds).toEqual([oldDelivery.id]);
+    await db.update(heartbeatRuns).set({ status: "running" }).where(eq(heartbeatRuns.id, oldRun.id));
+
+    const changed = await issueService(db).update(f.task.id, { assigneeAgentId: f.agentId });
+    const [retained, replacement] = await f.rows();
+    expect(retained).toMatchObject({ id: oldDelivery.id, status: "superseded", statusVersion: done!.statusVersion,
+      targetRunId: oldRun.id, responseCommentId: null });
+    expect(replacement).toMatchObject({ status: "pending", statusVersion: changed!.statusVersion, targetRunId: null });
+    const oldActor = { agentId: f.agentId, runId: oldRun.id };
+    await expect(issueService(db).addComment(f.sourceId, "Obsolete completion report", oldActor, { completionReply: true }))
+      .rejects.toThrow("chat_completion_superseded");
+    expect(await db.select().from(issueComments).where(eq(issueComments.issueId, f.sourceId))).toEqual([]);
+
+    const nextRun = await f.run(), nextActor = { agentId: f.agentId, runId: nextRun.id };
+    expect(nextRun.contextSnapshot?.chatCompletionDeliveryIds).toEqual([replacement.id]);
+    const reply = await issueService(db).addComment(f.sourceId, "Current completion report", nextActor, { completionReply: true });
+    const replay = await issueService(db).addComment(f.sourceId, "Repeated completion report", nextActor, { completionReply: true });
+    expect(replay.id).toBe(reply.id);
+    await expect(issueService(db).addComment(f.sourceId, "Late obsolete report", oldActor, { completionReply: true }))
+      .rejects.toThrow("chat_completion_superseded");
+    expect(await f.rows()).toMatchObject([
+      { id: oldDelivery.id, status: "superseded", statusVersion: done!.statusVersion, targetRunId: oldRun.id, responseCommentId: null },
+      { id: replacement.id, status: "delivered", statusVersion: changed!.statusVersion, targetRunId: nextRun.id, responseCommentId: reply.id },
+    ]);
+    expect(await db.select().from(issueComments).where(eq(issueComments.issueId, f.sourceId))).toMatchObject([{ id: reply.id }]);
+    await f.due(); await f.service.sweepPending();
+    await chatCompletionDeliveryService(db, { wakeup: f.wakeup }).sweepPending();
+    expect(f.wakeup).toHaveBeenCalledTimes(2);
+  });
+  it("does not notify again when a delivered Done task changes owner", async () => {
+    const f = await seed(); await f.finish();
+    const run = await f.run();
+    await issueService(db).addComment(f.sourceId, "Completed report", { agentId: f.agentId, runId: run.id }, { completionReply: true });
+    await issueService(db).update(f.task.id, { assigneeAgentId: f.agentId });
+    expect(await f.rows()).toMatchObject([{ status: "delivered" }]);
+    expect(await f.rows()).toHaveLength(1);
+    await f.service.sweepPending();
+    expect(f.wakeup).toHaveBeenCalledTimes(1);
   });
   it("advances a skipped daily-cap receipt and resumes with a fresh key", async () => {
     const f = await seed(); await f.finish(); const [delivery] = await f.rows();

@@ -10,7 +10,7 @@ import path from "node:path";
 import os from "node:os";
 import { skillFileBytes, snapshotFile, assertSkillSnapshotPath, skillSnapshotHash } from "./skill-snapshot.js";
 import { fileURLToPath } from "node:url";
-import { and, asc, desc, eq, inArray, isNull, isNotNull, lt, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, isNotNull, lt, notExists, sql } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import {
   agents as agentsTable,
@@ -52,10 +52,13 @@ export async function assertSkillCapabilityRetention(database: Db | DbTransactio
     "This skill retains published capability evidence or a company's adoption history. Keep the skill and its immutable versions; you can change the agent's selected skills without deleting that history.",
     { code: "capability_skill_history_retained" });
 }
-export async function assertSkillTestCapabilityRetention(database: Db | DbTransaction, companyId: string, runId: string) {
+async function skillTestHasCapabilityHistory(database: Db | DbTransaction, companyId: string, runId: string) {
   const [source] = await database.select({ id: agentosCapabilityReleases.id }).from(agentosCapabilityReleases)
     .where(and(eq(agentosCapabilityReleases.sourceCompanyId, companyId), eq(agentosCapabilityReleases.sourceTestRunId, runId))).limit(1);
-  if (source) throw conflict("This test is retained as evidence for a published employee capability and cannot be deleted.", { code: "capability_test_evidence_retained" });
+  return !!source;
+}
+export async function assertSkillTestCapabilityRetention(database: Db | DbTransaction, companyId: string, runId: string) {
+  if (await skillTestHasCapabilityHistory(database, companyId, runId)) throw conflict("This test is retained as evidence for a published employee capability and cannot be deleted.", { code: "capability_test_evidence_retained" });
 }
 import type { PaperclipDesiredSkillEntry, PaperclipSkillEntry } from "@paperclipai/adapter-utils/server-utils";
 import type {
@@ -7289,27 +7292,45 @@ export function companySkillService(db: Db, options: { actor?: AuthorizationActo
     const rows = await db
       .select({
         id: companySkillTestRuns.id,
-        issueId: companySkillTestRuns.issueId,
       })
       .from(companySkillTestRuns)
       .where(and(
         eq(companySkillTestRuns.companyId, companyId),
         lt(companySkillTestRuns.harnessIssueExpiresAt, now),
         isNull(companySkillTestRuns.harnessIssueDeletedAt),
+        // Retained history is not pending cleanup work, even after supersession.
+        notExists(db.select({ id: agentosCapabilityReleases.id }).from(agentosCapabilityReleases).where(and(
+          eq(agentosCapabilityReleases.sourceCompanyId, companyId),
+          eq(agentosCapabilityReleases.sourceTestRunId, companySkillTestRuns.id),
+        ))),
       ));
+    let pruned = 0;
     for (const row of rows) {
-      await db.transaction(async (tx) => {
+      const removed = await db.transaction(async (tx) => {
+        // Publication holds this same row through its commit. Recheck both the
+        // deadline and retained references after any lock wait; the candidate
+        // list can predate a publication, extension or another cleanup.
+        const [current] = await tx.select({ issueId: companySkillTestRuns.issueId,
+          harnessIssueDeletedAt: companySkillTestRuns.harnessIssueDeletedAt,
+          harnessIssueExpiresAt: companySkillTestRuns.harnessIssueExpiresAt,
+        }).from(companySkillTestRuns).where(and(
+          eq(companySkillTestRuns.companyId, companyId), eq(companySkillTestRuns.id, row.id),
+        )).for("update");
+        if (!current || current.harnessIssueDeletedAt || !current.harnessIssueExpiresAt
+          || current.harnessIssueExpiresAt >= now || await skillTestHasCapabilityHistory(tx, companyId, row.id)) return false;
         await tx
           .update(issues)
           .set({ hiddenAt: now, updatedAt: now })
-          .where(and(eq(issues.companyId, companyId), eq(issues.id, row.issueId), eq(issues.harnessKind, "skill_test")));
+          .where(and(eq(issues.companyId, companyId), eq(issues.id, current.issueId), eq(issues.harnessKind, "skill_test")));
         await tx
           .update(companySkillTestRuns)
           .set({ harnessIssueDeletedAt: now, updatedAt: now })
           .where(and(eq(companySkillTestRuns.companyId, companyId), eq(companySkillTestRuns.id, row.id)));
+        return true;
       });
+      if (removed) pruned += 1;
     }
-    return { pruned: rows.length };
+    return { pruned };
   }
 
   async function makeImportedSkillEditable(

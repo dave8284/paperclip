@@ -9,9 +9,12 @@ function fixture() {
   const finished = new Date("2026-01-01T00:01:00Z"), resolved = new Date("2026-01-01T00:02:00Z");
   const runRow = [run, company, agent, issue, "succeeded", new Date("2026-01-01T00:00:00Z"), finished, true];
   const reviewRow: unknown[] = [review, company, issue, run, "request_confirmation", "accepted",
-    { target: { type: "custom", key: "native_completion_review", revisionId: decision } }, `native-review:${decision}`, resolved, null, "independent-owner", null];
-  const decisionRow = [decision, company, issue, run, "applied", "in_review"];
-  return { company, issue, run, agent, review, decision, finished, resolved, runRow, reviewRow, decisionRow };
+    { target: { type: "custom", key: "native_completion_review", revisionId: decision } }, `native-review:${decision}`, resolved, null, "independent-owner", null, null, "independent-owner"];
+  const creation = { kind: "bind_reviewer", ownerAgentId: null as string | null, ownerUserId: "independent-owner" as string | null };
+  const effectPayload = { interactionId: review, interactionKind: "request_confirmation", ownerAgentId: null as string | null, ownerUserId: "independent-owner" as string | null };
+  const decisionRow: unknown[] = [decision, company, issue, run, "applied", "in_review", { effects: [creation] }];
+  const effectRow: unknown[] = [company, issue, decision, 1, "bind_reviewer", "issue_thread_interaction", review, `native-status:${decision}:1`, "delivered", effectPayload];
+  return { company, issue, run, agent, review, decision, finished, resolved, runRow, reviewRow, decisionRow, effectRow, creation, effectPayload };
 }
 function controlled(rows: unknown[][][]) {
   const queries: Array<{ sql: string; params: unknown[] }> = [];
@@ -39,7 +42,7 @@ describe("bounded native board outcome evidence", () => {
   });
   it("reports exact human review as historical evidence with an explicit current-scope mismatch", async () => {
     const f = fixture(); f.runRow[7] = false;
-    const { db, queries } = controlled([[f.runRow], [f.reviewRow], [f.decisionRow]]);
+    const { db, queries } = controlled([[f.runRow], [f.reviewRow], [f.decisionRow], [f.effectRow]]);
     const result = await readBoardDirectionOutcome(db, f.company, f.issue);
     expect(result).toMatchObject({ scopeMatchesCurrentTask: false, independentReview: { reviewId: f.review, verdict: "accepted", evaluator: "user:independent-owner", resolvedAt: f.resolved.toISOString() } });
     expect(result).not.toHaveProperty("businessOutcome");
@@ -52,7 +55,7 @@ describe("bounded native board outcome evidence", () => {
   });
   it("retains rejection independently of process success", async () => {
     const f = fixture(); f.reviewRow[5] = "rejected";
-    const { db } = controlled([[f.runRow], [f.reviewRow], [f.decisionRow]]);
+    const { db } = controlled([[f.runRow], [f.reviewRow], [f.decisionRow], [f.effectRow]]);
     expect(await readBoardDirectionOutcome(db, f.company, f.issue)).toMatchObject({ status: "succeeded", independentReview: { verdict: "rejected" } });
   });
   it("does not choose one of several ambiguous review records", async () => {
@@ -72,17 +75,20 @@ describe("bounded native board outcome evidence", () => {
     if (condition === "other execution") f.decisionRow[3] = randomUUID();
     if (condition === "unapplied decision") f.decisionRow[4] = "proposed";
     if (condition === "self review") { f.reviewRow[9] = f.agent; f.reviewRow[10] = null; }
-    const { db } = controlled([[f.runRow], [f.reviewRow], [f.decisionRow]]);
+    const { db } = controlled([[f.runRow], [f.reviewRow], [f.decisionRow], [f.effectRow]]);
     expect(await readBoardDirectionOutcome(db, f.company, f.issue)).toMatchObject({ independentReview: null });
   });
   it.each(["succeeded", "failed"])("requires the independent reviewer execution to succeed (%s)", async status => {
     const f = fixture(), reviewerRun = randomUUID(), reviewer = randomUUID();
     f.reviewRow[9] = reviewer; f.reviewRow[10] = null; f.reviewRow[11] = reviewerRun;
+    f.reviewRow[12] = reviewer; f.reviewRow[13] = null;
+    f.creation.ownerAgentId = reviewer; f.creation.ownerUserId = null;
+    f.effectPayload.ownerAgentId = reviewer; f.effectPayload.ownerUserId = null;
     const reviewerRow = [reviewerRun, f.company, reviewer, f.issue, status,
       { nativeReviewInteractionId: f.review, nativeReviewDecisionId: f.decision },
       { nativeReviewContextReceipt: { schema: "agentos.native-review-context-receipt.v1", companyId: f.company, issueId: f.issue,
         reviewerRunId: reviewerRun, references: { sourceRunId: f.run, sourceDecisionId: f.decision, reviewInteractionId: f.review } } }];
-    const { db } = controlled([[f.runRow], [f.reviewRow], [f.decisionRow], [reviewerRow]]);
+    const { db } = controlled([[f.runRow], [f.reviewRow], [f.decisionRow], [f.effectRow], [reviewerRow]]);
     const result = await readBoardDirectionOutcome(db, f.company, f.issue);
     if (status === "succeeded") expect(result?.independentReview).toMatchObject({ verdict: "accepted", evaluator: `agent:${reviewer}` });
     else expect(result?.independentReview).toBeNull();

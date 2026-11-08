@@ -12,9 +12,116 @@ Those requirements remain in scope; the rows below do not replace or erase them.
 The owner requested simple **Fixed / Not fixed** tracking in the existing
 [93-item worksheet](2026-11-03-agentos-requirements-reconciliation.md).
 Update those rows as work completes; do not create another backlog.
-**Current total: 42 Fixed / 51 Not fixed.** Partial implementation and unverified
+**Current total: 47 Fixed / 46 Not fixed.** Partial implementation and unverified
 live acceptance remain Not fixed. This checkpoint was refreshed at the owner's
 request on 7 November; the tables below the current checkpoint are historical.
+
+- **O03/O04/W03 Fixed; native company handoff completed:** review-preservation
+  commit `3aafdf738` is pushed and loaded through guarded restart
+  `44b8fda4-27cd-43a7-b86c-c738b4c302e2`, ready at 10:33:18 UTC, no lost runs.
+  The stale ORB-8 card was withdrawn through its native administrative route,
+  with an explicit technical reason and no approval. Withdrawal exposed a
+  separate preparation error in run `78968d47-4cb3-4ea9-9049-210ce220edf7`;
+  its generic successor `5c82fdd8-c562-4e13-8810-fe36723b8160` retained the
+  head's work and submitted fresh review `42f1f689-fb79-447f-af12-56c5e3bb7be7`.
+  Actual CEO reviewer run `a2f95353-592d-4bb8-a015-cccee1dce31b` accepted it.
+  CEO delivery `fd83d09a-6b5f-427a-923e-f1d2fed32d45` completed ORB-7 and
+  saved document `ff2fc2a0-a63e-4b45-a4d7-df28c82f7803`, revision
+  `a742d6ec-bb81-4f36-bcad-9c266f22774c` (`ceo-final-report`). Friday's automatic
+  native return `bd4cb3ea-c138-48cd-afe2-e18cf2a58435` completed at 10:39:20 UTC,
+  comment `e7f9e132-833b-4abb-908b-10a2f81d139f`. Friday directed/read/reported;
+  the company CEO, head and analyst owned execution. Current scope restrictions,
+  exactly one completed manual cycle and disabled scheduling were verified.
+  Shared-context review, original broader analyst access, simulation-only values
+  and pending owner acceptance are explicit limits, not retroactive passes.
+  Codex handoff audit attachment `5e4722a2-20be-495d-8e67-3b0822fb8edb`,
+  work product `8e3ad5c0-3cf8-4d5c-8b1a-6e2333542743`, is linked on ORB-7 by
+  comment `5ae179e0-c20b-455b-a3e5-f162331f8c26`. Initial upload timed out;
+  native attachment enumeration established absence before the successful retry.
+- **C05 Fixed — requested full migration plan delivered:** the owner asked to
+  plan the move. The existing plan now includes actual destination and connector
+  facts plus a measured isolated rehearsal: identical 324-table/25,298-row native
+  archives restored into PostgreSQL 17.7 and 18.1 with matching content, schema,
+  sequence and 394-row migration journal evidence. Ten actual Model Intelligence
+  PostgreSQL integration cases pass; the real SQLite snapshot imports/replays
+  on both restored copies while remaining unaccepted and disabled. Both private
+  rehearsal clusters are stopped/removed. PostgreSQL 18's extra NOT NULL catalog
+  representation is explained alongside matching column nullability; earlier
+  failed probe/comparison logs remain. Exact managed 17.11 rehearsal, effective
+  Data API/billing checks, private connector restrictions, TLS/backups/capacity,
+  final drain/window and explicit cutover approval are execution gates. No
+  production data moved and cloud hosting remains deferred. See the
+  [full migration plan](2026-11-07-agentos-supabase-full-migration.md) and private
+  `agentos-pg-restore-rehearsal-report-20261108.json`.
+- **Completion receipt and withdrawal source repairs checked, not yet loaded:**
+  replaying a committed completion previously superseded its own pending Friday
+  return before the duplicate insert was ignored. Only older receipt versions
+  are now superseded. A Done task's ownership-only change carries an outstanding
+  report into a new version; an already delivered report does not notify again.
+  **86 checks pass** across actual PostgreSQL completion/board-return and outcome
+  suites. Initial board fixtures lacked conversationState and exact materialized
+  native-review effects; those now match real records. A first correction used
+  zero-based effect ordinal; the committer is one-based. Another assertion
+  mistook a rollback settlement notification for a committed receipt: it now
+  verifies no publication before outer settlement and no delivery row on rollback.
+  A sweep assertion now checks the relevant company agent, excluding earlier
+  independent fixture obligations. These corrections retain real permission and
+  replay checks. Initial and corrected logs:
+  `/private/tmp/agentos-portfolio-direction-pg-{current,r2,r3,r4}-20261108.log`.
+  The withdrawal consumer now accepts only persisted plain cancelled/withdrawn
+  confirmations with resolver/time as administrative context. It grants no
+  approval, changes no task status and preserves governed tool/secret checks.
+  **10 actual PostgreSQL withdrawal cases and 69 neighboring checks pass** in
+  separate runs; two initial assertions incorrectly expected withdrawal not to
+  touch updatedAt and are corrected to assert status/version/decision. Independent
+  review found no blocker in the prior review-preservation fix. Server semantic
+  checks pass. Logs: `/private/tmp/agentos-native-withdrawal-{reproduction,fixed,fixed-r2,tsc-r3}-20261108.log`,
+  `agentos-completion-receipt-tsc-20261108.log`. A further queued/frozen ownership
+  regression rejects the superseded run's publication, retains the old receipt,
+  delivers its replacement exactly once and creates no extra wake on restart;
+  all **48 completion checks pass** (`agentos-chat-completion-queued-owner-20261108.log`).
+  Independent review found no blocking issue. Integrated server/UI builds pass
+  (`agentos-handoff-recovery-{build,ui-build}-20261108.log`); the UI build retains
+  its existing large-chunk advisory.
+- **W04 Fixed — actual routine and multi-loop browser checks pass:** the Orbit
+  graph exposes the real analyst, completed ORB-10 cycle, two stored outputs,
+  attachment preview, paused trigger, cycle/revision history, zoom and task triage.
+  The misleading next-cycle label is corrected to **Manual runs only** when no
+  trigger is enabled. Six component cases, UI semantics and token gates pass;
+  the current HMR browser shows the corrected label. Existing Northstar example
+  routines were linked through their native revision-checked board API to the
+  illustrative NOR-8 parent. Launch → Service → Launch navigation, parent task
+  navigation, revision 4 and editor/reload persistence pass; both remain paused,
+  disabled and at zero cycles. The final browser runs have no page errors or
+  failed responses. Active edges are component-tested, not browser-animated;
+  large-graph overflow and automatic external recurrence are not claimed.
+  Earlier create/edit acceptance and failed selector/transport attempts remain.
+  Reports: `/private/tmp/agentos-routine-browser-20261108/verification-report.json`
+  and `/private/tmp/agentos-northstar-loops-browser-20261108/verification-report.json`.
+- **O06 qualification underway, Not fixed:** 52 actual persisted workforce,
+  capability and retention checks pass, plus four native skill-selection cases.
+  Agent-skill route fixtures now use AgentOS branding and a ready hiring agent;
+  preparing/terminated denials remain enforced. All 120 route checks pass. The
+  runtime-pin/execution group initially passed 47 with one stale fixture failure:
+  it identified a delivery agent as Friday, correctly tripping the earlier
+  board-only guard. Its separate-Friday fixture now preserves both guards.
+  Automatic expiry of superseded tests could hide published capability evidence;
+  two actual PostgreSQL failures reproduced this and publication of expired
+  evidence. Cleanup now excludes published tests, then locks/rechecks current
+  references and deadlines; publication rejects a hidden expired harness.
+  **100 checks across six suites pass**, including both real SQL race orders and
+  a deadline changed while waiting. The final five-case rerun also proves native
+  detail GET retains output and visible task after supersession/expiry, with a
+  foreign-company 404. No polling/scheduler was added. Server semantics, module
+  boundaries and maps pass. Logs: `agentos-o06-expiry-before-fix-20261108.log`,
+  `agentos-o06-retention-native-regression-20261108.log`,
+  `agentos-o06-expiry-final-projection-20261108.log`,
+  `agentos-o06-retention-server-tsc-final-20261108.log` (all in `/private/tmp`).
+  No live capability release, adoption or evaluated improvement is claimed.
+  The retired Lab assignment remains retired.
+  Earlier evidence: `/private/tmp/agentos-o06-{capability-persisted-current,native-skill-routes-fixture-r2,runtime-pins-retention,native-readonly}-20261108.{log,json}`.
+
+## Earlier checkpoints (historical)
 
 - **8 November — C05 import/runtime source continuation, still Not fixed:**
   independent manifest-bound staging/import and the async PostgreSQL runtime are

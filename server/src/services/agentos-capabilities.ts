@@ -130,7 +130,7 @@ export function agentosCapabilityService(db: Db) {
         const [test] = await tx.select().from(companySkillTestRuns).where(and(eq(companySkillTestRuns.id, input.sourceTestRunId), eq(companySkillTestRuns.companyId, input.sourceCompanyId))).for("share", { noWait: true });
         const readable = test && await authorizationService(tx).decideReads(currentActor, [{ type: "issue", companyId: input.sourceCompanyId, issueId: test.issueId }]);
         if (!test || !readable?.[0]?.allowed || test.skillId !== input.sourceSkillId || test.skillVersionId !== input.sourceVersionId
-          || test.status !== "succeeded" || test.deletedAt || test.supersededAt || !test.outputSnapshot.trim()) {
+          || test.status !== "succeeded" || test.deletedAt || test.harnessIssueDeletedAt || test.supersededAt || !test.outputSnapshot.trim()) {
           throw unprocessable("Choose a completed, readable test of this exact skill version with retained output, then review its result.");
         }
         const markdown = reviewedCapabilityMarkdown(version);

@@ -20,6 +20,7 @@ it("opens the actual cycle task, output and editable trigger with active work ed
       agents={[{ id: "actual", name: "Marketing lead", role: "cmo" } as never]} onEdit={edit}
     />));
     expect(host.querySelector('[aria-label^="agent: Marketing lead"]')).toBeTruthy();
+    expect(host.querySelector('[aria-label="next: Return at next trigger · Schedule / event driven"]')).toBeTruthy();
     expect(host.querySelectorAll('path[data-active="true"]').length).toBeGreaterThan(0);
     await click("task: Make the next video");
     expect(host.querySelector('a[href="/issues/child"]')?.textContent).toBe("Open task and triage");
@@ -28,5 +29,19 @@ it("opens the actual cycle task, output and editable trigger with active work ed
     await click("trigger: Daily review"); await click("Edit trigger");
     expect(edit).toHaveBeenCalledWith("schedule");
     await click("Zoom in workflow"); expect(host.textContent).toContain("125%");
+  } finally { await act(async () => root.unmount()); host.remove(); }
+});
+
+it.each([
+  { name: "no automatic triggers", status: "active", triggers: [], expected: "Manual runs only" },
+  { name: "a disabled schedule", status: "active", triggers: [{ id: "schedule", kind: "schedule", enabled: false }], expected: "Manual runs only" },
+  { name: "an enabled event beside a disabled schedule", status: "active", triggers: [{ id: "schedule", kind: "schedule", enabled: false }, { id: "webhook", kind: "webhook", enabled: true }], expected: "Schedule / event driven" },
+  { name: "a paused routine with an enabled schedule", status: "paused", triggers: [{ id: "schedule", kind: "schedule", enabled: true }], expected: "paused" },
+  { name: "an archived routine without triggers", status: "archived", triggers: [], expected: "archived" },
+])("shows the actual next-cycle availability for $name", async ({ status, triggers, expected }) => {
+  const host = document.createElement("div"), root = createRoot(host); document.body.append(host);
+  try {
+    await act(async () => root.render(<RoutineWorkflow routine={{ id: "routine", status, triggers } as never} tasks={[]} outputs={[]} agents={[]} onEdit={vi.fn()} />));
+    expect(host.querySelector('[data-kind="next"]')?.getAttribute("aria-label")).toBe(`next: Return at next trigger · ${expected}`);
   } finally { await act(async () => root.unmount()); host.remove(); }
 });

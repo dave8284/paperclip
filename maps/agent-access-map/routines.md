@@ -52,6 +52,12 @@ document anchors do not pin the routine's original project/parent revision.
 Creation, replies and reopening retain that gate; current routine edits remain
 available through current-scope authorization. No historical scope is guessed.
 
+Separate board UI proof covers two paused illustrative routines linked through
+the existing `PATCH /api/routines/{id}` parentIssueId/baseRevisionId contract.
+Their saved revision, shared-parent navigation and reload persistence are visible;
+triggers remain disabled and neither has runs. This does not qualify an agent
+mutation path or turn the parent relationship into an execution dependency.
+
 Gaps: No dedicated production manage_routine binding; generic `call_api` provides
 the permitted REST path. Creation needs a responsible user resolved from the parent
 issue or company default.
@@ -141,13 +147,17 @@ Gaps: Scheduled/waiting native agents cannot independently call this operation:
 native authority requires a running bound run. A separate control binding remains absent.
 Controlled SQL transport and listener-free route checks cover override authority,
 changes while waiting, private scopes and replay. Persisted/live execution remains
-unqualified until a delegated company cycle actually completes. PostgreSQL
+separate from those transport checks; the completed delegated Orbit cycle is
+visible in the board browser, but this pass does not qualify all actor paths. PostgreSQL
 contention is not reproduced by these transport fixtures; the native write
 transaction releases authority locks before heartbeat wakeup.
 
 Agent OS workflow editing uses these same definition/trigger APIs and captured
 revision IDs. Its diagram is a board projection of authorized routine/run/task
 records, not a new executor. Agent entry points and approvals are unchanged.
+The next-cycle label uses the current lifecycle status and enabled saved triggers:
+an active routine without one is manual-only. Browser proof of that label and
+completed-cycle output inspection does not authorize or prove automatic recurrence.
 
 ## `history`
 

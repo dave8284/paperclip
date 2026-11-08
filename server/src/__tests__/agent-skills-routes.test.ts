@@ -1,5 +1,6 @@
 import express from "express";
 import { readFile } from "node:fs/promises";
+import { getTableName } from "drizzle-orm";
 import request from "supertest";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -163,6 +164,10 @@ function registerModuleMocks() {
     secretService: () => mockSecretService,
   }));
 
+  vi.doMock("../services/access.js", () => ({
+    accessService: () => mockAccessService,
+  }));
+
   vi.doMock("../services/instance-settings.js", async (importOriginal) => ({
     ...(await importOriginal<typeof import("../services/instance-settings.js")>()),
     instanceSettingsService: () => mockInstanceSettingsService,
@@ -178,11 +183,11 @@ function registerModuleMocks() {
   }));
 }
 
-function createDb(requireBoardApprovalForNewAgents = false) {
+function createDb(requireBoardApprovalForNewAgents = false, rowsByTable?: Record<string, Record<string, unknown>[]>) {
   return {
     select: vi.fn(() => ({
-      from: vi.fn(() => ({
-        where: vi.fn(async () => [
+      from: vi.fn((table) => ({
+        where: vi.fn(async () => rowsByTable?.[getTableName(table)] ?? [
           {
             id: "company-1",
             requireBoardApprovalForNewAgents,
@@ -1173,7 +1178,7 @@ describe("agent skill routes", () => {
           adapterType: "claude_local",
         }),
         expect.objectContaining({
-          "AGENTS.md": "You are an agent in a Paperclip company.\n",
+          "AGENTS.md": "You are an agent in an AgentOS company.\n",
         }),
         { entryFile: "AGENTS.md", replaceExisting: false },
       );
@@ -1289,8 +1294,12 @@ describe("agent skill routes", () => {
   });
 
   it("does not trust an agent-supplied onboarding marker to select chief-of-staff defaults", async () => {
-    mockAgentService.getById.mockResolvedValue(makeAgent("claude_local"));
-    const res = await request(await createApp(createDb(), {
+    const hiringAgent = { ...makeAgent("claude_local"), lifecycleState: "ready" };
+    mockAgentService.getById.mockResolvedValue(hiringAgent);
+    const db = createDb(false, {
+      agents: [hiringAgent], company_operating_profiles: [], agentos_departments: [],
+    });
+    const res = await request(await createApp(db, {
       type: "agent", agentId: "11111111-1111-4111-8111-111111111111", companyId: "company-1",
     }))
       .post("/api/companies/company-1/agent-hires")
@@ -1301,6 +1310,21 @@ describe("agent skill routes", () => {
     await vi.waitFor(() => expect(mockAgentInstructionsService.materializeManagedBundle).toHaveBeenCalled());
     expect(mockAgentInstructionsService.materializeManagedBundle.mock.calls[0][1]["AGENTS.md"])
       .not.toContain("chief of staff");
+  });
+
+  it.each(["preparing", "terminated"])("rejects an onboarding marker from a %s hiring employee", async (lifecycleState) => {
+    const hiringAgent = { ...makeAgent("claude_local"), lifecycleState };
+    mockAgentService.getById.mockResolvedValue(hiringAgent);
+    const res = await request(await createApp(createDb(false, { agents: [hiringAgent] }), {
+      type: "agent", agentId: hiringAgent.id, companyId: "company-1",
+    }))
+      .post("/api/companies/company-1/agent-hires")
+      .send({ name: "Biff", role: "general", adapterType: "claude_local",
+        runner: "legacy", onboardingFirstAgent: true });
+    expect(res.status, JSON.stringify(res.body)).toBe(403);
+    expect(res.body.error).toBe("The hiring employee is unavailable.");
+    expect(mockAgentService.create).not.toHaveBeenCalled();
+    expect(mockAgentInstructionsService.materializeManagedBundle).not.toHaveBeenCalled();
   });
 
   it("creates nothing for rejected Biff payloads and exactly one approval-gated hire after correction", async () => {

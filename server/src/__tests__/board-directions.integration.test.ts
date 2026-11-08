@@ -32,7 +32,7 @@ describeEmbeddedPostgres("persisted company-isolated board directions", () => {
     const [portfolio] = await ctx.db.insert(agentosPortfolios).values({ homeCompanyId: f.companyId, ownerUserId: f.userId, name: "Board" }).returning();
     await ctx.db.insert(agentosPortfolioCompanies).values([f.companyId, target.id].map(companyId => ({ portfolioId: portfolio.id, companyId })));
     const [chat] = await ctx.db.insert(issues).values({ companyId: f.companyId, title: "Board conversation", assigneeAgentId: friday.id,
-      conversationAgentId: friday.id, conversationUserId: f.userId, responsibleUserId: f.userId }).returning();
+      conversationAgentId: friday.id, conversationUserId: f.userId, conversationState: "waiting", responsibleUserId: f.userId }).returning();
     const [run] = await ctx.db.insert(heartbeatRuns).values({ companyId: f.companyId, agentId: friday.id, issueId: chat.id, nativeIssueId: chat.id,
       scopeKind: "issue", status: "running", runtimeMode: "native", responsibleUserId: f.userId,
       contextSnapshot: { issueId: chat.id, conversationSessionGeneration: chat.conversationSessionGeneration } }).returning();
@@ -81,7 +81,7 @@ describeEmbeddedPostgres("persisted company-isolated board directions", () => {
     await ctx.db.update(agentWakeupRequests).set({ runId }).where(eq(agentWakeupRequests.id, row.wakeupRequestId));
     await f.mandates.setBoardDirectionAuthority(f.owner, f.who, f.portfolio.id, f.input.mandateId, { expectedRevision: 1, expectedGrantId: f.input.grantId, enabled: false });
     const wakeup = vi.fn(); await boardDirectionDeliveryService(ctx.db, { heartbeat: { wakeup } }).sweepPending();
-    expect(wakeup).not.toHaveBeenCalled();
+    expect(wakeup.mock.calls.filter(([agentId]) => agentId === f.ceo.id)).toHaveLength(0);
     expect(await service.read(f.actor, f.companyId, row.id, 1)).toMatchObject({ dispatchState: "dispatched", taskStatus: "todo" });
   });
   it("cancels an unadmitted revoked handoff while preserving the company's saved task", async () => {
@@ -213,7 +213,7 @@ describeEmbeddedPostgres("persisted company-isolated board directions", () => {
     await expect(issueService(ctx.db).addComment(f.chat.id, "Must validate the entire old reply receipt.", actor, { completionReply: true })).rejects.toMatchObject({ status: 403 });
     expect(await ctx.db.select().from(issueComments).where(eq(issueComments.issueId, f.chat.id))).toMatchObject([{ id: reply.id }]);
   });
-  it("notifies the existing return worker only after a target-company completion commits", async () => {
+  it("notifies after outer settlement and retains no delivery from a rolled-back completion", async () => {
     const f = await returnFixture(), notified = vi.fn();
     const unsubscribe = subscribeDeliveryWork(ctx.db, DELIVERY_QUEUES.chatCompletion, notified);
     try {
@@ -222,7 +222,10 @@ describeEmbeddedPostgres("persisted company-isolated board directions", () => {
         expect(notified).not.toHaveBeenCalled();
         throw new Error("rollback completion");
       })).rejects.toThrow("rollback completion");
-      expect(notified).not.toHaveBeenCalled(); expect(await f.rows()).toHaveLength(0);
+      // Settlement also wakes recovery after rollback/uncertain commit. Only
+      // durable rows authorize delivery; a notification is never completion.
+      expect(notified).toHaveBeenCalledTimes(1); expect(await f.rows()).toHaveLength(0);
+      notified.mockClear();
       await f.finish(); expect(notified).toHaveBeenCalledTimes(1);
       expect(await f.rows()).toMatchObject([{ companyId: f.companyId, taskId: f.saved.direction.taskId }]);
       const run = await f.prepare();

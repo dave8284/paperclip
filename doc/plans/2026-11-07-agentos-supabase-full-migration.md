@@ -1,9 +1,16 @@
 # AgentOS full database migration to Supabase
 
-Date: 7 November 2026. **C05 — Not fixed** in the
+Date: 7 November 2026. **C05 — Fixed (requested migration plan)** in the
 [existing worksheet](2026-11-03-agentos-requirements-reconciliation.md).
 The owner selected **“Plan a full database migration.”** This plan does not
 authorize production data movement or cutover. Cloud/public hosting stays deferred.
+
+**Planning deliverable prepared — 8 November:** the scope, destination, access
+changes, native implementation, measured local restore/import rehearsal,
+execution gates and rollback procedure are specified below. Remaining destination
+changes and production acceptance belong to a separately authorized migration.
+They are not permission to carry out the move while completing this plan. The
+worksheet records planning completion separately from production migration.
 
 ## Destination and completion boundary
 
@@ -19,7 +26,7 @@ permissions, private-resource checks, execution, audit and recovery. Existing
 Google/Better Auth accounts and sessions remain. Supabase Auth and direct browser
 database access are not needed.
 
-Completion requires both database stores migrated, attached files readable,
+Future migration acceptance requires both database stores migrated, attached files readable,
 backups restored successfully and native privacy/recovery acceptance passed.
 PostgreSQL alone is an intermediate milestone. Remote storage does not make
 local agents, speech services or workers run while the Mac is off.
@@ -79,8 +86,9 @@ extensions before rehearsal.
    manifest. Reject source changes, conflicting destination rows and incompatible
    schemas. Identical replays must add no duplicates. Verify report/selection/
    policy parity before enabling writes. The resumable staging importer and
-   private PostgreSQL target are now implemented in source; their real PostgreSQL
-   acceptance remains unfinished. The async runtime factory, shared policy programs,
+   private PostgreSQL target are now implemented; ten disposable PostgreSQL cases
+   and the local PostgreSQL 17/18 import rehearsal below pass. Managed destination
+   acceptance remains separate. The async runtime factory, shared policy programs,
    separate activation and native host/HTTP awaits are now implemented in source.
 4. Back up both database schemas plus external files. The current native
    PostgreSQL backup includes `--clean`: keep it for source recovery, but do not
@@ -244,18 +252,22 @@ new test files also have a separate semantic check. The independently packed
 package passes its 77 package checks, syntax build and public export imports.
 Initial startup fixtures lacked the new delivery subscription boundary and capacity
 reconciliation method; corrected fixtures now pass, including accounting wake and
-unsubscribe wiring. Logs retain those failures. Ten actual PostgreSQL cases are
-authored but unrun, covering import, lifecycle, namespaces, replay, full routing,
-revocation and large payloads. None of these controlled checks proves PostgreSQL
-locking/performance or production acceptance. No live migration, activation or
+unsubscribe wiring. Logs retain those failures. The ten actual PostgreSQL cases
+subsequently passed after the process/listener restriction was lifted, covering
+import, lifecycle, namespaces, replay, routing, revocation and large payloads.
+Log: `/private/tmp/agentos-model-postgres-live-fixture-20261108.log` (10 passed,
+4.69 seconds). These use a disposable embedded PostgreSQL 18.1 database; they
+do not establish managed Supabase performance or production acceptance.
+No live migration, activation or
 runtime configuration change occurred. The standalone command still uses SQLite;
 remote use is explicit through the async factory. Multiple writers/replicas need
 an external wake/recovery contract before production use.
 Logs: `/private/tmp/agentos-model-postgres-{regression,host-tests,host-tsc-r2,host-build,startup-tests-r3,test-types-r3,packed-tests,gates}-20261108.log`.
 
-Next: execute real importer/report/selection/locking parity and recovery, complete
-source/target/file/key preflight and backup/restore rehearsal, then present concrete
-cutover review. **C05 remains Not fixed.**
+Next execution gates: managed-target importer/report/selection/locking parity and
+recovery, final source/target/file/key preflight and an approved cutover window.
+The local restore/import rehearsal below resolves the earlier local compatibility
+gap. The application still uses its original local stores.
 
 ## Live destination preflight — 8 November 2026
 
@@ -339,7 +351,7 @@ delivery state; create fresh encrypted PostgreSQL, consistent SQLite, file and
 key/configuration backups; verify referenced-object coverage and isolated
 restore/import parity. Retain the older archive as dated evidence. Effective
 destination API/connector restrictions, real PostgreSQL importer/locking checks,
-rehearsal and concrete cutover approval remain open. **C05 remains Not fixed.**
+rehearsal and concrete cutover approval remain open. **Historical checkpoint: C05 was still Not fixed here; the later planning deliverable below completes the requested plan.**
 
 At 05:18:16–05:18:21 UTC, the authorized native manual-backup endpoint produced
 `paperclip-20261108-181816.sql.gz` (15,997,900 bytes). A complete gzip CRC read
@@ -374,3 +386,147 @@ Full gzip verification passes (97,087,236 decompressed bytes; decompressed SHA-2
 Native retention pruned one eligible archive. This verifies the private-file fix
 on the actual backup path. It remains an online local backup, not an encrypted,
 drained, restored or cross-store migration baseline.
+
+## Isolated PostgreSQL 18 → 17 rehearsal — 8 November 2026
+
+At 10:33–10:35 UTC, the native restore owner restored the same retained archive
+into two new, disposable local clusters: **PostgreSQL 17.7 (Homebrew)** and
+**PostgreSQL 18.1 (embedded)**. Both used UTF8/UTC, private Unix sockets and
+`listen_addresses=''`; no application server, delivery worker or provider job
+was started against either copy. The live application and Supabase were unchanged.
+This exercises the required major-version boundary, not the exact managed 17.11
+server or its restricted migration role.
+
+The archive was `paperclip-20261108-215604.sql.gz`, created at
+**08:56:04.280 UTC**, copied privately with source inode/size/time stability
+checks. It is **17,979,349 compressed bytes**, SHA-256
+`35c1090f6d8fae80404fc7c164f0bdd54d6a872127298402817f95681aa75799`.
+Full gzip verification passes: **107,484,821 decompressed bytes**, SHA-256
+`911c5c6952b76ebf6a0b9ac7c2bd5f0f78b95dc4118c1680203e07fcd60f1de6`.
+The unmodified native archive includes destructive recovery statements; this
+success does **not** authorize restoring it into the managed project as-is.
+
+| Check | Observed result |
+| --- | --- |
+| Native `runDatabaseRestore` | PG17: **5.170 s**; PG18: **4.227 s**; both completed |
+| Application tables plus journal | **324 tables, 25,298 rows** on both |
+| Canonical table contents | Every table's count and SHA-256 matched; ordered PostgreSQL `to_jsonb(row)::text` with C collation, streamed 100 rows per batch |
+| Column definitions | **4,495** matched, including nullability, defaults, identity and generated flags |
+| Constraints | **1,363** ordinary constraints matched, including validation/deferral flags |
+| Indexes / triggers / application functions | **1,286 / 86 / 28** matched definitions |
+| Sequences | All **six** states/definitions matched, including `is_called`; generated identity sequences are included |
+| Extensions | `pg_trgm` 1.6, `fuzzystrmatch` 1.2 and `plpgsql` 1.0 matched |
+| Native migration inspection/application | Both `upToDate`; **394** original journal rows unchanged; no historical journal rewriting or new migration |
+
+The first socket probe failed before SQL execution: postgres.js did not use a
+URL `host` query parameter. The corrected invocation used its supported
+`PGHOST`/`PGPORT` Unix-socket configuration. The first raw constraint comparison
+also returned a mismatch: PostgreSQL 18 stores **2,854 named NOT NULL entries**
+in `pg_constraint`, while PostgreSQL 17 represents the same rule in column
+nullability. The complete column definitions and all non-`n` constraints match.
+The original mismatch is retained; it is not counted as an unexplained pass.
+
+The consistent SQLite backup captured at 05:28 UTC was independently inspected,
+then imported into the private Model Intelligence schema on each restored
+database. Both imports retained all twelve source tables and its **one row**,
+verified the manifest, and replayed identically. Both remain
+**`imported_unaccepted`, `runtimeEnabled: false`**. Manifest SHA-256:
+`165738d3ed9fada7985afcdea41f2c18d7cf8f1a262c5e060fd9dbeb5a1ea29e`.
+The PostgreSQL and SQLite snapshots are from different times; this is not a
+drained, atomic cross-store checkpoint or production routing acceptance.
+
+Private metadata evidence:
+`/private/tmp/agentos-pg-restore-rehearsal-report-20261108.json` (0600).
+Failure/success logs:
+`/private/tmp/agentos-pg-restore-rehearsal{,-r2,-followup,-final-checks}-20261108.log`.
+Both clusters were stopped normally, their postmaster PID files were confirmed
+absent, and their private database/archive copies were removed at **10:35:10 UTC**.
+Only metadata/scripts/logs remain; the original native archive is retained.
+
+## Refreshed destination and connector facts — 8 November 2026
+
+The authenticated native CLI metadata query at **10:36:16 UTC** still reports
+PostgreSQL **17.11**, 10,925,747 database bytes, 46 managed relations and **zero
+application relations**. Required extensions are available. Public default
+API-role privileges remain unsuitable for private application tables. The
+connection limit is still 60, with three superuser-reserved connections.
+
+Read-only CLI management checks now establish:
+
+- Backup listing returns **no available physical backups**, `pitr_enabled:false`
+  and `walg_enabled:true`. The latter does not establish a recoverable snapshot.
+- SSL enforcement reports `currentConfig.database:false`. This is not evidence
+  that TLS is unavailable; the proposed application connection must verify TLS
+  and the migration must require an enforced configuration before loading data.
+- Network restrictions currently allow `0.0.0.0/0` and `::/0`. The migration
+  proposal must constrain access where compatible with the actual client egress;
+  TLS, credential and native authorization gates remain required.
+
+Initial SSL/network invocations omitted the CLI's required `--experimental`
+flag, and the first SQL invocation supplied a path relative to the wrong
+workdir. Corrected read-only calls passed; no login or settings update occurred.
+Reports/logs: `/private/tmp/agentos-c05-target-{backups,ssl-r2,network-r2,current-r2}-20261108.{json,log}`.
+Despite `--output json`, the network command emitted text; it is not a parsed
+JSON receipt. CLI 2.90.0 exposes no read command for the effective Data API
+configuration. Its actual enabled state and current billing plan remain
+unverified; neither is inferred from local config or missing role overrides.
+
+Read-only native connector inspection at **10:37:38 UTC** confirms the active
+**AgentOS data and services** connection is pinned to this project at
+`mcp.supabase.com/mcp`, with one active organization grant and one company-wide
+installation in Platform Operations. Its 17 catalog tools include SQL, schema,
+logs and diagnostics. SQL, migration, deployment and storage-configuration
+mutations require native approval; read tools remain available. These metadata
+checks do not prove effective per-agent denial. Before private app data is loaded,
+remove the broad agent installation/grants or replace them with native
+company-authorized tools, and demonstrate denied SQL/log/schema access using
+actual agent identities. Friday's private portfolio reads must continue through
+the native mandate boundary. Report:
+`/private/tmp/agentos-c05-native-connector-preflight-20261108.json` (0600).
+
+## Concrete migration proposal and remaining execution gates
+
+The proposed move keeps AgentOS, authentication, workers and files on this Mac;
+only its two database stores move to the existing dedicated Sydney project.
+It does not start cloud hosting, change billing, expose browser SQL or merge
+company authorization. Existing company IDs, private records, account bindings,
+task history, migration history and encryption keys must survive unchanged.
+
+Before requesting cutover approval, complete these gates in order:
+
+1. **Managed destination preparation:** establish the actual Data API and billing
+   settings; prepare owner-reviewed API/grant/connector restrictions and verified
+   TLS. Rehearse those changes and a scoped archive without clean/owner/privilege
+   statements on a private managed staging target. Verify the intended migration
+   role can execute required session settings, extensions, constraints and
+   functions. The local superuser restore does not prove those privileges.
+2. **Recovery and capacity:** choose and verify an encrypted off-site backup
+   destination for PostgreSQL, SQLite, files and protected key/configuration
+   material. Restore it, verify referenced objects, and demonstrate the bounded
+   application/controller/model pools with managed-service headroom. Keep the
+   existing plan unless measured capacity requires an explicitly reviewed change;
+   an empty backup list is not a recovery policy.
+3. **Measured rehearsal:** rerun this archive/content comparison and native
+   Model Intelligence import on managed PostgreSQL 17.11, preserving managed
+   schemas. Exercise native privacy, owner authentication, secret/artifact reads,
+   recovery/outbox replay and rollback without production dispatch. Record total
+   network restore, verification and restart time, not just local SQL time.
+4. **Window and drain:** propose the maintenance window from measured drain,
+   final backups, network transfer/import, file verification and guarded restart
+   durations, with a contingency at least as long as the rehearsed restore and
+   rollback. The **5.170-second local restore is only a lower-bound component**;
+   it is not a promised downtime. Use native admission/drain controls, verify no
+   active writer or delivery obligation, and gate incoming mutations before the
+   final common checkpoint. Unresolved provider effects or lost ingress replay
+   block cutover. Supply exact target/config identities and the rollback manifest
+   for owner approval; do not schedule or execute the move from this plan alone.
+5. **Single-writer cutover and rollback:** retain admission hold through import,
+   activation and guarded restart. Before any destination write, reverting to
+   the untouched local stores is the rollback. After destination writes begin,
+   hold all writers and restore/reconcile those new records into an isolated
+   local target before switching; never point back at a stale local snapshot.
+   Release admission only after native data/privacy/recovery checks pass.
+
+The full planning deliverable is now concrete and reviewable. The listed gates
+are intentionally unexecuted migration conditions, not approvals or claims of a
+completed production move. No current application data has moved to Supabase.

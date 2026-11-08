@@ -1,5 +1,5 @@
 import { notifyDeliveryWork, DELIVERY_QUEUES } from "./delivery-work-notifications.js";
-import { and, asc, eq, inArray, lte, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, lt, lte, sql } from "drizzle-orm";
 import { agents, agentWakeupRequests, chatCompletionDeliveries as deliveries, chatTaskHandoffs as handoffs,
   heartbeatRuns, issueComments, issueDocuments, issues, type Db } from "@paperclipai/db";
 import { instanceSettingsService } from "./instance-settings.js";
@@ -53,9 +53,21 @@ export async function recordChatCompletionForTask(tx: Connection, task: Issue): 
 
 /** Must run on the same transaction as status projection (including native arbitration). */
 export async function recordChatCompletion(tx: Connection, before: Issue, after: Issue): Promise<boolean> {
-  if (before.status === after.status) return false;
+  if (before.status === after.status) {
+    if (after.status !== "done" || before.statusVersion === after.statusVersion) return false;
+    // Ownership changes advance the task version without reopening it. Carry
+    // an outstanding report into a fresh receipt; a delivered report is not
+    // another completion and must not notify the conversation twice.
+    const [outstanding] = await tx.select({ id: deliveries.id }).from(deliveries).where(and(
+      eq(deliveries.taskId, after.id), lt(deliveries.statusVersion, after.statusVersion),
+      inArray(deliveries.status, [...pending]),
+    )).limit(1);
+    if (!outstanding) return false;
+  }
+  // Replaying the same committed transition must not supersede its own receipt
+  // (or a newer one) before the unique insert is ignored.
   await tx.update(deliveries).set({ status: "superseded" }).where(and(eq(deliveries.taskId, after.id),
-    inArray(deliveries.status, [...pending])));
+    lt(deliveries.statusVersion, after.statusVersion), inArray(deliveries.status, [...pending])));
   return after.status === "done" ? recordChatCompletionForTask(tx, after) : false;
 }
 

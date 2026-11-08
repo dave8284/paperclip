@@ -61,6 +61,10 @@ version. A late child-result turn must not invalidate the queued reviewer while
 leaving its card pending. The PostgreSQL control-plane fixture exercises that
 sequence through subsequent reviewer admission/resolution; current live proof is
 tracked in the AgentOS completion ledger.
+An authoritatively withdrawn plain confirmation reaches its assignee as cancelled
+administrative context with the recorded reason; it is never approval. Governed
+tool/secret actions retain separate checks. Real PostgreSQL withdrawal tests cover
+native service withdrawal through runtime response materialization.
 
 Inspect the task’s execution policy and available review, pause, resume, or stop controls.
 

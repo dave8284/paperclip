@@ -27,6 +27,11 @@ Open `/chats`, choose an agent, or use `/chats/:agentRef` and its conversation s
 
 ### `project-handoff`
 
+Completion receipt replay preserves the existing pending report. A Done task's
+ownership-only version change replaces an outstanding receipt, while an already
+delivered report does not notify twice. PostgreSQL completion and board-return
+tests cover replay, later transitions and rollback/settlement notifications.
+
 Ask for project work in Agent Chat and follow its created project/task links.
 
 ### `conference-room`

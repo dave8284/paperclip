@@ -130,6 +130,10 @@ An already pending governance wait preserves its current status decision/version
 including late child-result finalization and attention routing. This preserves
 the original review assignment; it does not authorize a reviewer in an unrelated
 conversation run or relax company, assignee, revision or execution-lock checks.
+Plain confirmation withdrawal requires persisted cancelled/withdrawn state,
+resolver and time before native projection. Its reason is administrative context,
+not an approval or successful review. Tool/secret authority remains separate;
+foreign cards and unproven cancellation still fail.
 
 Evidence: `source-only` —
 [implementation](../../server/src/routes/issue-tree-control.ts#L95) at the reviewed

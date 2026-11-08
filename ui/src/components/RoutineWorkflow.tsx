@@ -31,7 +31,8 @@ export function RoutineWorkflow({ routine, cycle, task, tasks, outputs, agents, 
   connect("lead", "cycle", task?.status === "in_progress");
   childTasks.forEach((child, index) => { nodes.push({ id: child.id, title: child.title, kind: "task", task: child, status: `${agents.find(agent => agent.id === child.assigneeAgentId)?.name ?? "Unassigned"} · ${child.status.replaceAll("_", " ")}`, x: 750, y: 100 + index * 105 }); connect("cycle", child.id, child.status === "in_progress"); });
   visibleOutputs.forEach((output, index) => { const parent = output.issueId === task?.id ? "cycle" : childTasks.find(child => child.id === output.issueId)?.id; if (!parent) return; nodes.push({ id: output.id, title: output.title, output, kind: "output", status: `${output.status} · ${output.reviewState}`, x: 1000, y: 100 + index * 105 }); connect(parent, output.id); });
-  nodes.push({ id: "next", title: "Return at next trigger", kind: "next", status: routine.status === "active" ? "Schedule / event driven" : routine.status, x: 510, y: height - 100 });
+  const nextCycleStatus = routine.status !== "active" ? routine.status : routine.triggers.some(trigger => trigger.enabled) ? "Schedule / event driven" : "Manual runs only";
+  nodes.push({ id: "next", title: "Return at next trigger", kind: "next", status: nextCycleStatus, x: 510, y: height - 100 });
   connect("cycle", "next");
   triggers.filter(trigger => trigger.enabled).forEach(trigger => connect("next", trigger.id));
   const positions = new Map(nodes.map(node => [node.id, node]));

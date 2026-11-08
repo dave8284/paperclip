@@ -117,7 +117,7 @@ capability transfer, hidden provider context or owner business acceptance.
 
 ## Known gaps
 
-Portfolio task creation/delegation, attached binaries, automated capability evaluations and the portfolio Decisions/graph projections remain later steps of the approved operating-model plan. Explicit summary/private-content gateways and the manual capability lifecycle below have source implementation and focused checks, with PostgreSQL/runtime acceptance pending. Company-scoped staffing does not establish broader authorities. Delegated retirement has source regression coverage, with PostgreSQL execution still blocked by the known sandbox listener denial. This screen connects existing company agents; it does not create model subscriptions or start runs. Refresh and focus refetch retrieve current state; portfolio-wide live subscription is not implemented. Department is an optional assignment label, not an independent permission boundary. The home company is retained for portfolio administration; archive it instead of permanently deleting it.
+Automated evaluated-capability publication/adoption and portfolio Decisions/graph projections remain separate qualification work. Native Friday directions now completed direct-specialist and head/analyst company journeys with actual output review and automatic board return. Shared employee awareness/revocation/assignment retirement also ran successfully; current PostgreSQL checks are no longer blocked by listeners. Company-scoped staffing does not establish broader authorities, and the original analyst cycle preceded its narrowed current project policy. Owner acceptance and packet-isolated review remain distinct. This screen connects existing company agents; it does not create model subscriptions or start runs. Refresh and focus refetch retrieve current state; portfolio-wide live subscription is not implemented. Department labels alone do not grant access. The home company is retained for portfolio administration; archive it instead of permanently deleting it.
 
 ## Explicit portfolio read access
 
@@ -209,7 +209,10 @@ version; older releases remain reachable. Recent decision history is explicitly
 limited to 100 receipts per company. Current selection is read from native
 configuration, so manual removal or a changed selection is not labelled adopted.
 Source companies and skills with published evidence are retained by foreign keys;
-archive the source company rather than deleting it.
+archive the source company rather than deleting it. Published test tasks remain
+inspectable after later tests supersede them or their old expiry passes. Cleanup
+and publication share the test receipt lock: a published receipt is retained,
+and an already-expired task cannot be newly published.
 
 [Focused content/selection checks](../../server/src/__tests__/agentos-capabilities-contract.test.ts)
 and [component checks](../../ui/src/components/WorkforceCapabilities.test.tsx)
@@ -217,8 +220,9 @@ cover privacy projection, exact pins, review requirements, company choices,
 refusal/retry and older-version rollback controls. The additional
 [database/HTTP cases](../../server/src/__tests__/agentos-workforce.test.ts) cover
 real two-company adoption, stale/concurrent intent, policy/revocation and audit
-rollback; they require an isolated PostgreSQL/listener environment and have not
-run in this sandbox. Browser and native agent delivery acceptance remain open.
+rollback. These cases and published-evidence supersession/expiry races passed
+against isolated PostgreSQL on 8 November 2026. Browser, evaluated improvement
+and native agent delivery acceptance remain open.
 
 Friday’s private portfolio read scope also supports finding actual company CEOs
 and department heads, optionally for a readable project. Returned names, native

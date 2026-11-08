@@ -31,6 +31,9 @@ current triggers, actual cycle owner, cycle task, child tasks and stored outputs
 on a pan/zoom workflow. Select a node to inspect or triage its native record;
 Edit loop and Edit trigger use revision-checked native updates. Current definition
 nodes are labelled separately from past cycle results. Only recorded work animates.
+An active loop with no enabled saved triggers shows **Manual runs only** on its
+next-cycle node; enabled triggers retain **Schedule / event driven**. Paused and
+archived loops retain their lifecycle status there.
 The graph bounds child tasks and outputs to 30; complete history stays on the task.
 The editor also changes the project and parent objective through the same native
 revision check. A bounded authorized task search finds parent objectives; related
@@ -40,7 +43,11 @@ historical cycles and restore targets. Trigger mutations share the same guard.
 Run-now project and employee overrides retain native assignment and visibility
 checks, including changes while the request waits. Repeating a request does not
 reveal a cycle whose task became private.
-Workflow interaction tests pass; visual browser acceptance remains outstanding.
+Focused workflow interaction tests pass. Board browser proof covers the actual
+completed Orbit cycle, its assigned analyst, task navigation, stored report and
+cycle/revision history. Northstar's two paused illustrative loops also show their
+shared parent, navigate to each other and retain that relationship after reload.
+Those examples have no runs; they demonstrate relationships, not business results.
 
 ### `trigger-history`
 
@@ -56,6 +63,13 @@ Preconditions: follow the [baseline](./README.md#before-driving-a-journey). Use 
 Automated: [routine detail helper](../../ui/src/pages/RoutineDetail.test.tsx) tests project-selector options, not the rendered editor. [Routine service](../../server/src/__tests__/routines-service.test.ts) covers server contracts. Saving and running through the editor remain manual checks.
 
 Manual: Save an agent, request, project, and a required variable. Reload and inspect the saved definition. Run now with a distinguishable input, follow the resulting task, and verify its output and history entry. Check a missing required input.
+
+For related loops, use two authorized paused examples with the same parent task.
+Open each from the other's **Loops with the same parent task** control, reload,
+and inspect the saved parent and definition revision. Follow the parent task link.
+Verify their independent triggers, disabled Run one cycle controls and empty cycle
+histories without activating them. This relation does not make one loop execute
+the other. Inspect a completed operational cycle separately for actual outputs.
 
 Variables are detected from `{{name}}` placeholders; mark a detected variable
 Required and verify missing input prevents Run routine. Configuration can be
@@ -78,7 +92,9 @@ writer settlement, outer rollback and lock contention. Project-bound employees
 can read only routines whose native project and parent-task checks both pass,
 with current company membership; they cannot enumerate global routines or use
 scope to bypass membership/user denials. Controlled and PostgreSQL cases cover
-this path; the existing live ORB-10 cycle still needs loaded-build settlement.
+this path. The loaded live ORB-10 cycle now reads completed and its real task,
+outputs and manual-cycle history render in the browser. Its schedule remains
+disabled; this is not proof of automatic recurrence or other trigger providers.
 
 ## Gotchas
 

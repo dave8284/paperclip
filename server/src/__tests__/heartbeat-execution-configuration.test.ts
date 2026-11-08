@@ -136,7 +136,10 @@ describePostgres("heartbeat execution configuration through adapter dispatch", (
 
   it("resolves an unbound profile agent through native selection and refuses an API-billed default before dispatch", async () => {
     const f = await seed(true);
-    await db.insert(companyOperatingProfiles).values({ companyId: f.companyId, fridayAgentId: f.agentId });
+    // Friday directs the company team; the delivery employee is a separate
+    // identity so this fixture reaches the resolved-credential billing policy.
+    const [friday] = await db.insert(agents).values({ companyId: f.companyId, name: "Friday", status: "idle" }).returning();
+    await db.insert(companyOperatingProfiles).values({ companyId: f.companyId, fridayAgentId: friday.id });
     await db.update(agents).set({ runtimeConfig: {}, adapterConfig: { model: "fixture-model" } }).where(eq(agents.id, f.agentId));
     const { finished, input } = await execute(f);
     expect(finished.status).toBe("failed");

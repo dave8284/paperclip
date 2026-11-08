@@ -12,6 +12,7 @@ import { companySkillService } from "../services/company-skills.js";
 import { startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
 import { errorHandler } from "../middleware/index.js";
 import { agentosWorkforceRoutes } from "../routes/agentos-workforce.js";
+import { companySkillRoutes } from "../routes/company-skills.js";
 import { fridayRoutes } from "../routes/friday.js";
 import { deleteCompany } from "../services/company-deletion.js";
 import { deleteAgentDependencies } from "../services/agent-deletion.js";
@@ -72,7 +73,7 @@ describe("Agent OS shared workforce", () => {
       slug: `review-${randomUUID()}`, name: "Reviewed method", markdown, sourceType: "generated" }).returning();
     const [version] = await db.insert(companySkillVersions).values({ companyId: f.one.id, companySkillId: skill.id,
       revisionNumber: 1, fileInventory: [{ path: "SKILL.md", kind: "skill", content: markdown }] }).returning();
-    const [issue] = await db.insert(issues).values({ companyId: f.one.id, title: "Private capability test", description: "Private source context", status: "done" }).returning();
+    const [issue] = await db.insert(issues).values({ companyId: f.one.id, title: "Private capability test", description: "Private source context", status: "done", harnessKind: "skill_test", workMode: "skill_test" }).returning();
     const [test] = await db.insert(companySkillTestRuns).values({ companyId: f.one.id, skillId: skill.id, skillVersionId: version.id,
       agentId: f.first.id, issueId: issue.id, inputSnapshot: "Private evaluation task", outputSnapshot: "Private test evidence", status: "succeeded" }).returning();
     const intent = { id: randomUUID(), employeeId: f.employeeInput.id, capabilityKey: "review", name: "Reviewed method",
@@ -419,6 +420,132 @@ describe("Agent OS shared workforce", () => {
     const view = await request(f.api).get(`${f.base}/employees/${f.employeeInput.id}/capabilities`).expect(200);
     expect(view.body.assignments.every((assignment: { selected: Array<{ releaseId: string }> }) => assignment.selected[0]?.releaseId === first.intent.id)).toBe(true);
     expect(view.body.latestRevisions.review).toBe(2);
+  });
+  it("retains published capability test harnesses after native supersession and expiry", async () => {
+    const f = await seed(), source = await capabilityFixture(f);
+    await request(f.api).post(`${f.base}/capabilities`).send(source.intent).expect(201);
+    const skills = companySkillService(db);
+    const replacement = await skills.createTestRun(f.one.id, source.skill.id,
+      { content: "Separate replacement evaluation", agentId: f.first.id, skillVersionId: source.version.id },
+      { type: "user", userId: f.owner }, {
+        createHarnessIssue: async issue => {
+          await db.insert(issues).values({ ...issue, companyId: f.one.id });
+          return { id: issue.id };
+        }, wakeHarnessIssue: async () => null, retentionDays: 7,
+      });
+    expect(replacement.id).not.toBe(source.test.id);
+    expect((await skills.getTestRunDetail(f.one.id, source.skill.id, source.test.id))?.supersededAt).toBeInstanceOf(Date);
+    expect(await skills.pruneExpiredTestHarnessIssues(f.one.id, new Date(Date.now() + 8 * 86_400_000))).toEqual({ pruned: 0 });
+    const detail = await skills.getTestRunDetail(f.one.id, source.skill.id, source.test.id);
+    expect(detail).toMatchObject({ outputSnapshot: "Private test evidence", taskExpired: false,
+      harnessContent: { available: true }, harnessIssue: { id: source.issue.id, hiddenAt: null } });
+    const nativeApi = express();
+    nativeApi.use((req, _res, next) => { req.actor = f.actor; next(); });
+    nativeApi.use("/api", companySkillRoutes(db)); nativeApi.use(errorHandler);
+    const response = await request(nativeApi).get(`/api/companies/${f.one.id}/skills/${source.skill.id}/test-runs/${source.test.id}`).expect(200);
+    expect(response.body).toMatchObject({ id: source.test.id, outputSnapshot: "Private test evidence", taskExpired: false,
+      harnessContent: { available: true }, harnessIssue: { id: source.issue.id, hiddenAt: null } });
+    await request(nativeApi).get(`/api/companies/${f.two.id}/skills/${source.skill.id}/test-runs/${source.test.id}`).expect(404);
+    expect((await db.select().from(companySkillTestRuns).where(eq(companySkillTestRuns.id, source.test.id)))[0].harnessIssueDeletedAt).toBeNull();
+    expect(await skills.pruneExpiredTestHarnessIssues(f.one.id, new Date(Date.now() + 9 * 86_400_000))).toEqual({ pruned: 0 });
+  });
+  it("rejects publication after an unpublished test harness has expired", async () => {
+    const f = await seed(), source = await capabilityFixture(f);
+    await db.update(companySkillTestRuns).set({ harnessIssueExpiresAt: new Date(Date.now() - 60_000) })
+      .where(eq(companySkillTestRuns.id, source.test.id));
+    expect(await companySkillService(db).pruneExpiredTestHarnessIssues(f.one.id)).toEqual({ pruned: 1 });
+    const detail = await companySkillService(db).getTestRunDetail(f.one.id, source.skill.id, source.test.id);
+    expect(detail).toMatchObject({ outputSnapshot: "Private test evidence", taskExpired: true, harnessContent: { available: false } });
+    await request(f.api).post(`${f.base}/capabilities`).send(source.intent).expect(422);
+  });
+  it.each(["publication", "expiry"] as const)("serializes capability evidence cleanup when %s holds the test first", async winner => {
+    const f = await seed(), source = await capabilityFixture(f);
+    const skills = companySkillService(db);
+    await db.update(companySkillTestRuns).set({ harnessIssueExpiresAt: new Date(Date.now() - 60_000) })
+      .where(eq(companySkillTestRuns.id, source.test.id));
+    if (winner === "publication") {
+      await db.execute(sql`create function capability_evidence_barrier() returns trigger language plpgsql as $$ begin if NEW.action = 'agentos.capability_published' then perform pg_advisory_xact_lock(830811032); end if; return NEW; end $$`);
+      await db.execute(sql`create trigger capability_evidence_barrier before insert on activity_log for each row execute function capability_evidence_barrier()`);
+    } else {
+      await db.execute(sql`create function capability_evidence_barrier() returns trigger language plpgsql as $$ begin if NEW.harness_issue_deleted_at is not null and OLD.harness_issue_deleted_at is null then perform pg_advisory_xact_lock(830811032); end if; return NEW; end $$`);
+      await db.execute(sql`create trigger capability_evidence_barrier before update on company_skill_test_runs for each row execute function capability_evidence_barrier()`);
+    }
+    let release!: () => void, locked!: (pid: number) => void;
+    const releaseLock = new Promise<void>(resolve => { release = resolve; });
+    const barrierLocked = new Promise<number>(resolve => { locked = resolve; });
+    const holder = db.transaction(async tx => {
+      await tx.execute(sql`select pg_advisory_xact_lock(830811032)`);
+      const [row] = await tx.execute<{ pid: number }>(sql`select pg_backend_pid() as pid`);
+      locked(row.pid); await releaseLock;
+    });
+    const holderPid = await barrierLocked;
+    let publication: Promise<request.Response> | undefined;
+    let cleanup: Promise<{ pruned: number }> | undefined;
+    if (winner === "publication") publication = request(f.api).post(`${f.base}/capabilities`).send(source.intent).then(response => response);
+    else cleanup = skills.pruneExpiredTestHarnessIssues(f.one.id);
+    try {
+      let writerPid: number | undefined;
+      await expect.poll(async () => {
+        const [row] = await db.execute<{ pid: number }>(sql`select waiter.pid from pg_stat_activity waiter
+          where waiter.datname=current_database() and ${holderPid}=any(pg_blocking_pids(waiter.pid))`);
+        writerPid = row?.pid; return !!writerPid;
+      }, { timeout: 5000, interval: 25 }).toBe(true);
+      if (winner === "publication") {
+        cleanup = skills.pruneExpiredTestHarnessIssues(f.one.id);
+        await expect.poll(async () => {
+          const [row] = await db.execute<{ waiting: boolean }>(sql`select exists(select 1 from pg_stat_activity waiter
+            where waiter.datname=current_database() and ${writerPid!}=any(pg_blocking_pids(waiter.pid))) as waiting`);
+          return row.waiting;
+        }, { timeout: 5000, interval: 25 }).toBe(true);
+        release(); await holder;
+        expect((await publication!).status).toBe(201);
+        expect(await cleanup).toEqual({ pruned: 0 });
+        expect(await skills.getTestRunDetail(f.one.id, source.skill.id, source.test.id))
+          .toMatchObject({ taskExpired: false, harnessContent: { available: true }, harnessIssue: { hiddenAt: null } });
+      } else {
+        // Publication uses NOWAIT on the test receipt: conflict while cleanup
+        // owns it, then reject the settled expired receipt on a fresh request.
+        await request(f.api).post(`${f.base}/capabilities`).send(source.intent).expect(409);
+        release(); await holder;
+        expect(await cleanup).toEqual({ pruned: 1 });
+        await request(f.api).post(`${f.base}/capabilities`).send(source.intent).expect(422);
+        expect(await skills.getTestRunDetail(f.one.id, source.skill.id, source.test.id))
+          .toMatchObject({ taskExpired: true, harnessContent: { available: false } });
+      }
+    } finally {
+      release(); await holder; await publication; await cleanup;
+      if (winner === "publication") await db.execute(sql`drop trigger capability_evidence_barrier on activity_log`);
+      else await db.execute(sql`drop trigger capability_evidence_barrier on company_skill_test_runs`);
+      await db.execute(sql`drop function capability_evidence_barrier()`);
+    }
+  });
+  it("rechecks a test expiry extended while cleanup waits", async () => {
+    const f = await seed(), source = await capabilityFixture(f);
+    await db.update(companySkillTestRuns).set({ harnessIssueExpiresAt: new Date(Date.now() - 60_000) })
+      .where(eq(companySkillTestRuns.id, source.test.id));
+    let release!: () => void, locked!: (pid: number) => void;
+    const releaseLock = new Promise<void>(resolve => { release = resolve; });
+    const testLocked = new Promise<number>(resolve => { locked = resolve; });
+    const holder = db.transaction(async tx => {
+      await tx.select().from(companySkillTestRuns).where(eq(companySkillTestRuns.id, source.test.id)).for("update");
+      const [row] = await tx.execute<{ pid: number }>(sql`select pg_backend_pid() as pid`);
+      locked(row.pid); await releaseLock;
+      await tx.update(companySkillTestRuns).set({ harnessIssueExpiresAt: new Date(Date.now() + 86_400_000) })
+        .where(eq(companySkillTestRuns.id, source.test.id));
+    });
+    const holderPid = await testLocked;
+    const cleanup = companySkillService(db).pruneExpiredTestHarnessIssues(f.one.id);
+    try {
+      await expect.poll(async () => {
+        const [row] = await db.execute<{ waiting: boolean }>(sql`select exists(select 1 from pg_stat_activity waiter
+          where waiter.datname=current_database() and ${holderPid}=any(pg_blocking_pids(waiter.pid))) as waiting`);
+        return row.waiting;
+      }, { timeout: 5000, interval: 25 }).toBe(true);
+      release(); await holder;
+      expect(await cleanup).toEqual({ pruned: 0 });
+      expect(await companySkillService(db).getTestRunDetail(f.one.id, source.skill.id, source.test.id))
+        .toMatchObject({ taskExpired: false, harnessContent: { available: true }, harnessIssue: { hiddenAt: null } });
+    } finally { release(); await holder; await cleanup; }
   });
   it("deduplicates concurrent capability decisions and rejects stale or changed intent", async () => {
     const f = await seed(), source = await capabilityFixture(f);
