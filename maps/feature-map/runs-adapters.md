@@ -193,6 +193,13 @@ cross-company fairness, provider resets or interactive reservations. During a li
 run, compare the displayed wait against its persisted retry reason and deadline;
 reaching that deadline alone does not prove the provider accepted new work.
 
+Terminal history with explicit absence of stored output skips log reads, including
+remounts; its native failure remains visible. Unknown historical availability is
+read once, running output remains live, and changed persisted-byte metadata retries
+an earlier terminal 404. The transcript hook/native-hook/source-selection suites
+pass 33 checks on 8 November. This fixes observed pre-provider failures with no
+log; it does not recreate missing output or establish browser acceptance.
+
 Manual: Start a disposable task, open its running transcript, and follow it to a terminal outcome. Reload and compare task/run IDs, status, output, and cost. Verify a failed run remains distinguishable from a completed run with useful output.
 
 For Legacy OpenCode on a disposable Linux sandbox, run a Bash tool that reads

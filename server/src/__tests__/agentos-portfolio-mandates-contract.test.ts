@@ -102,6 +102,24 @@ describe("explicit portfolio read contract", () => {
     expect(result).not.toHaveProperty("evidence"); expect(result).not.toHaveProperty("assignments"); expect(result).not.toHaveProperty("accountability");
     expect(result).toMatchObject({ mandateId: row.id, revision: 3, targetCompanyId: id(6), tasks: [], counts: {} });
   });
+  it("bounds delegated employee work to its actual target assignment without replacing the source actor", async () => {
+    const targetAgentId = id(25), calls: Array<{ text: string; params: unknown[] }> = [];
+    const db = drizzle(async (text, params) => {
+      calls.push({ text, params });
+      return { rows: text.startsWith('select "id" from "agents"') ? [[targetAgentId]]
+        : text.includes('count(*)::int') && !text.includes('group by') ? [[0]] : [] };
+    }) as unknown as Db;
+    await fridayAwarenessService(db).work(id(6), actor,
+      { agentId: targetAgentId, offset: 25, projectOffset: 200, limit: 25, status: "all" }, { portfolioReadScope: "company_shared_only" });
+    expect(calls).toHaveLength(5);
+    for (const call of calls.filter(call => call.text.includes('from "issues"'))) {
+      expect(call.text).toContain("privacy_ancestors");
+      expect(call.text).toContain('"issues"."assignee_agent_id" =');
+      expect(call.params).toEqual(expect.arrayContaining([targetAgentId, row.sourceAgentId, "owner", "external", id(6)]));
+    }
+    expect(calls.some(call => /issue_comments|issue_work_products|case_handoffs|adapter_config/.test(call.text))).toBe(false);
+  });
+
   it("requires explicit private scope and the current Friday identity, without upgrading old grants", () => {
     const privateRow = { ...row, readScope: "owner_accessible_private" };
     expect(() => assertPortfolioMandateActor(privateRow, actor, id(6), 3)).not.toThrow();

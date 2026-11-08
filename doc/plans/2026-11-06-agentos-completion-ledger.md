@@ -503,6 +503,81 @@ request on 7 November; the tables below the current checkpoint are historical.
   `/private/tmp/agentos-native-evidence-grants-{runner-vendor,server-build,server-build-r2,ui-build,maps,boundaries}-20261108.log`,
   `/private/tmp/agentos-import-grant-{final-tests,routes}.log`, and
   `/private/tmp/agentos-application-grant-handoff-20261108.txt`.
+- **443f35b2c pushed and loaded — 8 November:** remote branch and guarded
+  restart `79305687-74e5-4da6-bdea-b0a111c27ba4` match
+  `443f35b2cbb18d1a1e4238a3464227d8778975cb`. Startup ready at 06:56:04 UTC,
+  source clean at boot, zero pending migrations. Native CEO permission PATCH
+  added only `applications:manage`; all fourteen existing grants/scopes and
+  membership remained unchanged. A real PostgreSQL catalog import into disposable
+  paused company `ef0da052-0bd7-44ab-b4e7-f356350f58fc` created CEO/CTO/QA;
+  only CEO received the management grant, all three remained company-paused and
+  provider-run count stayed zero. The fixture company was deleted through its
+  native API after these checks. Skill references absent from the import's
+  deliberately excluded skill package were reported as warnings, not hidden.
+- **R04 live pause/stop/resume evidence:** native CEO run
+  `fae5a6dc-79e7-4bdd-9c2d-28e38408fb81` began 06:57:47 and accepted a real
+  provider turn at 06:57:51. Native pause retained manual hold, cancelled that
+  run at 06:58:23 and recorded provider interruption plus
+  `native.local_process_stopped` at 06:58:24 for PID38171 and its exact birth.
+  Lifecycle reached paused, then native resume. Explicit task continuation
+  `40b30c38-0acc-4969-9ff2-4bc2970d227f` started
+  `de6ff67f-0d46-4047-9370-a5731a20f9e2` at 09:15:44; it succeeded 09:17:49
+  on the same ORB-7 task, preserving the cancelled attempt and existing head/
+  project. This is an agent availability resume followed by explicit task resume,
+  not an assertion that availability alone silently replays cancelled work.
+- **O04/W03 head-led operation advanced:** CEO created department
+  `da4f7eb3-fa86-4c90-ba84-17f1f1981587`, appointed the existing head and
+  associated the existing project. The head's native run
+  `93c3b901-2f3b-47dd-ac11-94e79909e786` hired exactly one analyst
+  `aa4a60e6-4e65-44a0-b687-eee514b3cbc3`, reporting to that head, with inherited
+  shared subscription. ORB-8 owns department delivery; ORB-9 owns routine setup.
+  Analyst run `7a6f8be5-6255-4cfc-aab4-b10b02135ac8` stopped before setup on
+  a board-only low-trust project-access read, not an actual routine-action denial.
+  Root verified current assignment grants and open project access, clarified the
+  native endpoint's purpose, and resumed ORB-9 with the same unused manual key
+  `orb7-deskbuddy-weekly-cycle-1-v1`. No grant was widened. Exact hard project-only
+  confinement was not asserted. Routine execution/head review/board return remain
+  to be verified. Captures: `/private/tmp/agentos-head-cycle-*-20261108.json`.
+
+- **O09 bounded delegated employee awareness — source checked:** the native
+  awareness endpoint now accepts an exact read mandate and same-employee
+  assignment continuation. The mandate owner retains current locked authority;
+  native work retains private ancestry, original actor and separate assignment
+  agent IDs. Denied company labels/counts are omitted before pagination; stale
+  bindings and expired/revoked mandates fail. No implicit company access, copied
+  private context or worker is added. **2,198 combined awareness/mandate/discovery
+  checks pass**, with shared/server/UI builds, server/UI semantic checks and
+  module/map/token/diff gates. The first server test type cast and one stale
+  discovery summary assertion were corrected; earlier logs retained. Real lock
+  contention remains unrun. Source is not yet loaded. Native qualification has
+  created fictional Orbit Assignment Lab and one separate agent using the existing
+  account automatically; employee identity and source assignment are recorded,
+  with no company-private instruction/session copied. Live multi-company chat,
+  private exclusion, revocation and independent retirement remain open.
+  Logs: `/private/tmp/agentos-employee-awareness-delegated-tests-r4-20261108.log`,
+  `agentos-employee-awareness-server-tsc-r3-20261108.log`,
+  `agentos-awareness-log-{ui-tsc,server-build,ui-build}-20261108.log`.
+- **Terminal log availability repaired in checked source:** historical failed
+  run `643570cf-b658-40a3-81c8-fa9a2453ea85` never opened a provider log;
+  repeated 404s were reads of known-absent output, not lost native journals.
+  The viewer skips explicit terminal absence across remounts, retains native
+  failure visibility, reads unknown history and retries when persisted byte
+  metadata changes. **33 focused transcript checks pass**, with UI build and
+  semantic/token gates. Browser acceptance remains separate.
+  Log: `/private/tmp/agentos-terminal-log-availability-tests-20261108.log`.
+- **O04/W03/W04 actual cycle delivered, two limitations retained:** routine
+  `d5eb9682-35bc-42ae-885e-acd75903635c` revision 2 produced exactly one manual
+  cycle `11ccde00-d869-45d1-81eb-d8abec907677` using the retained key, linked
+  to ORB-10. Analyst run `0ce15ff0-7487-4c9a-9b6d-e9e49c3b3e3f` completed
+  at 09:32:34 UTC with CSV/report attachments. Head review run
+  `33fe87de-28fd-4c14-be6c-c33d08ca3a4e` verified hashes and all 21 rows/
+  formulas, including 560/320/240 NZD, 320 labour minutes and 40% utilization.
+  CEO read the exact head evidence and saved `ceo-cycle1-verdict` on ORB-7.
+  Schedule remains disabled. Strict department/project grants are not yet
+  demonstrated, and the native routine row remains issue_created while its task
+  is done. ORB-7 stays blocked; neither limitation is waived or hidden. Next:
+  correct native settlement and establish actual scoped access, then let the CEO
+  finish the existing review and Friday return. No second cycle is authorized.
 
 - **8 November — continued after owner correction:** keep progressing through
   unblocked source work when runtime acceptance is blocked; a source checkpoint

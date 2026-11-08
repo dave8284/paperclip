@@ -128,6 +128,17 @@ export function agentosPortfolioMandateService(db: Db, options: { storage?: Pick
     assertPortfolioMandateActor(row, actor, targetCompanyId, revision); // expiry after lock wait
     return current;
   }
+  async function authorizedTargets(tx: Db, row: Mandate, actor: AuthorizationActor, revision: number) {
+    const targetCompanyIds: string[] = [];
+    let current: AuthorizationActor | null = null;
+    for (const targetCompanyId of row.targetCompanyIds) {
+      try {
+        current = await requireRead(tx, row, actor, targetCompanyId, revision);
+        targetCompanyIds.push(targetCompanyId);
+      } catch (error) { if ((error as { status?: number }).status !== 403) throw error; }
+    }
+    return { targetCompanyIds, actor: current };
+  }
   function changing(error: unknown): never {
     const value = error as { code?: string; cause?: { code?: string } };
     if ((value.cause?.code ?? value.code) === "55P03") throw conflict("Portfolio authority is changing. Retry the request.", { retryable: true });
@@ -160,16 +171,33 @@ export function agentosPortfolioMandateService(db: Db, options: { storage?: Pick
   }
   // Internal transaction contract: callers retain these locks through their
   // authorized operation. This check alone never authorizes a write.
-  async function authorizePrivateRead(tx: Db, actor: AuthorizationActor, sourceCompanyId: string,
+  async function authorizeRead(tx: Db, actor: AuthorizationActor, sourceCompanyId: string,
       query: { mandateId: string; revision: number; targetCompanyId: string }) {
       const [row] = await tx.select().from(agentosPortfolioMandates).where(and(eq(agentosPortfolioMandates.id, query.mandateId),
         eq(agentosPortfolioMandates.sourceCompanyId, sourceCompanyId))).for("share", { noWait: true });
       if (!row) throw notFound("Mandate not found");
-      assertPortfolioContentScope(row);
       return { row, actor: await requireRead(tx, row, actor, query.targetCompanyId, query.revision) };
   }
+  async function authorizePrivateRead(tx: Db, actor: AuthorizationActor, sourceCompanyId: string,
+      query: { mandateId: string; revision: number; targetCompanyId: string }) {
+    const result = await authorizeRead(tx, actor, sourceCompanyId, query);
+    assertPortfolioContentScope(result.row);
+    return result;
+  }
   return {
+    authorizeRead,
     authorizePrivateRead,
+    /** Retain native authority locks while a bounded same-employee projection
+     * filters assignments. Denied targets never become names/counts/cursors. */
+    async authorizeReads(tx: Db, actor: AuthorizationActor, sourceCompanyId: string,
+      query: { mandateId: string; revision: number }) {
+      const [row] = await tx.select().from(agentosPortfolioMandates).where(and(eq(agentosPortfolioMandates.id, query.mandateId),
+        eq(agentosPortfolioMandates.sourceCompanyId, sourceCompanyId))).for("share", { noWait: true });
+      if (!row) throw notFound("Mandate not found");
+      const authorized = await authorizedTargets(tx, row, actor, query.revision);
+      if (!authorized.actor || !authorized.targetCompanyIds.length) throw forbidden("A current portfolio read mandate and company authority are required");
+      return { row, actor: authorized.actor, targetCompanyIds: authorized.targetCompanyIds };
+    },
     async attachment(actor: AuthorizationActor, who: Who, sourceCompanyId: string, raw: PortfolioAttachmentQuery,
       signal?: AbortSignal): Promise<PortfolioAttachment> {
       const query = portfolioAttachmentQuerySchema.parse(raw);
@@ -311,11 +339,7 @@ export function agentosPortfolioMandateService(db: Db, options: { storage?: Pick
         const tx = connection as unknown as Db;
         const [row] = await tx.select().from(agentosPortfolioMandates).where(and(eq(agentosPortfolioMandates.sourceCompanyId, sourceCompanyId), eq(agentosPortfolioMandates.sourceAgentId, actor.agentId!))).for("share", { noWait: true });
         if (!row) return [];
-        const targets: string[] = [];
-        for (const target of row.targetCompanyIds) {
-          try { await requireRead(tx, row, actor, target, row.revision); targets.push(target); }
-          catch (error) { if ((error as { status?: number }).status !== 403) throw error; }
-        }
+        const { targetCompanyIds: targets } = await authorizedTargets(tx, row, actor, row.revision);
         const [directionGrant] = targets.length ? await tx.select().from(principalPermissionGrants).where(and(
           eq(principalPermissionGrants.companyId, sourceCompanyId), eq(principalPermissionGrants.principalType, "agent"),
           eq(principalPermissionGrants.principalId, row.sourceAgentId), eq(principalPermissionGrants.permissionKey, BOARD_DIRECTION_PERMISSION))) : [];

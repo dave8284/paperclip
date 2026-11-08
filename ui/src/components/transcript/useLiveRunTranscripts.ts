@@ -79,7 +79,15 @@ function isTerminalStatus(status: string): boolean {
 }
 
 function canReadPersistedLog(run: RunTranscriptSource): boolean {
-  return run.status === "running" || isTerminalStatus(run.status);
+  // Admission failures can finish without ever opening a log. Keep their
+  // native failure/status visible without probing a known-absent transcript
+  // again whenever its conversation mounts. Unknown history still gets a read.
+  return run.status === "running" || (isTerminalStatus(run.status)
+    && (run.hasStoredOutput !== false || runKnownLogBytes(run) !== null));
+}
+
+function logAvailabilityKey(run: RunTranscriptSource): string {
+  return `${run.status}:${run.hasStoredOutput ?? "unknown"}:${run.logBytes ?? "unknown"}:${run.lastOutputBytes ?? "unknown"}`;
 }
 
 function runKnownLogBytes(run: RunTranscriptSource): number | null {
@@ -120,7 +128,7 @@ export function useLiveRunTranscripts({
         .map((run) => {
           const logBytes = typeof run.logBytes === "number" ? run.logBytes : "";
           const lastOutputBytes = typeof run.lastOutputBytes === "number" ? run.lastOutputBytes : "";
-          return `${run.id}:${run.status}:${run.adapterType}:${run.hasStoredOutput === true ? "1" : "0"}:${logBytes}:${lastOutputBytes}`;
+          return `${run.id}:${run.runtimeMode ?? "unknown"}:${run.status}:${run.adapterType}:${run.hasStoredOutput ?? "unknown"}:${logBytes}:${lastOutputBytes}`;
         })
         .sort((a, b) => a.localeCompare(b))
         .join(","),
@@ -142,7 +150,7 @@ export function useLiveRunTranscripts({
   const trimmedSeqFloorByRunRef = useRef(new Map<string, number>());
   const pendingLogRowsByRunRef = useRef(new Map<string, string>());
   const logOffsetByRunRef = useRef(new Map<string, number>());
-  const missingTerminalLogRunIdsRef = useRef(new Set<string>());
+  const missingTerminalLogRunIdsRef = useRef(new Map<string, string>());
   // PAP-462 B3: buffered runs that dropped out of the `runs` list, mapped to the
   // wall-clock deadline (ms) after which their buffer may be pruned. A run still
   // inside its grace window is retained across the empty poll; `pruneTick` fires
@@ -307,7 +315,7 @@ export function useLiveRunTranscripts({
     const inFlightRunIds = new Set<string>();
 
     const readRunLog = async (run: RunTranscriptSource) => {
-      if (missingTerminalLogRunIdsRef.current.has(run.id) || inFlightRunIds.has(run.id)) {
+      if (missingTerminalLogRunIdsRef.current.get(run.id) === logAvailabilityKey(run) || inFlightRunIds.has(run.id)) {
         return;
       }
       inFlightRunIds.add(run.id);
@@ -344,7 +352,7 @@ export function useLiveRunTranscripts({
             return next;
           });
           // A newly started run may not have created its log yet.
-          if (isTerminalStatus(run.status)) missingTerminalLogRunIdsRef.current.add(run.id);
+          if (isTerminalStatus(run.status)) missingTerminalLogRunIdsRef.current.set(run.id, logAvailabilityKey(run));
         } else {
           setErrorsByRun((previous) => {
             if (previous.has(run.id)) return previous;

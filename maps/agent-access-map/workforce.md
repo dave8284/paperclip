@@ -71,17 +71,17 @@ Capability ID: `workforce/awareness`.
 
 Review: `baseline`.
 
-API: `present` — GET /api/companies/{companyId}/friday/agents/{agentId}/awareness with offset and limit (maximum five assignment pages). Native discovery exposes this read to standard, Ask and Plan modes.
+API: `present` — GET /api/companies/{companyId}/friday/agents/{agentId}/awareness. Offset/limit remain bounded to five assignments. Exact mandate ID/revision admits delegated reads; exact assignment ID/revision binds work/project continuation offsets. Standard, Ask and Plan discovery advertise the same read.
 
-Agent access: `available` — only the authenticated agent's own current-company assignment with a standard key. Shared identity, portfolio roles and the responsible user's access to other companies never substitute a different agent or board actor. Board reads intersect consented company scope with current native company/agent authorization.
+Agent access: `available` — ordinary reads expose only the authenticated agent's own current-company assignment. Explicit delegated reads retain the same source actor, run, owner and authorizer; they resolve only that employee's active assignments inside currently authorized mandate targets. No foreign actor, key or execution context is synthesized. Board reads retain current native company/agent permissions.
 
-Policy: resolve active shared bindings only after source company/agent admission. Refresh membership snapshots; retain actor, run, responsible user and external authorizer identities. Filter assignment metadata before pagination. Reuse native Friday work with the unchanged actor for private project/task/evidence predicates. At most five work calls, each bounded to 25 tasks; assignment metadata discovery scales with the shared employee's admitted company assignments, with eight concurrent authorization checks maximum. No credentials, configurations or transcript bodies are projected.
+Policy: the mandate owner locks current authority; the employee owner pins assignment, employee and target labels through projection/audit. Denied targets contribute no names/counts/cursors. Existing native work owns shared/private ancestry predicates. At most 50 mandate targets are checked on demand and five bounded work pages returned. Contended authority returns retryable 409. No timer, prefetch, credentials or transcript bodies are introduced.
 
-Evidence: `source-only` — [service](../../server/src/services/employee-awareness.ts), [direct-chat guidance](../../server/src/services/agent-conversations.ts), controlled-dependency [contract tests](../../server/src/services/employee-awareness.test.ts) and [discovery tests](../../server/src/services/native-runtime/runner-api.test.ts). Fresh native SQL privacy behavior and live model answers are not claimed by these tests.
+Evidence: `source-only` — [service](../../server/src/services/employee-awareness.ts), [delegated owner](../../server/src/services/employee-awareness-delegated.ts), [direct-chat guidance](../../server/src/services/agent-conversations.ts), [delegated contracts](../../server/src/services/employee-awareness-delegated.test.ts) and [discovery tests](../../server/src/services/native-runtime/runner-api.test.ts).
 
-Verification: `passed` — eight controlled-dependency awareness cases and 2,058 native API/discovery cases pass on 2026-11-04 without listeners. This proves those bounded contracts only; full PostgreSQL route/privacy integration and live direct-chat acceptance require an environment that permits them. No database listener or model execution was attempted for this slice.
+Verification: `passed` — 2,198 combined awareness, mandate and discovery checks on 8 November, with server/UI semantic checks. These exercise controlled dependencies and compiled SQL predicates, not actual PostgreSQL contention or live model responses.
 
-Gaps: this endpoint grants no cross-company authority. Explicit shared-summary reads use the separate read-mandate gateway below; private reads and broader cross-company chat/work delegation remain pending.
+Gaps: loaded-runtime multi-company chat, revocation and assignment retirement acceptance remain. Identity and read permission never confer foreign writes or prove transferred learned capability.
 
 ## `capabilities`
 

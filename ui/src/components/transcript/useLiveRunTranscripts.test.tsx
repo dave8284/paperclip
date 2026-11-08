@@ -269,6 +269,84 @@ describe("useLiveRunTranscripts", () => {
     }
   });
 
+  it("does not fetch or hold hydration for a terminal admission failure without stored output", async () => {
+    let latest: ReturnType<typeof useLiveRunTranscripts>;
+    function Harness() {
+      latest = useLiveRunTranscripts({ companyId: "company-1", runs: [{
+        id: "never-started", status: "failed", adapterType: "codex_local", hasStoredOutput: false, logBytes: null,
+      }] });
+      return null;
+    }
+    const container = document.createElement("div");
+    let root = createRoot(container);
+    try {
+      await act(async () => root.render(<Harness />));
+      expect(logMock).not.toHaveBeenCalled();
+      expect(latest!.isInitialHydrating).toBe(false);
+      expect(latest!.hasOutputForRun("never-started")).toBe(false);
+      await act(async () => root.unmount());
+      root = createRoot(container);
+      await act(async () => root.render(<Harness />));
+      await act(async () => latest!.retry());
+      expect(logMock).not.toHaveBeenCalled();
+    } finally { await act(async () => root.unmount()); }
+  });
+
+  it("still reads a live run before stored output is available", async () => {
+    function Harness() {
+      useLiveRunTranscripts({ companyId: "company-1", enableRealtimeUpdates: false, runs: [{
+        id: "starting", status: "running", adapterType: "codex_local", hasStoredOutput: false, logBytes: null,
+      }] });
+      return null;
+    }
+    const root = createRoot(document.createElement("div"));
+    try {
+      await act(async () => root.render(<Harness />));
+      expect(logMock).toHaveBeenCalledTimes(1);
+    } finally { await act(async () => root.unmount()); }
+  });
+
+  it("rechecks a missing terminal log when fresh metadata reports persisted bytes", async () => {
+    logMock.mockRejectedValueOnce(new ApiError("Run log not found", 404, { error: "Run log not found" }));
+    let latest: ReturnType<typeof useLiveRunTranscripts>;
+    function Harness({ bytes }: { bytes?: number }) {
+      latest = useLiveRunTranscripts({ companyId: "company-1", runs: [{
+        id: "late-log", status: "failed", adapterType: "codex_local", logBytes: bytes,
+      }] });
+      return null;
+    }
+    const root = createRoot(document.createElement("div"));
+    try {
+      await act(async () => root.render(<Harness />));
+      expect(logMock).toHaveBeenCalledTimes(1);
+      expect(latest!.errorsByRun.size).toBe(0);
+      await act(async () => root.render(<Harness bytes={42} />));
+      expect(logMock).toHaveBeenCalledTimes(2);
+      expect(latest!.isInitialHydrating).toBe(false);
+    } finally { await act(async () => root.unmount()); }
+  });
+
+  it("refreshes unknown versus absent output metadata without inventing a transcript", async () => {
+    let latest: ReturnType<typeof useLiveRunTranscripts>;
+    function Harness({ stored }: { stored?: boolean }) {
+      latest = useLiveRunTranscripts({ companyId: "company-1", runs: [{
+        id: "known-state", status: "failed", adapterType: "codex_local", hasStoredOutput: stored,
+      }] });
+      return null;
+    }
+    const root = createRoot(document.createElement("div"));
+    try {
+      await act(async () => root.render(<Harness stored={false} />));
+      expect(logMock).not.toHaveBeenCalled();
+      await act(async () => root.render(<Harness />));
+      expect(logMock).toHaveBeenCalledTimes(1);
+      expect(latest!.hasOutputForRun("known-state")).toBe(false);
+      await act(async () => root.render(<Harness stored={true} />));
+      expect(logMock).toHaveBeenCalledTimes(2);
+      expect(latest!.hasOutputForRun("known-state")).toBe(true);
+    } finally { await act(async () => root.unmount()); }
+  });
+
   it("stops retrying terminal runs whose persisted log never existed", async () => {
     logMock.mockReset();
     logMock.mockRejectedValue(new ApiError("Run log not found", 404, { error: "Run log not found" }));

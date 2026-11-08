@@ -340,6 +340,33 @@ PostgreSQL/HTTP case tests retained-source privacy, relinking, post-storage sour
 changes and disabled feature behavior; it is authored but unrun under the retained
 listener restrictions. Source checks are not persisted/live acceptance.
 
+### Same-employee assignment awareness — 8 November, source checked
+
+O09 extends the existing awareness endpoint with an explicit mandate and exact
+assignment continuation. `employee-awareness-delegated.ts` owns the bounded
+same-employee projection; the existing mandate owner owns current authority and
+native work owns private ancestry. Shared contracts and native chat/discovery
+need the versioned parameters because the separate portfolio summary strips
+assignee identity and cannot accurately attribute another assignment's tasks.
+Without a mandate, existing local agent/board behavior is unchanged.
+
+Only on-demand reads run. Native mandate checks scale with at most 50 targets;
+up to five work pages contain 25 tasks and bounded projects. Bindings/labels and
+current native grants are pinned in one transaction; denied target metadata is
+filtered before pagination. Work keeps the original source actor and explicit
+read scope; continuation binds the server-resolved assignment's native agent.
+Audit stores identities/offsets only and publishes after commit. No new worker,
+credential, foreign execution authority, schema or implicit sharing is added.
+
+The 2,198 combined awareness/mandate/discovery checks and server/UI semantic
+checks pass. Fake database dependencies test contract failures and compiled SQL,
+not actual row locks or revocation contention. Actual native two-company chat,
+private exclusion, revocation and independent assignment retirement are being
+qualified before O09/O05 can close. Logs:
+`/private/tmp/agentos-employee-awareness-delegated-tests-r4-20261108.log`,
+`/private/tmp/agentos-employee-awareness-server-tsc-r3-20261108.log`,
+`/private/tmp/agentos-awareness-log-ui-tsc-20261108.log`.
+
 ## Remaining work
 
 1. Complete parent integration and review of the combined change set; this

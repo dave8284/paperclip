@@ -4,6 +4,7 @@ import { employeeAwarenessQuerySchema, type EmployeeAwareness, type EmployeeAwar
 import { forbidden, notFound } from "../errors.js";
 import { authorizationService, type AuthorizationActor } from "./authorization.js";
 import { fridayAwarenessService } from "./friday-awareness.js";
+import { readDelegatedEmployeeAwareness } from "./employee-awareness-delegated.js";
 
 const assignmentSelection = {
   assignmentId: agentosAssignments.id, companyId: companies.id, companyName: companies.name,
@@ -41,6 +42,7 @@ export function employeeAwarenessService(db: Db) {
           resource: { type: "agent", companyId: targetCompanyId, agentId: targetAgentId } })).allowed;
       }
       if (!await canRead(companyId, agentId)) throw notFound("Employee not found");
+      if (query.mandateId) return readDelegatedEmployeeAwareness(db, companyId, agentId, readActor, query);
 
       const [source] = await db.select({ ...assignmentSelection, portfolioId: agentosAssignments.portfolioId,
         employeeId: agentosEmployees.id, employeeName: agentosEmployees.name, specialty: agentosEmployees.specialty,

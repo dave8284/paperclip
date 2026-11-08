@@ -82,27 +82,31 @@ recorded in the staffing plan rather than inferred from their presence.
 
 ### `employee-awareness`
 
-Direct employee chat guidance now directs assignment/project status questions to
-GET `/api/companies/{companyId}/friday/agents/{agentId}/awareness`. It resolves the
-active shared identity and reads current native work, with observation time and
-pagination. Agent runs can read their own current-company assignment only. A
-board request can include other assignments only when its admitted company
-scope, current native company and agent permissions permit them; native task and
-project privacy still applies. Hidden assignments add no names or counts.
+Direct employee chat uses GET
+`/api/companies/{companyId}/friday/agents/{agentId}/awareness`. Ordinary agent
+reads remain current-company only. An explicit exact `mandateId`/`revision`
+allows the same employee's other active assignments, within the mandate's
+current owner, source-agent and target-company authority. Each assignment retains
+its company label and separate native agent. Shared-only scope excludes private
+project/task ancestry; only the existing Friday private mandate can admit private
+work. A shared identity alone grants nothing.
 
-At most five assignment work pages are returned, each with up to 25 tasks and the
-existing work endpoint's bounded projects/evidence. Further work pages use that
-company's `/friday/work` endpoint with the assignment's native agent ID. Missing
-access is not proof of idle or absent work; task status is not execution proof.
-There is no model call, background prefetch, new UI or cross-company agent grant.
+Authorization filters assignments before counts/pagination. At most five work
+pages are returned, each with 25 tasks and bounded projects/evidence. Delegated
+continuations use the same source endpoint with exact assignment ID/revision and
+`workOffset`/`projectOffset`; they cannot substitute a foreign actor. Local/board
+reads retain the existing company work endpoint. Missing access is not proof of
+idle work, and task status is not execution proof. There is no new model call,
+background worker, credential sharing or foreign execution authority.
 
-[Contract tests](../../server/src/services/employee-awareness.test.ts) exercise
-scope preservation, responsible-user propagation, refreshed snapshots, omission
-before pagination, call bounds and changed evidence with controlled dependencies.
-[Native discovery tests](../../server/src/services/native-runtime/runner-api.test.ts)
-exercise the advertised API and read modes. These tests do not certify live chat
-answers or database privacy; the existing [native work tests](../../server/src/__tests__/friday-awareness.test.ts)
-cover those SQL resource boundaries and require a permitted PostgreSQL listener.
+[Existing contract tests](../../server/src/services/employee-awareness.test.ts),
+[delegated contracts](../../server/src/services/employee-awareness-delegated.test.ts),
+[mandate checks](../../server/src/__tests__/agentos-portfolio-mandates-contract.test.ts)
+and [discovery tests](../../server/src/services/native-runtime/runner-api.test.ts)
+pass 2,198 checks on 8 November. These controlled-dependency checks cover current
+identity/authority, denied targets before pagination, stale assignment/mandate
+revisions, bounded continuations, rollback publication and unchanged local reads.
+Real PostgreSQL contention and live model answers remain separate acceptance.
 
 ## Known gaps
 

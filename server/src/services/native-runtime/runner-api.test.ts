@@ -177,6 +177,10 @@ describe("runner API catalog", () => {
     expect(operation.allowedModes).toEqual(expect.arrayContaining(["standard", "ask", "planning"]));
     expect(operation.parameters.find(parameter => parameter.name === "limit")?.schema.maximum).toBe(5);
     expect(operation.summary).toContain("own current-company assignment");
+    expect(operation.summary).toContain("never changes company execution");
+    for (const name of ["mandateId", "revision", "assignmentId", "assignmentRevision", "workOffset", "projectOffset"]) {
+      expect(operation.parameters.some(parameter => parameter.name === name)).toBe(true);
+    }
     expect(operation.callPolicy).toBe("rest");
   });
   it("discovers explicit portfolio read mandates through the source company gateway", () => {
