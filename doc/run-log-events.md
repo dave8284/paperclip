@@ -573,6 +573,24 @@ No command arguments, stderr, filenames, repository URLs, or ref names are saved
 The same closed fields persist in `workspaceRestoreDiagnostic` and are
 revalidated before projection into an enabled Sentry failure report.
 
+## Codex accepted-input receipts
+
+Codex `session.started`/`session.resumed` events may retain a content-free
+`providerDescriptor.observedCodexIdentity.contextReceipt` from the accepted
+native provider request. `turn.accepted.inputReceipt` retains its accepted
+parameter/prompt/envelope hashes and `providerTurnId`. The runnerd bridge binds
+turn receipts to the exact run, runner, lease, native session, provider session
+and provider turn. Missing or invalid receipts stay absent; they are not
+reconstructed from requested configuration. These are request-acceptance facts,
+not proof of hidden context isolation, comprehension or task acceptance.
+
+For EGM reviews the facade reports `egm_packet_review` and its configured
+read-only profile independently of collaboration mode. Sandbox evidence is
+explicitly `configured_launch`; it does not certify all effective provider
+permissions or implicit context. The immutable `server_prepared` review receipts
+remain unchanged. Complete native history/order and tool correlation must still
+be checked separately before a context measurement can be qualified.
+
 ## Codex resume usage snapshot
 
 The native runner retains a bounded local `harness.diagnostic` event with code

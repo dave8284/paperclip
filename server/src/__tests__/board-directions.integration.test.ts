@@ -3,7 +3,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { expect, it, vi } from "vitest";
 import { agents, authUsers, companies, companyMemberships, companyOperatingProfiles, principalPermissionGrants, agentosPortfolios,
   agentosPortfolioCompanies, agentosBoardDirections, heartbeatRuns, issues, agentWakeupRequests, activityLog,
-  chatTaskHandoffs, chatCompletionDeliveries, issueComments, projects, projectAccessMembers, issueAccessGrants } from "@paperclipai/db";
+  chatTaskHandoffs, chatCompletionDeliveries, issueComments, projects, projectAccessMembers, issueAccessGrants, type Db } from "@paperclipai/db";
 import { agentosPortfolioMandateService } from "../services/agentos-portfolio-mandates.js";
 import { boardDirectionService } from "../services/board-directions.js";
 import { boardDirectionDeliveryService } from "../services/board-direction-delivery.js";
@@ -240,6 +240,36 @@ describeEmbeddedPostgres("persisted company-isolated board directions", () => {
     const run = await f.prepare();
     expect(f.wakeup).toHaveBeenCalledTimes(1);
     await issueService(ctx.db).addComment(f.chat.id, "Company report after resume.", { agentId: f.friday.id, runId: run.id }, { completionReply: true });
+  });
+
+  it("retains the locked pause reason when Friday resumes before delivery handles the rejected authorization", async () => {
+    const f = await returnFixture(); await f.finish();
+    let rolledBackPausedAuthority = false;
+    const interleaved = new Proxy(ctx.db, { get(target, key, receiver) {
+      if (key !== "transaction") return Reflect.get(target, key, receiver);
+      return async (callback: (tx: Db) => Promise<unknown>) => {
+        // The unlocked preflight already saw an available recipient. Pause is
+        // committed before the real authorization transaction reads its locks.
+        await ctx.db.update(agents).set({ status: "paused" }).where(eq(agents.id, f.friday.id));
+        try { return await ctx.db.transaction(tx => callback(tx as unknown as Db)); }
+        catch (error) { rolledBackPausedAuthority = true; throw error; }
+        finally {
+          // Resume is committed before deliver's catch observes the failure.
+          await ctx.db.update(agents).set({ status: "idle" }).where(eq(agents.id, f.friday.id));
+        }
+      };
+    } });
+    const [delivery] = await f.rows();
+    await chatCompletionDeliveryService(interleaved, { wakeup: f.wakeup }).deliver(delivery.id);
+    expect(rolledBackPausedAuthority).toBe(true);
+    expect(await ctx.db.select({ status: agents.status }).from(agents).where(eq(agents.id, f.friday.id))).toEqual([{ status: "idle" }]);
+    expect(await f.rows()).toMatchObject([{ status: "pending", attempts: 0, targetRunId: null }]);
+    expect(f.wakeup).not.toHaveBeenCalled();
+    await ctx.db.update(chatCompletionDeliveries).set({ nextAttemptAt: new Date(0) }).where(eq(chatCompletionDeliveries.id, delivery.id));
+    const run = await f.prepare();
+    expect(f.wakeup).toHaveBeenCalledTimes(1);
+    await issueService(ctx.db).addComment(f.chat.id, "Company report after rapid resume.", { agentId: f.friday.id, runId: run.id }, { completionReply: true });
+    expect(await f.rows()).toMatchObject([{ status: "delivered" }]);
   });
 
   it.each(["project member", "task grant"])("retains the %s authorization row through reply commit", async kind => {

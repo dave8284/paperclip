@@ -572,6 +572,7 @@ export function initializeCodexSessionEvents(
     state.emit(input.resumed ? "session.resumed" : "session.started", {
       driverSessionId: input.opened.threadId,
       providerSessionId: input.opened.providerSessionId,
+      ...(input.opened.providerDescriptor ? { providerDescriptor: input.opened.providerDescriptor } : {}),
       context: input.opened.context,
     });
     state.emitGoalCapabilities();

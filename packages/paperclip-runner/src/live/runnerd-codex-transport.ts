@@ -1,4 +1,6 @@
 import { parseExpectedCodexIdentity, type ExpectedCodexIdentity, type ObservedCodexIdentity } from "../contracts/codex-identity.js";
+import { providerThreadContextReceipt } from "../contracts/provider-context-receipt.js";
+import { acceptedRunnerTurnInputReceipt } from "./runner-provider-context.js";
 import { PRP_COMPLETION_TOOL_NAME, PRP_COMPLETION_RESULT_BRIDGE_INPUT_SCHEMA } from "../contracts/completion-result.js";
 import { EGM_PACKET_REVIEW_TOOL_NAMES, parseNativeExecutionPurpose, type NativeEgmPacketReviewPurpose } from "../contracts/native-execution.js";
 import { RunnerLaunchPreparationStore } from "./runner-launch-preparation-store.js";
@@ -6137,7 +6139,9 @@ class DurablePrpCodexTransport implements CodexAppServerTransport {
       if (!providerTurnStarted())
         throw new Error("runnerd did not report the provider turn identity");
       responseReady = true;
-      return { turn: { id: this.#turnId, status: "inProgress" } };
+      const inputReceipt = acceptedRunnerTurnInputReceipt(this.#core?.store.state.committedEvents ?? [],
+        this.#core!.store.state.identity, expectedProviderTurnId, this.#sessionId);
+      return { turn: { id: this.#turnId, status: "inProgress" }, ...(inputReceipt ? { inputReceipt } : {}) };
     } finally {
       if (!responseReady) {
         resolveAdmission(false);
@@ -6724,8 +6728,10 @@ class DurablePrpCodexTransport implements CodexAppServerTransport {
     if ((this.options.provider ?? "codex") === "codex") {
       const observed = record(descriptor.observedCodexIdentity);
       if (observed.source === "thread/start" || observed.source === "thread/resume") {
+        const contextReceipt = providerThreadContextReceipt(observed.contextReceipt);
         this.#evidence.observedCodexIdentity = { cliVersion: typeof observed.cliVersion === "string" ? observed.cliVersion : null,
-          model: typeof observed.model === "string" ? observed.model : null, reasoningEffort: typeof observed.reasoningEffort === "string" ? observed.reasoningEffort : null, source: observed.source };
+          model: typeof observed.model === "string" ? observed.model : null, reasoningEffort: typeof observed.reasoningEffort === "string" ? observed.reasoningEffort : null, source: observed.source,
+          ...(contextReceipt?.source === observed.source ? { contextReceipt } : {}) };
       } else delete this.#evidence.observedCodexIdentity;
       const expected = this.options.expectedCodexIdentity;
       if (expected && (this.#evidence.observedCodexIdentity?.cliVersion !== expected.cliVersion || this.#evidence.observedCodexIdentity?.model !== expected.model)) throw new Error("runner_qualified_codex_observed_identity_mismatch");

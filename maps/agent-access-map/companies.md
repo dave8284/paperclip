@@ -68,6 +68,10 @@ revision rollback must keep an existing team member inside the same team; they
 cannot promote a CEO, take another team's employee, or change the head's own
 manager. The owning configuration transaction rechecks the current appointment
 and native configure permission before applying the graph change.
+The same ceiling covers runtime/adapter/profile PATCH updates, managed instruction
+entries and supporting files, restoration, and legacy bundle/file writers.
+Native self-edit and protected-change consent remain intact; a server-bound,
+single-use receipt prevents consuming consent twice between route and writer.
 Company workforce assignment and retirement also require the head's own reporting
 team. Broad native target grants do not permit taking or retiring another team's
 employees; board and CEO scope is retained. Retirement still requires its separate

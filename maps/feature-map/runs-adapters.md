@@ -38,6 +38,10 @@ without restricting the root span name. Compare workspace preparation with its
 `controller.startup.<phase>`. A recovery pause or deployment drain is not model
 execution time. See the [tracing contract](../../doc/observability.md#controller-preparation-phases).
 These source-level diagnostics do not establish a live response-time budget.
+Native Codex run events retain available accepted thread/turn input hashes.
+For EGM, the session report labels the configured read-only review profile;
+missing historical receipts, hidden-context isolation and business acceptance
+remain unverified. See the [run-log evidence contract](../../doc/run-log-events.md#codex-accepted-input-receipts).
 `task.time_to_first_token` measures accepted ingress through the first committed
 text that the task transcript can show, including thinking and completed
 responses. It includes preparation and startup, and excludes browser latency.

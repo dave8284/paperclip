@@ -5,6 +5,7 @@ import { agents, agentWakeupRequests, chatCompletionDeliveries as deliveries, ch
 import { instanceSettingsService } from "./instance-settings.js";
 import { authorizeBoardDirectionReturn, recordBoardDirectionHandoffForTask, recoverBoardDirectionReturns } from "./board-direction-return.js";
 import { forbidden } from "../errors.js";
+import { PortfolioDelegatePausedError } from "./agentos-portfolio-mandates.js";
 
 export const CHAT_COMPLETION_WAKE_REASON = "chat_task_completed";
 const MAX_ATTEMPTS = 5;
@@ -304,13 +305,11 @@ export function chatCompletionDeliveryService(db: Db, heartbeat: { wakeup(agentI
       if (run) await db.update(deliveries).set({ targetRunId: run.id, status: "queued" })
         .where(and(eq(deliveries.id, id), inArray(deliveries.status, [...pending]), sql`${deliveries.targetRunId} is null`));
     } catch (error) {
+      // Retain the exact locked pause observation. Re-reading the recipient here
+      // can observe a subsequent resume and incorrectly discard the obligation.
+      // The next attempt rechecks all current authority before waking anyone.
+      if (error instanceof PortfolioDelegatePausedError) return;
       if (authorityDenied(error)) {
-        // Pause can race the preflight above. Preserve the actual owed return
-        // until resume; this does not bypass the next authority check.
-        const [recipient] = await db.select({ status: agents.status }).from(handoffs)
-          .innerJoin(agents, and(eq(agents.id, handoffs.agentId), eq(agents.companyId, handoffs.companyId)))
-          .where(and(eq(handoffs.taskId, claimed.taskId), eq(handoffs.companyId, claimed.companyId)));
-        if (recipient?.status === "paused") return;
         await db.update(deliveries).set({ status: "superseded", error: "Return authority is unavailable" })
           .where(and(eq(deliveries.id, id), inArray(deliveries.status, [...pending])));
         return;

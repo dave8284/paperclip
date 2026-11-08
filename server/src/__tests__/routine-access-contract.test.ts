@@ -4,7 +4,7 @@ import { routineRoutes } from "../routes/routines.js";
 import { routineAccessService } from "../services/routine-access.js";
 import { drizzle } from "drizzle-orm/pg-proxy";
 
-const native = vi.hoisted(() => ({ get: vi.fn(), list: vi.fn(), getDetail: vi.fn(), getTrigger: vi.fn(), update: vi.fn(), create: vi.fn(), listRuns: vi.fn(), listRevisions: vi.fn(), getRevision: vi.fn(), restoreRevision: vi.fn(), updateTrigger: vi.fn(), decideReads: vi.fn() }));
+const native = vi.hoisted(() => ({ get: vi.fn(), list: vi.fn(), getDetail: vi.fn(), getTrigger: vi.fn(), update: vi.fn(), create: vi.fn(), listRuns: vi.fn(), listRevisions: vi.fn(), getRevision: vi.fn(), restoreRevision: vi.fn(), updateTrigger: vi.fn(), decideReads: vi.fn(), runRoutine: vi.fn() }));
 const annotations = vi.hoisted(() => ({ listThreadsForRoutineDocument: vi.fn(), getThreadForRoutineDocument: vi.fn(), createRoutineThread: vi.fn(), addRoutineComment: vi.fn(), updateRoutineThread: vi.fn() }));
 vi.mock("../services/index.js", () => ({ routineService: () => native, accessService: () => ({ canUser: async () => true }), documentAnnotationService: () => annotations, logActivity: vi.fn() }));
 vi.mock("../services/authorization.js", async original => ({ ...await original<typeof import("../services/authorization.js")>(), authorizationService: () => ({ decideReads: native.decideReads }) }));
@@ -46,6 +46,13 @@ it("uses the same guard for definition and trigger mutations", async () => {
   expect((await call("/routines/:id", "patch", { title: "Changed" })).statusCode).toBe(404);
   expect((await call("/routine-triggers/:id", "patch", { enabled: true })).statusCode).toBe(404);
   expect(native.update).not.toHaveBeenCalled(); expect(native.updateTrigger).not.toHaveBeenCalled();
+});
+it("passes authenticated routine-run authority separately from user supplied overrides", async () => {
+  native.runRoutine.mockResolvedValue({ id: "cycle", source: "manual", status: "issue_created", companyId });
+  const res = await call("/routines/:id/run", "post", { projectId, assigneeAgentId: hiddenIssueId, authorizationActor: { type: "board", source: "local_implicit" } });
+  expect(res.statusCode).toBe(202);
+  expect(native.runRoutine).toHaveBeenCalledWith(routineId, { projectId, assigneeAgentId: hiddenIssueId, source: "manual" },
+    { agentId: null, userId: "owner", runId: null }, actor);
 });
 it("revalidates proposed relationship references before creating or editing", async () => {
   native.decideReads.mockImplementation(async (_actor, resources) => resources.map((resource: { issueId?: string }) => ({ allowed: resource.issueId !== hiddenIssueId })));

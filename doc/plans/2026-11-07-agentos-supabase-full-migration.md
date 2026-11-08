@@ -335,8 +335,8 @@ passed; the archive contains 324 table definitions, including the migration
 journal, board directions and both shared-account tables, and 18,901 INSERT
 statements. Its compressed digest and metadata are retained privately in
 `/private/tmp/agentos-c05-fresh-backup-20261108.json`. The captured archive's
-permissions were tightened from 0644 to 0600. Backup creation defaults are being
-corrected separately. Execution was not drained and the archive has not been
+permissions were tightened from 0644 to 0600. The creation defaults were later
+corrected and verified below. Execution was not drained and the archive has not been
 restored, encrypted or verified against all referenced files/keys. This newer
 archive advances recovery coverage; it is not the cutover baseline or proof of
 cross-version PostgreSQL compatibility.
@@ -353,3 +353,12 @@ Private snapshot/receipt: `/private/tmp/agentos-model-consistent-backup-20261108
 manifest: `/private/tmp/agentos-model-consistent-manifest-20261108.json`.
 This establishes a consistent independent SQLite inventory, not a drained
 cross-store checkpoint, destination import, encryption or migration acceptance.
+
+After guarded activation of `7ce59ddee`, the native manual-backup endpoint produced
+`paperclip-20261108-185440.sql.gz` at 05:54:40–05:54:44 UTC, 16,612,072 bytes.
+The new archive was created with **0600 permissions without a chmod repair**.
+Full gzip verification passes (97,087,236 decompressed bytes; decompressed SHA-256
+`8dd66dd4b093562b832876f10c186dde2fb9c168c8a4fadb4c9b3fc4ea6a021b`).
+Native retention pruned one eligible archive. This verifies the private-file fix
+on the actual backup path. It remains an online local backup, not an encrypted,
+drained, restored or cross-store migration baseline.

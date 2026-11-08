@@ -300,7 +300,7 @@ export function builtInAgentRoutes(db: Db) {
         agentId: actor.actorType === "agent" ? actor.actorId : null,
         userId: actor.actorType === "user" ? actor.actorId : null,
         runId: actor.runId ?? null,
-      });
+      }, req.actor);
       await logBuiltInAgentMutation(req, {
         companyId,
         action: "built_in_agent.routine_run_triggered",

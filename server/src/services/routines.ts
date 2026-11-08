@@ -66,6 +66,8 @@ import { getTelemetryClient } from "../telemetry.js";
 import { getConfiguredSecretProvider } from "../secrets/configured-provider.js";
 import { issueService } from "./issues.js";
 import { assertAssignableAgent } from "./agent-assignability.js";
+import type { AuthorizationActor } from "./authorization.js";
+import { authorizeRoutineDispatch, authorizeRoutineReplay, authorizeRoutineExecutionRead } from "./routine-run-authority.js";
 import { visibleIssueCondition } from "./issue-visibility.js";
 import { secretService } from "./secrets.js";
 import { getSecretProvider } from "../secrets/provider-registry.js";
@@ -1711,6 +1713,7 @@ export function routineService(
     descriptionAppendix?: string | null;
     nextRunAtOverride?: Date | null;
     actor?: Actor;
+    authorizationActor?: AuthorizationActor;
   }) {
     const projectId = input.projectId ?? input.routine.projectId ?? null;
     const projectWorkspaceId = input.projectWorkspaceId ?? null;
@@ -1777,6 +1780,11 @@ export function routineService(
         sql`select id from ${routines} where ${routines.id} = ${input.routine.id} and ${routines.companyId} = ${input.routine.companyId} for update`,
       );
 
+      const authorizedActor = input.authorizationActor ? await authorizeRoutineDispatch(txDb, {
+        actor: input.authorizationActor, expected: input.routine, assigneeAgentId, projectId,
+        triggerId: input.trigger?.id, projectWorkspaceId, executionWorkspaceId: input.executionWorkspaceId, lock: false,
+      }) : undefined;
+
       if (input.trigger && (input.source === "webhook" || input.source === "schedule")) {
         const currentTrigger = await txDb.select().from(routineTriggers).where(eq(routineTriggers.id, input.trigger.id)).then((rows) => rows[0]);
         const currentRoutine = await txDb.select({ status: routines.status }).from(routines).where(eq(routines.id, input.routine.id)).then((rows) => rows[0]);
@@ -1802,6 +1810,7 @@ export function routineService(
           .limit(1)
           .then((rows) => rows[0] ?? null);
         if (existing) {
+          if (authorizedActor) await authorizeRoutineReplay(txDb, authorizedActor, input.routine.companyId, existing, dispatchFingerprint);
           if (input.rejectIdempotencyReplay) {
             throw conflict("Webhook replay detected");
           }
@@ -1811,7 +1820,8 @@ export function routineService(
       }
 
       const triggeredAt = new Date();
-      const manualRunnerUserId = input.source === "manual" ? input.actor?.userId ?? null : null;
+      const manualRunnerUserId = authorizedActor?.type === "board" ? authorizedActor.userId ?? null
+        : input.source === "manual" ? input.actor?.userId ?? null : null;
       const latestRevisionResponsibleUserId = input.routine.latestRevisionId
         ? await txDb
             .select({
@@ -1831,7 +1841,8 @@ export function routineService(
             })
         : null;
       const responsibleUserId =
-        manualRunnerUserId ?? latestRevisionResponsibleUserId ?? input.routine.responsibleUserId ?? null;
+        (authorizedActor?.type === "agent" ? authorizedActor.onBehalfOfUserId ?? authorizedActor.authorizingUserId : null)
+        ?? manualRunnerUserId ?? latestRevisionResponsibleUserId ?? input.routine.responsibleUserId ?? null;
       const [createdRun] = await txDb
         .insert(routineRuns)
         .values({
@@ -1862,6 +1873,7 @@ export function routineService(
           id: issueOriginId,
         });
         if (activeIssue && input.routine.concurrencyPolicy !== "always_enqueue") {
+          if (authorizedActor) await authorizeRoutineExecutionRead(txDb, authorizedActor, input.routine.companyId, activeIssue.id);
           const status = input.routine.concurrencyPolicy === "skip_if_active" ? "skipped" : "coalesced";
           const updated = await finalizeRun(createdRun.id, {
             status,
@@ -1891,7 +1903,8 @@ export function routineService(
             status: "todo",
             priority: input.routine.priority,
             assigneeAgentId,
-            createdByAgentId: input.source === "manual" ? input.actor?.agentId ?? null : null,
+            createdByAgentId: authorizedActor?.type === "agent" ? authorizedActor.agentId ?? null
+              : input.source === "manual" ? input.actor?.agentId ?? null : null,
             createdByUserId: manualRunnerUserId,
             responsibleUserId,
             trustExplicitResponsibleUserId: true,
@@ -1903,7 +1916,18 @@ export function routineService(
             executionWorkspaceId: input.executionWorkspaceId ?? null,
             executionWorkspacePreference: input.executionWorkspacePreference ?? null,
             executionWorkspaceSettings: input.executionWorkspaceSettings ?? null,
-          });
+            ...(authorizedActor ? { workspaceSelectionActor: authorizedActor, actorRunId: authorizedActor.runId ?? null,
+              actorResponsibleUserId: authorizedActor.onBehalfOfUserId ?? null } : {}),
+          }, undefined, input.authorizationActor ? {
+            assertCanCreate: async (issueTx, scope) => {
+              await authorizeRoutineDispatch(issueTx as unknown as Db, {
+                actor: input.authorizationActor!, expected: input.routine,
+                assigneeAgentId: scope.assigneeAgentId!, projectId: scope.projectId,
+                triggerId: input.trigger?.id, projectWorkspaceId: scope.projectWorkspaceId,
+                executionWorkspaceId: scope.executionWorkspaceId,
+              });
+            },
+          } : undefined);
         } catch (error) {
           const isOpenExecutionConflict =
             !!error &&
@@ -1921,6 +1945,7 @@ export function routineService(
             id: issueOriginId,
           });
           if (!existingIssue) throw error;
+          if (authorizedActor) await authorizeRoutineExecutionRead(txDb, authorizedActor, input.routine.companyId, existingIssue.id);
           const status = input.routine.concurrencyPolicy === "skip_if_active" ? "skipped" : "coalesced";
           const updated = await finalizeRun(createdRun.id, {
             status,
@@ -2945,7 +2970,9 @@ export function routineService(
       return result;
     },
 
-    runRoutine: async (id: string, input: RunRoutine, actor?: Actor) => {
+    runRoutine: async (id: string, input: RunRoutine, actor?: Actor, authorizationActor?: AuthorizationActor) => {
+      if (actor?.agentId && (!authorizationActor || authorizationActor.type !== "agent" || authorizationActor.agentId !== actor.agentId))
+        throw forbidden("The original authenticated employee is required to run a routine");
       const routine = await getRoutineById(id);
       if (!routine) throw notFound("Routine not found");
       if (routine.status === "archived") throw conflict("Routine is archived");
@@ -2970,6 +2997,7 @@ export function routineService(
         executionWorkspaceSettings:
           (input.executionWorkspaceSettings as Record<string, unknown> | null | undefined) ?? null,
         actor,
+        authorizationActor,
       });
     },
 

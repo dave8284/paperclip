@@ -1,6 +1,7 @@
 import { readCodexThreadState, readCodexTurnMetadata, readCodexTurnItems } from "./codex-history.js";
 import { codexRunUsage, observeCodexUsage } from "./codex-usage-baseline.js";
 import { randomUUID } from "node:crypto";
+import { providerTurnInputReceipt } from "../../contracts/provider-context-receipt.js";
 import { NativeProviderTerminalFailure } from "../../contracts/native-session-backend.js";
 
 import type {
@@ -318,7 +319,9 @@ export class CodexHarnessSession
     if (dispositionOnlyRecovery) {
       this.dispositionOnlyRecoveryTurnId = turnId;
     }
-    this.emit("turn.accepted", { turnId }, { turnId });
+    const inputReceipt = providerTurnInputReceipt(response.inputReceipt);
+    this.emit("turn.accepted", { turnId, providerTurnId: turnId,
+      ...(inputReceipt ? { inputReceipt } : {}) }, { turnId });
     if (this.interruptQueued) {
       this.interruptQueued = false;
       await this.#sendInterrupt(turnId, "queued_before_start");

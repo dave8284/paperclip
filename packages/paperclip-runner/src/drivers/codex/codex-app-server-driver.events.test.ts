@@ -44,6 +44,46 @@ import {
 } from "./codex-app-server-driver.test-support.js";
 
 describe("Codex app-server Codex driver", () => {
+  it("preserves content-free accepted thread and turn receipts through the Codex facade", async () => {
+    const threadReceipt = { schema: "paperclip.provider-context-receipt.v1", stage: "thread_accepted", source: "thread/start",
+      parametersSha256: "a".repeat(64), instructionsSha256: "b".repeat(64) };
+    const inputReceipt = { schema: "paperclip.provider-context-receipt.v1", stage: "turn_accepted", source: "turn/start",
+      parametersSha256: "c".repeat(64), promptSha256: "d".repeat(64), modelEnvelopeSha256: "e".repeat(64) };
+    const transport = new FakeCodexTransport();
+    const request = transport.request.bind(transport);
+    vi.spyOn(transport, "request").mockImplementation(async (method, params) => ({ ...await request(method, params),
+      ...(method === "thread/start" ? { observedCodexIdentity: { cliVersion: "0.160.0", model: "gpt-test", reasoningEffort: null,
+        source: "thread/start", contextReceipt: { ...threadReceipt, instructions: "PRIVATE SOURCE" }, auth: "SECRET" } } : {}),
+      ...(method === "turn/start" ? { inputReceipt: { ...inputReceipt, prompt: "PRIVATE SOURCE" } } : {}),
+    }));
+    const session = await makeDriver([transport]).openSession({ runId: "run-receipts", normalizedSessionId: "session-receipts", workingDirectory: WORKSPACE });
+    const turn = await session.startTurn({ message: { role: "user", text: "Review." } });
+    transport.push("turn/started", { threadId: "thread-1", turn: { id: turn.turnId, status: "inProgress" } });
+    transport.push("paperclip/runResult", { threadId: "thread-1", turnId: turn.turnId, result });
+    transport.push("turn/completed", { threadId: "thread-1", turn: { id: turn.turnId, status: "completed", items: [] } });
+    const events = await collectUntilTerminal(session.events());
+    const started = events.find(event => event.eventType === "session.started");
+    const accepted = events.find(event => event.eventType === "turn.accepted");
+    expect(started).toMatchObject({ payload: { providerDescriptor: { observedCodexIdentity: { contextReceipt: threadReceipt } }, context: { codexVersion: "0.160.0" } } });
+    expect(accepted).toMatchObject({ payload: { providerTurnId: turn.turnId, inputReceipt } });
+    expect(validatePrpEvent(started).ok).toBe(true);
+    expect(validatePrpEvent(accepted).ok).toBe(true);
+    expect(JSON.stringify(events)).not.toMatch(/PRIVATE SOURCE|SECRET/);
+  });
+
+  it("leaves legacy transport receipt evidence absent", async () => {
+    const transport = new FakeCodexTransport();
+    const session = await makeDriver([transport]).openSession({ runId: "run-no-receipt", normalizedSessionId: "session-no-receipt", workingDirectory: WORKSPACE });
+    const stream = session.events()[Symbol.asyncIterator]();
+    const started = await stream.next();
+    expect(started.value?.payload).not.toHaveProperty("providerDescriptor");
+    await session.startTurn({ message: { role: "user", text: "Review." } });
+    let event;
+    do { event = await stream.next(); } while (!event.done && event.value.eventType !== "turn.accepted");
+    expect(event.value?.payload).not.toHaveProperty("inputReceipt");
+    await session.close({ reason: "fixture complete" });
+  });
+
   it("forwards credential updates before a turn with P0 priority", async () => {
     const transport = new FakeCodexTransport();
     const session = await makeDriver([transport]).openSession({
@@ -348,7 +388,7 @@ describe("Codex app-server Codex driver", () => {
       { runDelta: first, runDeltaComplete: true },
       { runDelta: { ...first, ...second }, runDeltaComplete: false },
     ]);
-    expect(await session.usage()).toMatchObject({ runDeltaComplete: false });
+    expect(await session.usage!()).toMatchObject({ runDeltaComplete: false });
   });
 
   it("accepts a thread usage snapshot replayed before a resumed turn starts", async () => {
@@ -380,7 +420,7 @@ describe("Codex app-server Codex driver", () => {
     expect(events.some((event) => event.eventType === "session.failed")).toBe(
       false,
     );
-    expect(await session.usage()).toMatchObject({
+    expect(await session.usage!()).toMatchObject({
       total: { inputTokens: 10, outputTokens: 4 },
     });
   });

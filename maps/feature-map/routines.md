@@ -37,6 +37,9 @@ revision check. A bounded authorized task search finds parent objectives; relate
 loops share that parent without becoming execution dependencies. List/detail,
 revision and cycle reads hide inaccessible project/task references, including
 historical cycles and restore targets. Trigger mutations share the same guard.
+Run-now project and employee overrides retain native assignment and visibility
+checks, including changes while the request waits. Repeating a request does not
+reveal a cycle whose task became private.
 Workflow interaction tests pass; visual browser acceptance remains outstanding.
 
 ### `trigger-history`

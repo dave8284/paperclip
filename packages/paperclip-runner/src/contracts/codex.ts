@@ -63,7 +63,7 @@ export interface CodexModelContextSnapshot {
   dynamicToolNames: string[];
   modelInputKinds: ["text"];
   liveConsole?: {
-    conversationMode?: "task" | "direct" | "prepared";
+    conversationMode?: "task" | "direct" | "prepared" | "egm_packet_review";
     runtimeRequestResolution: boolean;
     goals: boolean;
     threadLineage: boolean;

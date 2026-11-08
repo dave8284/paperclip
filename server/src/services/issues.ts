@@ -9943,6 +9943,14 @@ export function issueService(db: Db) {
       companyId: string,
       data: IssueCreateInput,
       dbOrTx: Db | DbTransaction = db,
+      authorization?: {
+        // Internal callers may pin their own current authority at the native
+        // write boundary. Never accept this callback from request data.
+        assertCanCreate: (tx: DbTransaction, scope: {
+          projectId: string | null; assigneeAgentId: string | null;
+          projectWorkspaceId: string | null; executionWorkspaceId: string | null;
+        }) => Promise<void>;
+      },
     ) => {
       const {
         workspaceSelection, workspaceSelectionSource = "explicit", workspaceSelectionActor,
@@ -10316,6 +10324,12 @@ export function issueService(db: Db) {
             executionWorkspaceSettings: issueData.executionWorkspaceSettings,
           });
         }
+        await authorization?.assertCanCreate(tx, {
+          projectId: issueData.projectId ?? null,
+          assigneeAgentId: issueData.assigneeAgentId ?? null,
+          projectWorkspaceId,
+          executionWorkspaceId,
+        });
         // Self-correcting counter: use MAX(issue_number) + 1 if the counter
         // has drifted below the actual max, preventing identifier collisions.
         const [maxRow] = await tx

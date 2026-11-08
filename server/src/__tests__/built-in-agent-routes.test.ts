@@ -1,4 +1,4 @@
-import express from "express";
+import express, { type Request, type Response, type NextFunction } from "express";
 import request from "supertest";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -292,6 +292,23 @@ describe("built-in agent routes", () => {
     );
   });
 
+  it("passes current authenticated authority through the built-in routine endpoint without a listener", async () => {
+    const { builtInAgentRoutes } = await vi.importActual<typeof import("../routes/built-in-agents.js")>("../routes/built-in-agents.js");
+    const actor = { type: "board", source: "session", userId: "board-user", companyIds: [companyId], isInstanceAdmin: false };
+    const route = builtInAgentRoutes({} as never).stack.find(layer => layer.route?.path === "/companies/:companyId/built-in-agents/:key/routines/:routineKey/run")!.route;
+    const req = { actor, params: { companyId, key: "reflection-coach", routineKey: "recent-agent-reflection" }, body: {} } as unknown as Request;
+    const res = { status: vi.fn(), json: vi.fn() };
+    res.status.mockReturnValue(res);
+    for (const layer of route.stack) {
+      let advance = false;
+      await (layer.handle as (req: Request, res: Response, next: NextFunction) => Promise<void>)(req, res as unknown as Response, () => { advance = true; });
+      if (!advance) break;
+    }
+    expect(mockBuiltInAgentService.runRoutine).toHaveBeenCalledWith(companyId, "reflection-coach", "recent-agent-reflection",
+      { agentId: null, userId: "board-user", runId: null }, actor);
+    expect(res.status).toHaveBeenCalledWith(202);
+  });
+
   it("triggers a built-in routine manual run", async () => {
     const app = await createApp({
       type: "board",
@@ -312,6 +329,7 @@ describe("built-in agent routes", () => {
       "reflection-coach",
       "recent-agent-reflection",
       { agentId: null, userId: "board-user", runId: null },
+      expect.objectContaining({ type: "board", userId: "board-user", source: "session" }),
     );
     expect(mockLogActivity).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
       action: "built_in_agent.routine_run_triggered",

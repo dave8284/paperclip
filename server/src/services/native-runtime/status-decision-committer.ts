@@ -611,7 +611,7 @@ async function materializeDecisionEffect(input: {
       addresseeUserId: effect.ownerUserId,
       title: egmPacketPreparation ? "EGM packet prepared" : "Review requested",
       summary:
-        egmPacketPreparation ? "The frozen packet is ready. Independent review execution is unavailable; inspect the packet or cancel this request." : effect.prompt,
+        egmPacketPreparation ? "The frozen packet is ready for review. Retain the actual review evidence and resolve its findings before approving completion." : effect.prompt,
       continuationPolicy: "wake_assignee",
       payload: {
         version: 1,

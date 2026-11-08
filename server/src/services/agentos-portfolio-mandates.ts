@@ -2,7 +2,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import { agents, authUsers, companyMemberships, companyOperatingProfiles, instanceUserRoles, principalPermissionGrants, agentosPortfolios,
   agentosPortfolioCompanies, agentosPortfolioMandates, type Db } from "@paperclipai/db";
 import { portfolioReadScopeSchema, portfolioAttachmentQuerySchema, type PortfolioAttachment, type PortfolioAttachmentQuery, type SetBoardDirectionAuthority, type PortfolioContent, type PortfolioRecords, type PortfolioContentQuery, type PortfolioRecordsQuery, type PortfolioPrivateReadReceipt, type PortfolioReadMandate, type SavePortfolioReadMandate, type PortfolioWorkQuery, type PortfolioWorkSummary } from "@paperclipai/shared";
-import { conflict, forbidden, notFound } from "../errors.js";
+import { conflict, forbidden, HttpError, notFound } from "../errors.js";
 import { authorizationService, type AuthorizationActor } from "./authorization.js";
 import { agentosWorkforceService, refreshWorkforceBoardActor } from "./agentos-workforce.js";
 import { fridayAwarenessService } from "./friday-awareness.js";
@@ -19,6 +19,13 @@ type Mandate = typeof agentosPortfolioMandates.$inferSelect;
 type Who = Pick<LogActivityInput, "actorType" | "actorId" | "agentId" | "runId">;
 const sorted = (ids: string[]) => [...ids].sort();
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+/** Captures the locked authority observation so a later resume cannot turn a
+ * temporary pause into permanent loss of an owed completion return. */
+export class PortfolioDelegatePausedError extends HttpError {
+  constructor() {
+    super(403, "The delegated agent is paused", { code: "portfolio_delegate_paused" });
+  }
+}
 export function assertPortfolioMandateActor(row: Mandate, actor: AuthorizationActor, targetCompanyId: string, revision: number, now = new Date()) {
   if (actor.type !== "agent" || actor.agentId !== row.sourceAgentId || actor.companyId !== row.sourceCompanyId
     || (actor.keyScope && actor.keyScope.kind !== "standard") || actor.onBehalfOfUserId !== row.ownerUserId
@@ -76,6 +83,7 @@ export function agentosPortfolioMandateService(db: Db, options: { storage?: Pick
     await tx.select().from(principalPermissionGrants).where(and(inArray(principalPermissionGrants.companyId, allCompanyIds),
       inArray(principalPermissionGrants.principalId, [...userIds, row.sourceAgentId]))).orderBy(principalPermissionGrants.id).for("share", noWait);
     const [agent] = await tx.select().from(agents).where(and(eq(agents.companyId, row.sourceCompanyId), eq(agents.id, row.sourceAgentId))).for("share", noWait);
+    if (agent?.status === "paused") throw new PortfolioDelegatePausedError();
     if (!agent || !["active", "idle", "running", "error"].includes(agent.status) || agent.lifecycleState !== "ready") throw forbidden("The delegated agent is unavailable");
     const [member] = await tx.select().from(companyMemberships).where(and(eq(companyMemberships.companyId, row.sourceCompanyId),
       eq(companyMemberships.principalType, "agent"), eq(companyMemberships.principalId, row.sourceAgentId), eq(companyMemberships.status, "active")));

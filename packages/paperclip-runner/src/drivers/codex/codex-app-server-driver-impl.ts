@@ -1,4 +1,6 @@
 import { usesPreconfiguredHome } from "../preconfigured-home.js";
+import { providerThreadContextReceipt } from "../../contracts/provider-context-receipt.js";
+import type { ObservedCodexIdentity } from "../../contracts/codex-identity.js";
 import { writeManagedCodexObservability, redactObservabilityDiagnostic } from "../agent-observability.js";
 import { trustCodexStartupRoot } from "./codex-startup-trust.js";
 import { readCodexThreadState, readCodexTurnMetadata } from "./codex-history.js";
@@ -299,6 +301,7 @@ export class CodexAppServerDriver implements HarnessDriver {
         delete threadParams.cwd;
         delete threadParams.runtimeWorkspaceRoots;
       }
+      if (this.#options.executionPurpose) threadParams.permissions = "paperclip-runner-workspace-read-only";
       const response = await cancellation.wait(
         transport.request("thread/start", {
           ...threadParams,
@@ -447,6 +450,7 @@ export class CodexAppServerDriver implements HarnessDriver {
             this.#options.environment,
           ),
           ...this.#instructionParams(this.#direct() ? "" : this.#baseInstructions()),
+          ...(this.#options.executionPurpose ? { permissions: "paperclip-runner-workspace-read-only" } : {}),
           approvalPolicy: this.#options.approvalPolicy ?? "never",
           ...(this.#options.model ? { model: this.#options.model } : {}),
           dynamicTools: this.#providerDynamicTools(),
@@ -859,8 +863,8 @@ export class CodexAppServerDriver implements HarnessDriver {
     const activePermissionProfile = record(thread.activePermissionProfile);
     const permissionProfileId = text(activePermissionProfile.id);
     const requestedMode = this.#options.requestedCollaborationMode ?? "default";
-    const requiredPermissionProfile =
-      text(createSecuredCodexThreadParams(workingDirectory, requestedMode, true, false, this.#options.environment).permissions);
+    const requiredPermissionProfile = this.#options.executionPurpose ? "paperclip-runner-workspace-read-only"
+      : text(createSecuredCodexThreadParams(workingDirectory, requestedMode, true, false, this.#options.environment).permissions);
     if (
       permissionProfileId.length > 0 &&
       permissionProfileId !== requiredPermissionProfile
@@ -874,14 +878,24 @@ export class CodexAppServerDriver implements HarnessDriver {
       id: requiredPermissionProfile,
     };
     const providerIdentity = parseProviderIdentity(thread.providerIdentity);
+    const observed = record(response.observedCodexIdentity);
+    const contextReceipt = providerThreadContextReceipt(observed.contextReceipt);
+    const observedCodexIdentity: ObservedCodexIdentity | undefined =
+      (observed.source === "thread/start" || observed.source === "thread/resume")
+        ? { cliVersion: typeof observed.cliVersion === "string" ? boundedText(observed.cliVersion) : null,
+            model: typeof observed.model === "string" ? boundedText(observed.model) : null,
+            reasoningEffort: typeof observed.reasoningEffort === "string" ? boundedText(observed.reasoningEffort) : null,
+            source: observed.source, ...(contextReceipt?.source === observed.source ? { contextReceipt } : {}) }
+        : undefined;
     return {
       threadId,
       providerSessionId,
       ...(providerIdentity === undefined ? {} : { providerIdentity }),
+      ...(observedCodexIdentity ? { providerDescriptor: { observedCodexIdentity } } : {}),
       collaborationMode,
       context: {
         protocolVersion: CODEX_CODEX_PROTOCOL_VERSION,
-        codexVersion: boundedText(initialize.userAgent),
+        codexVersion: observedCodexIdentity?.cliVersion ?? boundedText(initialize.userAgent),
         clientInfo: {
           name: "paperclip-runner",
           title: "Paperclip Runner",
@@ -899,7 +913,8 @@ export class CodexAppServerDriver implements HarnessDriver {
           legacyPolicy: boundedCodexValue(response.sandbox ?? null),
           rootAccess: "none",
           minimalRuntimeAccess: "read",
-          workspaceAccess: requestedMode === "plan" ? "read" : "write",
+          workspaceAccess: this.#options.executionPurpose || requestedMode === "plan" ? "read" : "write",
+          ...(this.#options.executionPurpose ? { evidence: "configured_launch", providerImplicitContext: "unverified" } : {}),
           networkAccess: codexNetworkAccess(this.#options.environment),
           githubAuthenticationMode: this.#options.environment?.PAPERCLIP_GITHUB_AUTH_MODE ?? "managed",
         },
@@ -929,7 +944,7 @@ export class CodexAppServerDriver implements HarnessDriver {
         ),
         modelInputKinds: ["text"],
         liveConsole: {
-          conversationMode: this.#prepared()
+          conversationMode: this.#options.executionPurpose ? "egm_packet_review" : this.#prepared()
             ? "prepared"
             : this.#direct()
               ? "direct"

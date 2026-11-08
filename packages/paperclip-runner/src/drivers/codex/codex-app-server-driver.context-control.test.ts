@@ -45,6 +45,23 @@ import {
 import { rehydrateRunnerdItemNotification } from "../../live/runnerd-codex-transport.js";
 
 describe("Codex app-server Codex driver", () => {
+  it("reports the configured EGM read-only profile independently of collaboration mode", async () => {
+    const transport = new FakeCodexTransport();
+    const session = await makeDriver([transport], { conversationMode: "prepared", requestedCollaborationMode: "default",
+      executionPurpose: { kind: "egm_packet_review", packetSha256: "a".repeat(64), sourceDigests: [] },
+    }).openSession({ runId: "run-egm-context", normalizedSessionId: "session-egm-context", workingDirectory: WORKSPACE });
+    const started = await session.events()[Symbol.asyncIterator]().next();
+    expect(started.value).toMatchObject({ eventType: "session.started", payload: { context: {
+      collaborationMode: "default", liveConsole: { conversationMode: "egm_packet_review" },
+      sandbox: { workspaceAccess: "read", permissionProfile: { id: "paperclip-runner-workspace-read-only" },
+        evidence: "configured_launch", providerImplicitContext: "unverified" },
+    } } });
+    expect(started.value?.payload).not.toHaveProperty("providerDescriptor");
+    await session.startTurn({ message: { role: "user", text: "Review." } });
+    expect(transport.calls.find(call => call.method === "turn/start")?.params.permissions).toBe("paperclip-runner-workspace-read-only");
+    await session.close({ reason: "fixture complete" });
+  });
+
   it.each(["default", "disabled"] as const)("rejects unsupported reasoning %s without sending a turn RPC", async reasoningMode => {
     const transport = new FakeCodexTransport();
     const session = await makeDriver([transport]).openSession({
@@ -648,7 +665,7 @@ describe("Codex app-server Codex driver", () => {
       ).rejects.toBeInstanceOf(HarnessCapabilityUnavailableError);
       for (const action of ["set", "pause", "resume", "clear"] as const) {
         await expect(
-          unsupported.goal?.({ action, ...(action === "set" ? { objective: "Must not reach the provider" } : {}) }),
+          unsupported.goal?.(action === "set" ? { action, objective: "Must not reach the provider" } : { action }),
         ).rejects.toBeInstanceOf(HarnessCapabilityUnavailableError);
       }
       expect(unsupportedTransport.calls.filter(({ method }) =>

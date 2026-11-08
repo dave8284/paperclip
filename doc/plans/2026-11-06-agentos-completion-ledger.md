@@ -12,7 +12,7 @@ Those requirements remain in scope; the rows below do not replace or erase them.
 The owner requested simple **Fixed / Not fixed** tracking in the existing
 [93-item worksheet](2026-11-03-agentos-requirements-reconciliation.md).
 Update those rows as work completes; do not create another backlog.
-**Current total: 38 Fixed / 55 Not fixed.** Partial implementation and unverified
+**Current total: 39 Fixed / 54 Not fixed.** Partial implementation and unverified
 live acceptance remain Not fixed. This checkpoint was refreshed at the owner's
 request on 7 November; the tables below the current checkpoint are historical.
 
@@ -309,6 +309,111 @@ request on 7 November; the tables below the current checkpoint are historical.
   live delivery, throughput and remaining database/browser/voice acceptance are
   explicitly unfinished. Local and remote refs match. Private captures and
   runtime/credential files remain excluded.
+  **`7ce59ddee` is committed and pushed to `origin/agentos/platform`**: scoped
+  department staffing/import/instruction authority, native board-direction
+  returns, isolated-review first admission/retry, attention order and private
+  backups. Validation and unrun/live limits are retained in its commit body and
+  entries above. The guarded activation was requested with no active runs;
+  verify its new process/recovery report before claiming the source loaded.
+  A pause/resume-between-denial-and-catch return classification edge is retained
+  for the next repair; it must not discard an owed return after a transient pause.
+
+- **7ce59ddee loaded and live return/retry — 8 November:** guarded restart
+  `efad2dfc-cf81-4df4-9ae8-75cab04f06af` replaced process 42077 with 82169;
+  recovery completed at 05:53:29 and startup became ready at 05:53:30 UTC.
+  Fresh health has no pending migration or required restart. There were no
+  active runs at activation, so this remains idle-restart evidence.
+  Startup reconstructed the owed ORB-1 return; Friday run
+  `04ac3d0f-604f-4527-9615-a1cdca7c2a44` succeeded and published comment
+  `b81d381b-cad9-4a35-9ae1-5303f2b3929b` at 05:54:35 with all five outputs,
+  accurate fictional figures, shared-context review limitations and owner
+  acceptance pending. Actual board-direction/content gateway reads returned 200;
+  the earlier PostgreSQL paging failures are fixed in the loaded runtime.
+  Exact reviewer retry `6f3cb1f2-9b99-4b48-83c2-8f73e906c1f8` retained parent
+  failure `4cff245e-0ea3-4c45-81b0-0ae0efb99483`, selected native execution,
+  read all eight frozen sources and saved three findings before succeeding at
+  05:55:24. Findings document `484a439f-0e94-4021-be1f-6709a27005cb`, revision
+  `34077525-4104-44e3-a311-61b05012a879`, remains pending separate resolution.
+  Missing alternatives analysis, unproven runtime qualification and original-
+  byte provenance limits remain visible. Exact prepared receipts remain
+  unverified by design; actual launch/turn/capability evidence is being reconciled
+  before any stronger isolation claim or the permitted corrective re-review.
+  Live native backup `paperclip-20261108-185440.sql.gz` was created at 0600 and
+  passes complete gzip verification without a permission repair. This is not a
+  drained/encrypted/restored migration baseline. Original output acceptance and
+  head-led recurring-work acceptance remain open.
+
+- **A03 Fixed — real Friday-created live display:** Friday run
+  `6b13d672-492a-4cd0-bb33-f8cd82b043ea` saved the requested native task table
+  `friday-display-orbit-delivery-status` in the owner conversation, document
+  `9a71f1a4-e667-41d1-8c52-e8c5eb5417ed`, revision
+  `3931bc76-28ed-444f-bd6f-27eee037e1af`. At 06:10:31 UTC its final comment
+  `8e52f3ae-5dea-49f7-82b4-e1937ccc3e9b` linked the saved table and accurately
+  reported ORB-1–ORB-5 Done / ORB-6 In review, with acceptance still pending.
+  Native GET independently verifies the real author, descriptor and revision.
+  Earlier browser checks already establish rendering, saved-view reuse,
+  stop/resume and current data reads. This closes native displays, not A04
+  custom code promotion or physical voice. No company delivery task was created.
+- **A05/M05 observed review evidence — 8 November:** the exact retained Rust
+  journal has 215 contiguous events, two accepted-input receipts and ten tool
+  calls with ten separate transport-write receipts. The Codex rollout confirms
+  the read-only profile and the three authorized review operations. This does
+  not prove absence of hidden provider context or model use of each result.
+  The outer AgentOS facade drops thread/turn receipts and shows nominal writable
+  defaults; a narrow reporting/forwarding repair is under verification. The
+  content-free audit is retained on ORB-6 as attachment
+  `79346437-4151-43c6-87c8-6ac447f033e5`, SHA-256
+  `db41455790b313d03e913a3995b47eabd0f02904ac64d1f78853c2f237122ce0`,
+  and work product `70989751-c8d1-45b8-87bc-2f43558fa3bd`. It states the
+  network/read-root and evidence limits; it is neither a finding resolution nor
+  owner acceptance. The sole corrective review has not been consumed.
+- **R04 transient return pause repaired in source:** a typed error retains the
+  pause observed under the mandate lock, so a resume before catch cannot discard
+  an owed completion. Unrelated revocation still supersedes delivery even if
+  Friday subsequently pauses. Thirty-one focused checks pass, including seven
+  new cases; PostgreSQL race cases remain authored/unrun. Source is not loaded.
+  Logs: `/private/tmp/agentos-return-pause-{tests,test-types,boundaries}-20261108.log`.
+
+- **W03/W04 manual routine authority repaired in source:** normal and built-in
+  run endpoints retain the authenticated actor through effective assignee,
+  project and workspace checks. The routine lock pins its definition; task
+  creation repeats authority checks in its own transaction and commits before
+  wakeup. Company non-key locking remains compatible with the outer receipt FK;
+  selected execution-workspace locking fences newly attached private tasks.
+  Existing grant, reporting and privacy ancestry are pinned before native
+  predicates. Replay/coalescing cannot expose an inaccessible cycle task.
+  **39 routine/task-owner checks and one built-in route check pass**, with
+  independent review and map/module gates. Real PostgreSQL contention remains
+  unrun; a controlled SQL transport is not contention proof. The first combined
+  build found reporting-chain type inference TS7022; an explicit result type
+  fixes it without changing behavior. The combined server build now passes;
+  `/private/tmp/agentos-egm-routine-integrated-build-r2-20261108.log` records it.
+  Logs: `/private/tmp/agentos-routine-authority-tests.log`,
+  `agentos-built-in-routine-authority-tests.log`, and
+  `agentos-egm-routine-integrated-build-20261108.log` (initial failure).
+- **A05/M05 receipt propagation repaired in source:** accepted thread and turn
+  hashes now survive the native transport bridge, with exact current run/runner/
+  session/lease/turn binding and content-free allowlists. Missing, malformed or
+  duplicate evidence remains absent; prepared receipts are immutable. Configured
+  EGM read-only settings are labeled separately from provider observations.
+  **62 checks, source/test semantic checks and actual 215-event projection pass**;
+  independent review found no blocker. This does not qualify M05's transformed
+  full-history chronology or hidden context. Runner/vendor rebuild passes using
+  the existing workspace Rust toolchain; an initial PATH missed cargo and its
+  failed log is retained. Logs: `/private/tmp/agentos-egm-receipt-{forwarding-r3,actual-projection}-20261108.log`,
+  `agentos-egm-routine-runner-vendor{,-r2}-20261108.log`.
+  The independent capability supplement is attachment
+  `e71f6fe5-5398-4867-bcc0-e963be4bc37e`, work product
+  `2cf15597-b3d9-4ed9-bafd-d3fc0538e973`. Its reconstructed accepted request
+  hash matches exactly and the observed model world state has no execution
+  environments; disabled built-ins and the three review tools match the packet
+  contract. Broader host/network permissions remain an explicit OS-isolation
+  limitation, not a discovered reachable leak or hidden-context attestation.
+- **R03 two-slot qualification candidate configured:** while idle, shared group
+  `237b6d5c-eab6-4f95-bc25-641106336731` advanced from revision 3 to 4 with
+  maxConcurrent=2, interactiveReserved=1 and interactivePriority=true. All three
+  original company bindings remain. This permits one background job alongside
+  one conversation; no parallel throughput or recovery pass is claimed yet.
 
 - **8 November — continued after owner correction:** keep progressing through
   unblocked source work when runtime acceptance is blocked; a source checkpoint

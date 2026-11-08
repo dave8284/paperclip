@@ -689,7 +689,8 @@ describe("routine routes", () => {
     }, {
       agentId: null,
       userId: "board-user",
-    });
+      runId: null,
+    }, expect.objectContaining({ type: "board", userId: "board-user", source: "session" }));
   });
 
   it("allows routine creation when the board user has tasks:assign", async () => {

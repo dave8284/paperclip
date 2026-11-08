@@ -109,6 +109,20 @@ New relationship references and historical restore targets are reauthorized;
 private cycle-task metadata is excluded. Trigger endpoints reuse the same guard;
 trigger secrets need secure handling.
 
+Manual/API run overrides retain the original authenticated actor. The routine
+writer rechecks ownership/definition after its row lock, current caller identity
+and native `tasks:assign` for the effective assignee, project and parent task.
+Both original and effective private scopes remain readable. Source/execution
+workspace overrides use native workspace access; eligible company-local
+delegation remains available under actual target grants. An idempotency replay
+must match the execution fingerprint and retain current cycle-task visibility;
+coalescing also hides inaccessible task references. Initial admission checks
+precede new execution receipts; the task writer repeats current authority checks
+inside its own transaction before persistence, then commits before worker wakeup.
+Authenticated task creation retains the native actor and responsible user.
+Built-in run controls pass the same authenticated authority. Trusted
+scheduler/plugin execution keeps its existing admission.
+
 Evidence: `source-only` — [implementation](../../server/src/routes/routines.ts#L99) at
 the reviewed commit above.
 
@@ -119,6 +133,11 @@ remaining operations before qualifying the whole capability.
 
 Gaps: Scheduled/waiting native agents cannot independently call this operation:
 native authority requires a running bound run. A separate control binding remains absent.
+Controlled SQL transport and listener-free route checks cover override authority,
+changes while waiting, private scopes and replay. Persisted/live execution remains
+unqualified until a delegated company cycle actually completes. PostgreSQL
+contention is not reproduced by these transport fixtures; the native write
+transaction releases authority locks before heartbeat wakeup.
 
 Agent OS workflow editing uses these same definition/trigger APIs and captured
 revision IDs. Its diagram is a board projection of authorized routine/run/task

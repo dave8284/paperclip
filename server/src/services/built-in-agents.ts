@@ -2060,10 +2060,11 @@ export function builtInAgentService(db: Db) {
     key: string,
     routineKey: string,
     actor: { agentId?: string | null; userId?: string | null; runId?: string | null } = {},
+    authorizationActor?: AuthorizationActor,
   ) {
     const { agent, routine } = await requireBundleRoutine(companyId, key, routineKey);
     await ensureBuiltInAgentAssignable(agent);
-    return routineSvc.runRoutine(routine.id, { source: "manual" }, actor);
+    return routineSvc.runRoutine(routine.id, { source: "manual" }, actor, authorizationActor);
   }
 
   async function requireBuiltInAgent(companyId: string, key: string): Promise<RequiredBuiltInAgent> {

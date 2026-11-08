@@ -123,6 +123,7 @@ export interface OpenedCodexThread {
   threadId: string;
   providerSessionId: string | null;
   providerIdentity?: PersistedHarnessProviderIdentity;
+  providerDescriptor?: { observedCodexIdentity: import("../../contracts/codex-identity.js").ObservedCodexIdentity };
   collaborationMode: Record<string, unknown> | null;
   context: CodexModelContextSnapshot;
   lineage: HarnessThreadLineageEntry;

@@ -658,7 +658,8 @@ export function routineRoutes(
     const run = await svc.runRoutine(routine.id, req.body, {
       agentId: req.actor.type === "agent" ? req.actor.agentId : null,
       userId: req.actor.type === "board" ? req.actor.userId ?? null : null,
-    });
+      runId: req.actor.runId ?? null,
+    }, req.actor);
     const actor = getActorInfo(req);
     await logActivity(db, {
       companyId: routine.companyId,

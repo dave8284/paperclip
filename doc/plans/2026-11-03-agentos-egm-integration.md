@@ -150,6 +150,19 @@ and the existing
 [`runtime-selection.ts`](../../server/src/services/heartbeat/runtime-selection.ts)
 persistence boundary.
 
+**A05/M05 source fix (2026-11-08):** the Codex facade now forwards accepted
+native thread and exact-turn hashes instead of discarding them. Its EGM session
+report identifies the configured read-only review profile independently of
+default collaboration mode. Older runs lacking forwarded receipts remain
+unknown; preparation receipts are never promoted or rewritten. The retained
+native journal and Codex rollout for the first Orbit review independently showed
+an accepted EGM launch and active read-only permission profile, eight source
+reads and ten transport writes. These observations do not certify hidden context
+absence, provider use of returned bytes, finding resolution or owner acceptance.
+The existing M05 full-history evaluator still needs its complete native
+ordering/semantic-tool stream; facade receipt forwarding alone does not qualify
+a comparison or canary.
+
 The trust boundary is the internally written, locked run row, not a receipt
 signature. The inspected agent/run routes and shared mutation schemas do not
 accept `runnerProfileJson`. Runtime-mode selection constructs a closed native

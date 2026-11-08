@@ -5,6 +5,7 @@ export interface ObservedCodexIdentity {
   /** The reported session default; never evidence of a per-turn override. */
   reasoningEffort: string | null;
   source: "thread/start" | "thread/resume";
+  contextReceipt?: import("./provider-context-receipt.js").ProviderThreadContextReceipt;
 }
 const versionPattern = /^[0-9][A-Za-z0-9.+-]{0,79}$/;
 export function parseExpectedCodexIdentity(value: unknown): ExpectedCodexIdentity {

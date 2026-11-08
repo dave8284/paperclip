@@ -1,8 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { drizzle } from "drizzle-orm/pg-proxy";
-import { agentosPortfolioMandates, principalPermissionGrants, type Db } from "@paperclipai/db";
+import { agents, agentosPortfolios, agentosPortfolioCompanies, authUsers, companyOperatingProfiles,
+  companyMemberships, instanceUserRoles, agentosPortfolioMandates, principalPermissionGrants, type Db } from "@paperclipai/db";
+import { getTableColumns, getTableName } from "drizzle-orm";
 import { savePortfolioReadMandateSchema, portfolioWorkQuerySchema } from "@paperclipai/shared";
-import { assertPortfolioMandateActor, assertPortfolioPrivateDelegate, matchesPortfolioMandateGrant, portfolioMandateGrantScope, portfolioSummary } from "../services/agentos-portfolio-mandates.js";
+import { agentosPortfolioMandateService, assertPortfolioMandateActor, assertPortfolioPrivateDelegate, matchesPortfolioMandateGrant, portfolioMandateGrantScope, portfolioSummary, PortfolioDelegatePausedError } from "../services/agentos-portfolio-mandates.js";
 import { refreshWorkforceBoardActor } from "../services/agentos-workforce.js";
 import { fridayAwarenessService } from "../services/friday-awareness.js";
 import type { AuthorizationActor } from "../services/authorization.js";
@@ -17,6 +19,40 @@ const grant: typeof principalPermissionGrants.$inferSelect = { id: row.grantId!,
 afterEach(() => vi.unstubAllEnvs());
 
 describe("explicit portfolio read contract", () => {
+  it.each(["paused", "terminated", "unready", "revoked"])("retains the precise locked delegate authorization failure (%s)", async condition => {
+    const mandate = { ...row, readScope: "owner_accessible_private", revokedAt: condition === "revoked" ? new Date() : null };
+    const tables = [agentosPortfolioMandates, agentosPortfolios, agentosPortfolioCompanies, authUsers,
+      companyOperatingProfiles, instanceUserRoles, companyMemberships, principalPermissionGrants, agents];
+    const records: Record<string, Record<string, unknown>[]> = {
+      [getTableName(agentosPortfolioMandates)]: [mandate],
+      [getTableName(agentosPortfolios)]: [{ id: row.portfolioId, ownerUserId: row.ownerUserId, homeCompanyId: row.sourceCompanyId }],
+      [getTableName(agentosPortfolioCompanies)]: [row.sourceCompanyId, id(6)].map(companyId => ({ id: companyId, companyId, portfolioId: row.portfolioId })),
+      [getTableName(authUsers)]: ["owner", "external"].map(id => ({ id, approvalStatus: "approved" })),
+      [getTableName(companyOperatingProfiles)]: [{ companyId: row.sourceCompanyId, fridayAgentId: row.sourceAgentId }],
+      [getTableName(agents)]: [{ id: row.sourceAgentId, companyId: row.sourceCompanyId,
+        status: condition === "unready" ? "idle" : condition, lifecycleState: condition === "unready" ? "pending" : "ready" }],
+    };
+    const queries: string[] = [];
+    const db = drizzle(async query => {
+      queries.push(query);
+      const table = tables.find(value => query.includes(`from "${getTableName(value)}"`));
+      if (!table) throw new Error("Unexpected authority query");
+      return { rows: (records[getTableName(table)] ?? []).map(value => Object.keys(getTableColumns(table)).map(key => {
+        const cell = value[key]; return cell instanceof Date ? cell.toISOString() : cell ?? null;
+      })) };
+    }) as unknown as Db;
+    const failure = await agentosPortfolioMandateService(db).authorizePrivateRead(db, actor, row.sourceCompanyId,
+      { mandateId: row.id, revision: row.revision, targetCompanyId: id(6) }).catch(error => error);
+    expect(failure).toMatchObject({ status: 403 });
+    if (condition === "paused") {
+      expect(failure).toBeInstanceOf(PortfolioDelegatePausedError);
+      expect(failure.details).toEqual({ code: "portfolio_delegate_paused" });
+    } else expect(failure).not.toBeInstanceOf(PortfolioDelegatePausedError);
+    const lockedAgentRead = queries.find(query => query.includes('from "agents"'));
+    if (condition === "revoked") expect(lockedAgentRead).toBeUndefined();
+    else expect(lockedAgentRead).toMatch(/for share nowait$/);
+  });
+
   it("requires explicit supported scope, action, expiry and bounded query pagination", () => {
     const input = { id: id(1), expectedRevision: 0, sourceCompanyId: id(3), sourceAgentId: id(4), targetCompanyIds: [id(6)],
       action: "portfolio_work:read", readScope: "company_shared_only", expiresAt: null };
