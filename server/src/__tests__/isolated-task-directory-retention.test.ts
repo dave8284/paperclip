@@ -89,6 +89,7 @@ describeEmbeddedPostgres("isolated task directory retention", () => {
     await fs.mkdir(path.join(cwd, "nested", "deeper"), { recursive: true });
     await fs.writeFile(path.join(cwd, "nested", "deeper", "data.json"), "{\"value\":1}\n");
     await fs.writeFile(path.join(cwd, "run.sh"), "#!/bin/sh\necho ok\n", { mode: 0o755 });
+    await fs.chmod(path.join(cwd, "run.sh"), 0o755);
     await fs.symlink(outside, path.join(cwd, "outside-link"));
     await fs.writeFile(path.join(cwd, "package.json"), "{\"name\":\"fixture\"}\n");
     await fs.mkdir(path.join(cwd, "node_modules", "dep"), { recursive: true });

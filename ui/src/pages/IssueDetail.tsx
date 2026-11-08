@@ -3097,7 +3097,7 @@ function IssueDetailActivityTab({
 export function IssueDetail({ tasksTab }: { tasksTab?: TaskSidePanelProps["tasksTab"] }) { return <TaskDetailSurface tasksTab={tasksTab} />; }
 
 /** One controller and surface for both task URLs and agent conversations. */
-export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskSidePanelProps["tasksTab"]; conversation?: {
+export function TaskDetailSurface({ conversation, tasksTab, ownsRoute = true }: { tasksTab?: TaskSidePanelProps["tasksTab"]; ownsRoute?: boolean; conversation?: {
   agent: Agent; issue: Issue | null; ensureIssue: () => Promise<Issue>; voice?: boolean; focusView?: AgentConversationFocusView;
 } }) {
   const { issueId: routeIssueId, companyPrefix } = useParams<{ issueId: string; companyPrefix: string }>();
@@ -5957,6 +5957,8 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
   );
 
   useLayoutEffect(() => {
+    // A background conversation does not own the page's shared properties pane.
+    if (!ownsRoute) return;
     if (!panelIssue || suppressPanelUntilPlan || (conversation && !conversation.issue)) {
       closePanel();
       return;
@@ -6021,6 +6023,7 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
     }
     return () => closePanel();
   }, [
+    ownsRoute,
     openBrowserId,
     handleBrowserOpened,
     closePanel,
@@ -6189,6 +6192,7 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
   const lastMaximizeRequestKeyRef = useRef<string | null>(null);
   const routeIssueDocumentDeepLink = useCallback(
     (hash: string) => {
+      if (!ownsRoute) return false;
       const route = resolveIssueDocumentDeepLink(hash);
       if (!route) return false;
 
@@ -6232,6 +6236,7 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
       return true;
     },
     [
+      ownsRoute,
       taskInterfaceSettingsLoaded,
       isMobile,
       issue?.id,
@@ -6244,6 +6249,7 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
   );
 
   useEffect(() => {
+    if (!ownsRoute) return;
     if (!routeIssueDocumentDeepLink(location.hash)) {
       setDocumentDeepLink(null);
       // The deep link ended (hash cleared or issue changed): drop any
@@ -6253,6 +6259,7 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
       clearPanelMaximizeRequest();
     }
   }, [
+    ownsRoute,
     issueId,
     location.hash,
     routeIssueDocumentDeepLink,
@@ -6261,15 +6268,17 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
 
   // Leaving the issue page entirely also ends the deep link's lifetime.
   useEffect(
-    () => () => {
-      clearPanelMaximizeRequest();
+    () => {
+      if (!ownsRoute) return;
+      return () => clearPanelMaximizeRequest();
     },
-    [clearPanelMaximizeRequest],
+    [ownsRoute, clearPanelMaximizeRequest],
   );
 
   // Keep first and repeated document clicks inside the mounted task and its
   // query cache. Native anchors reset thread scroll or reload alias URLs.
   useEffect(() => {
+    if (!ownsRoute) return;
     const handleDocumentClick = (event: MouseEvent) => {
       if (
         event.defaultPrevented ||
@@ -6312,6 +6321,7 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
     return () =>
       document.removeEventListener("click", handleDocumentClick, true);
   }, [
+    ownsRoute,
     issue?.id,
     issue?.identifier,
     issueId,

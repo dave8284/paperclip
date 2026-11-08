@@ -135,6 +135,40 @@ describe("git restore points", () => {
     expect(await read(restored, ".env.example")).toBe("TOKEN=\nOTHER=\n");
   });
 
+  it("preserves exact admitted file modes and symlink targets under a restrictive restore umask", async () => {
+    await write(work, ".gitignore", "node_modules/\n.env\nevidence/\n", 0o644);
+    await write(work, "notes/plain.txt", "ordinary text\n", 0o644);
+    await write(work, "scripts/run.sh", "#!/bin/sh\necho restored\n", 0o755);
+    await write(work, "private/key.txt", "private fixture\n", 0o600);
+    await write(work, "private/run.sh", "#!/bin/sh\necho private\n", 0o700);
+    await write(work, "evidence/plain.txt", "ignored evidence\n", 0o644);
+    await write(work, "evidence/private.txt", "private evidence\n", 0o600);
+    await write(root, "outside.txt", "outside stays unchanged\n", 0o640);
+    await fs.symlink(path.join(root, "outside.txt"), path.join(work, "notes", "outside-link"));
+    const { payload } = (await captureRestorePoint({ cwd: work, upstreamCommits: upstream() }))!;
+
+    const previousUmask = process.umask(0o077);
+    try {
+      const restored = await freshClone("restored-restrictive-umask");
+      await fs.chmod(path.join(restored, "README.md"), 0o400);
+      const manifest = await importRestorePoint({ repositoryCwd: restored, payload });
+      await applyRestorePoint({ cwd: restored, manifest });
+      for (const [relative, mode] of [
+        ["notes/plain.txt", 0o644], ["scripts/run.sh", 0o755],
+        ["private/key.txt", 0o600], ["private/run.sh", 0o700],
+        ["evidence/plain.txt", 0o644], ["evidence/private.txt", 0o600],
+        ["README.md", 0o400],
+      ] as const) expect((await fs.stat(path.join(restored, relative))).mode & 0o777).toBe(mode);
+      expect(await read(restored, "notes/plain.txt")).toBe("ordinary text\n");
+      expect(await read(restored, "evidence/private.txt")).toBe("private evidence\n");
+      expect(await fs.readlink(path.join(restored, "notes", "outside-link"))).toBe(path.join(root, "outside.txt"));
+      expect((await fs.stat(path.join(root, "outside.txt"))).mode & 0o777).toBe(0o640);
+      expect(await read(root, "outside.txt")).toBe("outside stays unchanged\n");
+    } finally {
+      process.umask(previousUmask);
+    }
+  });
+
   it("applies safeguards and modes to staged files whose contents match the index", async () => {
     await write(work, "private/staged.txt", "staged secret\n", 0o600);
     git(work, "add", "private/staged.txt");
@@ -252,7 +286,7 @@ describe("git restore points", () => {
       await write(work, ".gitignore", "node_modules/\n.env\n*.tsbuildinfo\nevidence/\ndist/\n");
       git(work, "commit", "-q", "-am", "ignore build output");
       git(work, "push", "-q", "origin", "HEAD:master");
-      await write(work, "ui/tsconfig.tsbuildinfo", "{\"version\":\"5\"}\n");
+      await write(work, "ui/tsconfig.tsbuildinfo", "{\"version\":\"5\"}\n", 0o644);
       await write(work, "evidence/run.log", "agent evidence\n", 0o600);
       await write(work, "dist/app.js", "regenerable\n");
       await write(work, "node_modules/pkg/index.js", "regenerable\n");

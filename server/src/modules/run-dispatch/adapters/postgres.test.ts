@@ -542,7 +542,7 @@ describeEmbeddedPostgres("run-dispatch postgres adapter", () => {
     const { companyId, agentId } = await seedCompanyAndAgent();
     const issueId = randomUUID();
     await seedIssue({ companyId, issueId, status: "in_progress", assigneeAgentId: agentId });
-    if (conversation) await db.update(issues).set({ conversationAgentId: agentId, conversationUserId: "responsible-user" }).where(eq(issues.id, issueId));
+    if (conversation) await db.update(issues).set({ conversationAgentId: agentId, conversationUserId: "responsible-user", conversationState: "active" }).where(eq(issues.id, issueId));
     const runId = await seedRun({ companyId, agentId, status: "running", contextSnapshot: { issueId } });
     await db.update(issues).set({ executionRunId: runId }).where(eq(issues.id, issueId));
     const reservation = await reserveRunBudget(db, companyId, runId, null);

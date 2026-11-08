@@ -2034,6 +2034,83 @@ describe("IssueDetail", () => {
     });
   });
 
+  it("keeps the main task's document pane when an embedded conversation mounts and unmounts", async () => {
+    const agent = createAgent();
+    const task = createIssue();
+    const chat = createIssue({ id: "friday-chat", identifier: "PAP-9", conversationAgentId: agent.id });
+    mockLocation.hash = "#document-qa-evidence&viewer=full";
+    mockIssuesApi.get.mockImplementation(async (id) => id === chat.id ? chat : task);
+    await act(async () => {
+      renderIssueView(<>
+        <IssueDetail key="main" />
+        <TaskDetailSurface key="dock" ownsRoute={false} conversation={{ agent, issue: chat, ensureIssue: async () => chat }} />
+      </>);
+    });
+    await waitForAssertion(() => {
+      expect(queryClient.getQueryData(queryKeys.issues.detail(chat.id))).toBeDefined();
+      const props = mockOpenPanel.mock.calls.at(-1)?.[0]?.props.children?.props;
+      expect(props?.issue.id).toBe(task.id);
+      expect(props?.documentDeepLink).toMatchObject({ documentKey: "qa-evidence" });
+      expect(mockRequestPanelMaximize).toHaveBeenCalledTimes(1);
+    });
+    expect(mockOpenPanel.mock.calls.every(([node]) => node.props.children.props.issue.id === task.id)).toBe(true);
+
+    mockClosePanel.mockClear();
+    mockClearPanelMaximizeRequest.mockClear();
+    await act(async () => renderIssueView(<><IssueDetail key="main" /></>));
+    await flushReact();
+    expect(mockClosePanel).not.toHaveBeenCalled();
+    expect(mockClearPanelMaximizeRequest).not.toHaveBeenCalled();
+    expect(mockOpenPanel.mock.calls.at(-1)?.[0]?.props.children?.props.issue.id).toBe(task.id);
+  });
+
+  it("does not route or intercept another task's document hash from an embedded conversation", async () => {
+    const agent = createAgent();
+    const chat = createIssue({ id: "friday-chat", identifier: "PAP-9", conversationAgentId: agent.id });
+    mockLocation.hash = "#document-qa-evidence&viewer=full";
+    mockIssuesApi.get.mockResolvedValue(chat);
+    await act(async () => renderIssueView(
+      <TaskDetailSurface ownsRoute={false} conversation={{ agent, issue: chat, ensureIssue: async () => chat }} />,
+    ));
+    await waitForAssertion(() => expect(queryClient.getQueryData(queryKeys.issues.detail(chat.id))).toBeDefined());
+    await flushReact();
+    expect(mockOpenPanel).not.toHaveBeenCalled();
+    expect(mockClosePanel).not.toHaveBeenCalled();
+    expect(mockSetPanelVisible).not.toHaveBeenCalled();
+    expect(mockRequestPanelMaximize).not.toHaveBeenCalled();
+    expect(mockClearPanelMaximizeRequest).not.toHaveBeenCalled();
+
+    const link = document.createElement("a");
+    link.href = "#document-qa-evidence&viewer=full";
+    container.appendChild(link);
+    const seenAtTarget = vi.fn((event: MouseEvent) => {
+      expect(event.defaultPrevented).toBe(false);
+      event.preventDefault(); // Avoid jsdom following an unhandled native link.
+    });
+    link.addEventListener("click", seenAtTarget);
+    await act(async () => { link.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true })); });
+    expect(seenAtTarget).toHaveBeenCalledTimes(1);
+    expect(mockNavigate).not.toHaveBeenCalled();
+  });
+
+  it("opens conversation documents on the actual Friday route even with its docked Decisions layout", async () => {
+    const agent = createAgent();
+    const chat = createIssue({ id: "friday-chat", identifier: "PAP-9", conversationAgentId: agent.id });
+    mockLocation.pathname = "/PAP/friday";
+    mockLocation.hash = "#document-direction-return&viewer=full";
+    mockIssuesApi.get.mockResolvedValue(chat);
+    await act(async () => renderIssueView(<TaskDetailSurface conversation={{
+      agent, issue: chat, ensureIssue: async () => chat,
+      focusView: { canvas: true, docked: true, showTranscript: true, render: () => null },
+    }} />));
+    await waitForAssertion(() => {
+      const props = mockOpenPanel.mock.calls.at(-1)?.[0]?.props.children?.props;
+      expect(props?.issue.id).toBe(chat.id);
+      expect(props?.documentDeepLink).toMatchObject({ documentKey: "direction-return" });
+      expect(mockRequestPanelMaximize).toHaveBeenCalledTimes(1);
+    });
+  });
+
   it("opens a closed desktop pane and routes an ordinary document to its own tab on direct load", async () => {
     mockPanelState.panelVisible = false;
     mockLocation.hash = "#document-qa-evidence";

@@ -1,5 +1,6 @@
 import { execFile as execFileCallback, spawn } from "node:child_process";
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
+import { constants } from "node:fs";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -263,7 +264,7 @@ async function writeIgnoredFiles(cwd: string, commit: string, signal?: AbortSign
     if (path.isAbsolute(match[4]!) || match[4]!.split("/").includes("..") || !target.startsWith(`${cwd}${path.sep}`)) {
       throw new RestorePointRestoreFailure("invalid_payload");
     }
-    return { mode: match[1]!, blob: match[2]!, size: Number(match[3]), target };
+    return { mode: match[1]!, blob: match[2]!, size: Number(match[3]), relative: match[4]!, target };
   });
   for (const entry of entries) {
     if (await fs.lstat(entry.target).then(() => true, () => false)) throw new RestorePointRestoreFailure("ignored_files_conflict");
@@ -287,12 +288,53 @@ async function writeIgnoredFiles(cwd: string, commit: string, signal?: AbortSign
       const parent = await fs.realpath(path.dirname(entry.target));
       if (parent !== cwd && !parent.startsWith(`${cwd}${path.sep}`)) throw new RestorePointRestoreFailure("invalid_payload");
       if (entry.mode === "120000") await fs.symlink(blobs[index]!, entry.target);
-      else await fs.writeFile(entry.target, blobs[index]!, { flag: "wx", mode: entry.mode === "100755" ? 0o755 : 0o644 });
+      // Keep newly written bytes private until the complete saved mode plan is
+      // applied, including explicit private modes in the manifest.
+      else await fs.writeFile(entry.target, blobs[index]!, { flag: "wx", mode: 0o600 });
       written.push(entry.target);
     }
   } catch (error) {
     for (const target of written.reverse()) await fs.rm(target, { force: true });
     throw error instanceof RestorePointRestoreFailure ? error : new RestorePointRestoreFailure("ignored_files_conflict");
+  }
+  return new Map(entries.filter((entry) => entry.mode !== "120000")
+    .map((entry) => [entry.relative, entry.mode === "100755" ? 0o755 : 0o644]));
+}
+
+async function changedWorktreeModes(cwd: string, head: string, worktree: string, signal?: AbortSignal) {
+  const changes = nulList(await git(cwd, ["diff-tree", "--no-commit-id", "--raw", "-r", "-z", "--no-renames", "--no-abbrev", head, worktree], { signal }));
+  const modes = new Map<string, number>();
+  for (let index = 0; index < changes.length; index += 2) {
+    const match = /^:\d{6} (000000|100644|100755|120000) [0-9a-f]{40} [0-9a-f]{40} [A-Z]$/.exec(changes[index]!);
+    const relative = changes[index + 1];
+    if (!match || !relative) throw new RestorePointRestoreFailure("invalid_payload");
+    if (match[1] === "100644" || match[1] === "100755") modes.set(relative, match[1] === "100755" ? 0o755 : 0o644);
+  }
+  return modes;
+}
+
+async function applySavedFileModes(cwd: string, modes: Map<string, number>) {
+  for (const [relative, mode] of modes) {
+    const target = path.join(cwd, relative);
+    if (path.isAbsolute(relative) || relative.split("/").includes("..") || !target.startsWith(`${cwd}${path.sep}`)) {
+      throw new RestorePointRestoreFailure("invalid_payload");
+    }
+    const stat = await fs.lstat(target).catch((error: NodeJS.ErrnoException) => {
+      if (error.code === "ENOENT") return null;
+      throw error;
+    });
+    if (!stat?.isFile()) continue;
+    const parent = await fs.realpath(path.dirname(target));
+    if (parent !== cwd && !parent.startsWith(`${cwd}${path.sep}`)) throw new RestorePointRestoreFailure("invalid_payload");
+    if ((stat.mode & 0o777) === mode) continue;
+    const file = await fs.open(target, constants.O_RDONLY | constants.O_NOFOLLOW);
+    try {
+      const opened = await file.stat();
+      if (!opened.isFile() || opened.dev !== stat.dev || opened.ino !== stat.ino) throw new RestorePointRestoreFailure("invalid_payload");
+      await file.chmod(mode);
+    } finally {
+      await file.close();
+    }
   }
 }
 
@@ -509,6 +551,9 @@ export async function applyRestorePoint(input: { cwd: string; manifest: RestoreP
   const cwd = await fs.realpath(input.cwd);
   const head = await gitText(cwd, ["rev-parse", "--verify", "HEAD^{commit}"], { signal: input.signal });
   if (head !== manifest.head) throw new RestorePointRestoreFailure("head_mismatch");
+  // Git records 0644/0755 in its trees; the manifest stores only overrides.
+  // Restore those admitted paths explicitly instead of inheriting host umask.
+  const modes = manifest.worktree ? await changedWorktreeModes(cwd, head, manifest.worktree, input.signal) : new Map<string, number>();
   if (manifest.index && manifest.worktree) {
     const changed = await git(cwd, ["diff", "--quiet", "--no-ext-diff", "--no-textconv", "HEAD", manifest.worktree], { signal: input.signal }).then(() => false, (error: { code?: unknown }) => {
       if (error.code === 1) return true;
@@ -518,13 +563,9 @@ export async function applyRestorePoint(input: { cwd: string; manifest: RestoreP
       ["apply", "--binary", "--whitespace=nowarn", "-"], input.signal);
     await git(cwd, ["read-tree", `${manifest.index}^{tree}`], { signal: input.signal });
   }
-  if (manifest.ignored) await writeIgnoredFiles(cwd, manifest.ignored, input.signal);
-  for (const entry of manifest.modes) {
-    const target = path.join(cwd, entry.path);
-    if (path.relative(cwd, target).startsWith("..")) throw new RestorePointRestoreFailure("invalid_payload");
-    const stat = await fs.lstat(target).catch(() => null);
-    if (stat?.isFile()) await fs.chmod(target, entry.mode);
-  }
+  if (manifest.ignored) for (const [relative, mode] of await writeIgnoredFiles(cwd, manifest.ignored, input.signal)) modes.set(relative, mode);
+  for (const entry of manifest.modes) modes.set(entry.path, entry.mode);
+  await applySavedFileModes(cwd, modes);
   const restored = await currentRestorePointSnapshot(cwd, input.signal);
   if (restored.head !== manifest.head || restored.index !== manifest.index || restored.worktree !== manifest.worktree
     || restored.ignored !== (manifest.ignored ?? null) || JSON.stringify(restored.modes) !== JSON.stringify(manifest.modes)) {

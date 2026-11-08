@@ -45,6 +45,17 @@ Preconditions: follow the [baseline](./README.md#before-driving-a-journey). Use 
 
 Automated: [documents service](../../server/src/__tests__/documents-service.test.ts), [annotations](../../server/src/__tests__/document-annotations-service.test.ts), and [revision restore](../../server/src/__tests__/issue-document-restore-routes.test.ts) cover server contracts.
 
+The current task or conversation route owns document hashes and the shared
+document pane. Embedded Friday must not interpret another task's hash, intercept
+its document links, or replace/close that pane. The actual Friday route retains
+document navigation, including its docked Decisions layout.
+[Mounted surface regressions](../../ui/src/pages/IssueDetail.test.tsx) exercise
+coexistence, unmount, ignored embedded clicks and the actual conversation route.
+For browser acceptance, open a saved task document's direct link while the Friday
+dock is mounted, then follow its artifact card and reload. Confirm the document
+belongs to the task and no matching document is requested from Friday's separate
+conversation. Also open an existing document on the actual Friday route.
+
 Manual: Edit a paragraph, save, reload, and compare revisions. Add an annotation to a specific selection and inspect it after another edit. Resolve it through the supported action. Restore a disposable revision and confirm the new current document and history agree.
 
 ### `task-output`

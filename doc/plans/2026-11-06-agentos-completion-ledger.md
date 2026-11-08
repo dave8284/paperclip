@@ -12,10 +12,46 @@ Those requirements remain in scope; the rows below do not replace or erase them.
 The owner requested simple **Fixed / Not fixed** tracking in the existing
 [93-item worksheet](2026-11-03-agentos-requirements-reconciliation.md).
 Update those rows as work completes; do not create another backlog.
-**Current total: 50 Fixed / 43 Not fixed.** Partial implementation and unverified
+**Current total: 49 Fixed / 44 Not fixed.** Partial implementation and unverified
 live acceptance remain Not fixed. This checkpoint was refreshed at the owner's
 request on 7 November; the tables below the current checkpoint are historical.
 
+- **O07 reopened — private activity metadata leak reproduced:** the current
+  model-comparison delivery test correctly rejects an activity feed containing a
+  private task ID. The unexpected row is an `issue_access_grant.created` event:
+  native grant/issue access itself remains restricted, but the activity reader
+  filters only direct issue entities and its producer omits explicit issue scope
+  for live publication. Repair both durable and live paths at their owners;
+  preserve the privacy assertion. Source fix and real PostgreSQL authorization
+  coverage are underway. The previous direct head/analyst allow/deny and
+  escalation evidence below remain valid but do not close this discovered gap.
+- **L04 regression fixes checked; final suite remains open:** restore-point
+  application now restores admitted ordinary Git/ignored-file modes under a
+  restrictive `077` umask, overlays explicit private modes and uses confined
+  no-follow descriptors; unrelated files and symlink targets are unchanged.
+  A real-Git case reproduced `restored_contents_mismatch` before the fix. Seven
+  other original mode failures were fixture setup assumptions, corrected with
+  explicit modes. Historical chat-parent edits now recheck only a changed parent
+  inside the locked transaction; new conversation children remain prohibited.
+  Current checks pass: 50 restore/comparison/fixture cases under `077`, 111 MCP/
+  skill-cache cases under `077` (actual owner script execution, no broadened
+  permissions), and 94 dispatch/chat/routine/email cases. The comparison privacy
+  assertion remains unchanged; Friday's board restriction remains enforced.
+  Brand text, native routine revision/owner, and conversation-state fixtures were
+  corrected without weakening production gates. These logs retain before-fix
+  failures: `agentos-restore-*`, `agentos-regression-failures-focused-*`,
+  `agentos-remaining-four-*`, `agentos-mcp-cache-final-umask077-*` and
+  `agentos-regression-followthrough-final-*`, all dated `20261109` in private tmp.
+  Teams-catalog's four checks also pass with a legitimate approved board owner
+  and explicit current permission-management grants; native defaults and caller
+  override assertions remain unchanged. Full application build and final normal
+  server types pass for this production batch. The document-route UI follow-up
+  build and one final fixture semantic check are in progress; commit/activation
+  and loaded privacy qualification remain pending. Older full run has 52 failed
+  cases so far: the initial 48 are accounted by current code/fixture fixes or
+  passing integrated reruns; four provider-failure/connection-intent/model-profile
+  cases remain under diagnosis. The wrapper is still in its first
+  server group; later workspace/serialized groups have not run.
 - **S03 Fixed — loaded administration lifecycle passed:** the exact disposable
   `example.invalid` identity was preapproved/revoked through the native UI, then
   explicitly seeded pending/unverified without credentials or a session. The UI
@@ -62,7 +98,7 @@ request on 7 November; the tables below the current checkpoint are historical.
   `/private/tmp/agentos-model-browser-20261108/verification-report.json`,
   `agentos-m04-{shared-build,server-emit,ui-build}-20261109.log`,
   `agentos-m04-{restart-request,loaded-health,restart-ceo-run}-20261109.json`.
-- **O06 native Skill Studio fix implemented; live qualification pending:** the
+- **O06 native Skill Studio fix loaded; fresh live evaluation running:** the
   fictional company's original test `5bb5a5eb-cb7d-4af8-aef7-81c83a8f5192`
   and both ORB-18 attempts remain failed admission evidence, not a quality result.
   Native v10 now binds the exact test, immutable skill version and frozen input/
@@ -86,9 +122,35 @@ request on 7 November; the tables below the current checkpoint are historical.
   and attention. Pre-activation read at
   11:49:05 UTC confirms no active runs, no scheduled retries on the two original
   failed attempts, and both wake requests failed. Nothing has been reactivated.
-  Next: commit/activate, verify loaded native admission, then explicitly ask the
-  existing CEO/specialist to create a fresh v1 evaluation under the predeclared
-  cases before refining v2. No evaluated improvement, publication, adoption or
+  Commit `69f2b94c235592f76af250a901386f640f54125c` is pushed. Guarded
+  restart `55d3d9a7-d2df-4d64-b56d-fb264a7f1162` started process 33820 at
+  11:52:52.927 UTC, ready 11:52:56.781 with the exact startup commit, zero
+  pending migrations, no required restart and no adopted/lost/skipped runs.
+  Explicit loaded-fix notices `d35d17fc` and `168ea61e` reached the existing
+  CEO/author. The author created fresh v1 test `c302d016-8d4a-43fd-acc3-5304b38d6fbf`,
+  harness `1c753618-90a9-4aaa-ad6a-71b07d7c8d15`, run
+  `09e3587e-4d6c-468e-98b1-ecb82172560d`. Live retained input is v10 with the
+  exact v1/input/skill hashes and Codex model `gpt-6.1-sol`. The fresh run now
+  succeeded/committed; root read the actual saved output and confirmed all three
+  predeclared cases: normal 200/48/48/96/104 NZD, 52% margin and 40% utilization;
+  zero capacity 100/24/24/48/52 NZD and 52% margin with utilization unavailable;
+  negative quantity rejected without totals. Exact output revision
+  `d4274fee-7f01-411d-83ba-36a039ad74f8` is frozen in the native run receipt,
+  SHA-256 `168dc22164b981993d573b81d3a2c9538cb69006e60c90ed7aba37517e23d0cc`.
+  V1 completion did not wake ORB-15 because no native dependency/parent relation
+  had been saved. Root supplied one explicit technical continuation (recorded,
+  not autonomous handoff evidence) and asked the author to link subsequent waiting
+  work through native dependencies. The author refined immutable v2
+  `c924393b-bcd2-4614-abb5-dd5a651902f9` and ran fresh test
+  `506e9113-06e6-4c97-b0bc-aa96704eec1a` (ORB-21), native run
+  `76473b79-0791-4524-bf89-b1209e0ca00f`; it succeeded with output revision
+  `7d2eb42c-e77f-4348-bf7a-74f00b6e85ed`. ORB-15 is done; its saved comparison
+  `66f0b6e6-f53e-44a5-ad7c-5fbdd1951e7e`, revision
+  `46a1c908-68be-4784-a053-c2c952ed251d`, reports both versions 3/3 under author
+  inspection and **no measured improvement**. Existing reviewer ORB-17 and CEO
+  are now running automatically. Root has not independently checked the complete
+  v2 package yet. Next: exact-output comparison and reviewer/CEO return, then
+  concrete owner publication review and independent company adoption controls. No evaluated improvement, publication, adoption or
   owner acceptance is claimed. Evidence is in private
   `agentos-native-skill-{runtime-selection-final,final-regression,runner-contracts,integrated-build,integrated-typecheck,integrated-pg,preactivation}-20261109.*`
   and `agentos-skill-test-tools-final-20261109.log`.
@@ -100,15 +162,29 @@ request on 7 November; the tables below the current checkpoint are historical.
   foreign/malformed targets do not borrow its current revision. Friday receives
   an explicit authorized re-read/lead-consultation instruction, not an approval
   or additional permission. Thirty actual PostgreSQL attention cases and twelve
-  UI cases pass, along with shared/UI semantics, maps and token gates. Full build
-  passes; loaded browser/context and actual lead investigation remain pending.
+  UI cases pass, along with shared/UI semantics, maps and token gates. Loaded
+  69f2b94 API/browser verifies exact requested/current context and normal chat
+  submission for both Discuss and alternatives; no-send interception preserved
+  all real pending questions. A bounded board-authored Orbit fixture ORB-20 then
+  produced actual Friday direction 4c475448, CEO ORB-22 and existing head ORB-23.
+  The head consulted exact saved evidence and returned a recommendation/risk,
+  explicitly shared-context and fictional. CEO return is done; automatic Friday
+  return is still running. Fixture approval/schedules remain untouched.
+  This check exposed a document-navigation defect: embedded Friday consumed the
+  main task's global document hash and shared pane, requesting the right document
+  key under the wrong conversation. Explicit route ownership now keeps global
+  pane/hash/click effects with the actual route. Existing/default Friday routes
+  remain owners; only the background dock opts out. All 175 UI/deep-link checks,
+  UI types and tokens pass; fresh HMR browser opens the exact head report without
+  the wrong-conversation request. Initial failed screen and test-only typing
+  failure are retained. Final built-UI and native-return acceptance remain pending.
   Report: `/private/tmp/agentos-decision-gap-check-20261109/verification-report.json`.
 - **L04 full regression remains in progress:** `pnpm test:run` log is
   `/private/tmp/agentos-full-regression-20261109.log`. It began before these
   latest edits and remains diagnostic across the evolving tree. Its first server
-  group has reported 22 failed cases in five suites (model-comparison delivery,
+  group initially reported 22 failed cases in five suites (model-comparison delivery,
   workspace expiry, tool access, restore points and isolated-task retention);
-  assertion details/focused reproduction are under investigation. The wrapper
+  additional failures and assertion details/focused reproduction are under investigation. The wrapper
   stops on group failure, so later workspace/serialized groups are not yet run.
   No current-head full-suite pass or physical voice acceptance is claimed.
 - **O07 Fixed — current project-lead boundary and real escalation verified:**

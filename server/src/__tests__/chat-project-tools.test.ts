@@ -110,7 +110,8 @@ const support = await getEmbeddedPostgresTestSupport();
     const ordinary = await svc.create(f.companyId, { title: "Ordinary" });
     await expect(svc.update(ordinary.id, { parentId: f.issueId })).rejects.toThrow(/cannot have new subtasks/);
     await server.db.update(issues).set({ parentId: f.issueId }).where(eq(issues.id, ordinary.id));
-    expect(await svc.update(ordinary.id, { title: "Legacy edited", parentId: f.issueId })).toMatchObject({ title: "Legacy edited" });
+    expect(await svc.update(ordinary.id, { title: "Legacy edited", parentId: f.issueId })).toMatchObject({ title: "Legacy edited", parentId: f.issueId });
+    expect(await svc.update(ordinary.id, { title: "Legacy edited without changing its parent" })).toMatchObject({ parentId: f.issueId });
     expect(await svc.update(ordinary.id, { parentId: null })).toMatchObject({ parentId: null });
   });
 

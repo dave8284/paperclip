@@ -4,12 +4,13 @@ import os from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { eq } from "drizzle-orm";
-import { agents, companies, createDb } from "@paperclipai/db";
+import { agents, authUsers, companies, companyMemberships, createDb } from "@paperclipai/db";
 import {
   getEmbeddedPostgresTestSupport,
   startEmbeddedPostgresTestDatabase,
 } from "./helpers/embedded-postgres.js";
 import { teamsCatalogService } from "../services/teams-catalog.js";
+import { accessService } from "../services/access.js";
 
 vi.mock("../services/agent-runner-selection.js", async importOriginal => {
   const actual = await importOriginal<typeof import("../services/agent-runner-selection.js")>();
@@ -49,13 +50,22 @@ describeEmbeddedPostgres("teams catalog install with no caller adapter overrides
 
   async function seedEmptyCompany() {
     const companyId = randomUUID();
+    const userId = randomUUID();
     await db.insert(companies).values({
       id: companyId,
       name: "Clean install company",
       issuePrefix: `T${companyId.replace(/-/g, "").slice(0, 6).toUpperCase()}`,
       requireBoardApprovalForNewAgents: false,
     });
-    return companyId;
+    await db.insert(authUsers).values({ id: userId, name: "Catalog owner", email: `${userId}@fixture.invalid`, approvalStatus: "approved", createdAt: new Date(), updatedAt: new Date() });
+    await db.insert(companyMemberships).values({ companyId, principalType: "user", principalId: userId, status: "active", membershipRole: "owner" });
+    const access = accessService(db);
+    await access.setPrincipalPermission(companyId, "user", userId, "users:manage_permissions", true, userId);
+    await access.setPrincipalPermission(companyId, "user", userId, "applications:manage", true, userId);
+    return { companyId, authority: {
+      authorizationActor: { type: "board" as const, source: "session" as const, userId, companyIds: [companyId], isInstanceAdmin: false },
+      actor: { actorType: "user" as const, actorId: userId, userId },
+    } };
   }
 
   async function listAdapterTypesByName(companyId: string, expectedOpenCodeName?: string) {
@@ -78,10 +88,11 @@ describeEmbeddedPostgres("teams catalog install with no caller adapter overrides
   }
 
   it("installs core-exec-team end-to-end with no caller overrides and creates 3 native Claude agents", async () => {
-    const companyId = await seedEmptyCompany();
+    const { companyId, authority } = await seedEmptyCompany();
     const svc = teamsCatalogService(db);
 
     await svc.installCatalogTeam(companyId, "core-exec-team", {
+      ...authority,
       collisionStrategy: "rename",
       include: { projects: false, issues: false },
     });
@@ -96,10 +107,11 @@ describeEmbeddedPostgres("teams catalog install with no caller adapter overrides
   });
 
   it("installs product-design end-to-end with no caller overrides and uses native Claude", async () => {
-    const companyId = await seedEmptyCompany();
+    const { companyId, authority } = await seedEmptyCompany();
     const svc = teamsCatalogService(db);
 
     await svc.installCatalogTeam(companyId, "product-design", {
+      ...authority,
       collisionStrategy: "rename",
       include: { projects: false, issues: false },
     });
@@ -112,10 +124,11 @@ describeEmbeddedPostgres("teams catalog install with no caller adapter overrides
   });
 
   it("installs product-engineering end-to-end with no caller overrides and uses native Claude for every agent", async () => {
-    const companyId = await seedEmptyCompany();
+    const { companyId, authority } = await seedEmptyCompany();
     const svc = teamsCatalogService(db);
 
     await svc.installCatalogTeam(companyId, "product-engineering", {
+      ...authority,
       collisionStrategy: "rename",
       include: { projects: false, issues: false },
     });
@@ -129,10 +142,11 @@ describeEmbeddedPostgres("teams catalog install with no caller adapter overrides
   });
 
   it("honors an explicit caller adapter override for a single slug while defaulting the rest to native Claude", async () => {
-    const companyId = await seedEmptyCompany();
+    const { companyId, authority } = await seedEmptyCompany();
     const svc = teamsCatalogService(db);
 
     await svc.installCatalogTeam(companyId, "core-exec-team", {
+      ...authority,
       collisionStrategy: "rename",
       include: { projects: false, issues: false },
       adapterOverrides: {

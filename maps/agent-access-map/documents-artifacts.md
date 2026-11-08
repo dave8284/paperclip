@@ -41,6 +41,13 @@ remaining operations before qualifying the whole capability.
 Gaps: Supported. Native helpers focus on the active task; generic API or explicit
 other-task tools cover additional scope.
 
+UI document-route ownership is presentation-only: the embedded Friday dock does
+not consume another task's document hash or shared pane. Actual task/chat/Friday
+routes keep their document navigation. This adds no document API, cross-company
+permission or native-tool authority. The companion's mounted-surface regression
+and browser recipe cover that navigation boundary; they do not qualify all
+document mutations or denied-actor cases above.
+
 ## `annotations`
 
 Capability ID: `documents-artifacts/annotations`.

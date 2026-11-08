@@ -14,6 +14,7 @@ import { activityToastIdentity } from "./activity-toast-identity.js";
 import { taskToastEligible } from "./task-toast-eligibility.js";
 import { subscribeCompanyLiveEvents } from "../services/live-events.js";
 import { trackIdleWork } from "../services/task-admission.js";
+import { resolveIssueAccessGrantActivityIssueId } from "../services/issue-access-grant-activity.js";
 
 interface WsSocket {
   readyState: number;
@@ -281,6 +282,12 @@ export function setupLiveEventsWebSocketServer(
 
     const access = authorizationService(db);
     async function visibleEvent(event: LiveEvent): Promise<LiveEvent | null> {
+      if (event.type === "activity.logged" && event.payload.entityType === "issue_access_grant") {
+        const issueId = await resolveIssueAccessGrantActivityIssueId(db, { companyId: event.companyId,
+          entityId: event.payload.entityId, issueId: event.payload.issueId, details: event.payload.details });
+        if (!issueId) return null;
+        event = { ...event, payload: { ...event.payload, issueId } };
+      }
       if (event.payload.entityType === "case" && (typeof event.payload.entityId !== "string"
         || !(await canActorReadCase(db, context!.actor, { id: event.payload.entityId, companyId: event.companyId })))) return null;
       if (context!.actor.source === "local_implicit") {

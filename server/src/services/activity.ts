@@ -2,7 +2,7 @@ import { DELIVERY_QUEUES, notifyDeliveryWork } from "./delivery-work-notificatio
 import { skillAccessService } from "./skill-access.js";
 import { credentialAccessConnectionNameSql } from "./credential-access-visibility.js";
 import { executionProjectionsForRuns } from "./execution-projection.js";
-import { and, asc, desc, eq, inArray, isNull, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNotNull, isNull, or, sql, type SQL } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import {
   activityLog,
@@ -14,6 +14,7 @@ import {
   heartbeatRunEvents,
   heartbeatRuns,
   issueComments,
+  issueAccessGrants,
   issueDocuments,
   issues,
   issueWorkProducts,
@@ -23,6 +24,7 @@ import { hasWorkspaceRestoreFailure, safeWorkspaceRestorePath, ISSUE_CONTINUATIO
 import { logger } from "../middleware/logger.js";
 import { visibleIssueCondition } from "./issue-visibility.js";
 import { classifyRunLiveness } from "./run-liveness.js";
+import { activityIssueAccessGrantId, issueAccessGrantActivityDetailsCondition } from "./issue-access-grant-activity.js";
 
 export interface ActivityFilters {
   companyId: string;
@@ -384,19 +386,27 @@ export function activityService(db: Db) {
       return db
         .select({ activityLog })
         .from(activityLog)
+        .leftJoin(issueAccessGrants, and(
+          eq(activityLog.entityType, "issue_access_grant"),
+          eq(issueAccessGrants.id, activityIssueAccessGrantId),
+        ))
         .leftJoin(
           issues,
           and(
-            eq(activityLog.entityType, sql`'issue'`),
-            eq(activityLog.entityId, issueIdAsText),
+            eq(issues.companyId, activityLog.companyId),
+            or(
+              and(eq(activityLog.entityType, "issue"), eq(activityLog.entityId, issueIdAsText)),
+              and(eq(activityLog.entityType, "issue_access_grant"), eq(issues.id, issueAccessGrants.issueId),
+                issueAccessGrantActivityDetailsCondition()),
+            ),
           ),
         )
         .where(
           and(
             ...conditions,
             or(
-              sql`${activityLog.entityType} != 'issue'`,
-              and(visibleIssueCondition(), filters.readCondition ?? sql<boolean>`true`),
+              sql`${activityLog.entityType} not in ('issue', 'issue_access_grant')`,
+              and(isNotNull(issues.id), visibleIssueCondition(), filters.readCondition ?? sql<boolean>`true`),
             ),
           ),
         )

@@ -177,6 +177,7 @@ describeEmbeddedPostgres("reconstructable Git expiration", () => {
     const nestedSettingsPath = path.join(nested!.cwd, ".claude/settings.local.json");
     await fs.mkdir(path.dirname(nestedSettingsPath));
     await fs.writeFile(nestedSettingsPath, settings, { mode: 0o640 });
+    await fs.chmod(nestedSettingsPath, 0o640);
     return { ...f, nestedSource, nestedRemote, nestedA, preparation, nested: nested!, settings, settingsPath, nestedSettingsPath,
       sharedBase: resolveManagedProjectWorkspaceDir({ companyId: f.companyId, projectId: f.projectId!, repoName: "nested" }) };
   }

@@ -13,7 +13,7 @@ import { agentRouteRef } from "@/lib/utils";
 import { TaskDetailSurface } from "./IssueDetail";
 import { isUuidLike, type Issue } from "@paperclipai/shared";
 
-export function AgentChat({ agentRef: selectedAgentRef, voice = false, focusView }: { agentRef?: string; voice?: boolean; focusView?: AgentConversationFocusView } = {}) {
+export function AgentChat({ agentRef: selectedAgentRef, voice = false, focusView, ownsRoute = true }: { agentRef?: string; voice?: boolean; focusView?: AgentConversationFocusView; ownsRoute?: boolean } = {}) {
   const { agentRef: routeAgentRef = "" } = useParams<{ agentRef: string }>();
   const agentRef = selectedAgentRef ?? routeAgentRef;
   const { selectedCompanyId } = useCompany();
@@ -97,6 +97,7 @@ export function AgentChat({ agentRef: selectedAgentRef, voice = false, focusView
   return (
     <TaskDetailSurface
       key={`${agent.id}:${userId}`}
+      ownsRoute={ownsRoute}
       conversation={{ agent, issue: chat.data ?? null, ensureIssue, voice, focusView }}
     />
   );

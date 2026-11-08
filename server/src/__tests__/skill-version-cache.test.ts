@@ -1,4 +1,6 @@
 import { randomUUID } from "node:crypto";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -84,7 +86,11 @@ describePostgres("immutable skill version cache", () => {
     const repository = path.join(restored.source, ".paperclip-repository");
     expect(await fs.readFile(path.join(repository, "marker.bin"))).toEqual(Buffer.from([0, 1, 255]));
     expect(await fs.readFile(path.join(repository, "scripts/example.sh"), "utf8")).toBe("#!/bin/sh\necho revision-1\n");
-    expect((await fs.stat(path.join(repository, "scripts/example.sh"))).mode & 0o111).toBe(0o111);
+    const script = path.join(repository, "scripts/example.sh");
+    const mode = (await fs.stat(script)).mode;
+    expect(mode & 0o100).toBe(0o100);
+    expect(mode & 0o222).toBe(0);
+    expect((await promisify(execFile)(script, { encoding: "utf8" })).stdout).toBe("revision-1\n");
     expect(await fs.readFile(path.join(current.source, ".paperclip-repository/marker.bin"))).toEqual(Buffer.from([0, 2, 255]));
     expect(upstream).not.toHaveBeenCalled();
   });

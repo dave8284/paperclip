@@ -611,7 +611,7 @@ describeEmbeddedPostgres("generic remote MCP connections", () => {
         iss: ISSUER, redirectUri: REDIRECT_URI, actor });
     };
     const completed = await authorize();
-    expect(completed.connection).toMatchObject({ name: "Paperclip Notebook", credentialPolicy: "per_user" });
+    expect(completed.connection).toMatchObject({ name: "AgentOS Notebook", credentialPolicy: "per_user" });
     expect(completed.catalog).toHaveLength(5);
     expect(completed.catalog.every(entry => entry.status === "active")).toBe(true);
     const [grant] = await db.select().from(connectionGrants).where(eq(connectionGrants.connectionId, connected.connectionId));
@@ -2233,7 +2233,7 @@ describeEmbeddedPostgres("generic remote MCP connections", () => {
 
     expect(thrown).toMatchObject({
       status: 502,
-      message: "The authorization server rejected Paperclip's callback URL.",
+      message: "The authorization server rejected AgentOS's callback URL.",
       details: {
         code: "oauth_dynamic_client_registration_failed",
         providerError: "invalid_redirect_uri",

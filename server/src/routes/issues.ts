@@ -13433,6 +13433,7 @@ export function issueRoutes(
           action: "issue_access_grant.created",
           entityType: "issue_access_grant",
           entityId: result.grant.id,
+          issueId: result.grant.issueId,
           details: {
             issueId: result.grant.issueId,
             subjectType: result.grant.subjectType,
@@ -13478,6 +13479,7 @@ export function issueRoutes(
         action: "issue_access_grant.revoked",
         entityType: "issue_access_grant",
         entityId: grant.id,
+        issueId: grant.issueId,
         details: { issueId: grant.issueId, subjectType: grant.subjectType, subjectId: grant.subjectId },
       });
       res.json(grant);

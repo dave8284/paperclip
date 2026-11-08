@@ -14,6 +14,7 @@ import { sanitizeRecord } from "../redaction.js";
 import { logger } from "../middleware/logger.js";
 import type { PluginEventBus } from "./plugin-event-bus.js";
 import { instanceSettingsService } from "./instance-settings.js";
+import { resolveIssueAccessGrantActivityIssueId } from "./issue-access-grant-activity.js";
 
 const PLUGIN_EVENT_SET: ReadonlySet<string> = new Set(PLUGIN_EVENT_TYPES);
 const ACTIVITY_ACTION_TO_PLUGIN_EVENT: Readonly<Record<string, PluginEventType>> = {
@@ -166,8 +167,11 @@ export function publishActivity(publication: ActivityPublication) {
 }
 
 export async function persistActivity(db: Db, input: LogActivityInput) {
+  const issueId = input.entityType === "issue_access_grant"
+    ? await resolveIssueAccessGrantActivityIssueId(db, input)
+    : input.issueId ?? (input.entityType === "issue" ? input.entityId : null);
   const redactedDetails = await redactActivityDetails(db, input.details ?? null);
-  const responsibleUserId = await resolveResponsibleUserIdForActivity(db, input);
+  const responsibleUserId = await resolveResponsibleUserIdForActivity(db, { ...input, issueId });
   const insert = (runner: Db) => runner.insert(activityLog).values({
     id: input.id,
     companyId: input.companyId,
@@ -189,7 +193,7 @@ export async function persistActivity(db: Db, input: LogActivityInput) {
     : await insert(db);
 
   const payload = {
-    issueId: input.issueId ?? (input.entityType === "issue" ? input.entityId : null),
+    issueId,
     actorType: input.actorType,
     actorId: input.actorId,
     action: input.action,

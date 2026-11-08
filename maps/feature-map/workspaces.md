@@ -83,6 +83,10 @@ Current runs, previews, recovery, unique files and shared base clones must stay.
 The [expiration tests](../../server/src/__tests__/git-workspace-expiration.test.ts)
 exercise real local Git and database paths, interruption and concurrent reopening;
 cloud credentials and the deployed user journey require separate live evidence.
+Git restore points retain exact saved file modes even under a restrictive host
+umask. The [restore-point regression](../../server/src/__tests__/git-restore-point.test.ts)
+checks ordinary, executable, private and ignored files while keeping unrelated
+files and symlink targets unchanged.
 
 For task workspace selection, use the authorized task workspace API to choose a
 task directory, project source, or existing workspace. Verify that a change

@@ -59,6 +59,12 @@ Policy: Company activity requires same-company access and `company_scope:read`,
 with issue visibility filtering. Issue activity requires same-company resource
 access and `issue:read` for the resolved issue. The sandbox transport does not
 replace those controller checks or permit activity writes.
+Grant-created/revoked activity resolves the retained native grant to its
+same-company task before applying current task read access. Revoked grants are
+history, not reader authority. Missing/deleted grants or tasks, malformed IDs,
+and conflicting detail references are withheld; no task ID in free-form details
+can authorize a read. Live publications resolve the same binding again before
+delivery, including older publications without an explicit task ID.
 
 Evidence: `source-only` — [activity routes](../../server/src/routes/activity.ts),
 [agent authorization tests](../../server/src/__tests__/activity-routes.test.ts),
@@ -71,6 +77,14 @@ regressions pass: permitted agent issue read, denied company/resource scope,
 denied writes, extra path segments, and company audit routes. With a real
 sandbox agent, read an authorized issue's activity, then verify denial for an
 inaccessible issue, another company, and company-wide audit.
+
+Focused grant-privacy verification uses actual PostgreSQL and a local WebSocket
+with a fixture-authenticated viewer in
+[activity-grant-privacy.test.ts](../../server/src/__tests__/activity-grant-privacy.test.ts):
+open/authorized/private/foreign tasks, created/revoked history, access revoked
+while subscribed, missing/malformed/conflicting bindings, retained audit after
+deletion, and a failed lookup that denies delivery without blocking later events.
+This is isolated boundary evidence, not a loaded production or real sign-in proof.
 
 Gaps: Audit export and raw activity creation have extra restrictions; do not
 equate them with issue activity reading. Live sandbox access remains unverified.

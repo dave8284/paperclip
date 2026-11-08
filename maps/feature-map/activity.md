@@ -44,8 +44,16 @@ Manual: Compare the dashboard with the known fixture tasks and runs. Start and f
 ### `activity-audit`
 
 Automated: [activity service](../../server/src/__tests__/activity-service.test.ts), [audit runs](../../ui/src/pages/audit/AuditRuns.test.tsx), and [routine audit](../../ui/src/pages/audit/RoutineAuditActivity.test.tsx) cover these separate data/host layers.
+[Grant activity privacy](../../server/src/__tests__/activity-grant-privacy.test.ts)
+uses actual PostgreSQL and a local WebSocket to verify retained grant history
+and current task authorization, including revocation during an open subscription.
+The fixture identity does not establish a production browser/sign-in journey.
 
 Manual: Find a known mutation by actor/resource and a known run by status. Change filters, load more, and follow the source links. Reload the chosen view and verify no company leakage or duplicate events. Inspect a routine run from its audit entry.
+Create and revoke a private task grant: a task reader may see its retained grant
+activity, while another company reader must see neither its task nor grant ID.
+Revoke that reader's access with Audit still open and confirm subsequent live
+events and refreshed history respect the current task boundary.
 
 Case detail's **View in Audit** opens `/activity?entityType=case&entityId=<case UUID>`.
 The Activity filters include **Cases** actions and **Case** entities; the Case

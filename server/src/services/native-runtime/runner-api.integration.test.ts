@@ -3,7 +3,9 @@ import { createHash, randomUUID } from "node:crypto";
 import { chmod, writeFile, symlink, mkdir, open } from "node:fs/promises";
 import { join, dirname } from "node:path";
 import { eq } from "drizzle-orm";
-import { agents, agentWakeupRequests, assets, documents, heartbeatRuns, issues, projects, routineDocuments, routines, runnerApiResponseReservations, companySkills, companyMemberships, principalPermissionGrants } from "@paperclipai/db";
+import { agents, agentWakeupRequests, assets, authUsers, documents, heartbeatRuns, issues, projects, routines, runnerApiResponseReservations, companySkills, companyMemberships, principalPermissionGrants } from "@paperclipai/db";
+import { createRoutineSchema } from "@paperclipai/shared";
+import { routineService } from "../routines.js";
 import { initializeRunIdentity } from "../run-identity.js";
 import { beforeAll, afterAll, beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 import { secretService } from "../secrets.js";
@@ -475,13 +477,20 @@ else if(m.id!==undefined) send({id:m.id,result:{}});
 
   it("supports routine annotation collaboration without changing scheduling", async () => {
     const fixture = await server.fixture();
-    const [document] = await server.db.select().from(documents).where(eq(documents.companyId, fixture.companyId));
-    const [routine] = await server.db.insert(routines).values({ companyId: fixture.companyId, projectId: fixture.projectId, title: "Review schedule", description: document.latestBody, assigneeAgentId: fixture.agentId, status: "paused" }).returning();
-    await server.db.insert(routineDocuments).values({ companyId: fixture.companyId, routineId: routine.id, documentId: document.id, key: "description" });
-    const exact = "silver-wren", start = document.latestBody.indexOf(exact);
+    const [sourceDocument] = await server.db.select().from(documents).where(eq(documents.companyId, fixture.companyId));
+    const ownerId = randomUUID();
+    await server.db.insert(authUsers).values({ id: ownerId, name: "Routine owner", email: `${ownerId}@fixture.invalid`, approvalStatus: "approved", createdAt: new Date(), updatedAt: new Date() });
+    await server.db.insert(companyMemberships).values({ companyId: fixture.companyId, principalType: "user", principalId: ownerId, status: "active", membershipRole: "owner" });
+    const service = routineService(server.db);
+    const routine = await service.create(fixture.companyId, createRoutineSchema.parse({
+      projectId: fixture.projectId, title: "Review schedule", description: sourceDocument.latestBody,
+      assigneeAgentId: fixture.agentId, status: "paused",
+    }), { userId: ownerId });
+    const document = (await service.getDescriptionDocument(routine.id))!;
+    const exact = "silver-wren", start = document.body.indexOf(exact);
     const base = "/api/routines/{id}/description/annotations";
     const call = (callId: string, operationId: string, body: unknown, threadId?: string) => fixture.authority.execute({ tool: "call_api", callId, arguments: { operationId, pathParams: { id: routine.id, ...(threadId ? { threadId } : {}) }, body } }) as Promise<any>;
-    const created = await call("annotation-create", `POST ${base}`, { baseRevisionId: document.latestRevisionId, baseRevisionNumber: document.latestRevisionNumber, selector: { quote: { exact, prefix: document.latestBody.slice(0, start), suffix: document.latestBody.slice(start + exact.length) }, position: { normalizedStart: start, normalizedEnd: start + exact.length, markdownStart: start, markdownEnd: start + exact.length } }, body: "Please clarify this note" });
+    const created = await call("annotation-create", `POST ${base}`, { baseRevisionId: document.latestRevisionId, baseRevisionNumber: document.latestRevisionNumber, selector: { quote: { exact, prefix: document.body.slice(0, start), suffix: document.body.slice(start + exact.length) }, position: { normalizedStart: start, normalizedEnd: start + exact.length, markdownStart: start, markdownEnd: start + exact.length } }, body: "Please clarify this note" });
     expect(created).toMatchObject({ status: 201, data: { routineId: routine.id, status: "open" } });
     const threadId = created.data.id;
     expect(await call("annotation-comment", `POST ${base}/{threadId}/comments`, { body: "Clarified note" }, threadId)).toMatchObject({ status: 201, data: { body: "Clarified note" } });

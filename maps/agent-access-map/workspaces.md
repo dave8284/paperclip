@@ -84,6 +84,9 @@ and trust checks. Missing upstream access returns a retryable error; it does not
 choose a newer commit or grant access to another company's source. Shared project
 bases and unresolved recovery remain protected. Local lifecycle evidence is in
 [expiration tests](../../server/src/__tests__/git-workspace-expiration.test.ts).
+Restore-point mode recovery applies only to saved changed or ignored files and
+explicit manifest overrides. It preserves private modes, checks workspace paths
+and file identity, and does not follow leaf symlinks or grant new agent access.
 
 Only directly selected configuration policies participate in current execution trust.
 Physical aliases and historical source projects do not contribute filesystem policy.

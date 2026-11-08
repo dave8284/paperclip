@@ -70,12 +70,12 @@ describe("native observed comparison delivery", () => {
     const [company] = await db.insert(companies).values({ name: "Observed comparison fixture", issuePrefix: `MC${randomUUID().slice(0, 5)}` }).returning();
     await db.insert(companyMemberships).values({ companyId: company.id, principalType: "user", principalId: userId,
       status: "active", membershipRole: "owner" });
-    const [agent, reviewer] = await db.insert(agents).values(["Implementer", "Independent reviewer"].map(name => ({
+    const [agent, reviewer, friday] = await db.insert(agents).values(["Implementer", "Independent reviewer", "Friday"].map(name => ({
       companyId: company.id, name, adapterType: "paperclip_runner", status: "idle", lifecycleState: "ready" as const,
       adapterConfig: { provider: "codex", model: "gpt-6.1-sol", modelReasoningEffort: "high", homeMode: "isolated" },
       runtimeConfig: { heartbeat: { enabled: false, wakeOnDemand: false } },
     }))).returning();
-    await db.insert(companyOperatingProfiles).values({ companyId: company.id, fridayAgentId: agent.id });
+    await db.insert(companyOperatingProfiles).values({ companyId: company.id, fridayAgentId: friday.id });
     const task = await issueService(db).create(company.id, {
       title: "Classify support tickets", description: "Triage the supplied tickets and check each category against the supplied expected labels.",
       status: "backlog", priority: "medium", workMode: "standard", reviewPolicy: "human_only",

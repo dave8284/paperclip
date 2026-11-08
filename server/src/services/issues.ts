@@ -3674,6 +3674,7 @@ export async function ensureAssignmentIssueAccessGrant(
     action: "issue_access_grant.created",
     entityType: "issue_access_grant",
     entityId: grant.id,
+    issueId: grant.issueId,
     details: {
       issueId: grant.issueId,
       subjectType: grant.subjectType,
@@ -11203,7 +11204,7 @@ export function issueService(db: Db) {
           .for("update")
           .then((rows: Array<typeof issues.$inferSelect>) => rows[0] ?? null);
         if (!receiptExisting) return null;
-        if (issueData.parentId !== undefined) {
+        if (issueData.parentId !== undefined && issueData.parentId !== receiptExisting.parentId) {
           // Recheck after the task/company locks; the preflight read cannot
           // authorize a parent link that changed while this update waited.
           await assertExecutionTaskParent(tx, receiptExisting.companyId, issueData.parentId, true);
