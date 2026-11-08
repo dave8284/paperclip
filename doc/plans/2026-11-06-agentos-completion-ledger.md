@@ -12,10 +12,60 @@ Those requirements remain in scope; the rows below do not replace or erase them.
 The owner requested simple **Fixed / Not fixed** tracking in the existing
 [93-item worksheet](2026-11-03-agentos-requirements-reconciliation.md).
 Update those rows as work completes; do not create another backlog.
-**Current total: 47 Fixed / 46 Not fixed.** Partial implementation and unverified
+**Current total: 48 Fixed / 45 Not fixed.** Partial implementation and unverified
 live acceptance remain Not fixed. This checkpoint was refreshed at the owner's
 request on 7 November; the tables below the current checkpoint are historical.
 
+- **M04 configured native model/attempt projection repaired, activation pending:**
+  the administration audit previously omitted each native run's selected model
+  when no Model Intelligence selection receipt existed. It now projects only
+  bound frozen profile metadata, separately from observed provider usage and
+  absent routing/quality evidence. Existing-session input and runtime session
+  metadata are labelled separately; neither proves provider resume success.
+  Attempt/retry/preceding/successor facts reuse the execution owner's company-
+  batched projections, with explicit unavailable/unknown states and correct
+  linked employee IDs. **25 server/projection and eight UI checks pass**; shared,
+  server/UI semantics, tokens, maps and diff checks pass. A real READ ONLY source
+  query inspected 50 runs in three companies/20 SQL statements in 193 ms, including
+  the original analyst, CEO and Friday models and three actual continuation links.
+  This is measured request-local evidence, not a performance guarantee or loaded
+  API acceptance. Commit/build/restart and current browser proof follow.
+- **O06 live qualification exposed native Skill Studio admission gap:** root
+  submitted the bounded fictional request in Friday chat by comment
+  `f9cf75a6-11ad-4789-8a95-8db64d456095`. Friday run `30b305e7` succeeded
+  and native direction `f6ca64c3-69c1-425b-9e6d-6b2b56c89ed0` created ORB-14
+  (`496057a0-9ba7-48eb-919f-596e30ab9412`). The CEO delegated author/evaluation
+  ORB-15, evidence checklist ORB-16 and review ORB-17 to existing staff. A new
+  company skill `3ef0f5db-6f73-41ef-80d4-d83fbf013e7a`, immutable v1
+  `94971b03-e11b-4e3e-8b80-590e5d96e8c5`, and native test
+  `5bb5a5eb-cb7d-4af8-aef7-81c83a8f5192` were saved. ORB-18 test attempts
+  `0c3d20da` and `a202a61e` failed before evaluation because native runtime
+  admission rejects `skill_test` (requires standard/planning/ask). This is a
+  platform defect, not a quality result. Source diagnosis is underway; do not
+  relabel the task mode, weaken test containment, manually succeed receipts or
+  switch provider/billing. Root notified the specialist/CEO by comments
+  `ffb2c85d`/`e5ec9340` to preserve v1/failures, avoid retries and wait for an
+  explicit loaded-fix notice. No v2, evaluated improvement, publication, adoption
+  or owner acceptance is claimed. Private captures:
+  `/private/tmp/agentos-o06-{friday-request,progress-followup}-20261109.json`.
+  Full `pnpm test:run` is separately in progress, log
+  `/private/tmp/agentos-full-regression-20261109.log`; no full-suite pass yet.
+- **O07 Fixed — current project-lead boundary and real escalation verified:**
+  the existing head/PM `fd75c026-9919-40dd-b96f-d67183296554` is Pilot
+  Operations' recorded lead. Its native key reads that project and assigned
+  ORB-8 work (200), while a foreign private project and Northstar task return
+  404. The temporary credential was revoked and its next identity read returned
+  401; no task writes, hires, schedules or provider jobs were started. This closes
+  the head-specific gap left by the existing analyst audit. Existing native
+  comments also show actual escalation: analyst `5922b961` → head `6274673d`
+  → CEO `f18b3bb4` → Friday `2e4598d4`, followed by final report `e7f9e132`.
+  Current Friday private mandate, employee revocation and analyst denial evidence
+  remain independently recorded. No additional hierarchy or synthetic delivery
+  was needed; open same-company resources are not claimed forbidden. Codex audit
+  attachment `a801a49b-4cf4-49f6-a135-55827c10ab31`, work product
+  `d69c6c6d-5db8-4550-b378-e4843afb1cb5`, linked on ORB-7 by comment
+  `db667c0c-bd78-4609-bc52-9bd0a4175b0d`, preserves the current checks and limits.
+  Private capture: `/private/tmp/agentos-head-access-qualification-20261108.json`.
 - **Checked batch pushed and loaded — 9 November NZDT (8 November UTC):**
   `0e1dbd5ac2ef1aaa7dfb978a5d6e095b3eec57ec` contains completion replay,
   administrative withdrawal, published-test retention, truthful routine labels,

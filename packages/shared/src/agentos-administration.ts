@@ -69,6 +69,17 @@ export const adminModelActivitySchema = z.object({
     createdAt: z.string(), status: z.string(), taskType: z.string(), durationMs: z.number().nullable(),
     queueDelayMs: z.number().nonnegative().nullable().default(null), firstAgentCommentMs: z.number().nonnegative().nullable().default(null),
     selected: z.object({ provider: z.string(), model: z.string(), reason: z.string(), policyVersion: z.string() }).nullable(),
+    nativeProfile: z.object({
+      harness: z.string().trim().min(1), model: z.string().trim().min(1),
+      sessionRequest: z.enum(["existing", "not_recorded"]),
+    }).nullable().default(null),
+    runtimeSessionState: z.enum(["fresh", "reused", "conflicting", "unknown"]).default("unknown"),
+    executionState: z.enum(["available", "unavailable", "not_recorded"]).default("not_recorded"),
+    execution: z.object({
+      phase: z.string(), label: z.string(), cause: z.string().nullable(), attempt: z.number().int().nonnegative(), retryAt: z.string().nullable(),
+      predecessorRunId: z.string().nullable(), predecessorAgentId: z.string().nullable(),
+      successorRunId: z.string().nullable(), successorAgentId: z.string().nullable(),
+    }).nullable().default(null),
     triage: z.object({ status: z.string(), reason: z.string(), provider: z.string().nullable(), model: z.string().nullable(),
       elapsedMs: z.number().nullable(), contextStrategy: z.string(), proposedTaskType: z.string().nullable(), proposedCandidateId: z.string().nullable(),
     }).nullable(),

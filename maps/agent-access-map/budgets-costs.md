@@ -97,6 +97,13 @@ Review: `baseline`.
 API: `present` — GET /api/admin/model-intelligence adds read-only task/model
 cohorts and recent run audit projections; GET /api/admin/model-intelligence/learning
 retains the independent selection/evaluation ledger.
+The audit may project only model/harness metadata from a frozen native request
+bound to the exact company, run and employee. This remains distinct from a Model
+Intelligence selection and observed provider usage; requested session context
+cannot prove successful reuse. Native execution projections are batched by company
+within the existing 50-run bound. Failed reads stay unavailable, and linked run
+employee IDs are resolved and checked against the same company before linking.
+No prompts, credentials or full native execution inputs enter this projection.
 GET and POST /api/companies/{companyId}/friday/model-qualifications list bounded
 native evidence and register an immutable qualification. DELETE
 /api/companies/{companyId}/friday/model-qualifications/{id} revokes eligibility
@@ -180,6 +187,8 @@ Evidence: `source-only` — [administrator route](../../server/src/routes/agento
 Verification: `not-run` for live board/agent requests. Focused SQL-projection tests
 and administrator component checks cover authorization-before-read, company/run
 binding, selected/actual distinction, bounded truncation and company-owned links.
+Native-profile, unknown/conflicting session, explicit retry-link and partial
+projection-failure cases are included; these do not grant an agent new access.
 Use an administrator and a denied ordinary actor against an owned fixture for
 live acceptance; recorded successful process completion must not become a
 quality pass.

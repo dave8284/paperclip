@@ -1,7 +1,8 @@
-import { and, desc, eq, gte, lte, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, lte, sql } from "drizzle-orm";
 import { companies, costEvents, heartbeatRuns, type Db } from "@paperclipai/db";
 import { adminModelActivitySchema, type AdminModelActivity } from "@paperclipai/shared";
 import type { Analytics } from "@agentos/model-intelligence";
+import { executionProjectionsForRuns } from "./execution-projection.js";
 
 const RUN_LIMIT = 50;
 const MODEL_LIMIT = 100;
@@ -9,7 +10,8 @@ const ACTUAL_MODEL_LIMIT = 20;
 const auditRowSchema = adminModelActivitySchema.shape.recentRuns.element;
 
 // Read only after the owning administrator endpoint authorizes the caller.
-// These projections never select prompts, transcripts, configuration or errors.
+// Select only named model/profile metadata, never prompts, transcripts, complete
+// configuration, credentials or raw errors.
 export async function modelActivityAudit(db: Db, since: Date, through: Date, learning: Analytics | undefined): Promise<AdminModelActivity> {
   // Raw SQL fragments have no timestamp column encoder for interpolated
   // values. Bind the same instant as an ISO string for the PostgreSQL driver.
@@ -19,6 +21,12 @@ export async function modelActivityAudit(db: Db, since: Date, through: Date, lea
   const triageBound = sql`${heartbeatRuns.contextSnapshot} #>> '{modelTriage,schema}' = 'agentos.model-triage.v1'
     and ${heartbeatRuns.contextSnapshot} #>> '{modelTriage,runId}' = ${heartbeatRuns.id}::text
     and ${heartbeatRuns.contextSnapshot} #>> '{modelTriage,companyId}' = ${heartbeatRuns.companyId}::text`;
+  const nativeProfileBound = sql`${heartbeatRuns.runtimeMode} = 'native'
+    and ${heartbeatRuns.runnerProfileJson} #>> '{nativeExecutionInput,binding,runId}' = ${heartbeatRuns.id}::text
+    and ${heartbeatRuns.runnerProfileJson} #>> '{nativeExecutionInput,binding,companyId}' = ${heartbeatRuns.companyId}::text
+    and ${heartbeatRuns.runnerProfileJson} #>> '{nativeExecutionInput,binding,agentId}' = ${heartbeatRuns.agentId}::text
+    and jsonb_typeof(${heartbeatRuns.runnerProfileJson} #> '{nativeExecutionInput,provider,model}') = 'string'
+    and jsonb_typeof(${heartbeatRuns.runnerProfileJson} #> '{nativeExecutionInput,provider,kind}') = 'string'`;
   const taskType = sql<string>`coalesce(
     case when ${selectionBound} then nullif(${heartbeatRuns.contextSnapshot} #>> '{modelIntelligence,taskType}', '') end,
     case when ${triageBound} then nullif(${heartbeatRuns.contextSnapshot} #>> '{modelTriage,taskType}', '') end,
@@ -88,18 +96,55 @@ export async function modelActivityAudit(db: Db, since: Date, through: Date, lea
           and ce.usage_kind = 'agent' and ce.occurred_at <= ${throughTimestamp}
         order by ce.provider, ce.model limit ${ACTUAL_MODEL_LIMIT + 1}
       ) observed_model), '[]'::jsonb)`,
+      nativeProfile: sql<AdminModelActivity["recentRuns"][number]["nativeProfile"]>`case when ${nativeProfileBound} then jsonb_build_object(
+        'harness', ${heartbeatRuns.runnerProfileJson} #>> '{nativeExecutionInput,provider,kind}',
+        'model', ${heartbeatRuns.runnerProfileJson} #>> '{nativeExecutionInput,provider,model}',
+        'sessionRequest', case when nullif(trim(${heartbeatRuns.sessionIdBefore}), '') is not null then 'existing' else 'not_recorded' end) end`,
+      runtimeSessionState: sql<AdminModelActivity["recentRuns"][number]["runtimeSessionState"]>`case
+        when ${heartbeatRuns.usageJson} -> 'freshSession' = 'true'::jsonb and ${heartbeatRuns.usageJson} -> 'sessionReused' = 'true'::jsonb then 'conflicting'
+        when ${heartbeatRuns.usageJson} -> 'freshSession' = 'true'::jsonb then 'fresh'
+        when ${heartbeatRuns.usageJson} -> 'sessionReused' = 'true'::jsonb then 'reused' else 'unknown' end`,
     }).from(heartbeatRuns).innerJoin(companies, eq(companies.id, heartbeatRuns.companyId))
       .where(and(gte(heartbeatRuns.createdAt, since), lte(heartbeatRuns.createdAt, through)))
       .orderBy(desc(heartbeatRuns.createdAt), desc(heartbeatRuns.id)).limit(RUN_LIMIT + 1),
   ]);
+  // Reuse the execution owner's retry accounting. Batch by company within the
+  // existing 50-row limit; never issue one projection request per run or poll.
+  const visibleRuns = recent.slice(0, RUN_LIMIT);
+  const groupedRuns = new Map<string, string[]>();
+  for (const run of visibleRuns) groupedRuns.set(run.companyId, [...(groupedRuns.get(run.companyId) ?? []), run.id]);
+  const executionByCompany = new Map(await Promise.all([...groupedRuns].map(async ([companyId, runIds]) => {
+    try { return [companyId, await executionProjectionsForRuns(db, companyId, runIds, through)] as const; }
+    catch { return [companyId, null] as const; }
+  })));
+  const linkedIds = [...new Set([...executionByCompany.values()].flatMap(projections => projections
+    ? [...projections.values()].flatMap(row => [row.predecessorRunId, row.successorRunId].filter((id): id is string => !!id)) : []))];
+  // Resolve each linked run's actual employee instead of assuming a continuation
+  // kept the original assignee. Match company again before exposing a link.
+  const linkedRuns = linkedIds.length ? await db.select({ id: heartbeatRuns.id, companyId: heartbeatRuns.companyId, agentId: heartbeatRuns.agentId })
+    .from(heartbeatRuns).where(and(inArray(heartbeatRuns.id, linkedIds), inArray(heartbeatRuns.companyId, [...groupedRuns.keys()])))
+    .catch(() => []) : [];
+  const linkedById = new Map(linkedRuns.map(run => [run.id, run]));
   return {
     taskModels: taskModels.slice(0, MODEL_LIMIT), moreTaskModels: taskModels.length > MODEL_LIMIT, taskModelLimit: MODEL_LIMIT,
-    recentRuns: recent.slice(0, RUN_LIMIT).map(row => {
+    recentRuns: visibleRuns.map(row => {
       const reviewed = learning?.evaluations.find(evaluation => evaluation.namespace === row.companyId && evaluation.receiptId === row.id);
       const selected = auditRowSchema.shape.selected.safeParse(row.selected);
       const triage = auditRowSchema.shape.triage.safeParse(row.triage);
+      const nativeProfile = auditRowSchema.shape.nativeProfile.safeParse(row.nativeProfile);
+      const projections = executionByCompany.get(row.companyId);
+      const execution = projections?.get(row.id);
+      const linkedAgentId = (id: string | null) => {
+        const linked = id ? linkedById.get(id) : undefined;
+        return linked?.companyId === row.companyId ? linked.agentId : null;
+      };
       return { ...row, createdAt: row.createdAt.toISOString(),
         selected: selected.success ? selected.data : null, triage: triage.success ? triage.data : null,
+        nativeProfile: nativeProfile.success ? nativeProfile.data : null,
+        executionState: projections === null ? "unavailable" as const : execution ? "available" as const : "not_recorded" as const,
+        execution: execution ? { phase: execution.phase, label: execution.label, cause: execution.cause, attempt: execution.attempt,
+          retryAt: execution.retryAt, predecessorRunId: execution.predecessorRunId, predecessorAgentId: linkedAgentId(execution.predecessorRunId),
+          successorRunId: execution.successorRunId, successorAgentId: linkedAgentId(execution.successorRunId) } : null,
         actualModels: row.actualModels.slice(0, ACTUAL_MODEL_LIMIT), actualModelsTruncated: row.actualModels.length > ACTUAL_MODEL_LIMIT,
         review: reviewed ? { passed: reviewed.passed, source: reviewed.source, evidenceRef: reviewed.evidenceRef, iterations: reviewed.iterations, latencyMs: reviewed.latencyMs } : null,
       };

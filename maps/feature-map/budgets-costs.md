@@ -52,6 +52,16 @@ Open Administration → Model Intelligence. Compare Models by task type, filter
 the displayed task/model groups, then expand and collapse a Routing audit trail
 row. Follow its owning-company execution/task links. Selection and evaluation
 controls remain in the existing learning ledger further down the page.
+When no Model Intelligence selection receipt exists, a bound frozen native
+request can still identify the requested model and harness. Its prior-session
+input is separate from recorded fresh/reused runtime metadata; conflicting
+flags remain visible, and neither source proves provider-side session reuse. Neither supplies a missing model
+selection reason, qualification or quality score. Observed provider/model usage
+continues to come from accounting receipts.
+Execution attempts reuse native recovery accounting, with explicit preceding
+and successor links to each run's actual employee. Other runs on the same task
+are not counted as retries. A failed projection read displays unavailable evidence
+for its affected rows while the rest of the model audit remains readable.
 Settings → Models exposes administrator-managed native qualification evidence.
 Select a completed task/employee/model record to retain access evidence or an
 independently reviewed workflow qualification, with an explicit finite expiry;
@@ -186,11 +196,18 @@ Source checks: [joined model audit](../../server/src/__tests__/agentos-model-aud
 and [administrator UI](../../ui/src/components/AdminModelIntelligence.test.tsx)
 exercise bounded projections, selected versus observed models, namespace-bound
 reviews, explicit truncation, detail expansion and owning-company links.
+They also cover frozen-native versus observed model identity, missing and
+conflicting session evidence, native retry links and partial read failure.
 These are controlled SQL-projection/component checks, not a live database or
 browser acceptance claim.
 
 Manual: Compare a known run's actual usage with its selected profile and any
 shadow observation; inspect a mismatching/unrecorded model and absent review.
+For a native run without a selection receipt, compare the frozen request with
+actual usage and keep the missing selection reason explicit. Follow a retained
+retry's predecessor/successor links; do not infer retries from task-run totals.
+Check an existing-session request followed by fresh usage, conflicting session
+flags and a temporarily unavailable execution projection without starting work.
 New interactive conversations retain a `not_run / interactive_conversation`
 shadow receipt: native persisted conversation identity skips the local shadow
 inference wait. It does not report model execution, quality or a changed route.

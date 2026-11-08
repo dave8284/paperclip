@@ -88,3 +88,46 @@ it("shows task/model evidence, reversible audit details and company-owned execut
   const filter = [...host.querySelectorAll("select")].find(select => select.parentElement?.textContent?.startsWith("Executed model"))!;
   expect([...filter.options].map(option => option.value)).toEqual(["", "openai / actual-model"]);
 });
+
+it("explains frozen native requests, explicit retry links and subscription usage without inventing qualification", async () => {
+  intelligence.mockResolvedValue({ ...fixture,
+    usage: [{ provider: "openai", model: "actual-model", billingType: "subscription_included", usageKind: "agent", receipts: 1, inputTokens: 120, outputTokens: 30, recordedCostCents: 0, unpriced: 0 }],
+    activity: { taskModels: [], moreTaskModels: false, taskModelLimit: 100, moreRuns: false, runLimit: 50, reviewLookupLimit: 100,
+      recentRuns: [{ id: "run-native", companyId: "company-a", companyName: "Northstar", companyPrefix: "NST", agentId: "agent-a", taskId: "task-a", createdAt: "2026-11-04T00:00:00Z", status: "succeeded", taskType: "unclassified", durationMs: 5000, queueDelayMs: null, firstAgentCommentMs: null,
+        selected: null, nativeProfile: { harness: "codex", model: "requested-model", sessionRequest: "existing" }, runtimeSessionState: "fresh", triage: null,
+        actualModels: [{ provider: "openai", model: "actual-model" }], actualModelsTruncated: false, review: null,
+        executionState: "available", execution: { label: "Completed", phase: "completed", cause: null, attempt: 2, retryAt: null,
+          predecessorRunId: "previous", predecessorAgentId: "previous-agent", successorRunId: "next", successorAgentId: null } }],
+    } });
+  await mount();
+  expect(host.textContent).toContain("Frozen native request: requested-model · codex harness");
+  expect(host.textContent).toContain("An existing session was supplied");
+  expect(host.textContent).toContain("Runtime session metadata: fresh");
+  expect(host.textContent).not.toContain("Runtime session metadata: reused");
+  expect(host.textContent).toContain("No Model Intelligence selection reason or qualification is recorded");
+  expect(host.textContent).toContain("openai / actual-model");
+  expect(host.textContent).toContain("Completed · Attempt 2");
+  expect(host.textContent).toContain("Successor run recorded; details unavailable");
+  expect(host.querySelector('a[href="/NST/agents/previous-agent/runs/previous"]')).not.toBeNull();
+  expect(host.querySelector('a[href$="/runs/next"]')).toBeNull();
+  expect(host.textContent).toContain("Other task runs and provider turns are not counted as retries");
+  expect(host.textContent).toContain("No linked review in the current ledger");
+  expect(host.textContent).toContain("subscription included");
+  expect(host.textContent).toContain("excludes seat subscription fees");
+});
+
+it.each(["unknown", "conflicting"])("keeps absent profile and %s session evidence distinct from actual usage", async (runtimeSessionState) => {
+  intelligence.mockResolvedValue({ ...fixture, activity: {
+    taskModels: [], moreTaskModels: false, taskModelLimit: 100, moreRuns: false, runLimit: 50, reviewLookupLimit: 100,
+    recentRuns: [{ id: "run-unknown", companyId: "company-a", companyName: "Northstar", companyPrefix: "NST", agentId: "agent-a", taskId: null, createdAt: "2026-11-04T00:00:00Z", status: "succeeded", taskType: "unclassified", durationMs: null, queueDelayMs: null, firstAgentCommentMs: null,
+      selected: null, nativeProfile: null, runtimeSessionState, triage: null, actualModels: [{ provider: "openai", model: "observed-only" }], actualModelsTruncated: false, review: null,
+      executionState: "unavailable", execution: null }],
+  } });
+  await mount();
+  expect(host.textContent).toContain("The requested model and selection reason are unknown");
+  expect(host.textContent).toContain("Execution attempt evidence is temporarily unavailable");
+  expect(host.textContent).toContain("openai / observed-only");
+  expect(host.textContent).not.toContain("Attempt 1");
+  expect(host.textContent).not.toContain("Frozen native request:");
+  expect(host.textContent).toContain(runtimeSessionState === "conflicting" ? "Runtime session metadata has conflicting fresh/reused flags" : "Runtime session metadata is not recorded");
+});
