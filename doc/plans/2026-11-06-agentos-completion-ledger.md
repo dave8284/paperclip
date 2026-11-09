@@ -130,7 +130,8 @@ below the current checkpoint are historical.
   The configured-only explanation was lost when later native preparation wrote
   its in-memory snapshot. A detached owner-return/context-copy correction now
   reproduces that loss and passes 43 actual PostgreSQL cases afterward; integration
-  and loaded verification remain pending. No qualification authority changes. Report:
+  and loaded verification remain pending. The reviewed isolated source is commit
+  `49bce7961`; server types/maps pass. No qualification authority changes. Report:
   `/private/tmp/agentos-model-default-observed-1794197623186-20261109.json`.
   No historical runs are backfilled, no rollout is enabled and unknown actual
   context remains unknown. The general-server campaign began before this slice;
@@ -166,7 +167,20 @@ below the current checkpoint are historical.
   by the canonical attachment owner; authoritative company/project ownership is
   retained. No inline preview, GitHub adoption/release, cloud delivery or owner
   business acceptance is claimed. Application remains discovery. The durable
-  new-project repository gap is being fixed separately in an isolated worktree.
+  new-project repository source fix is now reviewed in isolated commit `317e85a26`:
+  existing workspace/native create_project APIs initialize a server-owned local
+  repository with one labeled empty AgentOS bootstrap commit. Current project/
+  native Standard/local-lease/responsible-user/trust gates remain. Concurrent
+  retries return one row, one atomic creation audit and unchanged later commits;
+  only a confirmed outer transaction abort can remove unchanged owned contents.
+  Cleanup bounds both file bytes and directory enumeration. Checks pass 13 real
+  PostgreSQL route cases, 2,164 native catalog cases, ten filesystem cases,
+  neighboring workspace/schema/UI checks and server/shared types/maps/tokens.
+  Initial missing-build/fixture/catalog failures are retained in the handoff.
+  Source is not integrated or loaded yet, keeping the running canonical backend
+  regression stable. Native resolver/snapshot tests are not an actual provider
+  Git commit; that local CEO/developer follow-up is prepared, not submitted.
+  Handoff: `/private/tmp/agentos-local-repository-handoff-20261109.txt`.
   Report: `/private/tmp/agentos-w01-browser-20261109/verification-report.json`.
 - **O07 Fixed again — loaded private activity boundary verified:** the original
   regression exposed private task IDs through access-grant activity. Commit
