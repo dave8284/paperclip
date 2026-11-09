@@ -559,6 +559,8 @@ describe("New agent setup", () => {
     await settle();
     expect(container.querySelector('select[aria-label="Environment"]')).toBeNull();
     await click("Complete subscription login");
+    expect(managedApi.loginResult).toHaveBeenCalledWith("company-1", "login-session");
+    expect(managedApi.create).not.toHaveBeenCalled();
     await click("Finish setup");
     expect(api.hire.mock.calls[0][1]).toMatchObject({ defaultEnvironmentId: "login-env", runtimeConfig: { aiConnection: { method: "subscription" } } });
   });
@@ -655,6 +657,8 @@ describe("New agent setup", () => {
     if (method === "subscription") {
       await click("GrokSubscription");
       await click("Complete subscription login");
+      expect(managedApi.loginResult).toHaveBeenCalledWith("company-1", "login-session");
+      expect(managedApi.create).not.toHaveBeenCalled();
     } else {
       await click("GrokAPI key");
       await fill("API key", "example-test-secret");

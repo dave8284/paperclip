@@ -58,6 +58,12 @@ describeEmbeddedPostgres("connections v3 schema core migration", () => {
     // Subscription reporting adds a later grant binding; rewind the empty
     // fixture table before recreating grants, preserving production FK checks.
     await sql`DROP TABLE IF EXISTS "ai_subscription_connections"`;
+    // Account reuse arrives in 0395 and references native grant identities.
+    // Rewind only these known empty fixture consumers, never use CASCADE.
+    await sql`DROP TABLE IF EXISTS "ai_workspace_account_links"`;
+    await sql`DROP TABLE IF EXISTS "ai_workspace_accounts"`;
+    // The 0389 capacity binding is another later, empty grant consumer.
+    await sql`DROP TABLE IF EXISTS "ai_execution_capacity_bindings"`;
     await sql`DROP TABLE IF EXISTS "connection_grants"`;
     await sql`DROP INDEX IF EXISTS "tool_connections_company_uid_uq"`;
     await sql`ALTER TABLE "tool_connections" DROP CONSTRAINT IF EXISTS "tool_connections_company_id_uq"`;

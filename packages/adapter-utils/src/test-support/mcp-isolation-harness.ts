@@ -46,6 +46,16 @@ export async function runCommand(
     let stdout = "";
     let stderr = "";
     let timedOut = false;
+    let killTimer: NodeJS.Timeout | undefined;
+
+    const stop = (signal: NodeJS.Signals) => {
+      try {
+        if (process.platform === "win32") child.kill(signal);
+        else if (child.pid !== undefined) process.kill(-child.pid, signal);
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "ESRCH") throw error;
+      }
+    };
 
     child.stdout.on("data", (chunk) => {
       stdout += chunk.toString();
@@ -53,17 +63,26 @@ export async function runCommand(
     child.stderr.on("data", (chunk) => {
       stderr += chunk.toString();
     });
-    child.once("error", reject);
+    child.once("error", (error) => {
+      clearTimeout(timer);
+      clearTimeout(killTimer);
+      reject(error);
+    });
 
     const timer = setTimeout(() => {
       timedOut = true;
-      if (process.platform === "win32") child.kill("SIGTERM");
-      else process.kill(-child.pid!, "SIGTERM");
+      stop("SIGTERM");
+      killTimer = setTimeout(() => stop("SIGKILL"), 1_000);
+      killTimer.unref();
     }, options.timeoutMs ?? 15_000);
     timer.unref();
 
-    child.once("exit", (exitCode, signal) => {
+    // A CLI launcher can exit before its native child closes inherited pipes.
+    // Await drain before the caller reads debug files or removes the test home.
+    child.once("close", (exitCode, signal) => {
       clearTimeout(timer);
+      clearTimeout(killTimer);
+      if (timedOut) stop("SIGKILL");
       resolve({ exitCode, signal, stdout, stderr, timedOut });
     });
   });

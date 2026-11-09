@@ -225,8 +225,13 @@ refusal/retry and older-version rollback controls. The additional
 [database/HTTP cases](../../server/src/__tests__/agentos-workforce.test.ts) cover
 real two-company adoption, stale/concurrent intent, policy/revocation and audit
 rollback. These cases and published-evidence supersession/expiry races passed
-against isolated PostgreSQL on 8 November 2026. Browser, evaluated improvement
-and native agent delivery acceptance remain open.
+against isolated PostgreSQL on 8 November 2026. The owner-approved fictional
+manual lifecycle also passed native two-company delivery, refusal and rollback,
+including a running v2 snapshot after rollback and the next v1 execution. Fresh
+browser proof verifies exact previews and decision versions. The completed
+[O06 checkpoint](../../doc/plans/2026-11-06-agentos-completion-ledger.md) retains
+receipts and limits: both versions passed their frozen cases with no measured
+improvement, and review was non-author/shared-context.
 
 Friday’s private portfolio read scope also supports finding actual company CEOs
 and department heads, optionally for a readable project. Returned names, native

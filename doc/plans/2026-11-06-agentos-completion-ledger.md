@@ -12,7 +12,7 @@ Those requirements remain in scope; the rows below do not replace or erase them.
 The owner requested simple **Fixed / Not fixed** tracking in the existing
 [93-item worksheet](2026-11-03-agentos-requirements-reconciliation.md).
 Update those rows as work completes; do not create another backlog.
-**Current total: 51 Fixed / 42 Not fixed.** Partial implementation and unverified
+**Current total: 52 Fixed / 41 Not fixed.** Partial implementation and unverified
 live acceptance remain Not fixed. This checkpoint was refreshed at the owner's
 request on 7 November; the tables below the current checkpoint are historical.
 
@@ -77,8 +77,11 @@ request on 7 November; the tables below the current checkpoint are historical.
   plus 24 exposure checks. The predicted digest is bounded to this freshly
   API-created same-server fixture, not arbitrary-source attestation or model
   consumption. Direct server/e2e types pass. The original wrapper stopped before
-  later groups; workspace B and C are now running separately, with A and 164
-  serialized suites still pending. Original full log and all focused failures
+  later groups. C now passes all 58 files/253 cases after strict historical-row
+  expectations include the new business-purpose default and the migration fixture
+  rewinds all later empty FK consumers in order (no CASCADE or production SQL
+  change). Its original and first rerun failures are retained. A, B, serialized
+  and current general-server checks are underway. Original full log and all focused failures
   remain in private tmp. No full-suite pass is claimed.
 - **S03 Fixed — loaded administration lifecycle passed:** the exact disposable
   `example.invalid` identity was preapproved/revoked through the native UI, then
@@ -126,7 +129,7 @@ request on 7 November; the tables below the current checkpoint are historical.
   `/private/tmp/agentos-model-browser-20261108/verification-report.json`,
   `agentos-m04-{shared-build,server-emit,ui-build}-20261109.log`,
   `agentos-m04-{restart-request,loaded-health,restart-ceo-run}-20261109.json`.
-- **O06 native evaluations and review complete; publication remains open:** the
+- **O06 Fixed — reviewed publication, separate adoption and actual rollback pass:** the
   fictional company's original test `5bb5a5eb-cb7d-4af8-aef7-81c83a8f5192`
   and both ORB-18 attempts remain failed admission evidence, not a quality result.
   Native v10 now binds the exact test, immutable skill version and frozen input/
@@ -209,8 +212,16 @@ request on 7 November; the tables below the current checkpoint are historical.
   Loaded Workforce previews/pins/history passed but exposed missing version
   labels in adoption history. The bounded UI fix adds the exact receipt’s
   version (explicit unavailable identity fallback), with seven component checks,
-  UI types/build, tokens and paired maps passing. Next: load that UI fix and
-  verify actual history labels before closing O06. Evidence:
+  UI types/build, tokens and paired maps passing. Committed/pushed UI e1144cf5e
+  is verified in a fresh browser: exact Version 1/2 adoption, refusal and rollback
+  labels, published bytes and separate pins all pass. Backend process remains
+  26823 on unchanged source; the native UI-only restart request correctly returns
+  `restart_not_required`, and no new backend activation is claimed. Publication/
+  refusal replay returns the original identities and changes no state; stale
+  selection returns 409. Native [qualification report](http://localhost:3100/ORB/issues/ORB-14#document-capability-adoption-qualification)
+  is document `b29221de-d651-4490-8ef1-3ab438e45e6f`, revision
+  `d32f2e30-f7ec-483d-843c-efe43d83a027`, with company-local output links and
+  verification limits. Detailed scope/replay/browser receipts remain private. Evidence:
   `/private/tmp/agentos-o06-{approved-publication,adoption-steps,lab-successor,runtime-delivery}-20261109.json`.
   No general improvement or owner business-output acceptance is claimed. Earlier evidence is in private
   `agentos-native-skill-{runtime-selection-final,final-regression,runner-contracts,integrated-build,integrated-typecheck,integrated-pg,preactivation}-20261109.*`

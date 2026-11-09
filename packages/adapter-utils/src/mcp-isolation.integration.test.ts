@@ -160,7 +160,9 @@ describe("same-machine MCP isolation", () => {
       );
       const result = await runCommand("claude", args, {
         cwd: repoRoot,
-        timeoutMs: 4_000,
+        // First-run shared-home config locking can serialize CLI startup. This
+        // checks MCP isolation, not a provider startup latency guarantee.
+        timeoutMs: 15_000,
         env: {
           ...process.env,
           HOME: home,
@@ -191,7 +193,7 @@ describe("same-machine MCP isolation", () => {
     } finally {
       await apiFixture.close();
     }
-  }, 20_000);
+  }, 35_000);
 
   it("keeps concurrent Codex homes disjoint and supports CLI MCP overrides", async () => {
     const version = await commandVersion("codex");

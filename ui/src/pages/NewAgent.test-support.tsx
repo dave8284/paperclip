@@ -43,6 +43,7 @@ const state = vi.hoisted(() => ({
 const managedApi = vi.hoisted(() => ({
   list: vi.fn(async () => ({ currentUserId: "user-1", canManageConnections: true, connections: [] })),
   create: vi.fn(async () => ({ connectionId: "managed-connection", grantId: "managed-grant" })),
+  loginResult: vi.fn(async () => ({ connectionId: "managed-connection", grantId: "managed-grant" })),
   setDefault: vi.fn(async () => ({})),
 }));
 vi.mock("@/api/ai-connections", () => ({ aiConnectionsApi: managedApi }));
