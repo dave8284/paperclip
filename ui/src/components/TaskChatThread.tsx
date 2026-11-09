@@ -945,7 +945,8 @@ export function TaskChatThread(props: TaskChatThreadProps) {
     hydratedRunIds: hydratedNativeRunIds,
     terminalHydratedRunIds,
     retry: retryNativeEvents,
-  } = useNativeRunTranscripts(nativeRuns);
+    notifyRunEvent,
+  } = useNativeRunTranscripts(nativeRuns, companyId);
   const logRuns = useMemo(() => runs.filter((run) =>
     run.runtimeMode !== "native" ||
     // Active runs still need the websocket log stream. Only settled native
@@ -961,7 +962,7 @@ export function TaskChatThread(props: TaskChatThreadProps) {
     hydratedRunIds: hydratedLogRunIds,
     errorsByRun: logErrorsByRun,
     retry: retryLogs,
-  } = useLiveRunTranscripts({ runs: logRuns, companyId });
+  } = useLiveRunTranscripts({ runs: logRuns, companyId, onRunEvent: notifyRunEvent });
   const fallbackByRunRef = useRef(
     new Map<string, NonNullable<ReturnType<typeof logTranscriptByRun.get>>>(),
   );
@@ -3087,13 +3088,17 @@ export function TaskChatThread(props: TaskChatThreadProps) {
                 runStatus: liveRun?.status === "running" ? "running" : liveRun || optimisticRunnerStartup ? "queued" : "idle",
                 awaitingInput: !!selectedPendingInput || pendingInlineDecision || !!composerTakeover,
                 clarification: clarification.prompt,
-                liveReply: focusReply && tailRunId && focusReplyAgentId ? {
-                  id: focusReply.id, runId: tailRunId, agentId: focusReplyAgentId,
+                liveReply: focusReply?.sourceItemId && tailRunId && focusReplyAgentId ? {
+                  id: `${tailRunId}:final:${focusReply.sourceItemId}`, runId: tailRunId, agentId: focusReplyAgentId,
                   body: focusReply.text, createdAt: focusReply.atMs == null ? undefined : new Date(focusReply.atMs),
                   streaming: tailStreaming,
                 } : undefined,
-                unavailable: historyError || initialHistoryError || tailStatus === "failed" || !!props.executionBlocked,
-                loading: historyPending,
+                unavailable: initialHistoryError || tailActivityUnavailable ||
+                  Boolean(tailRunId && tailRunSource?.runtimeMode !== "native" && logErrorsByRun?.has(tailRunId)) ||
+                  tailStatus === "failed" || !!props.executionBlocked,
+                // Current comments, interactions and native run authority must
+                // be ready. Old transcript/plan hydration only gates history.
+                loading: initialHistoryPending,
               })}
             </div>}
             <FridayConversationPanel focus={focusView} open={showHistory || !collapseComposer} required={!!focusView && ((showHistory && !focusView.showTranscript) || (!collapseComposer && !!focusView.composerCollapsed))}>

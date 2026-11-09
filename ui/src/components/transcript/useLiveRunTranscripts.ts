@@ -68,6 +68,8 @@ interface UseLiveRunTranscriptsOptions {
   logPollIntervalMs?: number;
   logReadLimitBytes?: number;
   enableRealtimeUpdates?: boolean;
+  /** Sequence hint from this conversation's already-authorized company socket. */
+  onRunEvent?: (runId: string, seq: number) => void;
 }
 
 function readString(value: unknown): string | null {
@@ -111,7 +113,10 @@ export function useLiveRunTranscripts({
   logPollIntervalMs = LOG_POLL_INTERVAL_MS,
   logReadLimitBytes = LOG_READ_LIMIT_BYTES,
   enableRealtimeUpdates = true,
+  onRunEvent,
 }: UseLiveRunTranscriptsOptions) {
+  const runEventHandler = useRef(onRunEvent);
+  useEffect(() => { runEventHandler.current = onRunEvent; }, [onRunEvent]);
   // Ticker consumers opt into the silent chunk-count cap; full task views use a
   // byte budget that collapses (not discards) the oldest output when exceeded.
   const { visible } = usePageVisibility();
@@ -443,6 +448,7 @@ export function useLiveRunTranscripts({
       };
 
       socket.onmessage = (message) => {
+        if (closed) return;
         const raw = typeof message.data === "string" ? message.data : "";
         if (!raw) return;
 
@@ -481,6 +487,7 @@ export function useLiveRunTranscripts({
 
         if (event.type === "heartbeat.run.event") {
           const seq = typeof payload["seq"] === "number" ? payload["seq"] : null;
+          if (seq !== null && Number.isSafeInteger(seq) && seq > 0) runEventHandler.current?.(runId, seq);
           const eventType = readString(payload["eventType"]) ?? "event";
           const messageText = readString(payload["message"]) ?? eventType;
           appendChunks(runId, [{

@@ -7,6 +7,8 @@ import { readTranscriptRequest } from "./read-transcript-request";
 
 const EVENT_PAGE_SIZE = 1_000;
 const EVENT_POLL_INTERVAL_MS = 2_000;
+const EVENT_REFRESH_COALESCE_MS = 100;
+const HISTORICAL_READ_CONCURRENCY = 2;
 
 export interface NativeRunTranscriptSource {
   id: string;
@@ -23,7 +25,7 @@ function isLive(status: string): boolean {
   return status === "queued" || status === "running";
 }
 
-export function useNativeRunTranscripts(runs: readonly NativeRunTranscriptSource[]) {
+export function useNativeRunTranscripts(runs: readonly NativeRunTranscriptSource[], companyId?: string | null) {
   const nativeRunsKey = runs
     .filter((run) => run.runtimeMode === "native")
     .map((run) => `${run.id}:${run.status}`)
@@ -43,11 +45,20 @@ export function useNativeRunTranscripts(runs: readonly NativeRunTranscriptSource
   const retry = useCallback(() => setRetryGeneration((value) => value + 1), []);
   const projectionCacheRef = useRef(new Map<string, { events: HeartbeatRunEvent[]; transcript: TranscriptEntry[] }>());
   const cursorByRunRef = useRef(new Map<string, number>());
+  // Keep a just-completed live turn responsive through its final durable read.
+  // Once hydrated it joins ordinary history, rather than retaining priority.
+  const settlingRunIdsRef = useRef(new Set<string>());
+  const refreshEventRef = useRef<(runId: string, seq: number) => void>(() => {});
+  const notifyRunEvent = useCallback((runId: string, seq: number) => refreshEventRef.current(runId, seq), []);
 
   useEffect(() => {
     let cancelled = false;
     const controller = new AbortController();
     const timers = new Set<number>();
+    const historyQueue: NativeRunTranscriptSource[] = [];
+    const queuedHistoryIds = new Set<string>();
+    let activeHistoryReads = 0;
+    const refreshState = new Map(nativeRuns.map(run => [run.id, { active: false, dirty: false, lastStarted: 0, timer: undefined as number | undefined }]));
     const retainedIds = new Set(nativeRuns.map((run) => run.id));
     const retainMap = <T,>(previous: Map<string, T>) => {
       const next = new Map([...previous].filter(([id]) => retainedIds.has(id)));
@@ -63,8 +74,19 @@ export function useNativeRunTranscripts(runs: readonly NativeRunTranscriptSource
     for (const id of cursorByRunRef.current.keys()) {
       if (!retainedIds.has(id)) cursorByRunRef.current.delete(id);
     }
+    for (const id of settlingRunIdsRef.current) {
+      if (!retainedIds.has(id)) settlingRunIdsRef.current.delete(id);
+    }
+    for (const run of nativeRuns) {
+      if (isLive(run.status)) settlingRunIdsRef.current.add(run.id);
+    }
+    const isCurrent = (run: NativeRunTranscriptSource) =>
+      isLive(run.status) || settlingRunIdsRef.current.has(run.id);
 
     const refreshRun = async (run: NativeRunTranscriptSource) => {
+      const state = refreshState.get(run.id)!;
+      if (state.active) { state.dirty = true; return; }
+      state.active = true; state.dirty = false; state.lastStarted = Date.now();
       let failed = false;
       try {
         let cursor = cursorByRunRef.current.get(run.id) ?? 0;
@@ -102,6 +124,7 @@ export function useNativeRunTranscripts(runs: readonly NativeRunTranscriptSource
           if (previous.get(run.id) === run.status) return previous;
           return new Map(previous).set(run.id, run.status);
         });
+        if (!isLive(run.status)) settlingRunIdsRef.current.delete(run.id);
       } catch (error) {
         if (cancelled) return;
         failed = true;
@@ -115,23 +138,62 @@ export function useNativeRunTranscripts(runs: readonly NativeRunTranscriptSource
           return next;
         });
       }
+      state.active = false;
       if (cancelled) return;
       setHydratedRunIds((previous) => previous.has(run.id) ? previous : new Set([...previous, run.id]));
-      if (isLive(run.status) || failed) {
-        const timer = window.setTimeout(() => {
-          timers.delete(timer);
-          void refreshRun(run);
-        }, EVENT_POLL_INTERVAL_MS);
-        timers.add(timer);
+      if (state.dirty) schedule(run, Math.max(0, state.lastStarted + EVENT_REFRESH_COALESCE_MS - Date.now()));
+      else if (isLive(run.status) || failed) schedule(run, EVENT_POLL_INTERVAL_MS);
+    };
+    const drainHistory = () => {
+      while (!cancelled && activeHistoryReads < HISTORICAL_READ_CONCURRENCY && historyQueue.length > 0) {
+        const run = historyQueue.shift()!;
+        queuedHistoryIds.delete(run.id);
+        activeHistoryReads++;
+        void refreshRun(run).finally(() => {
+          activeHistoryReads--;
+          drainHistory();
+        });
       }
     };
-    for (const run of nativeRuns) void refreshRun(run);
+    const requestRefresh = (run: NativeRunTranscriptSource) => {
+      if (cancelled) return;
+      const state = refreshState.get(run.id)!;
+      if (state.active) { state.dirty = true; return; }
+      if (isCurrent(run)) {
+        void refreshRun(run);
+      } else if (!queuedHistoryIds.has(run.id)) {
+        queuedHistoryIds.add(run.id);
+        historyQueue.push(run);
+        drainHistory();
+      }
+    };
+    const schedule = (run: NativeRunTranscriptSource, delay: number) => {
+      const state = refreshState.get(run.id)!;
+      if (state.timer !== undefined) { window.clearTimeout(state.timer); timers.delete(state.timer); }
+      const timer = window.setTimeout(() => { timers.delete(timer); state.timer = undefined; requestRefresh(run); }, delay);
+      state.timer = timer; timers.add(timer);
+    };
+    // Reuse the authorized conversation socket as a hint, then read the existing
+    // durable endpoint. Never project unchecked websocket text as an answer.
+    // One active read and one coalesced follow-up bound a token/event burst.
+    refreshEventRef.current = (runId, seq) => {
+      const run = nativeRuns.find(candidate => candidate.id === runId && isLive(candidate.status));
+      if (!run || seq <= (cursorByRunRef.current.get(runId) ?? 0)) return;
+      const state = refreshState.get(runId)!;
+      if (state.active) state.dirty = true;
+      else schedule(run, Math.max(0, state.lastStarted + EVENT_REFRESH_COALESCE_MS - Date.now()));
+    };
+    // Historical hydration shares the browser connection pool with speech and
+    // current conversation APIs. Bound it without queueing a live/settling turn.
+    for (const run of nativeRuns.filter(isCurrent)) requestRefresh(run);
+    for (const run of nativeRuns.filter((run) => !isCurrent(run))) requestRefresh(run);
     return () => {
       cancelled = true;
+      refreshEventRef.current = () => {};
       controller.abort();
       for (const timer of timers) window.clearTimeout(timer);
     };
-  }, [nativeRuns, retryGeneration]);
+  }, [nativeRuns, retryGeneration, companyId]);
 
   const transcriptByRun = useMemo(() => {
     const transcripts = new Map<string, TranscriptEntry[]>();
@@ -156,7 +218,7 @@ export function useNativeRunTranscripts(runs: readonly NativeRunTranscriptSource
     .map((run) => run.id)), [nativeRuns, hydratedStatusByRun]);
 
   return {
-    transcriptByRun, errorsByRun, hydratedRunIds, terminalHydratedRunIds, retry,
+    transcriptByRun, errorsByRun, hydratedRunIds, terminalHydratedRunIds, retry, notifyRunEvent,
     isInitialHydrating: nativeRuns.some((run) => !hydratedRunIds.has(run.id)),
   };
 }

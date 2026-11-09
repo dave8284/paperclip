@@ -161,15 +161,22 @@ rejects stale/malformed payloads with a retryable message; the exact reported
 undefined-type browser stack still needs a user retest after restart. Main/map
 spheres tint only their interiors with matching dot colors. Decisions use a
 compact statement/context/action view and retain full expansion/native gates.
-Voice also consumes the native user-facing final-answer stream, speaking complete
-sentences before the comment is persisted. Reasoning, progress, tool output and
+Voice also consumes the native user-facing final-answer stream, allowing complete
+sentences to speak without waiting for comment persistence. Reasoning, progress, tool output and
 pending native holds are excluded; the focus owner checks the conversation agent.
 One speech chunk is prepared ahead, with event-driven waiting for new sentences.
 Interrupted/corrected answers cannot replay when their native comment arrives.
 The separate local recognition/speech workers retain bounded queues. Aborting a
 speech request cancels its inference without dropping another caller's queued
 request or recognition; idle workers still expire. Actual playback events own
-the speaking state, including gaps between chunks. Focused source tests pass; browser,
+the speaking state, including gaps between chunks. Native message identity survives
+completion and saved-comment handoff without restarting speech. The existing
+conversation socket hints coalesced reads of durable events; old terminal
+transcript hydration is bounded to two reads while current/settling turns stay
+immediate. Current interaction authority still gates voice, while old history
+errors remain visible in history. Verify slow history, delta-to-completed
+transitions, pending native input, cancellation and company navigation.
+Focused source tests pass; browser,
 physical audio and native runtime activation are tracked separately in the
 [execution log](../../doc/plans/2026-11-04-agentos-platform-fixes.md).
 

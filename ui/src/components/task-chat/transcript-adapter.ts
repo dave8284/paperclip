@@ -747,6 +747,7 @@ export function transcriptToTaskChatItems(
             authorName: agentName,
             text: entry.text,
             channel,
+            sourceItemId: entry.itemId,
             streaming: running,
             // Explicit final-answer items stream durably. Unclassified text
             // remains transient for backwards compatibility and fail-closed

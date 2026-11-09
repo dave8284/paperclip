@@ -178,6 +178,12 @@ foreign employee streams are excluded. Cancellation propagates through the
 existing board/company voice POST request to its owned local worker; it grants
 no additional authority and preserves other queued callers and the separate
 recognition lane. Provider generation, capture and playback remain separate.
+Stable normalized native item identity prevents delta/completion replay; missing
+identity falls back to the persisted comment. The existing conversation-company
+socket supplies only a run/sequence hint for coalesced authorized event reads,
+not answer text or selected-company authority. Historical terminal reads are
+bounded to two, with current/settling runs prioritized; scope teardown cancels
+active reads and queued work. This adds no socket, endpoint, grant or agent action.
 The queue wakes only for new text or request completion and has one synthesis
 lookahead; idle expiry and hidden-page/scope teardown remain. Focused tests pass; browser,
 physical audio and native runtime activation are tracked separately in the

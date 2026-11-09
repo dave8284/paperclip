@@ -115,6 +115,8 @@ export interface TaskChatMessageItem {
   text: string;
   /** Runner-authored output channel. Legacy adapters leave this unset. */
   channel?: "progress" | "final" | "unknown";
+  /** Native message identity survives delta-to-completed transcript replacement. */
+  sourceItemId?: string;
   /** Transport attribution for an inbound human comment. */
   sourceChannel?: IssueCommentMetadata["sourceChannel"];
   timestamp?: string;

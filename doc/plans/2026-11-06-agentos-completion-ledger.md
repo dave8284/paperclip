@@ -7,16 +7,17 @@ questions instead of assumptions. This continues the full
 [latest implementation backlog](2026-11-05-agentos-navigation-response-model-backlog.md).
 Those requirements remain in scope; the rows below do not replace or erase them.
 
-## Resume here — 8 November 2026
+## Resume here — 9 November 2026
 
 The owner requested simple **Fixed / Not fixed** tracking in the existing
 [93-item worksheet](2026-11-03-agentos-requirements-reconciliation.md).
 Update those rows as work completes; do not create another backlog.
 **Current total: 53 Fixed / 40 Not fixed.** Partial implementation and unverified
-live acceptance remain Not fixed. This checkpoint was refreshed at the owner's
-request on 7 November; the tables below the current checkpoint are historical.
+live acceptance remain Not fixed. The owner requires this log and the worksheet
+to be updated with each fix, its verification and Git/runtime state. The tables
+below the current checkpoint are historical.
 
-- **V01–V05 actual owner check found slow/missing playback; loaded retest underway:**
+- **V01–V05 slow/missing playback: source fixes checked; final loaded/physical checks open:**
   the owner confirmed correct physical transcription and visible reply generation,
   but audible playback took too long or did not start. The interface waited for
   the persisted comment despite an available native final-answer stream, and
@@ -35,7 +36,7 @@ request on 7 November; the tables below the current checkpoint are historical.
   physical audibility, interruption or total conversational latency. Reports:
   `/private/tmp/agentos-voice-latency-20261109/verification-report.json` and
   `/private/tmp/agentos-voice-stream-*-20261109.log`. Loaded browser and owner
-  retest remain; no voice requirement is marked complete from transcription alone.
+  physical retest remains; no voice requirement is marked complete from transcription alone.
   Source `841c1eebaebcf2448e80666ae88fc1f16c7c2962` is pushed and loaded:
   guarded restart `34d2b57c-bb9d-4f6b-8e0b-7b8ab8b71e68`, process 37517 started
   9 November 03:52:43.660 UTC, ready 03:52:47.012, with no pending migrations or
@@ -47,8 +48,7 @@ request on 7 November; the tables below the current checkpoint are historical.
   All 53 affected UI cases and rebuilt UI pass; the failed trial remains at
   `/private/tmp/agentos-voice-stream-browser-20261109/result.json`. Its first audio
   preceded browser observation of the saved comment, not database persistence.
-  One separate actual retry is underway; no physical audibility is inferred.
-  That retry exposed a second handoff defect: completion replaced transcript
+  The separate second actual trial exposed another handoff defect: completion replaced transcript
   array positions, so the presentation-derived speech ID restarted the same
   native message. The adapter now retains native message identity for speech;
   missing identity falls back to saved-comment playback. All 431 affected
@@ -67,8 +67,24 @@ request on 7 November; the tables below the current checkpoint are historical.
   defaults remain unchanged. Source work now reuses the conversation-company
   socket to refresh durable answer events promptly and bounds historical reads;
   current interaction readiness and historical presentation remain separate.
-  These follow-ups are pending integrated checks/loaded retest. Diagnosis:
-  `/private/tmp/agentos-voice-latency-20261109/latency-followup.json`.
+  The integrated follow-up now passes 563 cases across 11 UI suites and UI
+  typecheck. Historical reads (including pagination/retry) are bounded to two;
+  live and newly settling turns bypass the queue. Existing conversation-company
+  socket hints trigger coalesced durable reads without another socket or answer
+  text in notifications. Scope cleanup cancels reads/queued work. Stable native
+  item IDs prevent delta/completion replay; missing IDs retain saved-comment
+  fallback. Current interaction authority still gates speech, while old history
+  loading/errors remain in history. The callback regression checks company/run/
+  sequence filtering, callback replacement and late cleanup. Independent review
+  found no remaining source defect; UI build, maps, token gates and diff checks
+  pass. Rebuilt assets are served for one loaded timing trial. No backend restart
+  is needed for this UI slice. The first test
+  command selected a nonexistent named Vitest project and ran zero cases; its
+  failure is retained alongside the corrected UI-directory run:
+  `/private/tmp/agentos-voice-hydration-{tests,tests-corrected,types,build,static}-20261109.log`.
+  Diagnosis: `/private/tmp/agentos-voice-latency-20261109/latency-followup.json`.
+  Physical audibility, interruption/navigation and latency acceptance remain
+  open; the earlier 6.064-second delay is not erased by source checks.
 - **M05 source correction verified; live comparison remains Not fixed:** business
   companies without a local Friday operating-profile row were silently excluded
   from configured-model selection receipts. The selection owner now records the
@@ -78,8 +94,8 @@ request on 7 November; the tables below the current checkpoint are historical.
   all 15 qualification cases and 68 neighboring comparison/outcome cases pass
   afterward, plus server types, maps and independent review. Logs:
   `/private/tmp/agentos-model-no-friday-{before,after,neighbors,types}-20261109.log`.
-  Source activation is included in the voice restart above; a fresh Orbit native
-  selection receipt still needs loaded verification.
+  Source activation is included in the voice restart above. The fresh Orbit
+  native selection receipt is now verified below.
   Fresh ORB-32 `af33982d-ea02-47d6-8411-dcd6aa1acf7c` now completed through native
   run `30975de1-6937-427c-b954-eec503060329`: configured selection and profile
   receipts persist, admitted and observed models are both `gpt-6.1-sol`, billing
@@ -220,8 +236,8 @@ request on 7 November; the tables below the current checkpoint are historical.
   cleanup, bounds shutdown and retains files/environment after unsafe shutdown.
   Original scenario passes unchanged; the first full fixture passes 91 cases and
   final strengthened ownership/shutdown checks pass four cases. Final types and
-  independent reviews pass. No production deadline/assertion was relaxed. Next:
-  canonical serialized and general-server reruns on the committed correction.
+  independent reviews pass. No production deadline/assertion was relaxed.
+  Canonical rerun results follow.
   The corrected canonical serialized run now passes **164/164 files and
   3,544/3,544 cases** on committed `06d08d397` backend inputs (990.70 seconds).
   Its start/end source scope is retained in

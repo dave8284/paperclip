@@ -4963,11 +4963,35 @@ describe("conversation focus presentation", () => {
     ]);
     render(<TaskChatThread {...props} />);
     expect(focus.mock.lastCall?.[0].liveReply).toBeUndefined();
-    nativeTranscriptState.transcriptByRun.get(active.id)!.push({ kind: "assistant", channel: "final", text: "Your microphone works. The next", ts: active.createdAt });
+    nativeTranscriptState.transcriptByRun.get(active.id)!.push({ kind: "assistant", channel: "final", itemId: "final-user-answer", text: "Your microphone works. The next", ts: active.createdAt });
     render(<TaskChatThread {...props} />);
     expect(focus.mock.lastCall?.[0].liveReply).toMatchObject({ runId: active.id, agentId: "friday", body: "Your microphone works. The next", streaming: true });
     render(<TaskChatThread {...props} interactions={[{ ...questionInteraction("hold-voice", "Which company?", active.createdAt), sourceRunId: active.id }]} />);
     expect(focus.mock.lastCall?.[0].liveReply).toBeUndefined();
+  });
+
+  it("keeps the spoken native message identity when completed events replace streamed deltas", () => {
+    const run = nativeRunningRun();
+    const focus = vi.fn((_state: import("@/lib/conversation-focus").ConversationFocusState) => <div>Friday</div>);
+    const events: HeartbeatRunEvent[] = [];
+    const append = (eventType: string, text: string) => {
+      const seq = events.length + 1;
+      events.push({ id: seq, runId: run.id, seq, eventType, companyId: "company", agentId: run.agentId,
+        stream: "system", level: "info", color: null, message: null, createdAt: new Date(`2026-11-09T03:00:0${seq}Z`),
+        payload: { prpEvent: { schema: "paperclip.prp.event.v1", schemaVersion: 1, runId: run.id,
+          eventType, sourceEventId: `voice-${seq}`, itemId: "native-stable-answer",
+          payload: { kind: "agentMessage", channel: "final", text } } } });
+      nativeTranscriptState.transcriptByRun.set(run.id, nativeRunEventsToTranscript(events));
+      renderThread({ comments: [], onAdd: async () => {}, issueStatus: "in_progress", activeRun: run,
+        focusView: { showTranscript: false, render: focus } });
+    };
+    append("item.delta", "The voice test is ready. ");
+    const first = focus.mock.lastCall?.[0].liveReply;
+    expect(first?.id).toBe(`${run.id}:final:native-stable-answer`);
+    append("item.delta", "Here is the next sentence.");
+    expect(focus.mock.lastCall?.[0].liveReply?.id).toBe(first?.id);
+    append("item.completed", "The voice test is ready. Here is the next sentence.");
+    expect(focus.mock.lastCall?.[0].liveReply).toMatchObject({ id: first?.id, body: "The voice test is ready. Here is the next sentence." });
   });
 
   it("lets Friday ask a question in chat and accepts voice through the native answer handler", async () => {
@@ -5057,6 +5081,37 @@ describe("conversation focus presentation", () => {
     render(<TaskChatThread comments={[]} onAdd={async () => {}} initialHistoryError focusView={{ showTranscript: false, render: focus }} />);
     expect(focus.mock.lastCall?.[0]).toMatchObject({ unavailable: true });
     expect(container.querySelector('[data-testid="task-chat-history-content"]')?.parentElement?.hidden).toBe(false);
+  });
+  it("keeps current voice readiness independent of slow or failed old native history", () => {
+    const focus = vi.fn((_state: import("@/lib/conversation-focus").ConversationFocusState) => <div>Friday</div>);
+    const active = { id: "current", status: "running", invocationSource: "issue", triggerDetail: null,
+      startedAt: "2026-10-25T00:01:00Z", finishedAt: null, createdAt: "2026-10-25T00:01:00Z",
+      agentId: "agent", agentName: "Friday", adapterType: "paperclip_runner", runtimeMode: "native" as const };
+    const old = { ...active, id: undefined, runId: "old", status: "succeeded", finishedAt: "2026-10-25T00:00:10Z" };
+    nativeTranscriptState.hydratedRunIds = new Set(["current"]);
+    nativeTranscriptState.transcriptByRun.set("current", [{
+      kind: "assistant", channel: "final", itemId: "answer", ts: "2026-10-25T00:01:01Z", text: "Current reply.",
+    }]);
+    const props = { comments: [], onAdd: async () => {}, issueStatus: "in_progress", activeRun: active,
+      linkedRuns: [old], focusView: { canvas: true, showTranscript: false, render: focus } };
+    render(<TaskChatThread {...props} />);
+    expect(container.querySelector('[data-testid="task-chat-history-loading"]')).not.toBeNull();
+    expect(focus.mock.lastCall?.[0]).toMatchObject({ loading: false, unavailable: false, runStatus: "running" });
+    expect(focus.mock.lastCall?.[0].liveReply?.body).toBe("Current reply.");
+
+    nativeTranscriptState.errorsByRun.set("old", { message: "old history unavailable" });
+    render(<TaskChatThread {...props} />);
+    expect(container.textContent).toContain("Some task history could not be loaded.");
+    expect(focus.mock.lastCall?.[0]).toMatchObject({ loading: false, unavailable: false });
+    // Current API readiness, native questions and current execution failures
+    // still control the focus; history scheduling does not override them.
+    render(<TaskChatThread {...props} initialHistoryPending interactions={[pendingConnectionIntentInteraction]} />);
+    expect(focus.mock.lastCall?.[0]).toMatchObject({ loading: true, awaitingInput: true });
+    render(<TaskChatThread {...props} initialHistoryError />);
+    expect(focus.mock.lastCall?.[0].unavailable).toBe(true);
+    nativeTranscriptState.errorsByRun.set("current", { message: "current activity unavailable" });
+    render(<TaskChatThread {...props} />);
+    expect(focus.mock.lastCall?.[0].unavailable).toBe(true);
   });
   it("keeps native pending connection decisions reachable with history folded", async () => {
     const focus = vi.fn((_state: import("@/lib/conversation-focus").ConversationFocusState) => <div>Friday</div>);

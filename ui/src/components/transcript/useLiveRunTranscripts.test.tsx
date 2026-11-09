@@ -93,6 +93,52 @@ describe("useLiveRunTranscripts", () => {
     vi.useRealTimers();
   });
 
+  it("forwards scoped durable event hints through the existing socket and stops after cleanup", async () => {
+    const runs = [{ id: "run-1", status: "running", adapterType: "codex_local" }];
+    const first = vi.fn();
+    const replacement = vi.fn();
+    function Harness({ onRunEvent }: { onRunEvent: (runId: string, seq: number) => void }) {
+      useLiveRunTranscripts({ companyId: "conversation-company", runs, onRunEvent });
+      return null;
+    }
+    const root = createRoot(document.createElement("div"));
+    let unmounted = false;
+    try {
+      await act(async () => root.render(<Harness onRunEvent={first} />));
+      expect(FakeWebSocket.instances).toHaveLength(1);
+      const socket = FakeWebSocket.instances[0];
+      expect(socket.url).toContain("/companies/conversation-company/events/ws");
+      const message = (companyId: string, runId: string, seq: unknown) => new MessageEvent("message", {
+        data: JSON.stringify({ type: "heartbeat.run.event", companyId,
+          createdAt: "2026-11-09T00:00:00Z", payload: { runId, seq, eventType: "message_delta" } }),
+      });
+      await act(async () => {
+        socket.triggerOpen();
+        socket.onmessage?.(message("foreign-company", "run-1", 1));
+        socket.onmessage?.(message("conversation-company", "foreign-run", 1));
+        for (const seq of [null, "1", 0, -1, 1.5, Number.MAX_SAFE_INTEGER + 1]) {
+          socket.onmessage?.(message("conversation-company", "run-1", seq));
+        }
+      });
+      expect(first).not.toHaveBeenCalled();
+      await act(async () => socket.onmessage?.(message("conversation-company", "run-1", 7)));
+      expect(first).toHaveBeenCalledExactlyOnceWith("run-1", 7);
+      await act(async () => root.render(<Harness onRunEvent={replacement} />));
+      expect(FakeWebSocket.instances).toHaveLength(1);
+      await act(async () => socket.onmessage?.(message("conversation-company", "run-1", 8)));
+      expect(replacement).toHaveBeenCalledExactlyOnceWith("run-1", 8);
+      expect(first).toHaveBeenCalledTimes(1);
+      const lateMessage = socket.onmessage;
+      await act(async () => root.unmount());
+      unmounted = true;
+      lateMessage?.(message("conversation-company", "run-1", 9));
+      expect(replacement).toHaveBeenCalledTimes(1);
+      expect(socket.closeCalls).toEqual([{ code: 1000, reason: "live_run_transcripts_unmount" }]);
+    } finally {
+      if (!unmounted) await act(async () => root.unmount());
+    }
+  });
+
   it("pauses hidden-tab reads and resumes at the retained log offset", async () => {
     vi.useFakeTimers();
     const visibility = vi.spyOn(document, "visibilityState", "get").mockReturnValue("hidden");
