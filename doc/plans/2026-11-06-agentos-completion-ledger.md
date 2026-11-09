@@ -16,7 +16,7 @@ Update those rows as work completes; do not create another backlog.
 live acceptance remain Not fixed. This checkpoint was refreshed at the owner's
 request on 7 November; the tables below the current checkpoint are historical.
 
-- **V01–V05 actual owner check found slow/missing playback; fix awaiting activation:**
+- **V01–V05 actual owner check found slow/missing playback; loaded retest underway:**
   the owner confirmed correct physical transcription and visible reply generation,
   but audible playback took too long or did not start. The interface waited for
   the persisted comment despite an available native final-answer stream, and
@@ -36,6 +36,18 @@ request on 7 November; the tables below the current checkpoint are historical.
   `/private/tmp/agentos-voice-latency-20261109/verification-report.json` and
   `/private/tmp/agentos-voice-stream-*-20261109.log`. Loaded browser and owner
   retest remain; no voice requirement is marked complete from transcription alone.
+  Source `841c1eebaebcf2448e80666ae88fc1f16c7c2962` is pushed and loaded:
+  guarded restart `34d2b57c-bb9d-4f6b-8e0b-7b8ab8b71e68`, process 37517 started
+  9 November 03:52:43.660 UTC, ready 03:52:47.012, with no pending migrations or
+  lost/adopted/skipped runs. The first actual native muted-browser trial started
+  audio 1.361 seconds after the first final delta, but exposed a real handoff
+  failure: a transient missing live projection/busy state cancelled playing audio
+  before the saved comment appeared. The guard now preserves audio through that
+  gap; explicit interruption, questions, holds and scope changes still cancel.
+  All 53 affected UI cases and rebuilt UI pass; the failed trial remains at
+  `/private/tmp/agentos-voice-stream-browser-20261109/result.json`. Its first audio
+  preceded browser observation of the saved comment, not database persistence.
+  One separate actual retry is underway; no physical audibility is inferred.
 - **M05 source correction verified; live comparison remains Not fixed:** business
   companies without a local Friday operating-profile row were silently excluded
   from configured-model selection receipts. The selection owner now records the
@@ -45,7 +57,8 @@ request on 7 November; the tables below the current checkpoint are historical.
   all 15 qualification cases and 68 neighboring comparison/outcome cases pass
   afterward, plus server types, maps and independent review. Logs:
   `/private/tmp/agentos-model-no-friday-{before,after,neighbors,types}-20261109.log`.
-  Loaded verification awaits activation after the owner's physical voice check.
+  Source activation is included in the voice restart above; a fresh Orbit native
+  selection receipt still needs loaded verification.
   No historical runs are backfilled, no rollout is enabled and unknown actual
   context remains unknown. The general-server campaign began before this slice;
   its result is not an exact final-source pass.

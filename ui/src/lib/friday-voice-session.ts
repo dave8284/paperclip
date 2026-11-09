@@ -105,7 +105,9 @@ export class FridayVoiceSession {
       this.seen.add(value.reply.id);
       this.streamedReply!.buffer.update(value.reply.body, true);
     }
-    if (this.speechBuffer && this.streamedReply?.buffer === this.speechBuffer && (value.question || (!value.liveReply && !persistedStream && value.busy))) this.stopSpeaking(false);
+    // Native terminal projection and comment persistence can arrive separately.
+    // Missing live text/busy alone must not interrupt audio across that handoff.
+    if (this.speechBuffer && this.streamedReply?.buffer === this.speechBuffer && value.question) this.stopSpeaking(false);
     if (value.reply && !value.liveReply && !value.disabled && (!value.busy || value.reply.committed) && !value.question && !this.state.hearingSpeech && !this.seen.has(value.reply.id)) {
       this.seen.add(value.reply.id);
       const fresh = !value.reply.createdAt || new Date(value.reply.createdAt).getTime() >= this.since;

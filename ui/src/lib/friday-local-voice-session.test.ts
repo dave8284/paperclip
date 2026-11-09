@@ -212,6 +212,9 @@ it("speaks the native final stream before persistence and appends without replay
   const first = Playback.latest;
   expect(first.src).toContain(btoa("Your microphone works."));
   expect(session.snapshot().playing).toBe(true);
+  session.bind({ ...binding, busy: true }); await flush();
+  expect(first.pause).not.toHaveBeenCalled();
+  expect(session.snapshot().playing).toBe(true);
   first.onended?.(); await flush();
   expect(session.snapshot().playing).toBe(false);
   session.bind({ ...binding, busy: true, liveReply: { ...reply, body: "Your microphone works. The next step is ready. More" } }); await flush();
