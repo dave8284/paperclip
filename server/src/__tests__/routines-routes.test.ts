@@ -1,4 +1,5 @@
 import express from "express";
+import { getTableName, type Table } from "drizzle-orm";
 import request from "supertest";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -179,7 +180,16 @@ async function createApp(actor: Record<string, unknown>) {
     (req as any).actor = actor;
     next();
   });
-  app.use("/api", routineRoutes({} as any));
+  const db = {
+    select: () => ({ from: (table: Table) => {
+      if (getTableName(table) !== "routine_revisions") throw new Error("Unexpected routine fixture query");
+      return { where: () => ({ groupBy: () => ({ limit: async () => [{
+        companyId, routineId, projectId, parentIssueId: null,
+        count: 1, first: 1, last: 1, currentId: revisionId, valid: true,
+      }] }) }) };
+    } }),
+  };
+  app.use("/api", routineRoutes(db as any));
   app.use(errorHandler);
   return app;
 }
@@ -246,7 +256,7 @@ describe("routine routes", () => {
     vi.clearAllMocks();
     mockDecideReads.mockImplementation(async (_actor, resources) => resources.map(() => ({ allowed: true })));
     mockGetTelemetryClient.mockReturnValue({ track: vi.fn() });
-    mockRoutineService.list.mockResolvedValue([routine]);
+    mockRoutineService.list.mockResolvedValue([{ ...routine, triggers: [], lastRun: null, activeIssue: null }]);
     mockRoutineService.create.mockResolvedValue(routine);
     mockRoutineService.get.mockResolvedValue(routine);
     mockRoutineService.getTrigger.mockResolvedValue(trigger);

@@ -63,7 +63,7 @@ describe("AgentMail provider errors at the HTTP boundary", () => {
 
   it.each([
     [401, 422, "AgentMail rejected the API key"],
-    [403, 422, "AgentMail did not allow Paperclip to create the email address"],
+    [403, 422, "AgentMail did not allow AgentOS to create the email address"],
     [400, 422, "Try a different address"],
     [409, 422, "Try a different address"],
     [422, 422, "Try a different address"],

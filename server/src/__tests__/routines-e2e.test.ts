@@ -7,6 +7,7 @@ import {
   activityLog,
   agentWakeupRequests,
   agents,
+  authUsers,
   companies,
   companyMemberships,
   companySecrets,
@@ -131,6 +132,7 @@ describeEmbeddedPostgres("routine routes end-to-end", () => {
     await db.delete(projects);
     await db.delete(agents);
     await db.delete(companies);
+    await db.delete(authUsers);
     await db.delete(instanceSettings);
   });
 
@@ -224,7 +226,12 @@ describeEmbeddedPostgres("routine routes end-to-end", () => {
       status: "in_progress",
     });
 
+    await db.insert(authUsers).values({
+      id: userId, name: "Routine owner", email: `${userId}@example.test`,
+      approvalStatus: "approved", createdAt: new Date(), updatedAt: new Date(),
+    });
     const access = accessService(db);
+    await access.ensureMembership(companyId, "agent", agentId, "member", "active");
     const membership = await access.ensureMembership(companyId, "user", userId, "owner", "active");
     await access.setMemberPermissions(
       companyId,
@@ -330,11 +337,14 @@ describeEmbeddedPostgres("routine routes end-to-end", () => {
     await db.insert(routines).values({ id: routineId, companyId, assigneeAgentId: agentId, title: "Private routine" });
     await db.insert(routineTriggers).values({ id: triggerId, companyId, routineId, kind: "api" });
     const owner = await createApp({ type: "agent", agentId, companyId });
-    const otherAgent = await createApp({ type: "agent", agentId: randomUUID(), companyId });
+    const otherAgentId = randomUUID();
+    await db.insert(agents).values({ id: otherAgentId, companyId, name: "Routine peer", role: "engineer", status: "idle" });
+    await accessService(db).ensureMembership(companyId, "agent", otherAgentId, "member", "active");
+    const otherAgent = await createApp({ type: "agent", agentId: otherAgentId, companyId });
     const board = await createApp({ type: "board", userId, source: "session", companyIds: [companyId] });
     for (const app of [owner, otherAgent, board]) {
       const response = await request(app).get(`/api/routines/${routineId.toUpperCase()}`);
-      expect(response.status).toBe(200);
+      expect(response.status, JSON.stringify(response.body)).toBe(200);
       expect(response.body.id).toBe(routineId);
     }
     for (const [index, pending] of routineResourceRequests(otherAgent, routineId, triggerId).entries()) {
@@ -560,7 +570,7 @@ describeEmbeddedPostgres("routine routes end-to-end", () => {
       payload: { origin: "e2e-test" },
     });
 
-    expect(runRes.status).toBe(202);
+    expect(runRes.status, JSON.stringify(runRes.body)).toBe(202);
     expect(runRes.body.status).toBe("issue_created");
     expect(runRes.body.source).toBe("manual");
     expect(runRes.body.linkedIssueId).toBeTruthy();
@@ -656,7 +666,7 @@ describeEmbeddedPostgres("routine routes end-to-end", () => {
       variables: { repo: "paperclip" },
     });
 
-    expect(runRes.status).toBe(202);
+    expect(runRes.status, JSON.stringify(runRes.body)).toBe(202);
     expect(runRes.body.triggerPayload).toEqual({
       variables: {
         repo: "paperclip",
@@ -740,7 +750,7 @@ describeEmbeddedPostgres("routine routes end-to-end", () => {
       assigneeAgentId: agentId,
     });
 
-    expect(runRes.status).toBe(202);
+    expect(runRes.status, JSON.stringify(runRes.body)).toBe(202);
     expect(runRes.body.status).toBe("issue_created");
 
     const [issue] = await db
@@ -819,7 +829,7 @@ describeEmbeddedPostgres("routine routes end-to-end", () => {
       executionWorkspaceSettings: { mode: "isolated_workspace" },
     });
 
-    expect(runRes.status).toBe(202);
+    expect(runRes.status, JSON.stringify(runRes.body)).toBe(202);
 
     const [issue] = await db
       .select({

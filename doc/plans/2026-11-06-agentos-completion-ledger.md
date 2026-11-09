@@ -108,16 +108,28 @@ request on 7 November; the tables below the current checkpoint are historical.
   expectations include the new business-purpose default and the migration fixture
   rewinds all later empty FK consumers in order (no CASCADE or production SQL
   change). Its original and first rerun failures are retained. A, B, serialized
-  and current general-server checks are underway. The current UI portion of A
-  passes all 862 files/9,550 cases. Its earlier four failures came from a missing
+  and current general-server checks are underway. A now passes both projects:
+  UI 862 files/9,550 cases and CLI 65 files/537 cases. Its earlier four failures came from a missing
   saved-login-result mock; all 97 setup cases and UI types pass after restoring
-  that native contract and asserting no duplicate connection creation. A’s CLI
-  portion is still running. B requires the existing CI-pinned task-local Claude
+  that native contract and asserting no duplicate connection creation. B passes
+  all 17 projects: 326 files passed/two skipped and 5,197 cases passed/28 skipped,
+  using the existing CI-pinned task-local Claude
   2.1.277 and installed Python 3.13, preserving the earlier unsupported-version
   failures. Shared-home subprocess startup/drain checks pass; unrelated five-
   second timeout cases pass unchanged at bounded workers, with original failures
   retained. These test prerequisites do not change live provider credentials or
-  qualify additional production providers. Original full log and all focused failures
+  qualify additional production providers. First serialized run finished red:
+  164 files, 155 passed/nine failed; 3,544 cases, 3,525 passed/19 failed. All nine
+  affected suites now pass 159 focused cases after restoring legitimate native
+  actor/membership/query/lifecycle fixture contracts, current branding and exact
+  request-input existence-guard allowlist sites. Permission/denial/audit checks
+  remain intact. Server types pass; no production changes were needed. A full
+  committed serialized rerun is next, while current general-server continues.
+  Logs: `agentos-regression-workspaces-a-final-20261109.log`,
+  `agentos-regression-workspaces-b-qualified-20261109.log`,
+  `agentos-general-workspaces-c-final2-20261109.log`,
+  `agentos-serialized-20261109.log` and `agentos-serialized-*-final-20261109.log`.
+  Original full log and all focused failures
   remain in private tmp. No full-suite pass is claimed.
 - **S03 Fixed — loaded administration lifecycle passed:** the exact disposable
   `example.invalid` identity was preapproved/revoked through the native UI, then

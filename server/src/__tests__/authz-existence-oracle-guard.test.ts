@@ -34,6 +34,9 @@ const ROUTES_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "routes")
 // when the value cannot reveal whether a cross-tenant resource exists.
 const REQUEST_INPUT_ALLOWLIST = new Set([
   "companies.ts:target", // import target chosen by the caller (req.body.target)
+  "agentos-administration.ts:input", // evaluation companyId parsed directly from req.body
+  "ai-execution-capacity.ts:binding", // requested input.bindings[] parsed directly from req.body
+  "ai-workspace-accounts.ts:input", // account setup companyId parsed directly from req.body
   "plugins.ts:runContext", // run context supplied in the request body
 ]);
 

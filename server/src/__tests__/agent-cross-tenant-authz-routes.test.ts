@@ -1,4 +1,5 @@
 import express from "express";
+import { getTableName, type Table } from "drizzle-orm";
 import request from "supertest";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -18,6 +19,7 @@ const baseAgent = {
   title: "Builder",
   icon: null,
   status: "idle",
+  lifecycleState: "ready",
   reportsTo: null,
   capabilities: null,
   adapterType: "process",
@@ -51,6 +53,7 @@ const mockAgentService = vi.hoisted(() => ({
   retryLifecycle: vi.fn(),
   pause: vi.fn(),
   resume: vi.fn(),
+  updateAndTransition: vi.fn(),
   clearError: vi.fn(),
   terminate: vi.fn(),
   remove: vi.fn(),
@@ -204,6 +207,8 @@ vi.mock("../routes/authz.js", async () => {
   };
 });
 
+vi.mock("../services/access.js", () => ({ accessService: () => mockAccessService }));
+
 vi.mock("../services/index.js", () => ({
   agentService: () => mockAgentService,
   agentInstructionsService: () => mockAgentInstructionsService,
@@ -253,7 +258,14 @@ async function createApp(actor: Record<string, unknown>) {
     };
     next();
   });
-  app.use("/api", agentRoutes({} as any));
+  const db = {
+    select: () => ({ from: (table: Table) => ({ where: async () => {
+      // The acting employee is a current peer with no department appointment.
+      if (getTableName(table) === "agents") return [{ ...baseAgent, id: actor.agentId }];
+      return [];
+    } }) }),
+  };
+  app.use("/api", agentRoutes(db as any));
   app.use(errorHandler);
   return app;
 }
@@ -306,6 +318,10 @@ function resetMockDefaults() {
   mockAgentService.retryLifecycle.mockImplementation(async () => ({ ...baseAgent, lifecycleState: "preparing", lifecycleError: null }));
   mockAgentService.pause.mockImplementation(async () => ({ ...baseAgent }));
   mockAgentService.resume.mockImplementation(async () => ({ ...baseAgent }));
+  mockAgentService.updateAndTransition.mockImplementation(async (id: string, command: string) => {
+    if (command !== "resume") throw new Error("Unexpected fixture transition");
+    return mockAgentService.resume(id);
+  });
   mockAgentService.clearError.mockImplementation(async () => ({ ...baseAgent, status: "idle" }));
   mockAgentService.terminate.mockImplementation(async () => ({ ...baseAgent }));
   mockAgentService.remove.mockImplementation(async () => ({ ...baseAgent }));
@@ -511,6 +527,13 @@ describe("agent cross-tenant route authorization", () => {
       scope: { requiresChangeGrant: true },
     }));
     expect(mockAgentService.resume).toHaveBeenCalledWith(agentId);
+    expect(mockAgentService.updateAndTransition).toHaveBeenCalledWith(agentId, "resume", {}, {
+      departmentAuthority: {
+        actor: expect.objectContaining({ type: "agent", companyId }),
+        departmentHead: false,
+        requiresChangeGrant: true,
+      },
+    });
   });
 
   it.each([
@@ -765,6 +788,7 @@ vi.mock("../services/agent-lifecycle.js", async (importOriginal) => {
     retry: (...args: unknown[]) => mockAgentService.retryLifecycle(...args),
     pauseAgent: (...args: unknown[]) => mockAgentService.pause(...args),
     resumeAgent: (...args: unknown[]) => mockAgentService.resume(...args),
+    updateAndTransition: (...args: unknown[]) => mockAgentService.updateAndTransition(...args),
     terminateAgent: (...args: unknown[]) => mockAgentService.terminate(...args),
   }) };
 });

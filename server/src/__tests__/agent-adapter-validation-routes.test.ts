@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import request from "supertest";
 import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
+import { getTableName, type Table } from "drizzle-orm";
 import type { ServerAdapterModule } from "../adapters/index.js";
 
 const mockAgentService = vi.hoisted(() => ({
@@ -105,6 +106,8 @@ vi.mock("../services/secrets.js", () => ({
   secretService: () => mockSecretService,
 }));
 
+vi.mock("../services/access.js", () => ({ accessService: () => mockAccessService }));
+
 vi.mock("../services/managed-agent-profiles.js", () => ({
   managedAgentProfileService: () => mockManagedAgentProfileService,
 }));
@@ -138,6 +141,7 @@ function registerModuleMocks() {
   vi.doMock("../services/secrets.js", () => ({
     secretService: () => mockSecretService,
   }));
+  vi.doMock("../services/access.js", () => ({ accessService: () => mockAccessService }));
 
   vi.doMock("../services/managed-agent-profiles.js", () => ({
     managedAgentProfileService: () => mockManagedAgentProfileService,
@@ -193,13 +197,14 @@ async function createApp(actorOverride: Record<string, unknown> = {}) {
   });
   const db = {
     select: vi.fn(() => ({
-      from: vi.fn(() => ({
-        where: vi.fn(async () => [
-          {
-            id: "company-1",
-            requireBoardApprovalForNewAgents: false,
-          },
-        ]),
+      from: vi.fn((table: Table) => ({
+        // Hiring/configuration scope reads the actual actor, its company and
+        // current appointments. A company row is not an employee/department.
+        where: vi.fn(async () => {
+          if (getTableName(table) === "agents") return [await mockAgentService.getById()];
+          if (getTableName(table) === "companies") return [{ id: "company-1", requireBoardApprovalForNewAgents: false }];
+          return [];
+        }),
       })),
     })),
   };
@@ -286,6 +291,7 @@ describe("agent routes adapter validation", () => {
       title: null,
       icon: null,
       status: "idle",
+      lifecycleState: "ready",
       reportsTo: null,
       capabilities: null,
       adapterType: String(input.adapterType ?? "process"),
@@ -310,6 +316,7 @@ describe("agent routes adapter validation", () => {
       title: null,
       icon: null,
       status: "idle",
+      lifecycleState: "ready",
       reportsTo: null,
       capabilities: null,
       adapterType: "codex_local",
