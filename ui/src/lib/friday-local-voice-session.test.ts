@@ -203,3 +203,41 @@ it("times audio only after play resolves and ignores a late start after the conv
   expect(session.snapshot().timings.companyId).toBe("other");
   expect(session.snapshot().timings.playback).toEqual({ status: "unmeasured", durationMs: null });
 });
+
+it("speaks the native final stream before persistence and appends without replaying the saved answer", async () => {
+  api.post.mockImplementation(async (_path, body) => body.op === "speak" ? { audio: btoa(body.text) } : { ready: true });
+  session.bind(binding); await flush();
+  const reply = { id: "native-final", runId: "run", streaming: true, body: "Your microphone works. The next" };
+  session.bind({ ...binding, busy: true, liveReply: reply }); await flush();
+  const first = Playback.latest;
+  expect(first.src).toContain(btoa("Your microphone works."));
+  expect(session.snapshot().playing).toBe(true);
+  first.onended?.(); await flush();
+  expect(session.snapshot().playing).toBe(false);
+  session.bind({ ...binding, busy: true, liveReply: { ...reply, body: "Your microphone works. The next step is ready. More" } }); await flush();
+  expect(Playback.latest.src).toContain(btoa("The next step is ready."));
+  Playback.latest.onended?.(); await flush();
+  session.bind({ ...binding, reply: { id: "saved", runId: "run", committed: true, body: "Your microphone works. The next step is ready. More later." } }); await flush();
+  expect(Playback.latest.src).toContain(btoa("More later."));
+  Playback.latest.onended?.(); await flush();
+  session.bind({ ...binding, reply: { id: "saved", runId: "run", committed: true, body: "Your microphone works. The next step is ready. More later." } }); await flush();
+  expect(api.post.mock.calls.filter(call => call[1].op === "speak").map(call => call[1].text))
+    .toEqual(["Your microphone works.", "The next step is ready.", "More later."]);
+  expect(session.snapshot().speaking).toBe(false);
+});
+
+it("aborts synthesis on interruption and never resumes the cancelled stream when it is saved", async () => {
+  let signal: AbortSignal | undefined;
+  api.post.mockImplementation((_path, body, options) => body.op === "speak" ? new Promise((_resolve, reject) => {
+    signal = options.signal; signal!.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")));
+  }) : Promise.resolve({ ready: true }));
+  session.bind(binding); await flush();
+  const reply = { id: "native-final", runId: "run", streaming: true, body: "This reply is obsolete. More" };
+  session.bind({ ...binding, busy: true, liveReply: reply }); await flush();
+  expect(signal?.aborted).toBe(false);
+  session.stopSpeaking(); expect(signal?.aborted).toBe(true); await flush();
+  session.bind({ ...binding, liveReply: { ...reply, body: "This reply is obsolete. More old text." } });
+  session.bind({ ...binding, reply: { id: "saved", runId: "run", committed: true, body: "Revised wording from the interrupted answer." } }); await flush();
+  expect(api.post.mock.calls.filter(call => call[1].op === "speak")).toHaveLength(1);
+  expect(session.snapshot()).toMatchObject({ speaking: false, playing: false, error: "" });
+});

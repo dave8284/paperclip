@@ -7,7 +7,7 @@ vi.mock("node:child_process", () => ({ spawn: vi.fn() }));
 vi.mock("node:fs/promises", () => ({ access: vi.fn().mockResolvedValue(undefined) }));
 
 function childFixture() {
-  const requests: Array<{ id: string; op: string; mode?: string }> = [];
+  const requests: Array<{ id: string; op: string; mode?: string; text?: string; audio?: string }> = [];
   const stdin = Object.assign(new EventEmitter(), {
     write: vi.fn((line: string, callback: (error?: Error | null) => void) => {
       requests.push(JSON.parse(line)); callback(); return true;
@@ -87,7 +87,7 @@ describe("independent local recognition and speech workers", () => {
   it("limits each lane to two pending requests without blocking the other lane", async () => {
     const first = request({ op: "transcribe", audio: "first" });
     const second = request({ op: "transcribe", audio: "second" });
-    await vi.waitFor(() => expect(children[0]?.requests).toHaveLength(2));
+    await vi.waitFor(() => expect(children[0]?.requests).toHaveLength(1));
     await expect(request({ op: "transcribe", audio: "third" })).rejects.toMatchObject({ status: 429 });
     await expect(request({ op: "prepare" })).rejects.toMatchObject({ status: 429 });
     expect(children).toHaveLength(1); // Busy prepare did not partly start speech.
@@ -95,7 +95,9 @@ describe("independent local recognition and speech workers", () => {
     await vi.waitFor(() => expect(children).toHaveLength(2));
     children[1].reply(0, { audio: "answer" });
     await expect(speech).resolves.toMatchObject({ audio: "answer" });
-    children[0].reply(0, { text: "first" }); children[0].reply(1, { text: "second" });
+    children[0].reply(0, { text: "first" });
+    expect(children[0].requests).toHaveLength(2);
+    children[0].reply(1, { text: "second" });
     await Promise.all([first, second]);
   });
 
@@ -106,10 +108,7 @@ describe("independent local recognition and speech workers", () => {
     await vi.waitFor(() => expect(children).toHaveLength(2));
     const failed = children[0];
     if (mode === "stream") failed.stdin.emit("error", new Error("EPIPE"));
-    else {
-      failed.stdin.write.mockImplementationOnce((_line, callback) => { callback(new Error("EPIPE")); return false; });
-      await expect(request({ op: "transcribe", audio: "second" })).rejects.toMatchObject({ status: 503 });
-    }
+    else failed.stdin.write.mock.calls[0][1](new Error("EPIPE"));
     await rejected;
     expect(failed.kill).toHaveBeenCalledWith("SIGKILL");
     expect(children[1].kill).not.toHaveBeenCalled();
@@ -120,6 +119,80 @@ describe("independent local recognition and speech workers", () => {
     children[2].reply(0, { text: "replacement" }); children[1].reply(0, { audio: "preserved" });
     await expect(replacement).resolves.toMatchObject({ text: "replacement" });
     await expect(speech).resolves.toMatchObject({ audio: "preserved" });
+  });
+
+  it("does not start a worker for an already cancelled request", async () => {
+    const abort = new AbortController(); abort.abort();
+    await expect(request({ op: "speak", text: "Do not synthesize." }, abort.signal)).rejects.toMatchObject({ name: "AbortError" });
+    expect(spawn).not.toHaveBeenCalled();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("removes a cancelled queued request without interrupting active speech or sending stale text", async () => {
+    const active = request({ op: "speak", text: "Keep this response." });
+    const abort = new AbortController();
+    const queued = request({ op: "speak", text: "Discard this response." }, abort.signal);
+    const rejected = expect(queued).rejects.toMatchObject({ name: "AbortError" });
+    await vi.waitFor(() => expect(children[0]?.requests).toHaveLength(1));
+    abort.abort(); await rejected;
+    expect(children[0].kill).not.toHaveBeenCalled();
+    const next = request({ op: "speak", text: "The next response." });
+    // A third pending request proves the queue admission has completed.
+    await expect(request({ op: "speak", text: "Too many." })).rejects.toMatchObject({ status: 429 });
+    children[0].reply(0, { audio: "first" }); await active;
+    expect(children[0].requests.map(value => value.text)).toEqual(["Keep this response.", "The next response."]);
+    children[0].reply(1, { audio: "next" }); await next;
+    await vi.advanceTimersByTimeAsync(300_000);
+    expect(children[0].kill).toHaveBeenCalledTimes(1);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("stops cancelled active inference while preserving another queued caller and recognition", async () => {
+    const abort = new AbortController();
+    const active = request({ op: "speak", text: "Interrupted response." }, abort.signal);
+    const rejected = expect(active).rejects.toMatchObject({ name: "AbortError" });
+    const queued = request({ op: "speak", text: "Preserve this caller." });
+    const recognition = request({ op: "transcribe", audio: "preserve-recognition" });
+    await vi.waitFor(() => expect(children).toHaveLength(2));
+    expect(children[0].requests).toHaveLength(1);
+    abort.abort(); await rejected;
+    expect(children[0].kill).toHaveBeenCalledWith("SIGKILL");
+    expect(children).toHaveLength(3);
+    expect(children[2].requests[0].text).toBe("Preserve this caller.");
+    expect(children[1].kill).not.toHaveBeenCalled();
+    children[0].emit("exit", 1, null); // A late retired-process event cannot kill the replacement.
+    children[2].reply(0, { audio: "preserved" }); children[1].reply(0, { text: "recognized" });
+    await expect(queued).resolves.toMatchObject({ audio: "preserved" });
+    await expect(recognition).resolves.toMatchObject({ text: "recognized" });
+    expect(children[2].kill).not.toHaveBeenCalled();
+  });
+
+  it("keeps the original queued deadline when cancellation restarts its worker", async () => {
+    const abort = new AbortController();
+    const first = request({ op: "speak", text: "Interrupted." }, abort.signal);
+    const firstRejected = expect(first).rejects.toMatchObject({ name: "AbortError" });
+    const second = request({ op: "speak", text: "Still bounded." });
+    const secondRejected = expect(second).rejects.toMatchObject({ status: 503 });
+    await vi.waitFor(() => expect(children).toHaveLength(1));
+    await vi.advanceTimersByTimeAsync(30_000);
+    abort.abort(); await firstRejected;
+    expect(children).toHaveLength(2);
+    await vi.advanceTimersByTimeAsync(30_000);
+    await secondRejected;
+    expect(children[1].kill).toHaveBeenCalledWith("SIGKILL");
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("removes a settled request's abort listener so late cancellation cannot kill reused speech", async () => {
+    const abort = new AbortController();
+    const first = request({ op: "speak", text: "Finished." }, abort.signal);
+    await vi.waitFor(() => expect(children).toHaveLength(1));
+    children[0].reply(0, { audio: "finished" }); await first;
+    const next = request({ op: "speak", text: "Current." });
+    await vi.waitFor(() => expect(children[0].requests).toHaveLength(2));
+    abort.abort();
+    expect(children[0].kill).not.toHaveBeenCalled();
+    children[0].reply(1, { audio: "current" }); await next;
   });
 
   it("bounds hung recognition and releases idle speech without recurring work", async () => {

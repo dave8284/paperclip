@@ -160,7 +160,7 @@ Within `managed-applications/coordination` and `managed-applications/work`, API 
 
 The same authorized diagnostic response includes `local_triage` with a safe `localTriageStatus` enum. It uses read-only worker inspection and exposes no model path, credentials, task inputs or logs. Disabled/setup-required/cold/warming/ready/busy/unavailable distinguish installation and resource state; no check starts, stops or infers with the model. Configuration remains instance-operator controlled; no paid fallback or routing authority follows from readiness.
 
-Evidence `source-only`: `friday-diagnostics.test.ts` and `friday-diagnostics-contract.test.ts` passed using actual Drizzle SQL construction, controlled authorization/results and direct handlers without a listener, including local-triage states and private failure suppression without inference. Native API discovery and bound-company URL construction are exercised; real PostgreSQL privacy, active-run transport, live Friday diagnosis and deployed readiness are not verified. Dynamic native conversation guidance (including resume deltas) supplies diagnosis, complete spoken answers and revision-protected research publication instructions; template edits alone are not claimed to update an installed agent. Voice playback consumes persisted native comments, never transient tool/run logs; local synthesis retains one bounded lookahead chunk and existing opt-in/hold/scope controls. No new mutation permission or provider fallback is introduced.
+Evidence `source-only`: `friday-diagnostics.test.ts` and `friday-diagnostics-contract.test.ts` passed using actual Drizzle SQL construction, controlled authorization/results and direct handlers without a listener, including local-triage states and private failure suppression without inference. Native API discovery and bound-company URL construction are exercised; real PostgreSQL privacy, active-run transport, live Friday diagnosis and deployed readiness are not verified. Dynamic native conversation guidance (including resume deltas) supplies diagnosis, complete spoken answers and revision-protected research publication instructions; template edits alone are not claimed to update an installed agent. Voice playback consumes persisted native comments and the existing authorized native final-answer projection for the exact conversation agent, never reasoning, progress or tool output. Local synthesis retains one bounded lookahead chunk and existing opt-in/hold/scope controls. No new mutation permission or provider fallback is introduced.
 
 
 ### AgentOS review fixes — 2026-11-04
@@ -172,8 +172,14 @@ rejects stale/malformed payloads with a retryable message; the exact reported
 undefined-type browser stack still needs a user retest after restart. Main/map
 spheres tint only their interiors with matching dot colors. Decisions use a
 compact statement/context/action view and retain full expansion/native gates.
-Voice can play a committed reply before unrelated run cleanup and prepares only
-one subsequent local speech chunk ahead. Focused source tests pass; browser,
+Voice can play final-answer sentences before persistence, reconciling the same
+native run's saved comment without replay. Pending native interactions and
+foreign employee streams are excluded. Cancellation propagates through the
+existing board/company voice POST request to its owned local worker; it grants
+no additional authority and preserves other queued callers and the separate
+recognition lane. Provider generation, capture and playback remain separate.
+The queue wakes only for new text or request completion and has one synthesis
+lookahead; idle expiry and hidden-page/scope teardown remain. Focused tests pass; browser,
 physical audio and native runtime activation are tracked separately in the
 [execution log](../../doc/plans/2026-11-04-agentos-platform-fixes.md).
 

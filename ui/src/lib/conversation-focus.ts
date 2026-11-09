@@ -10,6 +10,8 @@ export interface ConversationFocusState {
   loading: boolean;
   /** A current clarification, spoken even while its provider run waits for input. */
   clarification?: { id: string; body: string };
+  /** Existing native final-answer projection, never reasoning/tool/progress text. */
+  liveReply?: { id: string; runId: string; agentId?: string; body: string; createdAt?: string | Date; streaming: boolean };
 }
 export interface ConversationFocusView {
   canvas?: boolean;

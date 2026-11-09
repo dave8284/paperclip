@@ -136,7 +136,16 @@ export function fridayRoutes(db: Db) {
   router.post("/companies/:companyId/friday/voice", json({ limit: "8mb" }), async (req, res) => {
     assertBoard(req);
     const input = z.discriminatedUnion("op", [z.object({ op: z.literal("prepare") }).strict(), z.object({ op: z.literal("speak"), text: z.string().trim().min(1).max(1000) }).strict(), z.object({ op: z.literal("transcribe"), audio: z.string().min(44).max(8_000_000).regex(/^[A-Za-z0-9+/=]+$/) }).strict()]).parse(req.body);
-    res.set("Cache-Control", "no-store").json(await fridayVoiceRequest(input));
+    const abort = new AbortController();
+    const disconnected = () => { if (!res.writableEnded) abort.abort(); };
+    req.once("aborted", disconnected); res.once("close", disconnected);
+    if (req.aborted || res.destroyed) abort.abort();
+    try {
+      const result = await fridayVoiceRequest(input, abort.signal);
+      if (!abort.signal.aborted) res.set("Cache-Control", "no-store").json(result);
+    } catch (error) {
+      if (!abort.signal.aborted) throw error;
+    } finally { req.off("aborted", disconnected); res.off("close", disconnected); }
   });
   return router;
 }

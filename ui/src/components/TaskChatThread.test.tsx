@@ -4950,6 +4950,26 @@ it("explains a missing provider runtime with an installation repair", () => {
 });
 
 describe("conversation focus presentation", () => {
+  it("exposes only the current native final-answer stream before a comment is persisted", () => {
+    const focus = vi.fn((_state: import("@/lib/conversation-focus").ConversationFocusState) => <div>Friday</div>);
+    const active = { id: "friday-voice-run", status: "running", runtimeMode: "native" as const,
+      invocationSource: "issue", triggerDetail: null, agentId: "friday", agentName: "Friday",
+      startedAt: "2026-11-09T03:40:00Z", finishedAt: null, createdAt: "2026-11-09T03:40:00Z", adapterType: "paperclip_runner" };
+    const props = { comments: [], onAdd: async () => {}, conversationMode: true, issueStatus: "in_progress", activeRun: active,
+      focusView: { showTranscript: false, render: focus } };
+    nativeTranscriptState.transcriptByRun.set(active.id, [
+      { kind: "thinking", text: "Private reasoning", ts: active.createdAt },
+      { kind: "assistant", channel: "commentary", text: "Working on it", ts: active.createdAt },
+    ]);
+    render(<TaskChatThread {...props} />);
+    expect(focus.mock.lastCall?.[0].liveReply).toBeUndefined();
+    nativeTranscriptState.transcriptByRun.get(active.id)!.push({ kind: "assistant", channel: "final", text: "Your microphone works. The next", ts: active.createdAt });
+    render(<TaskChatThread {...props} />);
+    expect(focus.mock.lastCall?.[0].liveReply).toMatchObject({ runId: active.id, agentId: "friday", body: "Your microphone works. The next", streaming: true });
+    render(<TaskChatThread {...props} interactions={[{ ...questionInteraction("hold-voice", "Which company?", active.createdAt), sourceRunId: active.id }]} />);
+    expect(focus.mock.lastCall?.[0].liveReply).toBeUndefined();
+  });
+
   it("lets Friday ask a question in chat and accepts voice through the native answer handler", async () => {
     const composerRef = createRef<IssueChatComposerHandle>();
     const onAdd = vi.fn().mockResolvedValue(undefined), answer = vi.fn().mockResolvedValue(undefined);

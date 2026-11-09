@@ -16,6 +16,26 @@ Update those rows as work completes; do not create another backlog.
 live acceptance remain Not fixed. This checkpoint was refreshed at the owner's
 request on 7 November; the tables below the current checkpoint are historical.
 
+- **V01–V05 actual owner check found slow/missing playback; fix awaiting activation:**
+  the owner confirmed correct physical transcription and visible reply generation,
+  but audible playback took too long or did not start. The interface waited for
+  the persisted comment despite an available native final-answer stream, and
+  cancelled synthesis continued occupying the local worker. Speech now consumes
+  only that exact conversation agent's final-answer sentences, with bounded
+  lookahead, cancellation, persisted-comment reconciliation and observed playback
+  state. No reasoning/tool/progress text or pending held answer is spoken. HTTP
+  abort cancels owned inference while preserving other queued callers and the
+  independent recognition lane; idle expiry remains. Source checks pass 366
+  unique UI cases and 21 server/real-HTTP cases, UI/server types, UI build, maps,
+  tokens and independent review. Initial fixture/type failures and review fixes
+  for decimal boundaries and cancelled-answer replay remain in private logs.
+  Real local engine measurements: warm 40-character sentence 0.56–0.60 seconds;
+  cancelled worker exit about 7 ms; preserved queued reply about 1.8 seconds after
+  its replacement worker starts. These generated/muted checks do not certify
+  physical audibility, interruption or total conversational latency. Reports:
+  `/private/tmp/agentos-voice-latency-20261109/verification-report.json` and
+  `/private/tmp/agentos-voice-stream-*-20261109.log`. Loaded browser and owner
+  retest remain; no voice requirement is marked complete from transcription alone.
 - **M05 source correction verified; live comparison remains Not fixed:** business
   companies without a local Friday operating-profile row were silently excluded
   from configured-model selection receipts. The selection owner now records the
@@ -45,17 +65,23 @@ request on 7 November; the tables below the current checkpoint are historical.
   Report: `/private/tmp/agentos-v09-conversation-20261109/verification-report.json`.
   This qualifies the bounded native Friday text flow; physical speech remains
   separate, and native action confirmations retain their existing controls.
-- **W01/W02 local application trial underway, still Not fixed:** the next
-  owner-authorized fictional trial was sent once to Friday as comment
-  `8f031dc4-cf67-469e-aa0d-318ca6607df1`, request
-  `c9016571-cc16-446e-8465-a75d93642c9c`. Friday must direct Orbit’s CEO to plan,
-  staff, implement, test and review DeskBuddy Margin Lab in company-owned native
-  workspaces. The concrete brief requires a standalone fictional calculator,
-  defined normal/zero/invalid cases, actual runnable artifacts and honest review
-  evidence. It forbids changing AgentOS, external publication/cloud/services,
-  persistent listeners or existing schedules/owner decisions. Local delivery
-  alone will not close GitHub/cloud or broader operating-workflow requirements.
-  Exact request: `/private/tmp/agentos-w01-local-app-request-20261109.json`.
+- **W01/W02 bounded local application delivered; broader requirements Not fixed:**
+  Friday directed Orbit’s CEO, who saved the plan, hired one developer and reused
+  the economics specialist/reviewer. ORB-28/29/30/31 completed; seven native runs
+  succeeded, with one retained capacity-busy cancellation followed by automatic
+  retry. Actual Friday return `50fcc0e7-79f5-427b-a8c7-29c48259445f` links the
+  exact 6,304-byte calculator (SHA `b8689c4d…041ba`), tests and review. Root’s
+  separate auth-free browser verification passes 42 cases; the supplied actual
+  script tests pass 126 cases. Final download/review/CEO document navigation
+  passes. Original owner decisions, paused company and single disabled-schedule
+  routine cycle remain unchanged; temporary browsers/listener are closed.
+  Native agents correctly disclose their lack of browser proof, shared review
+  context and Git initialization denial. Optional display metadata was discarded
+  by the canonical attachment owner; authoritative company/project ownership is
+  retained. No inline preview, GitHub adoption/release, cloud delivery or owner
+  business acceptance is claimed. Application remains discovery. The durable
+  new-project repository gap is being fixed separately in an isolated worktree.
+  Report: `/private/tmp/agentos-w01-browser-20261109/verification-report.json`.
 - **O07 Fixed again — loaded private activity boundary verified:** the original
   regression exposed private task IDs through access-grant activity. Commit
   `bcb44d48882b42b004e2b73e27e9db9c678a1406` is pushed and loaded: guarded restart

@@ -8291,6 +8291,7 @@ export function TaskDetailSurface({ conversation, tasksTab, ownsRoute = true }: 
                       issueId: conversation.issue?.id ?? null,
                       companyId: conversation.agent.companyId,
                       voiceSessionKey: `${conversation.agent.companyId}:${conversation.agent.id}:${currentUserId ?? "local"}`,
+                      liveReply: state.liveReply?.agentId === conversation.agent.id ? state.liveReply : undefined,
                       reply: comments.filter(comment => comment.authorAgentId === conversation.agent.id && !comment.deletedAt && comment.origin !== "fast_response").at(-1),
                       attachments: attachments ?? [],
                       workProducts: workProducts ?? [],

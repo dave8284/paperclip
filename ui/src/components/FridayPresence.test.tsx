@@ -21,6 +21,12 @@ afterEach(async () => { await act(async () => root.unmount()); vi.unstubAllGloba
 const render = (next = data) => act(async () => root.render(<FridayPresence data={next} connected />));
 const reply = () => ({ ...data, reply: { id: "reply", body: "Your review is ready.", createdAt: new Date(Date.now() + 1000) } as IssueComment });
 
+it("remains stable while a native run is thinking before any final answer exists", async () => {
+  await render({ ...data, runStatus: "running" });
+  expect(host.textContent).toContain("Thinking through your request");
+  expect(synthesis.speak).not.toHaveBeenCalled();
+});
+
 it("shows preparation until actual playback starts, then returns to the muted state when it ends", async () => {
   await render(); await render(reply());
   expect(host.textContent).toContain("Preparing reply audio");

@@ -100,6 +100,7 @@ describe("Friday voice session", () => {
   });
   it.each(["yes", "no", "the voice", "stop", "Here are your projects, but only show the launch"])("interrupts playback with %s without sending speaker echo", async answer => {
     session.toggle(); const playback = session.speak("Here are your projects and their latest decisions.");
+    synthesis.speak.mock.calls[0][0].onstart();
     const active = Recognition.latest;
     active.result("Here are your projects and their latest decisions.");
     await vi.advanceTimersByTimeAsync(1200);

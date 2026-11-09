@@ -1,4 +1,6 @@
 import { api } from "@/api/client";
+import { FridaySpeechBuffer, spokenReply } from "./friday-speech-buffer";
+export { spokenReply, spokenReplyChunks } from "./friday-speech-buffer";
 
 export interface VoiceRecognition {
   lang: string; continuous: boolean; interimResults: boolean;
@@ -8,12 +10,12 @@ export interface VoiceRecognition {
   start(): void; stop(): void; abort(): void;
 }
 type VoiceWindow = { SpeechRecognition?: new () => VoiceRecognition; webkitSpeechRecognition?: new () => VoiceRecognition };
-export interface SpokenReply { id: string; body: string; createdAt?: Date | string; /** Persisted user-facing comment, never a transient model/tool stream. */ committed?: boolean }
-export interface VoiceBinding { key: string; companyId?: string; disabled: boolean; busy?: boolean; send?: (text: string) => Promise<void>; draft: (text: string) => void; reply?: SpokenReply; question?: { id: string; body: string }; onTurn?: () => void }
+export interface SpokenReply { id: string; body: string; createdAt?: Date | string; runId?: string; /** Persisted user-facing comment. */ committed?: boolean; /** Only the native user-facing final answer channel, never reasoning or tools. */ streaming?: boolean }
+export interface VoiceBinding { key: string; companyId?: string; disabled: boolean; busy?: boolean; send?: (text: string) => Promise<void>; draft: (text: string) => void; reply?: SpokenReply; liveReply?: SpokenReply; question?: { id: string; body: string }; onTurn?: () => void }
 export interface VoiceTimingMeasurement { status: "unmeasured" | "pending" | "measured" | "unavailable" | "cancelled" | "failed"; durationMs: number | null }
 export interface VoiceTimingContext { companyId?: string; sessionKey: string }
 export interface VoiceTimings { companyId?: string; sessionKey?: string; active: boolean; transcription: VoiceTimingMeasurement; submission: VoiceTimingMeasurement; playback: VoiceTimingMeasurement }
-export interface VoiceState { enabled: boolean; listening: boolean; hearingSpeech: boolean; speaking: boolean; starting: boolean; sending: boolean; interim: string; error: string; local: boolean; checking: boolean; preparing: boolean; timings: VoiceTimings }
+export interface VoiceState { enabled: boolean; listening: boolean; hearingSpeech: boolean; speaking: boolean; playing: boolean; starting: boolean; sending: boolean; interim: string; error: string; local: boolean; checking: boolean; preparing: boolean; timings: VoiceTimings }
 const emptyTimings = (companyId?: string, sessionKey?: string): VoiceTimings => ({ companyId, sessionKey, active: !!sessionKey, transcription: { status: "unmeasured", durationMs: null }, submission: { status: "unmeasured", durationMs: null }, playback: { status: "unmeasured", durationMs: null } });
 // Acoustic echo cancellation handles speaker leakage first. Ignore recognisable
 // playback phrases too, without discarding short answers such as "yes" or "stop".
@@ -21,25 +23,6 @@ function playbackEcho(text: string, reference: string) {
   const words = (value: string) => value.toLocaleLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
   const candidate = words(text), spoken = words(reference);
   return candidate.split(" ").length >= 3 && candidate.length >= 12 && (` ${spoken} `).includes(` ${candidate} `);
-}
-export function spokenReply(text: string) {
-  return text.replace(/```[\s\S]*?```/g, " Code is available in the conversation. ").replace(/!\[[^\]]*\]\([^)]*\)/g, "").replace(/\[([^\]]*)\]\([^)]*\)/g, "$1").replace(/https?:\/\/\S+/g, " linked source ").replace(/[#*_`>|]/g, " ").replace(/\s+/g, " ").trim().slice(0, 6000);
-}
-/** Start with the first sentence, then keep synthesis bounded without cutting
- * words. Playback can begin before the rest of the answer is synthesized. */
-export function spokenReplyChunks(text: string) {
-  const chunks: string[] = [];
-  let remaining = text.trim();
-  while (remaining) {
-    const limit = chunks.length ? 220 : 120;
-    const prefix = remaining.slice(0, limit);
-    const sentence = /[.!?](?:\s|$)/.exec(prefix);
-    let end = sentence ? sentence.index + 1 : remaining.length <= limit ? remaining.length : prefix.lastIndexOf(" ");
-    if (end <= 0) end = limit;
-    chunks.push(remaining.slice(0, end).trim());
-    remaining = remaining.slice(end).trim();
-  }
-  return chunks;
 }
 export function pcmWave(chunks: Float32Array[], rate: number) {
   const size = chunks.reduce((n, chunk) => n + chunk.length, 0);
@@ -57,7 +40,7 @@ export function pcmWave(chunks: Float32Array[], rate: number) {
 /** Owns the microphone across React route changes. Native chat owns delivery.
  * No speech is sent without a bound conversation and explicit microphone opt-in. */
 export class FridayVoiceSession {
-  private state: VoiceState = { enabled: false, listening: false, hearingSpeech: false, speaking: false, starting: false, sending: false, interim: "", error: "", local: false, checking: false, preparing: false, timings: emptyTimings() };
+  private state: VoiceState = { enabled: false, listening: false, hearingSpeech: false, speaking: false, playing: false, starting: false, sending: false, interim: "", error: "", local: false, checking: false, preparing: false, timings: emptyTimings() };
   private listeners = new Set<() => void>();
   private binding: VoiceBinding | null = null;
   private identity = "";
@@ -72,6 +55,9 @@ export class FridayVoiceSession {
   private playbackCancel?: () => void;
   private playbackText = "";
   private speechGeneration = 0;
+  private speechAbort?: AbortController;
+  private speechBuffer?: FridaySpeechBuffer;
+  private streamedReply?: { id: string; runId?: string; buffer: FridaySpeechBuffer };
   private audio: HTMLAudioElement | null = null;
   private stream: MediaStream | null = null;
   private context: AudioContext | null = null;
@@ -99,22 +85,51 @@ export class FridayVoiceSession {
   canListen() { const host = window as unknown as VoiceWindow; return this.state.local ? !!navigator.mediaDevices?.getUserMedia : !!(host.SpeechRecognition ?? host.webkitSpeechRecognition); }
   bind(value: VoiceBinding) {
     clearTimeout(this.detachTimer);
-    if (this.identity && this.identity !== value.key) { this.disable(); this.seen.clear(); this.since = Date.now(); }
+    if (this.identity && this.identity !== value.key) { this.disable(); this.seen.clear(); this.streamedReply = undefined; this.since = Date.now(); }
     const first = this.identity !== value.key;
     if (first || this.binding?.companyId !== value.companyId || !this.state.timings.active) { this.cancelTimings(); this.patch({ timings: emptyTimings(value.companyId, value.key) }); }
     this.identity = value.key; this.binding = value;
     if (first && value.reply) this.seen.add(value.reply.id);
+    if (first && value.liveReply) this.seen.add(value.liveReply.id);
     if (first && value.companyId) {
       this.patch({ checking: true });
       void api.get<{ available: boolean }>(`/companies/${value.companyId}/friday/voice`).then(status => { if (this.identity === value.key) { this.patch({ local: status.available }); if (status.available && !document.hidden) void this.prepareLocal(); } }).catch(() => { if (this.identity === value.key) this.patch({ local: false }); }).finally(() => { if (this.identity === value.key) this.patch({ checking: false }); });
     }
-    if (value.reply && !value.disabled && (!value.busy || value.reply.committed) && !value.question && !this.state.hearingSpeech && !this.seen.has(value.reply.id)) {
+    if (value.liveReply && !value.disabled && !value.question && !this.state.hearingSpeech && !document.hidden) {
+      this.updateStreamedReply(value.liveReply);
+    }
+    const persistedStream = value.reply?.runId && value.reply.runId === this.streamedReply?.runId
+      && (this.streamedReply.buffer.cancelled || (this.streamedReply.buffer.text.length > 0
+        && spokenReply(value.reply.body).startsWith(this.streamedReply.buffer.text)));
+    if (persistedStream && value.reply) {
+      this.seen.add(value.reply.id);
+      this.streamedReply!.buffer.update(value.reply.body, true);
+    }
+    if (this.speechBuffer && this.streamedReply?.buffer === this.speechBuffer && (value.question || (!value.liveReply && !persistedStream && value.busy))) this.stopSpeaking(false);
+    if (value.reply && !value.liveReply && !value.disabled && (!value.busy || value.reply.committed) && !value.question && !this.state.hearingSpeech && !this.seen.has(value.reply.id)) {
       this.seen.add(value.reply.id);
       const fresh = !value.reply.createdAt || new Date(value.reply.createdAt).getTime() >= this.since;
       if ((this.autoSpeak || this.requestedReply) && fresh && !document.hidden) { this.requestedReply = false; void this.speak(value.reply.body); }
     }
-    if (value.disabled) { this.cancelTimings(); this.pauseCapture(); if (this.state.speaking) this.stopSpeaking(false); }
+    if (value.disabled) { this.cancelTimings(); this.pauseCapture(); if (this.speechBuffer || this.state.speaking) this.stopSpeaking(false); }
     else { this.presentQuestion(); this.resume(); }
+  }
+  private updateStreamedReply(reply: SpokenReply) {
+    if (this.streamedReply?.id === reply.id) {
+      this.streamedReply.buffer.update(reply.body, !reply.streaming);
+      if (this.streamedReply.buffer.cancelled && this.speechBuffer === this.streamedReply.buffer) this.stopSpeaking(false);
+      return;
+    }
+    if (this.seen.has(reply.id)) return;
+    this.seen.add(reply.id);
+    const fresh = !reply.createdAt || new Date(reply.createdAt).getTime() >= this.since;
+    if (!(this.autoSpeak || this.requestedReply) || !fresh) return;
+    this.requestedReply = false;
+    this.stopSpeaking(false);
+    const buffer = new FridaySpeechBuffer();
+    this.streamedReply = { id: reply.id, runId: reply.runId, buffer };
+    buffer.update(reply.body, !reply.streaming);
+    void this.playBuffer(buffer);
   }
   private presentQuestion() {
     const question = this.binding?.question;
@@ -199,7 +214,7 @@ export class FridayVoiceSession {
         turnReference ||= this.playbackReference();
         if (!text || playbackEcho(text, turnReference)) continue;
         this.patch({ hearingSpeech: true });
-        if (this.state.speaking) this.stopSpeaking(false);
+        if (this.speechBuffer) this.stopSpeaking(false);
         if (result.isFinal) {
           if (this.binding?.send) this.captured = [this.captured, text].filter(Boolean).join(" "); else if (text) this.binding?.draft(text);
         } else partial += result[0].transcript;
@@ -269,7 +284,7 @@ export class FridayVoiceSession {
             if (this.identity !== target.key || this.captureGeneration !== turnGeneration) return;
             if (timingGeneration === this.timingGeneration) this.timing("transcription", "measured", Math.max(0, this.monotonicNow() - startedAt));
             this.patch({ sending: false, interim: "" });
-            if (this.state.enabled && result.text.trim() && !playbackEcho(result.text, reference)) { if (this.state.speaking) this.stopSpeaking(false); return this.deliver(result.text); }
+            if (this.state.enabled && result.text.trim() && !playbackEcho(result.text, reference)) { if (this.speechBuffer) this.stopSpeaking(false); return this.deliver(result.text); }
           }).catch(() => { if (this.identity === target.key && this.captureGeneration === turnGeneration) { if (timingGeneration === this.timingGeneration) this.timing("transcription", "failed"); if (previewText) target.draft(previewText); this.patch({ sending: false, error: "Local transcription could not finish this turn. Any recognised words are saved as a draft. You can retry or type." }); } }).finally(() => this.resume());
         } else if (speechMs > 0 && speechMs < 250 && silenceMs >= 750) { chunks = []; speechMs = 0; totalMs = 0; previewAt = 0; speechPeak = 0; turnReference = ""; }
         else if (voiced && speechMs >= 350 && totalMs - previewAt >= 450 && !previewPending && this.localReady && this.binding?.companyId) {
@@ -280,7 +295,7 @@ export class FridayVoiceSession {
           previewAt = totalMs; previewPending = true;
           previewRequest = api.post<{ text: string }>(`/companies/${target.companyId}/friday/voice`, { op: "transcribe", audio: pcmWave(tail, context.sampleRate) }).then(result => {
             if (this.captureGeneration === generation && this.identity === target.key && this.state.enabled && result.text.trim() && !playbackEcho(result.text, turnReference)) {
-              if (this.state.speaking) this.stopSpeaking(false);
+              if (this.speechBuffer) this.stopSpeaking(false);
               previewText = result.text.trim(); this.patch({ interim: previewText, hearingSpeech: true });
             }
           }).catch(() => { /* A preview is optional; the final turn still owns delivery. */ }).finally(() => { previewPending = false; });
@@ -289,47 +304,66 @@ export class FridayVoiceSession {
       this.patch({ starting: false, listening: true });
     } catch { if (generation === this.captureGeneration) { this.patch({ enabled: false, error: "Microphone permission was denied or no microphone is available. You can still type." }); this.pauseCapture(); } }
   }
-  private playbackReference() { return this.state.speaking ? this.playbackText : ""; }
+  private playbackReference() { return this.state.playing ? this.playbackText : ""; }
   stopSpeaking = (resume = true) => {
     this.speechGeneration++;
+    this.speechBuffer?.cancel(); this.speechBuffer = undefined;
+    this.speechAbort?.abort(); this.speechAbort = undefined;
     if (this.state.timings.playback.status === "pending") this.timing("playback", "cancelled");
     this.playbackCancel?.(); this.playbackCancel = undefined;
     this.audio?.pause(); if (this.audio) this.audio.src = ""; this.audio = null;
-    window.speechSynthesis?.cancel(); this.patch({ speaking: false }); if (resume) this.resume();
+    window.speechSynthesis?.cancel(); this.patch({ speaking: false, playing: false }); if (resume) this.resume();
   };
   async speak(body: string) {
     const text = spokenReply(body); if (!text || this.binding?.disabled || (this.state.enabled && this.state.hearingSpeech)) return;
     this.stopSpeaking(false);
+    const buffer = new FridaySpeechBuffer(); buffer.update(body, true);
+    return this.playBuffer(buffer);
+  }
+  private async playBuffer(buffer: FridaySpeechBuffer) {
+    this.speechBuffer = buffer;
+    const abort = new AbortController(); this.speechAbort = abort;
     const generation = this.speechGeneration;
     const startedAt = this.monotonicNow();
     this.timing("playback", "pending");
-    this.patch({ speaking: true, error: "" }); this.resume();
+    this.patch({ speaking: true, playing: false, error: "" }); this.resume();
     const started = () => {
+      if (generation === this.speechGeneration) this.patch({ playing: true });
       if (generation === this.speechGeneration && this.state.timings.playback.status === "pending") {
         this.timing("playback", "measured", Math.max(0, this.monotonicNow() - startedAt));
       }
     };
-    const chunks = spokenReplyChunks(text);
     // One lookahead chunk overlaps synthesis with playback. There is no idle
     // work and an interrupted turn cannot enqueue more local inference.
     const companyId = this.state.local ? this.binding?.companyId : undefined;
-    const synthesize = (chunk: string) => api.post<{ audio: string }>(`/companies/${companyId}/friday/voice`, { op: "speak", text: chunk })
+    const synthesize = (chunk: string) => api.post<{ audio: string }>(`/companies/${companyId}/friday/voice`, { op: "speak", text: chunk }, { signal: abort.signal })
       .then(result => ({ result, error: null }), error => ({ result: null, error }));
-    let prepared = companyId ? synthesize(chunks[0]) : undefined;
+    type PreparedSpeech = { chunk: string; audio: Awaited<ReturnType<typeof synthesize>> | null };
+    const prepareChunk = (chunk: string | null): PreparedSpeech | null | Promise<PreparedSpeech | null> => {
+      if (!chunk || generation !== this.speechGeneration) return null;
+      return companyId ? synthesize(chunk).then(audio => ({ chunk, audio })) : { chunk, audio: null };
+    };
+    const prepareNext = () => {
+      const chunk = buffer.next();
+      return chunk instanceof Promise ? chunk.then(prepareChunk) : prepareChunk(chunk);
+    };
+    let prepared = prepareNext();
     try {
-      for (const [index, chunk] of chunks.entries()) {
+      while (true) {
+        const next = prepared instanceof Promise ? await prepared : prepared;
+        if (!next) break;
         if (generation !== this.speechGeneration) break;
+        const { chunk } = next;
         this.playbackText = chunk;
-        if (companyId && prepared) {
-          const { result, error } = await prepared;
-          if (generation !== this.speechGeneration) break;
+        if (companyId && next.audio) {
+          const { result, error } = next.audio;
           if (error || !result) throw error ?? new Error("Speech synthesis failed");
           const audio = new Audio(`data:audio/wav;base64,${result.audio}`); this.audio = audio;
           await new Promise<void>((resolve, reject) => {
-            this.playbackCancel = resolve; audio.onended = () => resolve(); audio.onerror = () => reject(new Error("Audio playback failed"));
+            this.playbackCancel = resolve; audio.onended = () => { if (generation === this.speechGeneration) this.patch({ playing: false }); resolve(); }; audio.onerror = () => reject(new Error("Audio playback failed"));
             void audio.play().then(() => {
-              if (index === 0) started();
-              if (generation === this.speechGeneration && chunks[index + 1]) prepared = synthesize(chunks[index + 1]);
+              started();
+              if (generation === this.speechGeneration) prepared = prepareNext();
             }).catch(reject);
           });
         } else {
@@ -339,14 +373,15 @@ export class FridayVoiceSession {
             const utterance = new SpeechSynthesisUtterance(chunk);
             const voices = window.speechSynthesis.getVoices();
             utterance.voice = voices.find(voice => voice.voiceURI === this.voiceURI) ?? voices.find(voice => voice.localService && /^en\b/.test(voice.lang)) ?? null;
-            if (index === 0) utterance.onstart = started;
-            utterance.onend = () => resolve(); utterance.onerror = () => generation !== this.speechGeneration ? resolve() : reject(new Error("Playback blocked"));
+            utterance.onstart = started;
+            utterance.onend = () => { if (generation === this.speechGeneration) this.patch({ playing: false }); resolve(); }; utterance.onerror = () => generation !== this.speechGeneration ? resolve() : reject(new Error("Playback blocked"));
             window.speechSynthesis.speak(utterance);
+            prepared = prepareNext();
           });
         }
       }
-    } catch { if (generation === this.speechGeneration) { if (this.state.timings.playback.status === "pending") this.timing("playback", "failed"); this.patch({ error: "Speech playback failed or was blocked. Click Read reply to retry; the response is in your conversation." }); } }
-    finally { if (generation === this.speechGeneration) { if (this.state.timings.playback.status === "pending") this.timing("playback", "unavailable"); this.audio = null; this.patch({ speaking: false }); this.resume(); } }
+    } catch { if (generation === this.speechGeneration) { abort.abort(); buffer.cancel(); if (this.state.timings.playback.status === "pending") this.timing("playback", "failed"); this.patch({ error: "Speech playback failed or was blocked. Click Read reply to retry; the response is in your conversation." }); } }
+    finally { if (generation === this.speechGeneration) { if (this.state.timings.playback.status === "pending") this.timing("playback", "unavailable"); this.audio = null; this.speechBuffer = undefined; this.speechAbort = undefined; this.patch({ speaking: false, playing: false }); this.resume(); } }
   }
 }
 export const fridayVoiceSession = new FridayVoiceSession();

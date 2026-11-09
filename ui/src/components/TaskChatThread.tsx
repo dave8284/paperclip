@@ -3050,6 +3050,9 @@ export function TaskChatThread(props: TaskChatThreadProps) {
   };
 
   const focusView = props.focusView;
+  const focusReply = paperclipRunnerTail && !suppressPaperclipRunnerTailFinal
+    ? paperclipRunnerFinalResponse(tailItems, { allowFallback: false }) : undefined;
+  const focusReplyAgentId = liveRun?.agentId ?? linkedRunMetaById.get(tailRunId ?? "")?.agentId;
   // The Friday canvas opens only on request. Pending decisions and failures
   // update the orb's status; they must not open the user's transcript for them.
   // Ordinary task threads retain their existing recovery/takeover behaviour.
@@ -3084,6 +3087,11 @@ export function TaskChatThread(props: TaskChatThreadProps) {
                 runStatus: liveRun?.status === "running" ? "running" : liveRun || optimisticRunnerStartup ? "queued" : "idle",
                 awaitingInput: !!selectedPendingInput || pendingInlineDecision || !!composerTakeover,
                 clarification: clarification.prompt,
+                liveReply: focusReply && tailRunId && focusReplyAgentId ? {
+                  id: focusReply.id, runId: tailRunId, agentId: focusReplyAgentId,
+                  body: focusReply.text, createdAt: focusReply.atMs == null ? undefined : new Date(focusReply.atMs),
+                  streaming: tailStreaming,
+                } : undefined,
                 unavailable: historyError || initialHistoryError || tailStatus === "failed" || !!props.executionBlocked,
                 loading: historyPending,
               })}
