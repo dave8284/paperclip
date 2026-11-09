@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { and, desc, eq, lte, sql } from "drizzle-orm";
-import { agents, companyOperatingProfiles, costEvents, heartbeatRuns, issues, type Db } from "@paperclipai/db";
+import { agents, costEvents, heartbeatRuns, issues, type Db } from "@paperclipai/db";
 import { agentHarnessType, type AiConnectionAttribution, type AiConnectionBinding, type ModelTriageReceipt, type ModelProfileBinding } from "@paperclipai/shared";
 import { models as codexModels } from "@paperclipai/adapter-codex-local";
 import { models as claudeModels } from "@paperclipai/adapter-claude-local";
@@ -124,11 +124,9 @@ export async function selectCompanyModelProfile(db: Db, input: {
     if (input.comparison) throw conflict("The admitted comparison harness changed");
     return { config };
   }
-  const [profile] = await db.select().from(companyOperatingProfiles).where(eq(companyOperatingProfiles.companyId, agent.companyId)).limit(1);
-  if (!profile) {
-    if (input.comparison) throw conflict("The comparison company model policy is unavailable");
-    return { config };
-  }
+  // A company-local Friday binding does not enroll model routing. Business
+  // companies also record their configured default; alternatives still require
+  // account qualification and the separately authorized routing release below.
   const [task] = await db.select({ title: issues.title, description: issues.description, workMode: issues.workMode,
     conversationAgentId: issues.conversationAgentId, conversationUserId: issues.conversationUserId,
   }).from(issues).where(and(eq(issues.id, input.issueId), eq(issues.companyId, agent.companyId))).limit(1);

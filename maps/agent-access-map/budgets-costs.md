@@ -128,6 +128,15 @@ The optional PostgreSQL evidence adapter preserves these native authority gates.
 Operator migration acceptance is separate from importing and application startup;
 neither an agent request nor a model response can activate its destination.
 Host calls await durable results before marking native evidence delivered.
+Fresh subscription-bound native selection records the configured default without
+requiring a company-local Friday/operating-profile row. The owning selection
+service reuses its existing run receipt and namespace; it creates no operating
+profile, qualification or rollout policy. Same-company task/run ownership remains
+required; alternatives still require current account qualification and an
+authorized release.
+Disposable PostgreSQL checks cover absent/existing Friday profiles, foreign
+task/run rejection and qualified alternatives without enrollment. These are
+source checks, not live model qualification or an enabled rollout.
 
 Agent access: `restricted` — these are instance-level board administrator reads.
 Company membership, an agent role or task execution does not grant this

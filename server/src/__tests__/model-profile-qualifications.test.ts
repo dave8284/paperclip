@@ -35,7 +35,7 @@ describe("native current-account model profile qualification", () => {
   }, 60000);
   afterAll(async () => { await modelIntelligenceProduct()?.close(); await db?.$client.end(); await database?.cleanup(); vi.unstubAllEnvs(); isolatedHome?.cleanup(); });
 
-  async function fixture() {
+  async function fixture(options: { operatingProfile?: boolean } = {}) {
     const userId = randomUUID(), companyId = randomUUID();
     await db.insert(authUsers).values({ id: userId, name: "Qualification owner", email: `${userId}@example.test`, approvalStatus: "approved", createdAt: new Date(), updatedAt: new Date() });
     await db.insert(instanceUserRoles).values({ userId, role: "instance_admin" });
@@ -43,7 +43,7 @@ describe("native current-account model profile qualification", () => {
     await db.insert(companyMemberships).values({ companyId, principalType: "user", principalId: userId, status: "active", membershipRole: "owner" });
     const [agent, reviewer] = await db.insert(agents).values(["Implementer", "Independent reviewer"].map(name => ({ companyId, name, adapterType: "paperclip_runner", status: "idle", lifecycleState: "ready",
       adapterConfig: { provider: "codex", model: "gpt-6-astra", modelReasoningEffort: "high", homeMode: "isolated" } }))).returning();
-    await db.insert(companyOperatingProfiles).values({ companyId, fridayAgentId: agent.id });
+    if (options.operatingProfile !== false) await db.insert(companyOperatingProfiles).values({ companyId, fridayAgentId: agent.id });
     const connection = await aiConnectionService(db).save(companyId, userId, { provider: "openai", method: "subscription", ownership: "personal", name: "Fixture subscription", loginSessionId: "fixture", agentIds: [], allAgents: true }, JSON.stringify({ tokens: { account_id: userId, access_token: "fixture-only", refresh_token: "fixture-only" } }));
     const [grant] = await db.select().from(connectionGrants).where(eq(connectionGrants.id, connection.grantId));
     const secretId = grant.credentialSecretRefs[0].secretId;
@@ -86,6 +86,43 @@ describe("native current-account model profile qualification", () => {
       contextSnapshot: { aiConnection: { ...f.account.attribution, sessionIdentity: f.account.sessionIdentity } } }).returning();
     return { runId: run.id, issueId: task.id, agent: f.agent, config, binding: f.binding, resumed: false, account: f.account };
   }
+  it("records the configured native default without a company Friday profile or routing enrollment", async () => {
+    const f = await fixture({ operatingProfile: false });
+    const input = await nextSelectionInput(f);
+    const selected = await selectCompanyModelProfile(db, input);
+    expect(selected.receipt).toMatchObject({ id: input.runId, namespace: f.companyId,
+      candidate: { model: "gpt-6-astra", method: "subscription" },
+      reason: "Configured baseline; no enrolled, qualified routing release." });
+    expect(selected.request?.candidates.map(candidate => candidate.model)).toEqual(["gpt-6-astra"]);
+    expect(selected.profileBinding).toMatchObject({ model: "gpt-6-astra", taskType: "operations.support" });
+    expect(selected.qualification).toBeUndefined();
+    expect(selected.receipt?.rollout).toBeUndefined();
+    expect(f.account.readRuntimeIdentity).not.toHaveBeenCalled();
+    const [run] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, input.runId));
+    expect(run.contextSnapshot).toMatchObject({ modelIntelligence: selected.receipt,
+      modelProfileBinding: selected.profileBinding,
+      modelIntelligenceQualification: { mode: "configured_only", source: "operator_configuration", accountModelAccess: "not_verified" } });
+    expect(await modelIntelligenceProduct()!.selectionReceipt({ namespace: f.companyId, receiptId: input.runId })).toEqual(selected.receipt);
+    expect(await db.select().from(companyOperatingProfiles).where(eq(companyOperatingProfiles.companyId, f.companyId))).toEqual([]);
+    expect(await db.select().from(modelProfileQualifications).where(eq(modelProfileQualifications.companyId, f.companyId))).toEqual([]);
+    expect(await modelIntelligenceProduct()!.routingRollouts({ namespace: f.companyId, taskType: "operations.support" }))
+      .toMatchObject({ policy: null, releases: [] });
+  });
+  it("does not borrow foreign tasks, runs or qualifications without a company Friday profile", async () => {
+    const local = await fixture({ operatingProfile: false }), foreign = await fixture({ operatingProfile: false });
+    await foreign.service.register(foreign.companyId, foreign.actor, { ...foreign.input, reviewDecisionId: foreign.review.id });
+    const input = await nextSelectionInput(local);
+    const selected = await selectCompanyModelProfile(db, input);
+    expect(selected.request?.candidates.map(candidate => candidate.model)).toEqual(["gpt-6-astra"]);
+    const before = modelIntelligenceProduct()!.analytics(local.companyId).counts.selections;
+    await expect(selectCompanyModelProfile(db, { ...await nextSelectionInput(local), issueId: foreign.task.id }))
+      .rejects.toThrow("Model routing task not found");
+    await expect(selectCompanyModelProfile(db, { ...await nextSelectionInput(local), runId: foreign.run.id }))
+      .rejects.toThrow("Model routing run not found");
+    expect(modelIntelligenceProduct()!.analytics(local.companyId).counts.selections).toBe(before);
+    expect(await db.select().from(modelProfileQualifications).where(eq(modelProfileQualifications.companyId, local.companyId))).toEqual([]);
+    expect(await db.select().from(companyOperatingProfiles).where(eq(companyOperatingProfiles.companyId, local.companyId))).toEqual([]);
+  });
   it("separates access evidence from reviewed workflow qualification and makes retries immutable", async () => {
     const f = await fixture();
     const access = await request(f.api).post(f.path).send(f.input).expect(201);
@@ -137,8 +174,8 @@ describe("native current-account model profile qualification", () => {
     expect(await f.service.candidates(f.candidateInput)).toEqual([]);
     expect(modelIntelligenceProduct()!.analytics(f.companyId).counts.evaluations).toBe(0);
   });
-  it("only offers alternatives after managed-account admission and retains the configured default without quality evidence", async () => {
-    const f = await fixture();
+  it.each([true, false])("only offers alternatives after managed-account admission and retains the configured default without quality evidence (operating profile: %s)", async operatingProfile => {
+    const f = await fixture({ operatingProfile });
     await f.service.register(f.companyId, f.actor, { ...f.input, reviewDecisionId: f.review.id });
     const next = async () => {
       const [task] = await db.insert(issues).values({ companyId: f.companyId, title: f.task.title, description: f.task.description, responsibleUserId: f.userId }).returning();
@@ -157,8 +194,8 @@ describe("native current-account model profile qualification", () => {
     await request(f.api).post(f.path).send({ ...f.input, requestKey: randomUUID() }).expect(403);
     expect(await db.select().from(modelProfileQualifications).where(eq(modelProfileQualifications.companyId, f.companyId))).toHaveLength(1);
   });
-  it("routes a reviewed efficient profile only through an enrolled qualified release and rechecks revocation before dispatch", async () => {
-    const f = await fixture();
+  it.each([true, false])("routes a reviewed efficient profile only through an enrolled qualified release and rechecks revocation before dispatch (operating profile: %s)", async operatingProfile => {
+    const f = await fixture({ operatingProfile });
     const qualification = await f.service.register(f.companyId, f.actor, { ...f.input, reviewDecisionId: f.review.id });
     const engine = modelIntelligenceProduct()!;
     const initial = await selectCompanyModelProfile(db, await nextSelectionInput(f));

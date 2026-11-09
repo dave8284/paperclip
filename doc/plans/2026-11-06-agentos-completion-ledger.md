@@ -16,6 +16,19 @@ Update those rows as work completes; do not create another backlog.
 live acceptance remain Not fixed. This checkpoint was refreshed at the owner's
 request on 7 November; the tables below the current checkpoint are historical.
 
+- **M05 source correction verified; live comparison remains Not fixed:** business
+  companies without a local Friday operating-profile row were silently excluded
+  from configured-model selection receipts. The selection owner now records the
+  existing configured default without creating a Friday, qualification or routing
+  enrollment. Native task/run/company ownership and qualified alternative/release
+  gates remain intact. An actual PostgreSQL reproducer failed before the change;
+  all 15 qualification cases and 68 neighboring comparison/outcome cases pass
+  afterward, plus server types, maps and independent review. Logs:
+  `/private/tmp/agentos-model-no-friday-{before,after,neighbors,types}-20261109.log`.
+  Loaded verification awaits activation after the owner's physical voice check.
+  No historical runs are backfilled, no rollout is enabled and unknown actual
+  context remains unknown. The general-server campaign began before this slice;
+  its result is not an exact final-source pass.
 - **V09 Fixed — actual ordinary Friday clarification passed:** native question
   `d3031be7-bd02-4a48-8e6a-4146f980d8dc` came from actual Friday run
   `504155a2-be33-4e4e-bb0e-f257a212678b`. One normal composer answer produced one

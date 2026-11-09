@@ -70,6 +70,12 @@ Routine-work alternatives require current account, employee, task-family,
 prompt/configuration and CLI bindings plus separate routing-quality evidence.
 Historical subscription use and harness catalogs do not authorize alternatives.
 Without qualified evidence, new admissions retain the configured model.
+With the evidence service configured, fresh subscription-backed tasks record
+that default and its selection reason even when their company has no local
+Friday binding. Recording the selection creates no Friday, qualification or
+routing enrollment. The disposable PostgreSQL qualification checks cover both
+company configurations; loaded-runtime verification of this correction remains
+separate from source checks.
 Retained sessions keep their model; stale queued alternatives require review.
 The [offline service checks](../../server/src/__tests__/agentos-model-intelligence-offline.test.ts)
 cover this boundary alongside execution-account feedback attribution.
