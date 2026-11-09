@@ -99,6 +99,16 @@ below the current checkpoint are historical.
   for prompt speech, interruption and listening across navigation. These remain
   Not fixed until that actual result; earlier failures remain retained. Report:
   `/private/tmp/agentos-voice-stream-browser-priority-20261109/verification-report.json`.
+- **R04 same-run retry gap reproduced; correction in isolated verification:**
+  two actual HTTP/PostgreSQL cases committed a fictional project before its
+  response was held/lost. Retrying the same mutation with a new tool-call ID
+  created a second project in both cases. Existing same-ID and ancestor-run
+  receipts did not fence this same-run retry. The owning tool authority is being
+  corrected under its existing lock, with distinct-body operations and reads
+  preserved. No live company, provider job or external effect was used. Original
+  failure evidence: `/private/tmp/agentos-r04-unknown-before-20261109.log`.
+  Integration, affected checks and loaded acceptance remain open; R04 stays
+  Not fixed. Earlier passed restart/pause/one-cycle evidence is unchanged.
 - **M05 source correction verified; live comparison remains Not fixed:** business
   companies without a local Friday operating-profile row were silently excluded
   from configured-model selection receipts. The selection owner now records the
