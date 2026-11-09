@@ -6,7 +6,7 @@ import { promisify } from "node:util";
 import { randomUUID } from "node:crypto";
 import { pathToFileURL } from "node:url";
 import { createRequire } from "node:module";
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { eq, sql } from "drizzle-orm";
 import { companies, projects, projectWorkspaces, issues, executionWorkspaces, agents, heartbeatRuns, issueRecoveryActions, nativeRunFinalizations, workspaceRuntimeServices, executionWorkspaceRestorePoints, createDb } from "@paperclipai/db";
 import { markGitRestorePointExpired } from "../services/git-restore-point-storage.js";
@@ -30,12 +30,58 @@ const gitEnv = { ...process.env, GIT_AUTHOR_NAME: "Fixture", GIT_AUTHOR_EMAIL: "
 const git = (cwd: string, ...args: string[]) => execFileSync("git", args, { cwd, env: gitEnv, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
 const exists = (target: string) => fs.lstat(target).then(() => true, () => false);
 
+function createFixtureWorkOwner(stopDatabase: () => Promise<void>, timeoutMs = 10_000, afterStopTimeoutMs = 5_000) {
+  const pending = new Set<Promise<void>>();
+  let failure: Error | null = null;
+  async function settleWithin(limitMs: number) {
+    if (!pending.size) return true;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      return await Promise.race([
+        (async () => { while (pending.size) await Promise.all([...pending]); return true; })(),
+        new Promise<false>(resolve => { timer = setTimeout(() => resolve(false), limitMs); }),
+      ]);
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+  return {
+    assertAvailable() { if (failure) throw failure; },
+    isSettled: () => pending.size === 0,
+    canReleaseResources: () => failure === null && pending.size === 0,
+    run<T>(work: () => Promise<T>): Promise<T> {
+      if (failure) return Promise.reject(failure);
+      const result = Promise.resolve().then(work);
+      const settled = result.then(() => undefined, () => undefined);
+      pending.add(settled);
+      void settled.then(() => pending.delete(settled));
+      return result;
+    },
+    async drain() {
+      if (failure) throw failure;
+      if (await settleWithin(timeoutMs)) return;
+      failure = new Error("Owned fixture work did not settle; disposable database shutdown requested");
+      // The existing embedded owner ends registered clients (one-second
+      // bound) and stops its own cluster (five-second bound). Later tests
+      // cannot use this failed fixture or overlap a delayed TRUNCATE.
+      await stopDatabase();
+      if (!await settleWithin(afterStopTimeoutMs)) {
+        failure = new Error("Owned fixture work remains active after database shutdown; fixture resources retained");
+      }
+      throw failure;
+    },
+  };
+}
+
 const support = await getEmbeddedPostgresTestSupport();
 const describeEmbeddedPostgres = support.supported ? describe : describe.skip;
 describeEmbeddedPostgres("reconstructable Git expiration", () => {
   let db: ReturnType<typeof createDb>;
   let database: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>;
   let root: string;
+  let databaseCleanup: Promise<void> | undefined;
+  const stopDatabase = () => databaseCleanup ??= database.cleanup();
+  const fixtureWork = createFixtureWorkOwner(stopDatabase);
   const previousHome = process.env.PAPERCLIP_HOME;
   const previousInstance = process.env.PAPERCLIP_INSTANCE_ID;
   beforeAll(async () => {
@@ -45,11 +91,25 @@ describeEmbeddedPostgres("reconstructable Git expiration", () => {
     process.env.PAPERCLIP_HOME = path.join(root, "home");
     process.env.PAPERCLIP_INSTANCE_ID = "default";
   });
-  afterEach(async () => { vi.restoreAllMocks(); await db.execute(sql`TRUNCATE TABLE companies CASCADE`); });
+  beforeEach(() => fixtureWork.assertAvailable());
+  afterEach(async () => {
+    // Vitest's deadline stops awaiting the test, not its database/Git work.
+    // TRUNCATE while that work holds a transaction can block the work's next
+    // connection and prevent both the operation and cleanup from finishing.
+    await fixtureWork.drain();
+    vi.restoreAllMocks();
+    await db.execute(sql`TRUNCATE TABLE companies CASCADE`);
+  });
   afterAll(async () => {
+    if (!fixtureWork.canReleaseResources()) {
+      // Closing a PostgreSQL client can reject an outer transaction before
+      // all callback continuations finish. A forced shutdown is never proof
+      // that deleting the workspace or changing its environment is safe.
+      throw new Error(`Fixture shutdown was forced or work remains active; retaining its environment and files at ${root}`);
+    }
     if (previousHome === undefined) delete process.env.PAPERCLIP_HOME; else process.env.PAPERCLIP_HOME = previousHome;
     if (previousInstance === undefined) delete process.env.PAPERCLIP_INSTANCE_ID; else process.env.PAPERCLIP_INSTANCE_ID = previousInstance;
-    await db.$client.end({ timeout: 1 }); await database.cleanup(); await fs.rm(root, { recursive: true, force: true });
+    await db.$client.end({ timeout: 1 }); await stopDatabase(); await fs.rm(root, { recursive: true, force: true });
   });
 
   async function fixture(managed = false, nested = false, withProject = managed) {
@@ -91,7 +151,7 @@ describeEmbeddedPostgres("reconstructable Git expiration", () => {
     return { companyId, projectId, issueId, workspaceId, cwd: workspace.cwd, baseCwd, base, remote, source, commitA, row, expire, reopen, advance };
   }
 
-  it("expires through the lifecycle worker and restores the recorded commit after upstream advances", async () => {
+  it("expires through the lifecycle worker and restores the recorded commit after upstream advances", async () => fixtureWork.run(async () => {
     const f = await fixture();
     await fs.mkdir(path.join(f.cwd, "node_modules")); await fs.writeFile(path.join(f.cwd, "node_modules", "cache"), "regenerable");
     await fs.symlink("cache", path.join(f.cwd, "node_modules", "cache-link"));
@@ -120,6 +180,100 @@ describeEmbeddedPostgres("reconstructable Git expiration", () => {
     await db.update(executionWorkspaces).set({ status: "archived" }).where(eq(executionWorkspaces.id, f.workspaceId));
     expect(await f.reopen()).toMatchObject({ ok: true, reopened: true });
     expect(git(f.cwd, "rev-parse", "HEAD")).toBe(continued);
+  }));
+
+  it("drains owned workspace work before cleanup after its caller stops waiting", async () => {
+    const companyId = randomUUID(), issueId = randomUUID();
+    await db.insert(companies).values({ id: companyId, name: "Cleanup ownership fixture", issuePrefix: `CO${companyId.slice(0, 6)}` });
+    await db.insert(issues).values({ id: issueId, companyId, title: "Retained while work settles" });
+    let release!: () => void, entered!: () => void;
+    const held = new Promise<void>(resolve => { release = resolve; });
+    const ready = new Promise<void>(resolve => { entered = resolve; });
+    const operationFailure = new Error("owned operation failure remains visible");
+    const work = fixtureWork.run(() => db.transaction(async tx => {
+      await tx.select({ id: issues.id }).from(issues).where(eq(issues.id, issueId));
+      entered();
+      await held;
+      // A second connection is the dependency that TRUNCATE must not overtake.
+      await db.update(issues).set({ title: "Owned work settled" }).where(eq(issues.id, issueId));
+      throw operationFailure;
+    }));
+    await ready;
+    let cleanupStarted = false;
+    const cleanup = fixtureWork.drain().then(async () => {
+      cleanupStarted = true;
+      await db.execute(sql`TRUNCATE TABLE companies CASCADE`);
+    });
+    try {
+      const callerTimeout = new Error("caller stopped waiting");
+      await expect(Promise.race([work, Promise.reject(callerTimeout)])).rejects.toBe(callerTimeout);
+      expect(cleanupStarted).toBe(false);
+      expect(await db.select({ id: companies.id }).from(companies).where(eq(companies.id, companyId)))
+        .toEqual([{ id: companyId }]);
+    } finally {
+      release();
+      await expect(work).rejects.toBe(operationFailure);
+      await cleanup;
+    }
+    expect(cleanupStarted).toBe(true);
+    expect(await db.select({ id: companies.id }).from(companies).where(eq(companies.id, companyId))).toEqual([]);
+  });
+
+  it.each(["settles", "stays pending"] as const)("bounds a stuck fixture drain when its continuation %s", async continuationState => {
+    const stuckDatabase = await startEmbeddedPostgresTestDatabase("git-cache-stuck-work-");
+    const stuckDb = createDb(stuckDatabase.connectionString);
+    let stopped: Promise<void> | undefined;
+    let shutdownFinished!: () => void, finishContinuation!: () => void;
+    const shutdown = new Promise<void>(resolve => { shutdownFinished = resolve; });
+    const continuation = new Promise<void>(resolve => { finishContinuation = resolve; });
+    const continuationPath = path.join(root, `drain-continuation-${randomUUID()}`);
+    const stop = () => stopped ??= stuckDatabase.cleanup().then(shutdownFinished);
+    const owner = createFixtureWorkOwner(stop, 50, 100);
+    let entered!: () => void;
+    const ready = new Promise<void>(resolve => { entered = resolve; });
+    const work = owner.run(async () => {
+      try {
+        await stuckDb.transaction(async tx => {
+          await tx.execute(sql`select 1`);
+          entered();
+          await tx.execute(sql`select pg_sleep(60)`);
+        });
+      }
+      catch (error) {
+        await continuation;
+        await fs.writeFile(continuationPath, "owned work settled\n");
+        throw error;
+      }
+    });
+    try {
+      await ready;
+      let drainFinished = false;
+      const drain = owner.drain();
+      void drain.then(() => { drainFinished = true; }, () => { drainFinished = true; });
+      await shutdown;
+      expect(owner.isSettled()).toBe(false);
+      expect(drainFinished).toBe(false);
+      expect(await exists(continuationPath)).toBe(false);
+      if (continuationState === "stays pending") {
+        await expect(drain).rejects.toThrow("fixture resources retained");
+        expect(owner.isSettled()).toBe(false);
+        expect(await exists(root)).toBe(true);
+        expect(await exists(continuationPath)).toBe(false);
+      }
+      finishContinuation();
+      if (continuationState === "settles") await expect(drain).rejects.toThrow("Owned fixture work did not settle");
+      await expect(work).rejects.toBeDefined();
+      expect(owner.isSettled()).toBe(true);
+      expect(owner.canReleaseResources()).toBe(false);
+      expect(await fs.readFile(continuationPath, "utf8")).toBe("owned work settled\n");
+      expect(() => owner.assertAvailable()).toThrow("Owned fixture work");
+      await expect(owner.run(async () => "not admitted")).rejects.toThrow("Owned fixture work");
+      await expect(stuckDb.execute(sql`select 1`)).rejects.toBeDefined();
+      expect(await db.execute(sql`select 1 as still_available`)).toMatchObject([{ still_available: 1 }]);
+    } finally {
+      finishContinuation();
+      await stop();
+    }
   });
 
   it("expires a worktree after an ordinary fetch and restores its older recorded commit", async () => {

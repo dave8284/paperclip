@@ -685,14 +685,15 @@ describeEmbeddedPostgres("heartbeat dependency-aware queued run selection", () =
     });
     expect(interactionWake).not.toBeNull();
 
-    await waitForCondition(async () => {
+    expect(await waitForCondition(async () => {
       const run = await db
         .select({ status: heartbeatRuns.status })
         .from(heartbeatRuns)
         .where(eq(heartbeatRuns.id, interactionWake!.id))
         .then((rows) => rows[0] ?? null);
-      return run?.status === "succeeded";
-    });
+      return Boolean(run && !["queued", "running"].includes(run.status));
+    }, 15_000)).toBe(true);
+    await heartbeat.waitForRunExecutionDrain(interactionWake!.id, { timeoutMs: 15_000 });
 
     const interactionRun = await db
       .select({
@@ -744,14 +745,15 @@ describeEmbeddedPostgres("heartbeat dependency-aware queued run selection", () =
     });
     finishReadyRun();
 
-    await waitForCondition(async () => {
+    expect(await waitForCondition(async () => {
       const run = await db
         .select({ status: heartbeatRuns.status })
         .from(heartbeatRuns)
         .where(eq(heartbeatRuns.id, readyWake!.id))
         .then((rows) => rows[0] ?? null);
-      return run?.status === "succeeded";
-    });
+      return Boolean(run && !["queued", "running"].includes(run.status));
+    }, 15_000)).toBe(true);
+    await heartbeat.waitForRunExecutionDrain(readyWake!.id, { timeoutMs: 15_000 });
 
     const readyRun = await db
       .select()
@@ -779,14 +781,15 @@ describeEmbeddedPostgres("heartbeat dependency-aware queued run selection", () =
     });
     expect(promotedWake).not.toBeNull();
 
-    await waitForCondition(async () => {
+    expect(await waitForCondition(async () => {
       const run = await db
         .select({ status: heartbeatRuns.status })
         .from(heartbeatRuns)
         .where(eq(heartbeatRuns.id, promotedWake!.id))
         .then((rows) => rows[0] ?? null);
-      return run?.status === "succeeded";
-    });
+      return Boolean(run && !["queued", "running"].includes(run.status));
+    }, 15_000)).toBe(true);
+    await heartbeat.waitForRunExecutionDrain(promotedWake!.id, { timeoutMs: 15_000 });
 
     const promotedBlockedRun = await db
       .select({

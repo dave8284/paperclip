@@ -163,7 +163,25 @@ request on 7 November; the tables below the current checkpoint are historical.
   actor/membership/query/lifecycle fixture contracts, current branding and exact
   request-input existence-guard allowlist sites. Permission/denial/audit checks
   remain intact. Server types pass; no production changes were needed. A full
-  committed serialized rerun is next, while current general-server continues.
+  committed serialized rerun finished with one remaining timing failure: 163/164
+  files and 3,543/3,544 cases pass. The dependency fixture discarded its three-
+  second wait result; it now checks bounded exact-run terminal waits, joins native
+  execution cleanup and retains every original success/dependency assertion.
+  Its 13 cases pass; prior unchanged isolation passes and two failed lifecycle-
+  synchronization experiments remain retained. The general-server campaign was
+  aborted with exit 130 after read-only PostgreSQL inspection proved timed-out
+  test work and TRUNCATE cleanup deadlocked. Only its verified Vitest process was
+  interrupted; its disposable database exited, and live AgentOS was untouched.
+  The affected Git fixture now drains its owned first lifecycle operation before
+  cleanup, bounds shutdown and retains files/environment after unsafe shutdown.
+  Original scenario passes unchanged; the first full fixture passes 91 cases and
+  final strengthened ownership/shutdown checks pass four cases. Final types and
+  independent reviews pass. No production deadline/assertion was relaxed. Next:
+  canonical serialized and general-server reruns on the committed correction.
+  Evidence: `agentos-serialized-committed-20261109.log`,
+  `agentos-serialized-lifecycle-terminal-20261109.log`,
+  `agentos-git-expiration-*-20261109.log` and the retained aborted
+  `agentos-regression-current-general-server-20261109.log`.
   Logs: `agentos-regression-workspaces-a-final-20261109.log`,
   `agentos-regression-workspaces-b-qualified-20261109.log`,
   `agentos-general-workspaces-c-final2-20261109.log`,
