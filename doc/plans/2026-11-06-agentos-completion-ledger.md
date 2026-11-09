@@ -64,9 +64,22 @@ request on 7 November; the tables below the current checkpoint are historical.
   Before-fix logs and failures from the older evolving-tree full run remain
   retained; its initial restrictive umask also exposed test-harness permission
   assumptions. Plan-task fixture digest checks are being corrected without
-  broadening cached-file permissions. The wrapper is still in its first server
-  group; later workspace/serialized groups have not run. No full-suite pass is
-  claimed.
+  broadening cached-file permissions. The original first server group finished
+  red: 1,236 files (29 failed, 1,200 passed, seven skipped); 26,029 cases (79
+  failed, 25,826 passed, 124 skipped), plus the retained failed-import detail.
+  All reported failures now have focused dispositions; this is not a current-head
+  full pass. Final six completion/backup-cleanup cases pass under `077`, and 15
+  onboarding cases pass after branding expectations were corrected. Native input
+  boundary (110), runtime mode (39) and model audit (six) pass unchanged in the
+  current tree; their earlier evolving-artifact failures remain recorded.
+  Planning calibration now snapshots through native owners and verifies actual
+  immutable bytes/mode/bundle digest: three cases pass under each `077`/`022`,
+  plus 24 exposure checks. The predicted digest is bounded to this freshly
+  API-created same-server fixture, not arbitrary-source attestation or model
+  consumption. Direct server/e2e types pass. The original wrapper stopped before
+  later groups; workspace B and C are now running separately, with A and 164
+  serialized suites still pending. Original full log and all focused failures
+  remain in private tmp. No full-suite pass is claimed.
 - **S03 Fixed — loaded administration lifecycle passed:** the exact disposable
   `example.invalid` identity was preapproved/revoked through the native UI, then
   explicitly seeded pending/unverified without credentials or a session. The UI
@@ -185,8 +198,19 @@ request on 7 November; the tables below the current checkpoint are historical.
   import. Every decision leaves the other company unchanged. Old Lab assignment
   remains retired and its agent terminated; the successor is a distinct native
   agent/assignment using the existing subscription connection. ORB-26 started
-  with captured v2 before rollback; ORBA-3 checks Lab’s v1. Next: actual delivery,
-  recipient privacy and loaded UI/history proof. Evidence:
+  with captured v2 before rollback and succeeded; ORBA-3 succeeded with Lab’s
+  v1, and ORB-27 succeeded with Orbit’s restored v1. All three retained outputs
+  independently match the new fictional cases. Exact native input snapshots and
+  read-only runtime bundle bytes match their different company-local version
+  IDs; the running v2 snapshot survives the selection rollback. Seventeen live
+  Lab-native scope checks pass: own exact imported bytes readable, source company
+  private skill/version/test denied, no copied source test/input evidence, and
+  board-only portfolio access denied. Temporary key is revoked and returns 401.
+  Loaded Workforce previews/pins/history passed but exposed missing version
+  labels in adoption history. The bounded UI fix adds the exact receipt’s
+  version (explicit unavailable identity fallback), with seven component checks,
+  UI types/build, tokens and paired maps passing. Next: load that UI fix and
+  verify actual history labels before closing O06. Evidence:
   `/private/tmp/agentos-o06-{approved-publication,adoption-steps,lab-successor,runtime-delivery}-20261109.json`.
   No general improvement or owner business-output acceptance is claimed. Earlier evidence is in private
   `agentos-native-skill-{runtime-selection-final,final-regression,runner-contracts,integrated-build,integrated-typecheck,integrated-pg,preactivation}-20261109.*`
@@ -229,13 +253,11 @@ request on 7 November; the tables below the current checkpoint are historical.
   has exactly one manual cycle and a disabled trigger. Reports:
   `/private/tmp/agentos-d04-orbit-consultation-20261109/verification-report.json`
   and `/private/tmp/agentos-decision-gap-check-20261109/verification-report.json`.
-- **L04 full regression remains in progress:** `pnpm test:run` log is
+- **L04 full regression continuation:** original `pnpm test:run` log is
   `/private/tmp/agentos-full-regression-20261109.log`. It began before these
-  latest edits and remains diagnostic across the evolving tree. Its first server
-  group initially reported 22 failed cases in five suites (model-comparison delivery,
-  workspace expiry, tool access, restore points and isolated-task retention);
-  additional failures and assertion details/focused reproduction are under investigation. The wrapper
-  stops on group failure, so later workspace/serialized groups are not yet run.
+  latest edits and is diagnostic across the evolving tree. Its failed first
+  server group and subsequent focused dispositions are summarized above. The
+  wrapper stopped on that group failure; remaining groups are being run explicitly.
   No current-head full-suite pass or physical voice acceptance is claimed.
 - **O07 Fixed — current project-lead boundary and real escalation verified:**
   the existing head/PM `fd75c026-9919-40dd-b96f-d67183296554` is Pilot

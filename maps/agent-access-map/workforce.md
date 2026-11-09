@@ -112,6 +112,12 @@ Verification: `passed` — focused content/privacy/native selection/mutation-aut
 
 Gaps: native two-company provider delivery and evaluated improvement, browser review, and delegated/automated capability evaluation remain open. Migrations are active; persistence tests are distinct from runtime and owner acceptance. The manual slice supports native Paperclip Runner skill delivery only. Release pages are bounded to 100 plus active pins; decision history shows the latest 100 receipts.
 
+Decision history presentation matches each immutable receipt's `releaseId` to
+the page's release before showing its version. Missing/off-page releases retain
+their inspectable identity and an explicit unavailable-version label; neither
+latest release nor current company selection supplies a substitute. This is a
+board UI projection only and changes no publication, adoption or read authority.
+
 ## `board-directions`
 
 Capability ID: `workforce/board-directions`.

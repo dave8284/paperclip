@@ -208,6 +208,10 @@ Release history pages contain 100 releases plus every currently selected
 version; older releases remain reachable. Recent decision history is explicitly
 limited to 100 receipts per company. Current selection is read from native
 configuration, so manual removal or a changed selection is not labelled adopted.
+Decision history shows the exact matched release's version alongside its action,
+reason and date. If that release is absent from the current page, the version is
+explicitly unavailable and its release identity remains inspectable; history
+never substitutes the latest release or current selection.
 Source companies and skills with published evidence are retained by foreign keys;
 archive the source company rather than deleting it. Published test tasks remain
 inspectable after later tests supersede them or their old expiry passes. Cleanup

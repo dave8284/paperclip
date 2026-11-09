@@ -47,7 +47,12 @@ export function WorkforceCapabilities({ userId, employeeId, workforce }: { userI
         {(offset > 0 || query.data.hasMoreReleases) && <div className="flex items-center justify-between gap-3"><Button variant="ghost" size="sm" disabled={offset === 0} onClick={() => setOffset(value => Math.max(0, value - 100))}>Newer releases</Button><span className="text-xs text-muted-foreground">100 releases per page; selected versions always included.</span><Button variant="outline" size="sm" disabled={!query.data.hasMoreReleases} onClick={() => setOffset(value => value + 100)}>Older releases</Button></div>}
         {query.data.assignments.map(assignment => assignment.decisions.length > 0 && <details key={assignment.assignmentId}>
           <summary className="cursor-pointer text-sm">{workforce.companies.find(company => company.id === assignment.companyId)?.name} · decision history</summary>
-          <div className="flex flex-col gap-2">{assignment.decisions.map(decision => <p key={decision.id} className="text-sm"><span className="font-medium">{decision.action === "refuse" ? "Refused" : decision.action === "rollback" ? "Rolled back" : "Adopted"}</span> · {query.data!.releases.find(release => release.id === decision.releaseId)?.name ?? "Earlier release"} · {decision.reason} <time className="text-xs text-muted-foreground" dateTime={decision.createdAt}>{formatDateTime(decision.createdAt)}</time></p>)}</div>
+          <div className="flex flex-col gap-2">{assignment.decisions.map(decision => {
+            const release = query.data!.releases.find(row => row.id === decision.releaseId);
+            return <p key={decision.id} className="text-sm"><span className="font-medium">{decision.action === "refuse" ? "Refused" : decision.action === "rollback" ? "Rolled back" : "Adopted"}</span> · {release
+              ? <>{release.name} · Version {release.revision}</>
+              : <>Earlier release · Version unavailable on this page (<code className="text-xs font-mono">{decision.releaseId}</code>)</>} · {decision.reason} <time className="text-xs text-muted-foreground" dateTime={decision.createdAt}>{formatDateTime(decision.createdAt)}</time></p>;
+          })}</div>
           {assignment.decisions.length >= 100 && <p className="text-xs text-muted-foreground">Showing the latest 100 decisions.</p>}
         </details>)}
       </>}

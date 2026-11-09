@@ -51,6 +51,31 @@ describe("reviewed workforce capabilities", () => {
     mocks.capabilities.mockResolvedValue({ ...base, assignments: [{ ...base.assignments[0], previouslyAdoptedReleaseIds: ["release"], decisions: [] }] });
     await open(); expect(button("Roll back to this version")).toBeDefined(); expect(button("Adopt")).toBeUndefined();
   });
+  it("identifies the exact release version in decision history and preserves unknown versions", async () => {
+    const decisions = [
+      { id: "rollback", releaseId: "release", action: "rollback" as const, reason: "Restore the baseline" },
+      { id: "upgrade", releaseId: "second-release", action: "adopt" as const, reason: "Try the reviewed revision" },
+      { id: "older-refusal", releaseId: "off-page-release", action: "refuse" as const, reason: "Keep the current selection" },
+    ].map(decision => ({ ...decision, importedSkillId: null, importedVersionId: null, createdAt: "2026-11-09T02:46:00.000Z" }));
+    mocks.capabilities.mockResolvedValue({ ...base,
+      releases: [{ ...release, id: "second-release", revision: 2 }, release],
+      latestRevisions: { review: 2 },
+      assignments: [{ ...base.assignments[0], decisions }],
+    });
+    await open();
+    const history = Array.from(host.querySelectorAll("details")).find(row => row.querySelector("summary")?.textContent === "Company one · decision history")!;
+    const rows = Array.from(history.querySelectorAll("p"));
+    expect(rows).toHaveLength(3);
+    expect(rows[0].textContent).toContain("Rolled back · Release review · Version 1 · Restore the baseline");
+    expect(rows[1].textContent).toContain("Adopted · Release review · Version 2 · Try the reviewed revision");
+    expect(rows[2].textContent).toContain("Refused · Earlier release · Version unavailable on this page");
+    expect(rows[2].querySelector("code")?.textContent).toBe("off-page-release");
+    expect(rows[2].textContent).toContain("Keep the current selection");
+    expect(rows[2].textContent).not.toMatch(/Version [12]/);
+    expect(rows.map(row => row.querySelector("time")?.dateTime)).toEqual(decisions.map(row => row.createdAt));
+    expect(mocks.decideCapability).not.toHaveBeenCalled();
+    expect(mocks.publishCapability).not.toHaveBeenCalled();
+  });
   it("keeps owner and company read-only restrictions on action controls", async () => {
     mocks.capabilities.mockResolvedValue({ ...base, canPublish: false, assignments: [{ ...base.assignments[0], canManage: false }] });
     await open(); expect(button("Publish reviewed release")).toBeUndefined(); expect(button("Adopt")).toBeUndefined(); expect(button("Refuse")).toBeUndefined();
