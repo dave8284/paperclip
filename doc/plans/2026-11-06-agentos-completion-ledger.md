@@ -48,6 +48,27 @@ request on 7 November; the tables below the current checkpoint are historical.
   `/private/tmp/agentos-voice-stream-browser-20261109/result.json`. Its first audio
   preceded browser observation of the saved comment, not database persistence.
   One separate actual retry is underway; no physical audibility is inferred.
+  That retry exposed a second handoff defect: completion replaced transcript
+  array positions, so the presentation-derived speech ID restarted the same
+  native message. The adapter now retains native message identity for speech;
+  missing identity falls back to saved-comment playback. All 431 affected
+  parser/thread/local-voice checks and UI types/build pass. The third actual
+  native trial, run `50c9a17b-6611-4c06-8af0-8aef69486b12`, played all three
+  real muted WAV chunks exactly once and finished cleanly. Earlier two failures
+  remain. Its first playback was 6.064 seconds after the first native delta,
+  so latency remains open. Real HTTP cancellation also terminated only the owned
+  speech worker and preserved recognition/queued speech. Reports:
+  `/private/tmp/agentos-voice-stream-browser-final-20261109/verification-report.json`
+  and `/private/tmp/agentos-voice-loaded-abort-retest-20261109/result.json`.
+  Further measurement found warm synthesis normally 0.51–0.72 seconds, but
+  simultaneous history hydration added about 0.8–1 second of browser request
+  queuing. The original larger peaks remain unexplained variance. Two-/four-
+  thread engine settings were slower in 24 controlled warm samples, so engine
+  defaults remain unchanged. Source work now reuses the conversation-company
+  socket to refresh durable answer events promptly and bounds historical reads;
+  current interaction readiness and historical presentation remain separate.
+  These follow-ups are pending integrated checks/loaded retest. Diagnosis:
+  `/private/tmp/agentos-voice-latency-20261109/latency-followup.json`.
 - **M05 source correction verified; live comparison remains Not fixed:** business
   companies without a local Friday operating-profile row were silently excluded
   from configured-model selection receipts. The selection owner now records the
@@ -59,6 +80,16 @@ request on 7 November; the tables below the current checkpoint are historical.
   `/private/tmp/agentos-model-no-friday-{before,after,neighbors,types}-20261109.log`.
   Source activation is included in the voice restart above; a fresh Orbit native
   selection receipt still needs loaded verification.
+  Fresh ORB-32 `af33982d-ea02-47d6-8411-dcd6aa1acf7c` now completed through native
+  run `30975de1-6937-427c-b954-eec503060329`: configured selection and profile
+  receipts persist, admitted and observed models are both `gpt-6.1-sol`, billing
+  is `subscription_included`, and Orbit still has zero operating-profile or
+  qualification rows. No enrollment, alternative selection or backfill occurred.
+  The classifier recorded `engineering.testing`/complex for this fixture's
+  test-heavy wording; this is not qualified `operations.support` evidence.
+  A missing configured-only metadata field in the eventual context snapshot is
+  under read-only owner diagnosis. Report:
+  `/private/tmp/agentos-model-default-observed-1794197623186-20261109.json`.
   No historical runs are backfilled, no rollout is enabled and unknown actual
   context remains unknown. The general-server campaign began before this slice;
   its result is not an exact final-source pass.
@@ -191,6 +222,12 @@ request on 7 November; the tables below the current checkpoint are historical.
   final strengthened ownership/shutdown checks pass four cases. Final types and
   independent reviews pass. No production deadline/assertion was relaxed. Next:
   canonical serialized and general-server reruns on the committed correction.
+  The corrected canonical serialized run now passes **164/164 files and
+  3,544/3,544 cases** on committed `06d08d397` backend inputs (990.70 seconds).
+  Its start/end source scope is retained in
+  `/private/tmp/agentos-serialized-final-20261109.metadata.json`; intervening
+  changes were UI voice work. General-server is progressing with two retained
+  legacy skill-test fixture failures under diagnosis; no full-suite pass claimed.
   Evidence: `agentos-serialized-committed-20261109.log`,
   `agentos-serialized-lifecycle-terminal-20261109.log`,
   `agentos-git-expiration-*-20261109.log` and the retained aborted
