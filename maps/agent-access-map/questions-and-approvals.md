@@ -64,6 +64,15 @@ Verification: `not-run` — Submit paged edited answers; invalid IDs/limits leav
 
 Gaps: Provider/runtime delivery requires its own actual waiting input or continuation evidence.
 
+Friday canvas presentation uses the same native response route for normal
+composer text: [conversation adapter](../../ui/src/hooks/useConversationalQuestion.ts)
+and [thread](../../ui/src/components/TaskChatThread.tsx). It preserves exact
+question IDs and permitted free text, rather than resolving approvals from prose.
+A bounded local native Friday free-text question, owner response, one continuation
+and acknowledgement have been exercised with fresh-browser persistence. That
+scope does not qualify mixed forms, conflicting responses, other providers,
+physical speech or external channels; those remain separate checks above.
+
 ### `cancel`
 
 API: `present` — POST /api/issues/{id}/interactions/{interactionId}/cancel.

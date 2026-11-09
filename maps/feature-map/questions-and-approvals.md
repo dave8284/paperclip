@@ -48,6 +48,15 @@ With Agent Chat enabled, choose Chat and an agent (`/chats/:agentRef`). Answer,
 dismiss, or reopen requests in this persistent conversation. A plan handoff here
 creates linked work rather than turning the conversation into implementation.
 
+On Friday's canvas (`/friday`), ordinary clarification appears as a conversation
+message. Use **Prefer to type?** and the normal composer to answer; there is no
+questionnaire modal or choice takeover. The saved native question still owns
+validation, responder attribution and continuation. Verify the exact answer and
+one resulting reply after reopening the conversation. Governed confirmations
+retain their explicit native approval controls; an ordinary answer grants no
+action approval. This text journey does not qualify physical speech or external
+channel delivery.
+
 ### `attention`
 
 Open Decisions (`/decisions`, including a saved queue) or an Inbox attention row.

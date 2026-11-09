@@ -12,10 +12,37 @@ Those requirements remain in scope; the rows below do not replace or erase them.
 The owner requested simple **Fixed / Not fixed** tracking in the existing
 [93-item worksheet](2026-11-03-agentos-requirements-reconciliation.md).
 Update those rows as work completes; do not create another backlog.
-**Current total: 52 Fixed / 41 Not fixed.** Partial implementation and unverified
+**Current total: 53 Fixed / 40 Not fixed.** Partial implementation and unverified
 live acceptance remain Not fixed. This checkpoint was refreshed at the owner's
 request on 7 November; the tables below the current checkpoint are historical.
 
+- **V09 Fixed — actual ordinary Friday clarification passed:** native question
+  `d3031be7-bd02-4a48-8e6a-4146f980d8dc` came from actual Friday run
+  `504155a2-be33-4e4e-bb0e-f257a212678b`. One normal composer answer produced one
+  response wake and successful continuation `e0d798ec-da84-404c-b495-7b86ff6ee1e5`;
+  actual reply `ed7f8ef2-076b-40d3-9a58-f500e22e66c4` acknowledges the fictional
+  name Mira. Fresh browser retains the user answer and reply without a modal,
+  choices or composer takeover. Delivery correctly records acknowledged
+  `fallback_queued`/`wake_fallback`, not an in-flight steer. Protected dismissed/
+  pending owner questions, ORB-6, Northstar and Orbit’s single manual cycle with
+  disabled schedule are unchanged; no company tasks, staff or operations were
+  created. No fixture cleanup remains. Initial locator/load waits and an exact
+  text filter’s pre-transmission Markdown-escaping rejection are retained; native
+  readback confirmed zero sends before the single corrected submission.
+  Report: `/private/tmp/agentos-v09-conversation-20261109/verification-report.json`.
+  This qualifies the bounded native Friday text flow; physical speech remains
+  separate, and native action confirmations retain their existing controls.
+- **W01/W02 local application trial underway, still Not fixed:** the next
+  owner-authorized fictional trial was sent once to Friday as comment
+  `8f031dc4-cf67-469e-aa0d-318ca6607df1`, request
+  `c9016571-cc16-446e-8465-a75d93642c9c`. Friday must direct Orbit’s CEO to plan,
+  staff, implement, test and review DeskBuddy Margin Lab in company-owned native
+  workspaces. The concrete brief requires a standalone fictional calculator,
+  defined normal/zero/invalid cases, actual runnable artifacts and honest review
+  evidence. It forbids changing AgentOS, external publication/cloud/services,
+  persistent listeners or existing schedules/owner decisions. Local delivery
+  alone will not close GitHub/cloud or broader operating-workflow requirements.
+  Exact request: `/private/tmp/agentos-w01-local-app-request-20261109.json`.
 - **O07 Fixed again — loaded private activity boundary verified:** the original
   regression exposed private task IDs through access-grant activity. Commit
   `bcb44d48882b42b004e2b73e27e9db9c678a1406` is pushed and loaded: guarded restart
@@ -81,7 +108,16 @@ request on 7 November; the tables below the current checkpoint are historical.
   expectations include the new business-purpose default and the migration fixture
   rewinds all later empty FK consumers in order (no CASCADE or production SQL
   change). Its original and first rerun failures are retained. A, B, serialized
-  and current general-server checks are underway. Original full log and all focused failures
+  and current general-server checks are underway. The current UI portion of A
+  passes all 862 files/9,550 cases. Its earlier four failures came from a missing
+  saved-login-result mock; all 97 setup cases and UI types pass after restoring
+  that native contract and asserting no duplicate connection creation. A’s CLI
+  portion is still running. B requires the existing CI-pinned task-local Claude
+  2.1.277 and installed Python 3.13, preserving the earlier unsupported-version
+  failures. Shared-home subprocess startup/drain checks pass; unrelated five-
+  second timeout cases pass unchanged at bounded workers, with original failures
+  retained. These test prerequisites do not change live provider credentials or
+  qualify additional production providers. Original full log and all focused failures
   remain in private tmp. No full-suite pass is claimed.
 - **S03 Fixed — loaded administration lifecycle passed:** the exact disposable
   `example.invalid` identity was preapproved/revoked through the native UI, then
