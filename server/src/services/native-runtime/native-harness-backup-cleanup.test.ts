@@ -13,6 +13,10 @@ it("removes retired backups containing immutable skills without modifying live f
   mkdirSync(live);
   writeFileSync(join(nested, "SKILL.md"), "retired instructions", { mode: 0o444 });
   writeFileSync(join(live, "SKILL.md"), "live instructions", { mode: 0o444 });
+  // These exact fixture modes are the before/after invariant, independent of
+  // the test process's umask; cleanup must never chmod the live symlink target.
+  chmodSync(join(nested, "SKILL.md"), 0o444);
+  chmodSync(join(live, "SKILL.md"), 0o444);
   symlinkSync(live, join(retired, "outside"));
   chmodSync(nested, 0o555);
   chmodSync(join(retired, "claude", "skills"), 0o555);

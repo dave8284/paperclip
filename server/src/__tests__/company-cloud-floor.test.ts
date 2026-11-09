@@ -16,6 +16,11 @@ const mockBudgetService = vi.hoisted(() => ({
 }));
 
 const mockLogActivity = vi.hoisted(() => vi.fn());
+const mockInheritOwnerAiAccounts = vi.hoisted(() => vi.fn());
+
+vi.mock("../services/ai-workspace-account-setup.js", () => ({
+  inheritOwnerAiAccountsWithStatus: mockInheritOwnerAiAccounts,
+}));
 
 vi.mock("../services/index.js", () => ({
   accessService: () => mockAccessService,
@@ -34,6 +39,7 @@ const createdCompany = {
   name: "New Company",
   budgetMonthlyCents: 0,
 };
+const accountSetup = { status: "not_applicable", accountId: null, installedCompanyIds: [], pending: [], retry: null };
 
 async function createApp(actor: Record<string, unknown>) {
   const [{ companyRoutes }, { errorHandler }] = await Promise.all([
@@ -57,6 +63,7 @@ describe("POST /api/companies Cloud floor", () => {
     delete process.env.PAPERCLIP_CLOUD_TENANT_SERVER_TOKEN;
     delete process.env.PAPERCLIP_MANAGED_CONFIG;
     mockCompanyService.create.mockResolvedValue(createdCompany);
+    mockInheritOwnerAiAccounts.mockResolvedValue(accountSetup);
   });
 
   afterEach(() => {
@@ -79,6 +86,7 @@ describe("POST /api/companies Cloud floor", () => {
     expect(res.body).toMatchObject({ code: "cloud_managed" });
     expect(mockCompanyService.create).not.toHaveBeenCalled();
     expect(mockAccessService.ensureMembership).not.toHaveBeenCalled();
+    expect(mockInheritOwnerAiAccounts).not.toHaveBeenCalled();
   });
 
   it("applies the Cloud floor before request-body validation", async () => {
@@ -95,6 +103,7 @@ describe("POST /api/companies Cloud floor", () => {
     expect(res.status).toBe(403);
     expect(res.body).toMatchObject({ code: "cloud_managed" });
     expect(mockCompanyService.create).not.toHaveBeenCalled();
+    expect(mockInheritOwnerAiAccounts).not.toHaveBeenCalled();
   });
 
   it("preserves self-hosted company creation", async () => {
@@ -108,7 +117,8 @@ describe("POST /api/companies Cloud floor", () => {
     const res = await request(app).post("/api/companies").send({ name: "New Company" });
 
     expect(res.status).toBe(201);
-    expect(res.body).toEqual(createdCompany);
+    expect(res.body).toEqual({ ...createdCompany, aiAccountSetup: accountSetup });
+    expect(mockInheritOwnerAiAccounts).toHaveBeenCalledWith({}, "company-new", "local-user");
     expect(mockCompanyService.create).toHaveBeenCalledWith(expect.objectContaining({
       name: "New Company",
       defaultResponsibleUserId: "local-user",

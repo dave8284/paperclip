@@ -1,6 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
-import os from "node:os";
+import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import express from "express";
 import request from "supertest";
@@ -17,6 +16,9 @@ import { resolveRunnerdCodexSkillInputs } from "../../../packages/paperclip-runn
 import type { NativeRuntimeContextSnapshot } from "../../../packages/paperclip-runner/src/contracts/runtime-context.js";
 import { PLAN_SKILLS, PLAN_VARIANTS, planHash } from "../../../tests/runner-e2e/plan-task-cases.js";
 import type { RunnerApi } from "../../../tests/runner-e2e/api.js";
+import { companySkillService } from "../services/company-skills.js";
+import { materializeAsset } from "../services/native-runtime/runtime-context.js";
+import { createIsolatedTestHome } from "./helpers/isolated-test-home.js";
 
 const support = await getEmbeddedPostgresTestSupport();
 if (!support.supported) console.warn(`Planning fixture API calibration skipped: ${support.reason}`);
@@ -24,12 +26,13 @@ if (!support.supported) console.warn(`Planning fixture API calibration skipped: 
   let tempDb: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>;
   let db: ReturnType<typeof createDb>;
   let root: string;
+  let isolatedHome: ReturnType<typeof createIsolatedTestHome>;
   const savedHome = process.env.PAPERCLIP_HOME, savedInstance = process.env.PAPERCLIP_INSTANCE_ID;
   let api: Pick<RunnerApi, "get" | "post">;
   let app: express.Express;
   beforeAll(async () => {
     tempDb = await startEmbeddedPostgresTestDatabase("paperclip-plan-fixture-");
-    root = await mkdtemp(path.join(os.tmpdir(), "paperclip-plan-fixture-home-"));
+    isolatedHome = createIsolatedTestHome(); root = isolatedHome.home;
     process.env.PAPERCLIP_HOME = root;
     process.env.PAPERCLIP_INSTANCE_ID = "default";
     db = createDb(tempDb.connectionString);
@@ -55,8 +58,9 @@ if (!support.supported) console.warn(`Planning fixture API calibration skipped: 
   afterAll(async () => {
     if (savedHome === undefined) delete process.env.PAPERCLIP_HOME; else process.env.PAPERCLIP_HOME = savedHome;
     if (savedInstance === undefined) delete process.env.PAPERCLIP_INSTANCE_ID; else process.env.PAPERCLIP_INSTANCE_ID = savedInstance;
+    await db?.$client.end();
     await tempDb?.cleanup();
-    if (root) await rm(root, { recursive: true, force: true });
+    isolatedHome?.cleanup();
   });
   it.each(PLAN_VARIANTS)("admits %s through real creation, readback and selection APIs", async variant => {
     const companyId = randomUUID(), agentId = randomUUID();
@@ -69,18 +73,31 @@ if (!support.supported) console.warn(`Planning fixture API calibration skipped: 
     expect(sources).toHaveLength(2);
     expect(sources.every(s => s.key.startsWith(`company/${companyId}/eval-`))).toBe(true);
     const selected = await selectPlanSkills(api, companyId, agentId, sources);
-    const invocations = planInvocations(sources, selected);
+    const invocations = await planInvocations(sources, selected);
+    // Public selection exposes editable source paths. Exercise the native
+    // admission owners to freeze their versions and materialize real bundles;
+    // no heartbeat or provider starts during this calibration.
+    const runtimeEntries = await companySkillService(db).listRuntimeSkillEntries(companyId, {
+      onlyKeys: new Set(sources.filter(source => source.selected).map(source => source.key)), snapshotLatest: true,
+    });
     const contextSkills = [];
     for (const source of sources.filter(s => s.selected)) {
-      const entry = (selected as any).entries.find((e: any) => e.key === source.key && e.desired);
-      const bytes = await readFile(path.join(entry.sourcePath, "SKILL.md"));
+      const entry = runtimeEntries.find(entry => entry.key === source.key)!;
+      expect(entry.versionId).toBeTruthy();
+      const bytes = await readFile(path.join(entry.source, "SKILL.md"));
       expect(planHash(bytes)).toBe(source.sha256);
-      const mode = (await stat(path.join(entry.sourcePath, "SKILL.md"))).mode & 0o555;
-      expect(mode).toBe(0o444);
+      expect(bytes.length).toBe(source.bytes);
+      const permissions = (await stat(path.join(entry.source, "SKILL.md"))).mode;
+      expect(permissions & 0o400).toBe(0o400);
+      expect(permissions & 0o333).toBe(0);
+      const mode = permissions & 0o555;
       const digest = planHash(JSON.stringify([{ path: "SKILL.md", sha256: planHash(bytes), mode, size: bytes.length }]));
       expect(invocations.find(i => i.name === entry.runtimeName)?.assetDigest).toBe(digest);
-      contextSkills.push({ key: source.key, runtimeName: entry.runtimeName, versionId: entry.currentVersionId,
-        bundle: { rootPath: path.join(root, "runtime-context-assets/bundles", digest) } });
+      const bundle = await materializeAsset([{ path: "SKILL.md", content: bytes, mode }]);
+      expect(bundle.digest).toBe(digest);
+      expect((await stat(path.join(bundle.rootPath, "SKILL.md"))).mode & 0o777).toBe(mode);
+      expect(await readFile(path.join(bundle.rootPath, "SKILL.md"))).toEqual(bytes);
+      contextSkills.push({ key: source.key, runtimeName: entry.runtimeName, versionId: entry.versionId, bundle });
     }
     const context = { skills: contextSkills } as NativeRuntimeContextSnapshot;
     const inputs = nativeTaskSkillInputs(planInvocationPrompt("Business task", invocations), context);

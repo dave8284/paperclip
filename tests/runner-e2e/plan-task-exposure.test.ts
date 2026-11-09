@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { planExposure, planInvocationPrompt } from "./plan-task-exposure.js";
+import { planExposure, planInvocationPrompt, planInvocations } from "./plan-task-exposure.js";
+import { chmod, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { planHash } from "./plan-task-cases.js";
 
 const digest = "a".repeat(64);
 function fixture(enabled = true) {
@@ -13,6 +17,37 @@ function fixture(enabled = true) {
 }
 
 describe("planning native invocation evidence", () => {
+  it.each([0o400, 0o404, 0o440, 0o444, 0o600, 0o644])("attests the exact native read-only projection of source mode %i", async mode => {
+    const root = await mkdtemp(path.join(tmpdir(), "planning-snapshot-"));
+    try {
+      const bytes = "Exact planning instructions", file = path.join(root, "SKILL.md");
+      await writeFile(file, bytes); await chmod(file, mode);
+      const source = { originalKey: "planning", key: "planning", id: "skill", sourcePath: "fixture", sha256: planHash(bytes), bytes: Buffer.byteLength(bytes), words: 3, selected: true };
+      const invocations = await planInvocations([source], { entries: [{ key: "planning", desired: true, runtimeName: "planning", sourcePath: root }] });
+      const expected = planHash(JSON.stringify([{ path: "SKILL.md", sha256: source.sha256, mode: mode & 0o555, size: source.bytes }]));
+      expect(invocations).toEqual([{ name: "planning", assetDigest: expected }]);
+      const evidence = fixture(); evidence.invocations = invocations;
+      evidence.evidence[0]!.events[0]!.payload.prpEvent.payload.skillInputs![0]!.path = `/private/runtime-context-assets/bundles/${expected}/SKILL.md`;
+      expect(planExposure(evidence).passed).toBe(true);
+      if ((mode & 0o555) !== 0o444) {
+        const invented = planHash(JSON.stringify([{ path: "SKILL.md", sha256: source.sha256, mode: 0o444, size: source.bytes }]));
+        evidence.evidence[0]!.events[0]!.payload.prpEvent.payload.skillInputs![0]!.path = `/private/runtime-context-assets/bundles/${invented}/SKILL.md`;
+        expect(planExposure(evidence).passed).toBe(false);
+      }
+    } finally { await rm(root, { recursive: true, force: true }); }
+  });
+  it.each(["unreadable", "executable", "bytes", "size", "symlink"])("rejects a %s source before provider execution", async problem => {
+    const root = await mkdtemp(path.join(tmpdir(), "planning-snapshot-"));
+    try {
+      const bytes = "Exact planning instructions", file = path.join(root, "SKILL.md");
+      const target = problem === "symlink" ? path.join(root, "other.md") : file;
+      await writeFile(target, bytes); await chmod(target, problem === "unreadable" ? 0o000 : problem === "executable" ? 0o500 : 0o400);
+      if (problem === "symlink") await symlink(target, file);
+      const source = { originalKey: "planning", key: "planning", id: "skill", sourcePath: "fixture", sha256: problem === "bytes" ? planHash("Different instructions") : planHash(bytes),
+        bytes: Buffer.byteLength(bytes) + (problem === "size" ? 1 : 0), words: 3, selected: true };
+      await expect(planInvocations([source], { entries: [{ key: "planning", desired: true, runtimeName: "planning", sourcePath: root }] })).rejects.toThrow();
+    } finally { await rm(root, { recursive: true, force: true }); }
+  });
   it.each([true, false])("accepts exact enabled=%s delivery and accepted-turn receipts", enabled => expect(planExposure(fixture(enabled)).passed).toBe(true));
   it.each(["missing", "wrong-run", "wrong-turn", "wrong-path", "wrong-digest", "wrong-name", "duplicate", "prose-only", "unaccepted"])("rejects %s delivery evidence", problem => {
     const value = fixture();

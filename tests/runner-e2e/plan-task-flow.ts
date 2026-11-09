@@ -87,7 +87,7 @@ export async function runPlanTaskFlow(input: Input) {
       await api.patch(`/api/agents/${id}/budgets`, { budgetMonthlyCents: PLAN_BUDGET_CENTS });
       const skills = await selectPlanSkills(api, f.company.id, id, source.skills);
       source.agents.push({ id, skills });
-      if (id === f.agent.id) invocations = planInvocations(source.skills, skills);
+      if (id === f.agent.id) invocations = await planInvocations(source.skills, skills);
     }
     source.invocations = invocations;
     source.requestPrompt = planInvocationPrompt(scenario.prompt, invocations);

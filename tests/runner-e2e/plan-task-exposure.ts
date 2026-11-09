@@ -1,19 +1,35 @@
 import path from "node:path";
 import { createHash } from "node:crypto";
+import { constants } from "node:fs";
+import { open } from "node:fs/promises";
 import type { PlanRow } from "./plan-task-scoring.js";
 import type { PlanSkillSource } from "./plan-task-skills.js";
 
 export type PlanInvocation = { name: string; assetDigest: string };
 
-/** Native context uses one immutable SKILL.md file for each company copy. */
-export function planInvocations(sources: PlanSkillSource[], snapshot: PlanRow): PlanInvocation[] {
-  return sources.filter(s => s.selected).map(source => {
+/** Predict one exact native read-only projection from the selected local
+ * authoring copy. The completed run must later attest that exact bundle. */
+export async function planInvocations(sources: PlanSkillSource[], snapshot: PlanRow): Promise<PlanInvocation[]> {
+  return Promise.all(sources.filter(s => s.selected).map(async source => {
     const entries = snapshot.entries?.filter((e: PlanRow) => e.key === source.key && e.desired);
     const entry = entries?.length === 1 ? entries[0] : undefined;
     if (!entry || !/^[a-zA-Z0-9_-]+$/.test(entry.runtimeName)) throw new Error("Missing unique assigned planning runtime name");
-    const manifest = [{ path: "SKILL.md", sha256: source.sha256, mode: 0o444, size: source.bytes }];
+    if (typeof entry.sourcePath !== "string" || !path.isAbsolute(entry.sourcePath)) throw new Error("Missing selected planning skill source");
+    // Selection exposes the editable authoring source; native admission later
+    // snapshots it and strips write bits. Measure the local read permissions
+    // instead of inventing world readability under a restrictive server umask.
+    const file = await open(path.join(entry.sourcePath, "SKILL.md"), constants.O_RDONLY | constants.O_NOFOLLOW);
+    let manifest;
+    try {
+      const info = await file.stat();
+      if (!info.isFile() || !(info.mode & 0o400) || (info.mode & 0o111)) throw new Error("Planning skill source must be owner-readable and non-executable");
+      if (info.size !== source.bytes) throw new Error("Planning skill source size differs from its declared source");
+      const bytes = await file.readFile();
+      if (bytes.length !== source.bytes || createHash("sha256").update(bytes).digest("hex") !== source.sha256) throw new Error("Planning skill source bytes differ from its declared source");
+      manifest = [{ path: "SKILL.md", sha256: source.sha256, mode: info.mode & 0o555, size: bytes.length }];
+    } finally { await file.close(); }
     return { name: entry.runtimeName, assetDigest: createHash("sha256").update(JSON.stringify(manifest)).digest("hex") };
-  });
+  }));
 }
 
 export function planInvocationPrompt(prompt: string, invocations: PlanInvocation[]) {
