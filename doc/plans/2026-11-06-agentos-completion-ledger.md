@@ -83,8 +83,22 @@ below the current checkpoint are historical.
   failure is retained alongside the corrected UI-directory run:
   `/private/tmp/agentos-voice-hydration-{tests,tests-corrected,types,build,static}-20261109.log`.
   Diagnosis: `/private/tmp/agentos-voice-latency-20261109/latency-followup.json`.
-  Physical audibility, interruption/navigation and latency acceptance remain
-  open; the earlier 6.064-second delay is not erased by source checks.
+  The slice is committed/pushed as `72aa8de075a72994d4d557fef9eb718cedf9464e`.
+  Its single actual native trial `49fd8400-e52e-42fc-beba-5768ebe74cc5` succeeded:
+  all three real muted WAV clips ended exactly once, without progress speech or
+  microphone access. First native final event to playback was 2.046 seconds
+  (previous trial 6.064); synthesis request to playback was 0.820 seconds and
+  browser speech-request queue was 4.3 ms. Historical native reads peaked at two,
+  plus one current read. First playback still followed database persistence by
+  1.169 seconds; it preceded the UI's saved-comment observation by 3.408 seconds.
+  This fixture uses the approved board CLI token, which the browser WebSocket
+  contract rejects with 403; the measured path used polling fallback. It does
+  not establish an owner-session socket failure or event-driven latency. Prepare
+  remained 4.033 seconds, and differing workloads limit causal timing comparison.
+  Browser/context are closed. Physical retest is now requested from the owner
+  for prompt speech, interruption and listening across navigation. These remain
+  Not fixed until that actual result; earlier failures remain retained. Report:
+  `/private/tmp/agentos-voice-stream-browser-priority-20261109/verification-report.json`.
 - **M05 source correction verified; live comparison remains Not fixed:** business
   companies without a local Friday operating-profile row were silently excluded
   from configured-model selection receipts. The selection owner now records the
@@ -103,8 +117,10 @@ below the current checkpoint are historical.
   qualification rows. No enrollment, alternative selection or backfill occurred.
   The classifier recorded `engineering.testing`/complex for this fixture's
   test-heavy wording; this is not qualified `operations.support` evidence.
-  A missing configured-only metadata field in the eventual context snapshot is
-  under read-only owner diagnosis. Report:
+  The configured-only explanation was lost when later native preparation wrote
+  its in-memory snapshot. A detached owner-return/context-copy correction now
+  reproduces that loss and passes 43 actual PostgreSQL cases afterward; integration
+  and loaded verification remain pending. No qualification authority changes. Report:
   `/private/tmp/agentos-model-default-observed-1794197623186-20261109.json`.
   No historical runs are backfilled, no rollout is enabled and unknown actual
   context remains unknown. The general-server campaign began before this slice;
