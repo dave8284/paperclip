@@ -74,6 +74,7 @@ describe("native completed failure diagnostics", () => {
         interactionResponses: [], credentialBindings: [],
       };
       await db.update(heartbeatRuns).set({ runnerProfileJson: { nativeExecutionInput: execution } }).where(eq(heartbeatRuns.id, runId));
+      let endReviewAfterAdmission: (() => Promise<void>) | undefined;
       if (scenario.endsWith("-review")) {
         const sourceRunId = randomUUID(), sourceResultId = randomUUID(), assessmentId = randomUUID();
         const decisionId = randomUUID(), interactionId = randomUUID();
@@ -85,16 +86,22 @@ describe("native completed failure diagnostics", () => {
         await db.update(issues).set({ lastStatusDecisionId: decisionId }).where(eq(issues.id, issueId));
         await db.insert(issueThreadInteractions).values({ id: interactionId, companyId, issueId, kind: "request_confirmation", sourceRunId, addresseeAgentId: agentId, createdByAgentId: workerId,
           continuationPolicy: "wake_assignee",
-          status: scenario === "resolved-review" ? "accepted" : "pending",
-          ...(scenario === "resolved-review" ? { resolvedByRunId: runId, resolvedByAgentId: agentId } : {}),
+          status: "pending",
           payload: { version: 1, prompt: "Review the completed work.", target: { type: "custom", key: "native_completion_review", revisionId: decisionId } },
         });
         const contextSnapshot = { issueId, wakeReason: "native_completion_review", nativeReviewInteractionId: interactionId, nativeReviewDecisionId: decisionId };
         await db.update(heartbeatRuns).set({ contextSnapshot }).where(eq(heartbeatRuns.id, runId));
-        if (scenario === "superseded-review") await db.update(issues).set({ lastStatusDecisionId: null }).where(eq(issues.id, issueId));
         const review = await getNativeReviewAssignment(db, { companyId, issueId, agentId, contextSnapshot, allowResolvedByRunId: runId });
-        if (scenario === "superseded-review") expect(review).toBeNull();
-        else expect(review?.interaction.status).toBe(scenario === "resolved-review" ? "accepted" : "pending");
+        expect(review?.interaction.status).toBe("pending");
+        // A retired review cannot start a provider. Exercise the late failure
+        // race by ending its authority only after a legitimate admission.
+        endReviewAfterAdmission = async () => {
+          if (scenario === "superseded-review") await db.update(issues).set({ lastStatusDecisionId: null }).where(eq(issues.id, issueId));
+          if (scenario === "resolved-review") await db.update(issueThreadInteractions).set({ status: "accepted", resolvedByRunId: runId, resolvedByAgentId: agentId }).where(eq(issueThreadInteractions.id, interactionId));
+          const current = await getNativeReviewAssignment(db, { companyId, issueId, agentId, contextSnapshot, allowResolvedByRunId: runId });
+          if (scenario === "superseded-review") expect(current).toBeNull();
+          else expect(current?.interaction.status).toBe(scenario === "resolved-review" ? "accepted" : "pending");
+        };
       }
       const event: PrpEvent = {
         schema: "paperclip.prp.event.v1", runId, normalizedSessionId: native.normalizedSessionId,
@@ -123,6 +130,7 @@ describe("native completed failure diagnostics", () => {
         completionClaim: { ...CONTROL_PLANE_CONFORMANCE_RESULT.completionClaim, contractRevision: completionInput.revision } };
       provider.execute.mockReset().mockImplementation(async (options: { controlPlane: ControlPlanePort }) => {
         await options.controlPlane.openRun(openInput);
+        await endReviewAfterAdmission?.();
         if (scenario === "untrusted-source") {
           await expect(options.controlPlane.appendEvent({ ...event, sourceInstanceId: "wrong-runner" })).rejects.toThrow("native_event_source_binding_mismatch");
         } else if (scenario === "untrusted-run" || scenario === "untrusted-session") {

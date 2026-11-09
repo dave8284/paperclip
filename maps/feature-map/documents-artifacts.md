@@ -47,14 +47,24 @@ Automated: [documents service](../../server/src/__tests__/documents-service.test
 
 The current task or conversation route owns document hashes and the shared
 document pane. Embedded Friday must not interpret another task's hash, intercept
-its document links, or replace/close that pane. The actual Friday route retains
-document navigation, including its docked Decisions layout.
+its document links, or replace/close that pane. Actual conversation controllers
+retain document routing even when their presentation is docked.
 [Mounted surface regressions](../../ui/src/pages/IssueDetail.test.tsx) exercise
 coexistence, unmount, ignored embedded clicks and the actual conversation route.
 For browser acceptance, open a saved task document's direct link while the Friday
 dock is mounted, then follow its artifact card and reload. Confirm the document
 belongs to the task and no matching document is requested from Friday's separate
-conversation. Also open an existing document on the actual Friday route.
+conversation. Also open an existing Friday document through its generated native
+conversation-task link (`/AGE/issues/AGE-9#document-…` in the local fixture).
+The separate `/friday` workspace canvas does not render the shared properties
+pane; this change does not add a document pane to that canvas.
+
+Read-only browser checks on loaded `bcb44d488` opened the actual ORB-23 findings
+direct link with the background dock present, a Friday conversation document,
+and the findings citation in Friday's delivered reply. The company-prefix alias
+preserved the document hash when canonicalized. The existing mounted surface and
+deep-link suites passed 175 cases; this proof does not cover document editing,
+revision restore or all attachment formats.
 
 Manual: Edit a paragraph, save, reload, and compare revisions. Add an annotation to a specific selection and inspect it after another edit. Resolve it through the supported action. Restore a disposable revision and confirm the new current document and history agree.
 

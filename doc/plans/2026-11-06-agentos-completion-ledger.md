@@ -12,19 +12,28 @@ Those requirements remain in scope; the rows below do not replace or erase them.
 The owner requested simple **Fixed / Not fixed** tracking in the existing
 [93-item worksheet](2026-11-03-agentos-requirements-reconciliation.md).
 Update those rows as work completes; do not create another backlog.
-**Current total: 49 Fixed / 44 Not fixed.** Partial implementation and unverified
+**Current total: 51 Fixed / 42 Not fixed.** Partial implementation and unverified
 live acceptance remain Not fixed. This checkpoint was refreshed at the owner's
 request on 7 November; the tables below the current checkpoint are historical.
 
-- **O07 reopened — private activity metadata leak reproduced:** the current
-  model-comparison delivery test correctly rejects an activity feed containing a
-  private task ID. The unexpected row is an `issue_access_grant.created` event:
-  native grant/issue access itself remains restricted, but the activity reader
-  filters only direct issue entities and its producer omits explicit issue scope
-  for live publication. Repair both durable and live paths at their owners;
-  preserve the privacy assertion. Source fix and real PostgreSQL authorization
-  coverage are underway. The previous direct head/analyst allow/deny and
-  escalation evidence below remain valid but do not close this discovered gap.
+- **O07 Fixed again — loaded private activity boundary verified:** the original
+  regression exposed private task IDs through access-grant activity. Commit
+  `bcb44d48882b42b004e2b73e27e9db9c678a1406` is pushed and loaded: guarded restart
+  `647af0c3-779c-4ec3-9838-01712f45c666`, process 26823 started 8 November
+  12:30:17.599 UTC and ready 12:30:21.770, with no lost/adopted/skipped runs.
+  Native grant/task scope now protects both durable activity and live WebSocket
+  delivery, including historical unscoped events and current revocation. All 36
+  focused PostgreSQL/WebSocket cases pass with the original privacy assertion.
+  The existing head's actual native identity passes 27 loaded checks: public
+  controls arrive, private task/grant metadata is absent from both streams and
+  activity queries, owner audit remains readable, and revoked credentials fail.
+  ORB-24/25 are cancelled, the temporary key/grant revoked, and zero provider runs
+  or wakes occurred. The first helper cleanup incorrectly supplied a status
+  version; a follow-up also omitted PATCH. Both rejected requests are retained;
+  corrected native PATCH and a read-only cleanup audit pass. Evidence:
+  `/private/tmp/agentos-o07-grant-live-qualification-20261109-69f5ee46-86a1-4e49-9030-ec6ff9eb3323.json`
+  and `/private/tmp/agentos-o07-grant-live-cleanup-20261109.json`. Earlier actual
+  project-lead allow/deny and analyst→head→CEO→Friday escalation remain valid.
 - **L04 regression fixes checked; final suite remains open:** restore-point
   application now restores admitted ordinary Git/ignored-file modes under a
   restrictive `077` umask, overlays explicit private modes and uses confined
@@ -45,13 +54,19 @@ request on 7 November; the tables below the current checkpoint are historical.
   Teams-catalog's four checks also pass with a legitimate approved board owner
   and explicit current permission-management grants; native defaults and caller
   override assertions remain unchanged. Full application build and final normal
-  server types pass for this production batch. The document-route UI follow-up
-  build and one final fixture semantic check are in progress; commit/activation
-  and loaded privacy qualification remain pending. Older full run has 52 failed
-  cases so far: the initial 48 are accounted by current code/fixture fixes or
-  passing integrated reruns; four provider-failure/connection-intent/model-profile
-  cases remain under diagnosis. The wrapper is still in its first
-  server group; later workspace/serialized groups have not run.
+  server types and document-route UI build pass. This production batch is pushed
+  and loaded as `bcb44d488`; loaded privacy acceptance is recorded above.
+  Subsequent test-only corrections preserve actual provider admission, installed
+  connection readiness, reviewed comparison/canary eligibility, active Friday
+  conversation authority, and artifact cleanup order. Current reruns pass 16
+  provider-failure, 35 connection/qualification, seven Friday-role and 23 artifact/
+  comparison-event cases. The unchanged model-audit suite passes all six cases.
+  Before-fix logs and failures from the older evolving-tree full run remain
+  retained; its initial restrictive umask also exposed test-harness permission
+  assumptions. Plan-task fixture digest checks are being corrected without
+  broadening cached-file permissions. The wrapper is still in its first server
+  group; later workspace/serialized groups have not run. No full-suite pass is
+  claimed.
 - **S03 Fixed — loaded administration lifecycle passed:** the exact disposable
   `example.invalid` identity was preapproved/revoked through the native UI, then
   explicitly seeded pending/unverified without credentials or a session. The UI
@@ -98,7 +113,7 @@ request on 7 November; the tables below the current checkpoint are historical.
   `/private/tmp/agentos-model-browser-20261108/verification-report.json`,
   `agentos-m04-{shared-build,server-emit,ui-build}-20261109.log`,
   `agentos-m04-{restart-request,loaded-health,restart-ceo-run}-20261109.json`.
-- **O06 native Skill Studio fix loaded; fresh live evaluation running:** the
+- **O06 native evaluations and review complete; publication remains open:** the
   fictional company's original test `5bb5a5eb-cb7d-4af8-aef7-81c83a8f5192`
   and both ORB-18 attempts remain failed admission evidence, not a quality result.
   Native v10 now binds the exact test, immutable skill version and frozen input/
@@ -147,14 +162,36 @@ request on 7 November; the tables below the current checkpoint are historical.
   `7d2eb42c-e77f-4348-bf7a-74f00b6e85ed`. ORB-15 is done; its saved comparison
   `66f0b6e6-f53e-44a5-ad7c-5fbdd1951e7e`, revision
   `46a1c908-68be-4784-a053-c2c952ed251d`, reports both versions 3/3 under author
-  inspection and **no measured improvement**. Existing reviewer ORB-17 and CEO
-  are now running automatically. Root has not independently checked the complete
-  v2 package yet. Next: exact-output comparison and reviewer/CEO return, then
-  concrete owner publication review and independent company adoption controls. No evaluated improvement, publication, adoption or
-  owner acceptance is claimed. Evidence is in private
+  inspection and **no measured improvement**. Root independently read both exact
+  outputs, sources and frozen inputs. The non-author reviewer and CEO confirm
+  the same 3/3 result; shared-context review is explicitly distinguished from
+  verified isolated review. Root found source hashes incorrectly labeling local
+  copies with an extra newline. The reviewer resolved the finding without
+  changing either candidate or original history: native v1 hash `bcbc29dd…39b9`,
+  v2 `d4391c6f…8e39`; both native input snapshots are identical 510-byte content.
+  Final owner package is [ORB-14 owner-review-package](http://localhost:3100/ORB/issues/ORB-14#document-owner-review-package),
+  document `b12eb2c2-f939-4f69-9d8b-a9346f3e4954`, revision
+  `ec4eb703-28d1-49c6-a69b-0fdd8643d9da`. It contains complete sources/outputs,
+  corrected provenance, the exact reviewer report and bounded conclusions.
+  Friday automatically returned the result in comment `0bd14bbb-add6-4484-8766-8093dc4ad97b`.
+  V2 completion automatically resumed its author through the saved dependency;
+  the earlier manually assisted v1 continuation remains disclosed. The owner then
+  explicitly replied “Approve both for the test” to the concrete publication
+  question. Native releases `00054956-2ca8-4cf7-b2da-600e264a7573` (v1) and
+  `0b787879-ddcf-4135-ad63-086a1c65cd72` (v2) exactly match reviewed source hashes;
+  public fields exclude private source identifiers and publication changes no
+  selection. Orbit adopted v1 then v2; a new Lab assignment adopted v1 and refused
+  v2 without configuration changes. Orbit rolled back to its exact prior v1
+  import. Every decision leaves the other company unchanged. Old Lab assignment
+  remains retired and its agent terminated; the successor is a distinct native
+  agent/assignment using the existing subscription connection. ORB-26 started
+  with captured v2 before rollback; ORBA-3 checks Lab’s v1. Next: actual delivery,
+  recipient privacy and loaded UI/history proof. Evidence:
+  `/private/tmp/agentos-o06-{approved-publication,adoption-steps,lab-successor,runtime-delivery}-20261109.json`.
+  No general improvement or owner business-output acceptance is claimed. Earlier evidence is in private
   `agentos-native-skill-{runtime-selection-final,final-regression,runner-contracts,integrated-build,integrated-typecheck,integrated-pg,preactivation}-20261109.*`
   and `agentos-skill-test-tools-final-20261109.log`.
-- **D04 exact decision context corrected; live investigation remains open:**
+- **D04 Fixed — exact context, native consultation and loaded navigation pass:**
   Decisions now carries the requested plan revision/document identity separately
   from the currently observed revision, including changed/unavailable states.
   A changed plan cannot silently replace the requested proposal's summary.
@@ -168,8 +205,11 @@ request on 7 November; the tables below the current checkpoint are historical.
   all real pending questions. A bounded board-authored Orbit fixture ORB-20 then
   produced actual Friday direction 4c475448, CEO ORB-22 and existing head ORB-23.
   The head consulted exact saved evidence and returned a recommendation/risk,
-  explicitly shared-context and fictional. CEO return is done; automatic Friday
-  return is still running. Fixture approval/schedules remain untouched.
+  explicitly shared-context and fictional. All six actual native runs succeeded;
+  Friday returned the CEO/head recommendation in owner comment
+  `0bd14bbb-add6-4484-8766-8093dc4ad97b`, with no operator return nudge. The head
+  recommends reviewing existing evidence before expansion, without treating one
+  fictional routine cycle as readiness for daily business operations.
   This check exposed a document-navigation defect: embedded Friday consumed the
   main task's global document hash and shared pane, requesting the right document
   key under the wrong conversation. Explicit route ownership now keeps global
@@ -177,8 +217,18 @@ request on 7 November; the tables below the current checkpoint are historical.
   remain owners; only the background dock opts out. All 175 UI/deep-link checks,
   UI types and tokens pass; fresh HMR browser opens the exact head report without
   the wrong-conversation request. Initial failed screen and test-only typing
-  failure are retained. Final built-UI and native-return acceptance remain pending.
-  Report: `/private/tmp/agentos-decision-gap-check-20261109/verification-report.json`.
+  failure are retained. Built and loaded bcb44d488 browser checks pass for the
+  canonical head document, canonical Friday conversation document and the actual
+  owner-reply citation. Initial post-startup load delays and incorrect test
+  selectors are retained; sequential loaded checks succeed without page errors.
+  The full Friday canvas does not host the shared document pane; its canonical
+  conversation route is the verified document destination. Native cleanup cancels
+  only ORB-20 and expires its request, without approval/rejection; planning and
+  unassigned state remain, with zero fixture runs/wakes and five native audits.
+  Protected owner questions, ORB-6 and Northstar are unchanged; the routine still
+  has exactly one manual cycle and a disabled trigger. Reports:
+  `/private/tmp/agentos-d04-orbit-consultation-20261109/verification-report.json`
+  and `/private/tmp/agentos-decision-gap-check-20261109/verification-report.json`.
 - **L04 full regression remains in progress:** `pnpm test:run` log is
   `/private/tmp/agentos-full-regression-20261109.log`. It began before these
   latest edits and remains diagnostic across the evolving tree. Its first server

@@ -1,6 +1,4 @@
-import { randomUUID } from "node:crypto";
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { createHash, randomUUID } from "node:crypto";
 import { join } from "node:path";
 import express from "express";
 import request from "supertest";
@@ -19,18 +17,23 @@ import { managedAiSessionIdentity } from "../services/ai-connection-session.js";
 import { fridayRoutes } from "../routes/friday.js";
 import { errorHandler } from "../middleware/index.js";
 import { unprocessable } from "../errors.js";
+import { DEFAULT_MODEL_ROUTING_LIMITS } from "@paperclipai/shared";
+import { modelComparisonProfile, modelComparisonVariantForModel } from "../services/model-comparison-scope.js";
+import { modelRoutingService } from "../services/model-routing.js";
+import { createIsolatedTestHome } from "./helpers/isolated-test-home.js";
 
 vi.mock("../services/subscription-refresh.js", () => ({ refreshSubscriptionConnection: vi.fn().mockResolvedValue(undefined) }));
 
 describe("native current-account model profile qualification", () => {
   let database: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>, db: ReturnType<typeof createDb>, home: string;
+  let isolatedHome: ReturnType<typeof createIsolatedTestHome>;
   beforeAll(async () => {
-    home = await mkdtemp(join(tmpdir(), "agentos-model-qualification-"));
+    isolatedHome = createIsolatedTestHome(); home = isolatedHome.home;
     vi.stubEnv("PAPERCLIP_HOME", home); vi.stubEnv("PAPERCLIP_INSTANCE_ID", "model-qualification-fixture");
     vi.stubEnv("AGENTOS_MODEL_INTELLIGENCE_DB", join(home, "learning.sqlite"));
     database = await startEmbeddedPostgresTestDatabase("agentos-model-qualification-"); db = createDb(database.connectionString);
   }, 60000);
-  afterAll(async () => { modelIntelligenceProduct()?.close(); await db?.$client.end(); await database?.cleanup(); vi.unstubAllEnvs(); if (home) await rm(home, { recursive: true, force: true }); });
+  afterAll(async () => { await modelIntelligenceProduct()?.close(); await db?.$client.end(); await database?.cleanup(); vi.unstubAllEnvs(); isolatedHome?.cleanup(); });
 
   async function fixture() {
     const userId = randomUUID(), companyId = randomUUID();
@@ -154,7 +157,7 @@ describe("native current-account model profile qualification", () => {
     await request(f.api).post(f.path).send({ ...f.input, requestKey: randomUUID() }).expect(403);
     expect(await db.select().from(modelProfileQualifications).where(eq(modelProfileQualifications.companyId, f.companyId))).toHaveLength(1);
   });
-  it("routes a reviewed efficient profile only with independent quality evidence and rechecks revocation before dispatch", async () => {
+  it("routes a reviewed efficient profile only through an enrolled qualified release and rechecks revocation before dispatch", async () => {
     const f = await fixture();
     const qualification = await f.service.register(f.companyId, f.actor, { ...f.input, reviewDecisionId: f.review.id });
     const engine = modelIntelligenceProduct()!;
@@ -180,10 +183,44 @@ describe("native current-account model profile qualification", () => {
       engine.evaluate({ namespace: f.companyId, id, receiptId: id, passed: true, iterations: 1, latencyMs: candidate === fast ? 400 : 1000,
         source: "checks", evaluator: "controlled-fixture", evidenceRef: `fixture:${id}` });
     }
-    const [task] = await db.insert(issues).values({ companyId: f.companyId, title: f.task.title, description: f.task.description, responsibleUserId: f.userId }).returning();
+    // Legacy examples remain observable but cannot authorize an alternative.
+    expect((await selectCompanyModelProfile(db, await nextSelectionInput(f))).config.model).toBe("gpt-6-astra");
+    const baseline = await modelComparisonProfile(db, f.agent, f.agent.adapterConfig, scope.profile.accountFingerprint, scope.cliVersion);
+    const candidate = modelComparisonVariantForModel(baseline, "gpt-6.1-sol", scope.profile.accountFingerprint);
+    const comparisonId = randomUUID(), datasetId = randomUUID();
+    const sha = (value: string) => createHash("sha256").update(value).digest("hex");
+    const cases = Array.from({ length: 5 }, (_, index) => ({ id: `fixture-${index}`, split: "holdout" as const,
+      inputDigest: sha(`input-${comparisonId}-${index}`), checkDigest: sha(`check-${comparisonId}-${index}`), sourceRef: `fixture:${index}` }));
+    await engine.registerDataset({ namespace: f.companyId, id: datasetId, version: "1", taskFamily: scope.profile.taskType,
+      taskFamilyVersion: "1", complexity: "routine", provenance: "observed", cases });
+    await engine.registerComparison({ namespace: f.companyId, id: comparisonId, datasetId, datasetVersion: "1", dimension: "model", baseline, candidate,
+      thresholds: { minimumHoldoutPairs: 5, qualityLowerBound: .7, maximumMedianIterations: 2, minimumLatencyImprovement: .15 } });
+    // Controlled host-attested outcomes test the policy mechanics only. They
+    // are never presented as actual provider evaluations outside this fixture.
+    for (const item of cases) for (const arm of ["baseline", "candidate"] as const) {
+      const profile = arm === "baseline" ? baseline : candidate, id = `${comparisonId}:${item.id}:${arm}`;
+      await engine.select({ namespace: f.companyId, requestId: id, taskKey: id, taskType: scope.profile.taskType, complexity: "routine", defaultCandidateId: profile.profileId,
+        candidates: [{ id: profile.profileId, model: profile.model, provider: profile.provider, method: "subscription", available: true }],
+        promptFingerprint: profile.promptFingerprint, contextFingerprint: profile.contextFingerprint });
+      await engine.recordComparisonOutcome({ namespace: f.companyId, id, comparisonId, caseId: item.id, arm, attempt: 1, receiptId: id,
+        inputDigest: item.inputDigest, checkDigest: item.checkDigest, observedVariant: profile, provenance: "observed", outcome: "passed", terminal: true,
+        iterations: 1, latencyMs: arm === "baseline" ? 1000 : 400, source: "checks", evaluator: "controlled-fixture", evidenceRef: `fixture:${id}` });
+    }
+    await modelRoutingService(db).configure(f.companyId, f.actor, { requestKey: randomUUID(), taskType: scope.profile.taskType, expectedRevision: 0,
+      mode: "automatic", pinnedReleaseId: null, limits: DEFAULT_MODEL_ROUTING_LIMITS, reason: "Exercise account qualification during an enrolled canary" });
+    const release = (await engine.routingRollouts({ namespace: f.companyId, taskType: scope.profile.taskType })).releases[0];
+    expect(release?.state).toBe("canary");
+    let taskId = "";
+    for (let index = 0; index < 10000; index++) {
+      const id = randomUUID();
+      if (Number.parseInt(sha(JSON.stringify([release.id, `${id}:${f.agent.id}`])).slice(0, 8), 16) % 100 < release.limits.canaryPercent) { taskId = id; break; }
+    }
+    expect(taskId).not.toBe("");
+    const [task] = await db.insert(issues).values({ id: taskId, companyId: f.companyId, title: f.task.title, description: f.task.description, responsibleUserId: f.userId }).returning();
     const [run] = await db.insert(heartbeatRuns).values({ companyId: f.companyId, agentId: f.agent.id, issueId: task.id }).returning();
     const selected = await selectCompanyModelProfile(db, { runId: run.id, issueId: task.id, agent: f.agent, config: f.agent.adapterConfig, binding: f.binding, resumed: false, account: f.account });
     expect(selected.config.model).toBe("gpt-6.1-sol");
+    expect(selected.receipt?.rollout).toMatchObject({ releaseId: release.id, phase: "canary", arm: "candidate" });
     expect(selected.qualification).toEqual({ id: qualification.qualification.id, cliVersion: "0.160.0", model: "gpt-6.1-sol" });
     await expect(selected.assertQualificationCurrent?.()).resolves.toBeUndefined();
     await f.service.revoke(f.companyId, qualification.qualification.id, f.actor);

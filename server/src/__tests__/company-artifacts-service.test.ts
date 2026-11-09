@@ -79,6 +79,7 @@ describeEmbeddedPostgres("companyArtifactsService", () => {
     await db.delete(issues);
     await db.delete(projects);
     await db.delete(agents);
+    await db.delete(companyMemberships);
     await db.delete(companies);
   });
 

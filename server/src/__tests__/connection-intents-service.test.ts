@@ -1,12 +1,14 @@
 import { subscribeDeliveryWork } from "../services/delivery-work-notifications.js";
 import { DELIVERY_QUEUES } from "../services/delivery-work-notifications.js";
 import { randomUUID } from "node:crypto";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { and, eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import {
   agents,
   authUsers,
-  aiProviderDefaults,
   agentWakeupRequests,
   issueComments,
   companies,
@@ -40,6 +42,7 @@ import { materializeNativeInteractionResponses } from "../services/native-runtim
 import { toolAccessService } from "../services/tool-access.js";
 import { toolAccessPolicyService } from "../services/tool-access-policy.js";
 import { connectionIntentService } from "../services/connection-intents.js";
+import { aiConnectionService } from "../services/ai-connections.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
 import {
   getEmbeddedPostgresTestSupport,
@@ -97,8 +100,12 @@ describeEmbeddedPostgres("connectionIntentService", () => {
   let cleanup: (() => Promise<void>) | undefined;
   let claims!: RuntimeToolsTokenClaims;
   let runId!: string;
+  let home!: string;
 
   beforeAll(async () => {
+    home = await mkdtemp(join(tmpdir(), "agentos-connection-intents-home-"));
+    vi.stubEnv("PAPERCLIP_HOME", home);
+    vi.stubEnv("PAPERCLIP_INSTANCE_ID", "connection-intents-fixture");
     const tempDb = await startEmbeddedPostgresTestDatabase("paperclip-connection-intents-");
     cleanup = tempDb.cleanup;
     connectionString = tempDb.connectionString;
@@ -170,7 +177,10 @@ describeEmbeddedPostgres("connectionIntentService", () => {
   }, 20_000);
 
   afterAll(async () => {
+    await db?.$client.end();
     await cleanup?.();
+    vi.unstubAllEnvs();
+    if (home) await rm(home, { recursive: true, force: true });
   });
 
   async function waitForBlockedMembershipLock() {
@@ -857,10 +867,13 @@ describeEmbeddedPostgres("connectionIntentService", () => {
     await db.insert(agents).values({ id: agentId, companyId, name: "AI Agent", adapterType: "claude_local", runtimeConfig: { aiConnection: binding } });
     await db.insert(issues).values({ id: issueId, companyId, title: "AI authentication", status: "in_progress", assigneeAgentId: agentId });
     await db.insert(heartbeatRuns).values({ id: aiRunId, companyId, agentId, status: "running", responsibleUserId: claims.responsible_user_id, contextSnapshot: { issueId } });
-    const [app] = await db.insert(toolApplications).values({ companyId, applicationKey: "ai-intent-fixture", name: "AI intent fixture", type: "mcp_http", metadata: { sourceTemplateKey: "anthropic" } }).returning();
-    const [connection] = await db.insert(toolConnections).values({ companyId, applicationId: app!.id, name: "Personal Claude API", uid: `ai-${randomUUID()}`, connectionPurpose: "ai", transport: "runtime_auth", authKind: "api_key", credentialPolicy: "per_user", healthStatus: "ok", status: "active", enabled: true, config: { sourceTemplateKey: "anthropic", ai: { provider: "anthropic", method: "api_key" } } }).returning();
-    const [grant] = await db.insert(connectionGrants).values({ companyId, connectionId: connection!.id, kind: "user", subjectUserId: claims.responsible_user_id, createdByUserId: claims.responsible_user_id }).returning();
-    await db.insert(aiProviderDefaults).values({ companyId, userId: claims.responsible_user_id!, provider: "anthropic", grantId: grant!.id });
+    // Persist a synthetic credential through the native vault owner. A grant
+    // without a credential cannot establish a connected runtime account.
+    const saved = await aiConnectionService(db).save(companyId, claims.responsible_user_id!, {
+      provider: "anthropic", method: "api_key", ownership: "personal", name: "Personal Claude API",
+      apiKey: "fixture-only", agentIds: [], allAgents: false,
+    }, "fixture-only");
+    const [connection] = await db.select().from(toolConnections).where(eq(toolConnections.id, saved.connectionId));
     const aiClaims = { ...claims, sub: agentId, run_id: aiRunId };
     const service = connectionIntentService(db);
     await expect(service.request(aiClaims, "anthropic")).rejects.toMatchObject({

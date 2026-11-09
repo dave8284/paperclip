@@ -65,7 +65,7 @@ describe("native comparison journal persistence", () => {
         stage: "turn_accepted", source: "turn/start", parametersSha256: "d".repeat(64), promptSha256: "e".repeat(64), modelEnvelopeSha256: receipt.initialEnvelopeSha256 } }),
       f.event(3, "turn.started", { providerTurnId: "provider-turn" }),
       f.event(4, "turn.completed", { providerTurnId: "provider-turn" }),
-      f.event(5, "run.terminal", { runTerminalState: "succeeded" }),
+      f.event(5, "run.terminal", { schema: "paperclip.prp.terminal.v1", turnTerminalState: "completed", runTerminalState: "succeeded", reportedWorkDisposition: "done" }),
     ];
     // Same source instance/sequence in the facade is a different stream.
     await db.insert(heartbeatRunEvents).values({ companyId: f.run.companyId, runId: f.run.id, agentId: f.run.agentId,
@@ -136,7 +136,7 @@ describe("native comparison journal persistence", () => {
     const overflow = await fixture();
     await overflow.sink(overflow.event(MAX_COMPARISON_EVENTS + 1, "session.started"));
     await overflow.sink(overflow.event(MAX_COMPARISON_EVENTS + 2, "turn.started"));
-    const terminal = overflow.event(MAX_COMPARISON_EVENTS + 3, "run.terminal", { runTerminalState: "succeeded" });
+    const terminal = overflow.event(MAX_COMPARISON_EVENTS + 3, "run.terminal", { schema: "paperclip.prp.terminal.v1", turnTerminalState: "completed", runTerminalState: "succeeded", reportedWorkDisposition: "done" });
     await overflow.sink(terminal);
     await db.update(nativeRunFinalizations).set({ leaseOwner: null, leaseExpiresAt: null }).where(eq(nativeRunFinalizations.runId, overflow.run.id));
     await overflow.sink(terminal); // Lost ACK after the durable cap; no evidence claim or insert.

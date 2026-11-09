@@ -46,7 +46,7 @@ describeEmbeddedPostgres("Friday's persisted board role", () => {
       .rejects.toMatchObject({ details: { code: "friday_board_role" } });
     await expect(assertAssignableAgent(ctx.db, f.companyId, f.worker.id)).resolves.toBeUndefined();
     const [chat, oldWork] = await ctx.db.insert(issues).values([
-      { companyId: f.companyId, title: "Board conversation", assigneeAgentId: f.friday.id, conversationAgentId: f.friday.id, conversationUserId: f.userId },
+      { companyId: f.companyId, title: "Board conversation", assigneeAgentId: f.friday.id, conversationAgentId: f.friday.id, conversationUserId: f.userId, conversationState: "active" },
       { companyId: f.companyId, title: "Previously assigned delivery", assigneeAgentId: f.friday.id },
     ]).returning();
     await expect(assertFridayRunEligible(ctx.db, { companyId: f.companyId, agentId: f.friday.id, issueId: chat!.id })).resolves.toBeUndefined();
