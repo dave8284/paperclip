@@ -10,7 +10,7 @@ export interface VoiceRecognition {
   start(): void; stop(): void; abort(): void;
 }
 type VoiceWindow = { SpeechRecognition?: new () => VoiceRecognition; webkitSpeechRecognition?: new () => VoiceRecognition };
-export interface SpokenReply { id: string; body: string; createdAt?: Date | string; runId?: string; /** Persisted user-facing comment. */ committed?: boolean; /** Only the native user-facing final answer channel, never reasoning or tools. */ streaming?: boolean }
+export interface SpokenReply { id: string; body: string; createdAt?: Date | string; runId?: string; /** Persisted user-facing comment. */ committed?: boolean; /** Native user-facing assistant message, never reasoning or tools. */ streaming?: boolean; kind?: "progress" | "final" }
 export interface VoiceBinding { key: string; companyId?: string; disabled: boolean; busy?: boolean; send?: (text: string) => Promise<void>; draft: (text: string) => void; reply?: SpokenReply; liveReply?: SpokenReply; question?: { id: string; body: string }; onTurn?: () => void }
 export interface VoiceTimingMeasurement { status: "unmeasured" | "pending" | "measured" | "unavailable" | "cancelled" | "failed"; durationMs: number | null }
 export interface VoiceTimingContext { companyId?: string; sessionKey: string }
@@ -57,7 +57,10 @@ export class FridayVoiceSession {
   private speechGeneration = 0;
   private speechAbort?: AbortController;
   private speechBuffer?: FridaySpeechBuffer;
-  private streamedReply?: { id: string; runId?: string; buffer: FridaySpeechBuffer };
+  private streamedReply?: { id: string; runId?: string; kind?: "progress" | "final"; buffer: FridaySpeechBuffer };
+  // Current playback plus the latest waiting update bounds conversational lag.
+  // A final answer replaces an unspoken progress update, never playing audio.
+  private pendingReply?: SpokenReply;
   private audio: HTMLAudioElement | null = null;
   private stream: MediaStream | null = null;
   private context: AudioContext | null = null;
@@ -98,20 +101,23 @@ export class FridayVoiceSession {
     if (value.liveReply && !value.disabled && !value.question && !this.state.hearingSpeech && !document.hidden) {
       this.updateStreamedReply(value.liveReply);
     }
-    const persistedStream = value.reply?.runId && value.reply.runId === this.streamedReply?.runId
+    const persistedStream = value.reply?.runId && this.streamedReply?.kind !== "progress" && value.reply.runId === this.streamedReply?.runId
       && (this.streamedReply.buffer.cancelled || (this.streamedReply.buffer.text.length > 0
         && spokenReply(value.reply.body).startsWith(this.streamedReply.buffer.text)));
     if (persistedStream && value.reply) {
       this.seen.add(value.reply.id);
       this.streamedReply!.buffer.update(value.reply.body, true);
     }
+    if (value.reply?.runId && this.pendingReply?.kind !== "progress" && value.reply.runId === this.pendingReply?.runId
+      && spokenReply(value.reply.body).startsWith(spokenReply(this.pendingReply.body, !this.pendingReply.streaming))) {
+      this.seen.add(value.reply.id);
+      this.pendingReply = { ...this.pendingReply, body: value.reply.body, streaming: false };
+    }
     // Native terminal projection and comment persistence can arrive separately.
     // Missing live text/busy alone must not interrupt audio across that handoff.
     if (this.speechBuffer && this.streamedReply?.buffer === this.speechBuffer && value.question) this.stopSpeaking(false);
     if (value.reply && !value.liveReply && !value.disabled && (!value.busy || value.reply.committed) && !value.question && !this.state.hearingSpeech && !this.seen.has(value.reply.id)) {
-      this.seen.add(value.reply.id);
-      const fresh = !value.reply.createdAt || new Date(value.reply.createdAt).getTime() >= this.since;
-      if ((this.autoSpeak || this.requestedReply) && fresh && !document.hidden) { this.requestedReply = false; void this.speak(value.reply.body); }
+      if (!document.hidden) this.updateStreamedReply({ ...value.reply, kind: "final", streaming: false });
     }
     if (value.disabled) { this.cancelTimings(); this.pauseCapture(); if (this.speechBuffer || this.state.speaking) this.stopSpeaking(false); }
     else { this.presentQuestion(); this.resume(); }
@@ -126,10 +132,24 @@ export class FridayVoiceSession {
     this.seen.add(reply.id);
     const fresh = !reply.createdAt || new Date(reply.createdAt).getTime() >= this.since;
     if (!(this.autoSpeak || this.requestedReply) || !fresh) return;
-    this.requestedReply = false;
-    this.stopSpeaking(false);
+    if (this.speechBuffer) {
+      // Later deltas replace the pending snapshot; do not add inference jobs.
+      if (this.pendingReply?.kind !== "progress" && this.pendingReply && reply.kind === "progress") return;
+      if (this.pendingReply?.id !== reply.id) {
+        if (this.pendingReply) this.seen.add(this.pendingReply.id);
+      }
+      this.seen.delete(reply.id); // It becomes spoken only when playback starts.
+      this.pendingReply = reply;
+      // A durable refresh can skip the previous item's completed projection.
+      // A new message is a boundary: finish known text rather than waiting for
+      // more deltas that can no longer reach this focus slot.
+      if (this.streamedReply?.buffer === this.speechBuffer) this.speechBuffer.update(this.speechBuffer.text, true);
+      return;
+    }
+    if (reply.kind !== "progress") this.requestedReply = false;
+    this.stopSpeaking(false, true);
     const buffer = new FridaySpeechBuffer();
-    this.streamedReply = { id: reply.id, runId: reply.runId, buffer };
+    this.streamedReply = { id: reply.id, runId: reply.runId, kind: reply.kind, buffer };
     buffer.update(reply.body, !reply.streaming);
     void this.playBuffer(buffer);
   }
@@ -307,9 +327,18 @@ export class FridayVoiceSession {
     } catch { if (generation === this.captureGeneration) { this.patch({ enabled: false, error: "Microphone permission was denied or no microphone is available. You can still type." }); this.pauseCapture(); } }
   }
   private playbackReference() { return this.state.playing ? this.playbackText : ""; }
-  stopSpeaking = (resume = true) => {
+  stopSpeaking = (resume = true, preserveRequest = false) => {
+    if (!preserveRequest) this.requestedReply = false;
     this.speechGeneration++;
     this.speechBuffer?.cancel(); this.speechBuffer = undefined;
+    if (this.pendingReply) {
+      this.seen.add(this.pendingReply.id);
+      if (this.pendingReply.kind !== "progress") {
+        const buffer = new FridaySpeechBuffer(); buffer.cancel();
+        this.streamedReply = { id: this.pendingReply.id, runId: this.pendingReply.runId, kind: "final", buffer };
+      }
+      this.pendingReply = undefined;
+    }
     this.speechAbort?.abort(); this.speechAbort = undefined;
     if (this.state.timings.playback.status === "pending") this.timing("playback", "cancelled");
     this.playbackCancel?.(); this.playbackCancel = undefined;
@@ -383,7 +412,14 @@ export class FridayVoiceSession {
         }
       }
     } catch { if (generation === this.speechGeneration) { abort.abort(); buffer.cancel(); if (this.state.timings.playback.status === "pending") this.timing("playback", "failed"); this.patch({ error: "Speech playback failed or was blocked. Click Read reply to retry; the response is in your conversation." }); } }
-    finally { if (generation === this.speechGeneration) { if (this.state.timings.playback.status === "pending") this.timing("playback", "unavailable"); this.audio = null; this.speechBuffer = undefined; this.speechAbort = undefined; this.patch({ speaking: false, playing: false }); this.resume(); } }
+    finally { if (generation === this.speechGeneration) {
+      if (this.state.timings.playback.status === "pending") this.timing("playback", "unavailable");
+      this.audio = null; this.speechBuffer = undefined; this.speechAbort = undefined;
+      this.patch({ speaking: false, playing: false });
+      const pending = this.pendingReply; this.pendingReply = undefined;
+      if (pending && !this.binding?.disabled && !document.hidden && !this.state.hearingSpeech) this.updateStreamedReply(pending);
+      this.resume();
+    } }
   }
 }
 export const fridayVoiceSession = new FridayVoiceSession();

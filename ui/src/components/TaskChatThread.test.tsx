@@ -4950,6 +4950,22 @@ it("explains a missing provider runtime with an installation repair", () => {
 });
 
 describe("conversation focus presentation", () => {
+  it("offers the native assistant's completed progress message for speech while its tools continue", () => {
+    const run = nativeRunningRun();
+    const focus = vi.fn((_state: import("@/lib/conversation-focus").ConversationFocusState) => <div>Friday</div>);
+    nativeTranscriptState.transcriptByRun.set(run.id, [
+      { kind: "thinking", text: "Private reasoning", ts: run.createdAt },
+      { kind: "assistant", channel: "progress", itemId: "spoken-status", text: "I’ll check the company work list.", ts: run.createdAt },
+      { kind: "tool_call", name: "search_api", input: { query: "work list" }, ts: run.createdAt },
+    ]);
+    renderThread({ comments: [], onAdd: async () => {}, issueStatus: "in_progress", activeRun: run,
+      focusView: { showTranscript: false, render: focus } });
+    expect(focus.mock.lastCall?.[0].liveReply).toMatchObject({
+      id: `${run.id}:progress:spoken-status`, body: "I’ll check the company work list.",
+      runId: run.id, agentId: run.agentId, streaming: false, kind: "progress",
+    });
+  });
+
   it("exposes only the current native final-answer stream before a comment is persisted", () => {
     const focus = vi.fn((_state: import("@/lib/conversation-focus").ConversationFocusState) => <div>Friday</div>);
     const active = { id: "friday-voice-run", status: "running", runtimeMode: "native" as const,
@@ -4963,7 +4979,7 @@ describe("conversation focus presentation", () => {
     ]);
     render(<TaskChatThread {...props} />);
     expect(focus.mock.lastCall?.[0].liveReply).toBeUndefined();
-    nativeTranscriptState.transcriptByRun.get(active.id)!.push({ kind: "assistant", channel: "final", itemId: "final-user-answer", text: "Your microphone works. The next", ts: active.createdAt });
+    nativeTranscriptState.transcriptByRun.get(active.id)!.push({ kind: "assistant", channel: "final", itemId: "final-user-answer", delta: true, text: "Your microphone works. The next", ts: active.createdAt });
     render(<TaskChatThread {...props} />);
     expect(focus.mock.lastCall?.[0].liveReply).toMatchObject({ runId: active.id, agentId: "friday", body: "Your microphone works. The next", streaming: true });
     render(<TaskChatThread {...props} interactions={[{ ...questionInteraction("hold-voice", "Which company?", active.createdAt), sourceRunId: active.id }]} />);

@@ -161,9 +161,12 @@ rejects stale/malformed payloads with a retryable message; the exact reported
 undefined-type browser stack still needs a user retest after restart. Main/map
 spheres tint only their interiors with matching dot colors. Decisions use a
 compact statement/context/action view and retain full expansion/native gates.
-Voice also consumes the native user-facing final-answer stream, allowing complete
-sentences to speak without waiting for comment persistence. Reasoning, progress, tool output and
-pending native holds are excluded; the focus owner checks the conversation agent.
+Voice consumes normalized native user-facing progress and final-answer messages,
+allowing sentences to speak while tools continue and before comment persistence.
+Reasoning, raw tool output and pending native holds are excluded; the focus owner
+checks the conversation agent. Message completion closes its speech buffer even
+while the run continues. Current playback finishes before the latest waiting
+update; a final answer replaces unspoken progress. Interruption discards both.
 One speech chunk is prepared ahead, with event-driven waiting for new sentences.
 Interrupted/corrected answers cannot replay when their native comment arrives.
 The separate local recognition/speech workers retain bounded queues. Aborting a

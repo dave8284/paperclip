@@ -117,6 +117,8 @@ export interface TaskChatMessageItem {
   channel?: "progress" | "final" | "unknown";
   /** Native message identity survives delta-to-completed transcript replacement. */
   sourceItemId?: string;
+  /** Native message completion is independent of the tool-using run finishing. */
+  sourceComplete?: boolean;
   /** Transport attribution for an inbound human comment. */
   sourceChannel?: IssueCommentMetadata["sourceChannel"];
   timestamp?: string;

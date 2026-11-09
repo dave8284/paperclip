@@ -3052,7 +3052,8 @@ export function TaskChatThread(props: TaskChatThreadProps) {
 
   const focusView = props.focusView;
   const focusReply = paperclipRunnerTail && !suppressPaperclipRunnerTailFinal
-    ? paperclipRunnerFinalResponse(tailItems, { allowFallback: false }) : undefined;
+    ? tailItems.findLast((item): item is TaskChatMessageItem => item.kind === "message" && item.author === "agent"
+      && Boolean(item.sourceItemId) && (item.channel === "progress" || item.channel === "final")) : undefined;
   const focusReplyAgentId = liveRun?.agentId ?? linkedRunMetaById.get(tailRunId ?? "")?.agentId;
   // The Friday canvas opens only on request. Pending decisions and failures
   // update the orb's status; they must not open the user's transcript for them.
@@ -3089,9 +3090,10 @@ export function TaskChatThread(props: TaskChatThreadProps) {
                 awaitingInput: !!selectedPendingInput || pendingInlineDecision || !!composerTakeover,
                 clarification: clarification.prompt,
                 liveReply: focusReply?.sourceItemId && tailRunId && focusReplyAgentId ? {
-                  id: `${tailRunId}:final:${focusReply.sourceItemId}`, runId: tailRunId, agentId: focusReplyAgentId,
+                  id: `${tailRunId}:${focusReply.channel}:${focusReply.sourceItemId}`, runId: tailRunId, agentId: focusReplyAgentId,
                   body: focusReply.text, createdAt: focusReply.atMs == null ? undefined : new Date(focusReply.atMs),
-                  streaming: tailStreaming,
+                  streaming: tailStreaming && !focusReply.sourceComplete,
+                  kind: focusReply.channel === "progress" ? "progress" : "final",
                 } : undefined,
                 unavailable: initialHistoryError || tailActivityUnavailable ||
                   Boolean(tailRunId && tailRunSource?.runtimeMode !== "native" && logErrorsByRun?.has(tailRunId)) ||

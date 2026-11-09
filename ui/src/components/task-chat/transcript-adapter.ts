@@ -735,6 +735,7 @@ export function transcriptToTaskChatItems(
           const it = items[messageIndex];
           if (it.kind === "message") {
             it.text += entry.text;
+            it.sourceComplete = entry.delta !== true;
             it.transcriptIndex = i;
           }
         } else {
@@ -748,6 +749,7 @@ export function transcriptToTaskChatItems(
             text: entry.text,
             channel,
             sourceItemId: entry.itemId,
+            sourceComplete: entry.delta !== true,
             streaming: running,
             // Explicit final-answer items stream durably. Unclassified text
             // remains transient for backwards compatibility and fail-closed

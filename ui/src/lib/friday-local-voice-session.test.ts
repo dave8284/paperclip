@@ -244,3 +244,75 @@ it("aborts synthesis on interruption and never resumes the cancelled stream when
   expect(api.post.mock.calls.filter(call => call[1].op === "speak")).toHaveLength(1);
   expect(session.snapshot()).toMatchObject({ speaking: false, playing: false, error: "" });
 });
+
+it("finishes a spoken progress update before the final answer and reconciles its saved comment once", async () => {
+  api.post.mockImplementation(async (_path, body) => body.op === "speak" ? { audio: btoa(body.text) } : { ready: true });
+  session.bind(binding); await flush();
+  session.bind({ ...binding, busy: true, liveReply: { id: "progress", runId: "tools-run", kind: "progress", streaming: false, body: "I will check the work list." } });
+  await flush();
+  const progressAudio = Playback.latest;
+  session.bind({ ...binding, busy: true, liveReply: { id: "answer", runId: "tools-run", kind: "final", streaming: true, body: "The result is ready. More" } });
+  await flush();
+  expect(progressAudio.pause).not.toHaveBeenCalled();
+  session.bind({ ...binding, busy: true, liveReply: { id: "answer", runId: "tools-run", kind: "final", streaming: false, body: "The result is ready. More details." } });
+  session.bind({ ...binding, reply: { id: "saved-tools-answer", runId: "tools-run", committed: true, body: "The result is ready. More details." } });
+  await flush();
+  expect(progressAudio.pause).not.toHaveBeenCalled();
+  progressAudio.onended?.(); await flush(); await flush();
+  expect(Playback.latest.src).toContain(btoa("The result is ready."));
+  Playback.latest.onended?.(); await flush();
+  expect(Playback.latest.src).toContain(btoa("More details."));
+  Playback.latest.onended?.(); await flush();
+  expect(api.post.mock.calls.filter(call => call[1].op === "speak").map(call => call[1].text))
+    .toEqual(["I will check the work list.", "The result is ready.", "More details."]);
+  expect(session.snapshot().speaking).toBe(false);
+});
+
+it("coalesces waiting progress into the final answer and cancels that answer on interruption", async () => {
+  api.post.mockImplementation(async (_path, body) => body.op === "speak" ? { audio: btoa(body.text) } : { ready: true });
+  session.bind(binding); await flush();
+  const progress = { id: "first", runId: "run", kind: "progress" as const, streaming: false, body: "Checking the work." };
+  session.bind({ ...binding, liveReply: progress }); await flush();
+  session.bind({ ...binding, liveReply: { ...progress, id: "second", body: "Checking the review." } });
+  session.bind({ ...binding, liveReply: { id: "final", runId: "run", kind: "final", body: "The review is ready.", streaming: false } });
+  session.stopSpeaking(); await flush();
+  session.bind({ ...binding, reply: { id: "saved", runId: "run", body: "The review is ready.", committed: true } }); await flush();
+  expect(api.post.mock.calls.filter(call => call[1].op === "speak").map(call => call[1].text)).toEqual(["Checking the work."]);
+  expect(session.snapshot()).toMatchObject({ playing: false, speaking: false });
+});
+
+it("keeps a one-response speech request through progress until the final answer", async () => {
+  api.post.mockImplementation(async (_path, body) => body.op === "speak" ? { audio: btoa(body.text) } : { ready: true });
+  session.autoSpeak = false;
+  session.bind(binding); await flush();
+  expect(session.requestSpokenReply(binding.key)).toBe(true);
+  session.bind({ ...binding, liveReply: { id: "progress", runId: "run", kind: "progress", body: "Checking the work.", streaming: false } }); await flush();
+  Playback.latest.onended?.(); await flush();
+  session.bind({ ...binding, liveReply: { id: "final", runId: "run", kind: "final", body: "The work is ready.", streaming: false } }); await flush();
+  Playback.latest.onended?.(); await flush();
+  session.bind({ ...binding, reply: { id: "unrequested", body: "A later reply." } }); await flush();
+  expect(api.post.mock.calls.filter(call => call[1].op === "speak").map(call => call[1].text)).toEqual(["Checking the work.", "The work is ready."]);
+});
+
+it("closes partial progress when the next message arrives without a completion bind", async () => {
+  api.post.mockImplementation(async (_path, body) => body.op === "speak" ? { audio: btoa(body.text) } : { ready: true });
+  session.bind(binding); await flush();
+  session.bind({ ...binding, liveReply: { id: "progress", runId: "run", kind: "progress", body: "Checking the work", streaming: true } }); await flush();
+  expect(api.post.mock.calls.some(call => call[1].op === "speak")).toBe(false);
+  session.bind({ ...binding, liveReply: { id: "final", runId: "run", kind: "final", body: "The work is ready.", streaming: false } }); await flush();
+  expect(Playback.latest.src).toContain(btoa("Checking the work"));
+  Playback.latest.onended?.(); await flush(); await flush();
+  expect(Playback.latest.src).toContain(btoa("The work is ready."));
+  Playback.latest.onended?.(); await flush();
+  expect(session.snapshot().speaking).toBe(false);
+});
+
+it("cancels a one-response speech request when interrupted during progress", async () => {
+  api.post.mockImplementation(async (_path, body) => body.op === "speak" ? { audio: btoa(body.text) } : { ready: true });
+  session.autoSpeak = false;
+  session.bind(binding); await flush(); session.requestSpokenReply(binding.key);
+  session.bind({ ...binding, liveReply: { id: "progress", runId: "run", kind: "progress", body: "Checking the work.", streaming: false } }); await flush();
+  session.stopSpeaking(); await flush();
+  session.bind({ ...binding, liveReply: { id: "final", runId: "run", kind: "final", body: "The work is ready.", streaming: false } }); await flush();
+  expect(api.post.mock.calls.filter(call => call[1].op === "speak")).toHaveLength(1);
+});
