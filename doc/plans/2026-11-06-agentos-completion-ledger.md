@@ -17,6 +17,65 @@ live acceptance remain Not fixed. The owner requires this log and the worksheet
 to be updated with each fix, its verification and Git/runtime state. The tables
 below the current checkpoint are historical.
 
+### Usage-limit continuation checkpoint — 9 November, 04:47 UTC
+
+Owner requests a checkpoint with every change and the final allowance reserved
+for logs before limits reset. **The build is not complete.** Do not recreate the
+backlog, repeat passed fictional trials or claim the 40 open requirements passed.
+
+Latest owner result supersedes the simple-greeting voice test: ordinary replies
+can speak, but tool-using turns do not speak promptly/in sync with visible chat.
+The owner wants listening/speaking to remain responsive independently of Friday's
+directing work, including interruption, and useful diagnostic timings. Friday
+still directs executives; company teams execute. The owner reaffirmed local-first
+smoothness before cloud. A second conversation/directing profile is a proposed
+architecture, not a silently approved model/account switch or completed feature.
+
+Read-only evidence `/private/tmp/agentos-owner-voice-turns-1794199127062-20261109.json`
+contains the latest eight Friday runs and bounded native events/comments. Actual
+run `9b32dd1f-4ad4-4918-98a7-2b4164e0a957` posted an assistant progress message at
+04:35:34.613 and completed its final answer at04:37:21.958. Current speech excludes
+that normalized user-facing progress channel. Diagnostic run
+`644c707b-28ab-4904-987e-dc849576a1bd` has the same progress→tools→final pattern.
+The owner also produced an extreme repeated-phrase transcription and said capture
+cuts speech in half. `listenLocal` currently disconnects the microphone after750ms
+quiet **before** waiting for preparation/preview/final transcription, losing
+resumed speech during that wait. Raw audio was not captured for this investigation.
+
+Current main branch `agentos/platform` is clean at source/UI checkpoint
+`72aa8de075a72994d4d557fef9eb718cedf9464e` plus pushed documentation through
+`68d100cd9`. The browser serves rebuilt UI; actual backend remains source
+`841c1eeba`, PID37517 from the recorded guarded restart. A moving health Git field
+is not proof of loaded backend. **No subsequent backend restart/build performed.**
+
+| Owner / retained work | Exact continuation state |
+| --- | --- |
+| Root — voice progress/playback/diagnostics | Diagnosis and design only; no new source edits after72aa8de07. Next expose only normalized assistant progress/final messages from the exact conversation agent, retaining stable message IDs, native holds and exclusion of reasoning/raw tool text. Preserve completed progress through tool use; queue/coalesce a bounded pending spoken update without cutting current playback or replaying saved comments. Add phase/queue/playback failure timing to the existing voice diagnostics. Actual user-session interruption and navigation remain unaccepted. |
+| migration_rehearsal — voice capture | Worktree `/private/tmp/agentos-voice-capture-20261109`, base68d100cd9. New uncommitted `ui/src/lib/friday-local-utterance.ts` and test. Proposed pure helper keeps bounded60s PCM/preroll, utterance revision, provisional750ms and settled1300ms quiet; resumed speech invalidates stale recognition while microphone remains connected. Root must integrate into `friday-voice-session.ts`; it has not been integrated. Pure helper6/6 tests pass; integration and Python repetition guard are unfinished. Installed mlx_whisper segment compression/confidence/duration evidence supports a bounded rejection reason rather than rewriting text. Exact handoff `/private/tmp/agentos-voice-capture-handoff-20261109.txt`; two-file backup `/private/tmp/agentos-voice-capture-helper-20261109.patch`. No active writer/test. |
+| review_wait_audit — canonical general-server | Productive session94959, wrapperPID/PGID48738, started03:56:14UTC on06d08d397 backend inputs. Log `/private/tmp/agentos-regression-general-server-recovered-20261109.log`; metadata same stem`.json`. At04:46:20 no aggregate, only two known stale skill-test native-bridge fixture failures. Exact poll/apply/test commands are in `/private/tmp/agentos-review-wait-handoff-20261109.md`; safe process snapshot `/private/tmp/agentos-review-wait-checkpoint-20261109.json`. Preserve the running process; do not start another full campaign. Main backend and built artifacts have been held stable for this run. |
+| review_wait_audit — fixture correction | Prepared unapplied `/private/tmp/agentos-runner-api-skill-test-fixture-proposal-20261109.patch`. Strict frozen skill-test native binding must reject the generic API bridge; direct scoped REST image/secret and low-trust coverage remain. After canonical aggregate, apply and run native runner-api integration plus strict skill-test tool cases, then explicitly release artifact builds. Do not loosen production admission. |
+| M05 verified source | Detached `/private/tmp/agentos-model-annotation-20261109`, commit`49bce79610974c465f184dc14b7ed4d64ff0d236`. Five-file owner-return/context-copy fix, 43 actual PG cases/types/maps pass. Not integrated/loaded. No qualification/backfill/rollout created. |
+| W01 verified source | Detached `/private/tmp/agentos-local-repository-20261109`, commit`317e85a268eabd6091ab72e41b30aa3d8d4942b0`. Fifteen owned files;13PG+2164catalog+10FS, neighbors/types/maps/tokens pass. Handoff `/private/tmp/agentos-local-repository-handoff-20261109.txt`. Not integrated/loaded; real provider-authored Git commit still required. |
+| R04 verified API fence | Detached `/private/tmp/agentos-r04-outcome-20261109`, commit`a3802c8733c6535c971791fd784c428270c5dc64`. Five-file same-operation uncertain-write fence including changed body/key,13actual HTTP/PG checks/types/maps/review pass. Report `/private/tmp/agentos-r04-api-uncertainty-20261109.json`. Not integrated/loaded; first two duplicate-project failures retained. |
+| R04 generic tool gateway | Same R04 worktree now has uncommitted `server/src/__tests__/tool-gateway.test.ts`. Six real local-counter cases fail: pending/lost response after committed effect, unchanged replay falsely returns null/success, changed args/key repeats effect. Log `/private/tmp/agentos-r04-gateway-before-20261109.log`. No gateway production edits yet. Source fix belongs in existing tool-access-policy/gateway/receipt owners. Exact next steps `/private/tmp/agentos-r04-gateway-continuation-20261109.json`; repro patch `/private/tmp/agentos-r04-gateway-reproducer-20261109.patch`. Red session8138 endedexit1 and owned fixtures cleaned; no active second-lane job. Serialize current run/connection/tool reservation and preserve unknown state; reads/definite pre-dispatch rejection and provider-specific publication owners retain their contracts. No live/external/provider effect. |
+
+After the canonical runner releases main inputs, integrate only verified commits
+above, review the combined diff, run affected tests/types/build, update these same
+records, commit/push and use the guarded restart. Keep no more than two heavy
+PG/native test processes; ordinary022 test umask, private0600 logs. Worktree `dist`
+links point at existing main builds: **never commit them or build through those
+links while the canonical inputs are held.**
+
+Next W01 live follow-up is prepared only at
+`/private/tmp/agentos-w01-repository-followup-20261109.json`, clientRequestId
+`8a371659-6526-4761-8126-31de7dd50520`. Submit only after verified loaded repository
+capability. It asks Friday→OrbitCEO→existing developer to preserve original Margin
+Lab HTML bytes, create/select durable repository, commit, and verify a second
+native task reopens it. No remote push/cloud/persistent listener/schedule change.
+Do not resubmit earlier W01/O06/V09/M05 trial helpers. ORB-6 owner disposition,
+older owner questions, paused Northstar and the single disabled-schedule routine
+remain protected. No current question requires another answer before code work.
+
 - **V01–V05 slow/missing playback: source fixes checked; final loaded/physical checks open:**
   the owner confirmed correct physical transcription and visible reply generation,
   but audible playback took too long or did not start. The interface waited for
@@ -104,8 +163,9 @@ below the current checkpoint are historical.
   response was held/lost. Retrying the same mutation with a new tool-call ID
   created a second project in both cases. Existing same-ID and ancestor-run
   receipts did not fence this same-run retry. The owning tool authority is being
-  corrected under its existing lock, with distinct-body operations and reads
-  preserved. No live company, provider job or external effect was used. Original
+  corrected under its existing lock. Uncertain same-operation mutations remain
+  fenced even with changed body/key; reads/different operations and definite
+  completed/rejected follow-ups remain available. No live company, provider job or external effect was used. Original
   failure evidence: `/private/tmp/agentos-r04-unknown-before-20261109.log`.
   Integration, affected checks and loaded acceptance remain open; R04 stays
   Not fixed. Earlier passed restart/pause/one-cycle evidence is unchanged.
